@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "HoobiBitwardenCommandPaletteExtension (Package)": {
+      "commandName": "MsixPackage",
+      "doNotLaunchApp": true
+    },
+    "HoobiBitwardenCommandPaletteExtension (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

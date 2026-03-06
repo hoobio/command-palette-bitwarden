@@ -1,0 +1,60 @@
+using System;
+using Microsoft.CommandPalette.Extensions;
+using Microsoft.CommandPalette.Extensions.Toolkit;
+using OtpNet;
+
+namespace HoobiBitwardenCommandPaletteExtension.Commands;
+
+internal sealed partial class CopyOtpCommand : InvokableCommand
+{
+  private readonly string _totpSecret;
+
+  public CopyOtpCommand(string totpSecret)
+  {
+    _totpSecret = totpSecret;
+    Name = "Copy OTP";
+    Icon = new IconInfo("\uEC92");
+  }
+
+  public override ICommandResult Invoke()
+  {
+    try
+    {
+      var (key, digits, period) = ParseTotpSecret(_totpSecret);
+      var totp = new Totp(key, step: period, totpSize: digits);
+      var code = totp.ComputeTotp();
+
+      ClipboardHelper.SetText(code);
+      return CommandResult.ShowToast("OTP copied to clipboard");
+    }
+    catch
+    {
+      return CommandResult.ShowToast("Failed to compute OTP");
+    }
+  }
+
+  private static (byte[] Key, int Digits, int Period) ParseTotpSecret(string secret)
+  {
+    if (secret.StartsWith("otpauth://", StringComparison.OrdinalIgnoreCase))
+    {
+      var uri = new Uri(secret);
+      var query = uri.Query.TrimStart('?');
+      var parameters = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+      foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+      {
+        var parts = pair.Split('=', 2);
+        if (parts.Length == 2)
+          parameters[Uri.UnescapeDataString(parts[0])] = Uri.UnescapeDataString(parts[1]);
+      }
+
+      var key = Base32Encoding.ToBytes(parameters.TryGetValue("secret", out var s) ? s : secret);
+      _ = int.TryParse(parameters.TryGetValue("digits", out var d) ? d : null, out var digits);
+      _ = int.TryParse(parameters.TryGetValue("period", out var p) ? p : null, out var period);
+
+      return (key, digits > 0 ? digits : 6, period > 0 ? period : 30);
+    }
+
+    return (Base32Encoding.ToBytes(secret), 6, 30);
+  }
+}

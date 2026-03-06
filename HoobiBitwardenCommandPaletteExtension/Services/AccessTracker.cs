@@ -1,0 +1,77 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+
+namespace HoobiBitwardenCommandPaletteExtension.Services;
+
+internal static class AccessTracker
+{
+  private static readonly string FilePath = Path.Combine(
+      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+      "HoobiBitwardenCommandPalette", "access.json");
+
+  private static Dictionary<string, DateTime>? _data;
+  private static readonly Lock _lock = new();
+
+  public static void Record(string itemId)
+  {
+    lock (_lock)
+    {
+      var data = Load();
+      data[itemId] = DateTime.UtcNow;
+      Save(data);
+    }
+  }
+
+  public static DateTime GetLastAccess(string itemId)
+  {
+    lock (_lock)
+    {
+      return Load().TryGetValue(itemId, out var dt) ? dt : DateTime.MinValue;
+    }
+  }
+
+  private static Dictionary<string, DateTime> Load()
+  {
+    if (_data != null)
+      return _data;
+
+    try
+    {
+      if (File.Exists(FilePath))
+      {
+        var json = File.ReadAllText(FilePath);
+        _data = JsonSerializer.Deserialize(json, AccessJsonContext.Default.DictionaryStringDateTime) ?? [];
+        return _data;
+      }
+    }
+    catch { }
+
+    _data = [];
+    return _data;
+  }
+
+  private static void Save(Dictionary<string, DateTime> data)
+  {
+    try
+    {
+      if (data.Count > 500)
+      {
+        _data = data = new Dictionary<string, DateTime>(
+            data.OrderByDescending(kvp => kvp.Value).Take(500));
+      }
+
+      Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+      File.WriteAllText(FilePath, JsonSerializer.Serialize(data, AccessJsonContext.Default.DictionaryStringDateTime));
+    }
+    catch { }
+  }
+}
+
+[JsonSerializable(typeof(Dictionary<string, DateTime>))]
+internal sealed partial class AccessJsonContext : JsonSerializerContext;
+

@@ -1,0 +1,102 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: simple
+
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        platform: [x64, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content version.txt -Raw).Trim()
+          "APP_VERSION=$ver.0" | Out-File -Append $env:GITHUB_ENV
+          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+
+      - name: Stamp Package.appxmanifest version
+        shell: pwsh
+        run: |
+          $manifest = "HoobiBitwardenCommandPaletteExtension\Package.appxmanifest"
+          (Get-Content $manifest -Raw) -replace 'Version="[\d.]+"', "Version=`"$env:APP_VERSION`"" |
+            Set-Content $manifest -NoNewline
+
+      - name: Restore
+        run: dotnet restore -p:Platform=${{ matrix.platform }}
+
+      - name: Build
+        run: dotnet build -c Release -p:Platform=${{ matrix.platform }} --no-restore
+
+      - name: Create MSIX package
+        run: |
+          dotnet publish -c Release -p:Platform=${{ matrix.platform }} `
+            -p:AppxPackageDir=${{ github.workspace }}\AppPackages\ `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxBundle=Never
+        working-directory: HoobiBitwardenCommandPaletteExtension
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: msix-${{ matrix.platform }}
+          path: AppPackages/**/*.msix
+
+      - name: Upload publish output
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-${{ matrix.platform }}
+          path: HoobiBitwardenCommandPaletteExtension/bin/Release/**/publish/
+
+  release:
+    needs: [release-please, build]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download x64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: msix-x64
+          path: release/x64
+
+      - name: Download ARM64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: msix-ARM64
+          path: release/ARM64
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: |
+            release/**/*.msix
