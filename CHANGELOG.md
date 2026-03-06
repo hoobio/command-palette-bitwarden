@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.1.0...v1.1.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* correct Extenstion typo in package identity and COM registration ([8b22036](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/8b22036243ed3eab56ff34ce69efeaec5e456d6d))
+
 ## [1.1.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.0.0...v1.1.0) (2026-03-06)
 
 
