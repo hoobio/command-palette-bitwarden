@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.0.0...v1.1.0) (2026-03-06)
+
+
+### Features
+
+* sign MSIX packages with self-signed certificate in CI ([a76696f](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/a76696fc3bf3c5787729f099c90835f31fd1a94a))
+
 ## 1.0.0 (2026-03-06)
 
 
