@@ -66,6 +66,28 @@ jobs:
             -p:AppxBundle=Never
         working-directory: HoobiBitwardenCommandPaletteExtension
 
+      - name: Import signing certificate
+        shell: pwsh
+        run: |
+          $pfxBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
+          $pfxPath = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          $pwd = ConvertTo-SecureString "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" -AsPlainText -Force
+          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $pwd
+          Remove-Item $pfxPath
+
+      - name: Sign MSIX package
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match 'x64\\signtool' } |
+            Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*','$1') } -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          Get-ChildItem "${{ github.workspace }}\AppPackages" -Recurse -Filter *.msix | ForEach-Object {
+            & $signtool sign /fd SHA256 /sha1 "${{ vars.SIGNING_CERT_THUMBPRINT }}" /td SHA256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($_.Name)" }
+          }
+
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v7
         with:
