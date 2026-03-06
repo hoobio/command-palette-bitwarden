@@ -9,15 +9,13 @@
   IgnorableNamespaces="uap uap3 rescap">
 
   <Identity
-    Name="HoobiBitwardenCommandPaletteExtension"
-    Publisher="CN=hoobio"
+    Name="Hoobi.BitwardenCommandPaletteExtension"
+    Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71"
     Version="0.0.1.0" />
-  <!-- When you're ready to publish your extension, you'll need to change the
-       Publisher= to match your own identity -->
 
   <Properties>
     <DisplayName>Bitwarden Command Palette Extension</DisplayName>
-    <PublisherDisplayName>A Lone Developer</PublisherDisplayName>
+    <PublisherDisplayName>Hoobi</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
