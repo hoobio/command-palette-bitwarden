@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.2.0...v1.3.0) (2026-03-06)
+
+
+### Features
+
+* add login flow, logout, server config, 2FA support, and session persistence ([1a873c8](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/1a873c8898225731661042ea2153b956ee0eda60))
+
 ## [1.2.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.1.1...v1.2.0) (2026-03-06)
 
 
