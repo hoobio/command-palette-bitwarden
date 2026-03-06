@@ -48,7 +48,8 @@ jobs:
         shell: pwsh
         run: |
           $manifest = Resolve-Path "HoobiBitwardenCommandPaletteExtension\Package.appxmanifest"
-          $content = [System.IO.File]::ReadAllText($manifest) -replace 'Version="[\d.]+"', "Version=`"$env:APP_VERSION`""
+          $content = [System.IO.File]::ReadAllText($manifest)
+          $content = $content -creplace '(?<=<Identity\s[^>]*)Version="[\d.]+"', "Version=`"$env:APP_VERSION`""
           [System.IO.File]::WriteAllText($manifest, $content, [System.Text.UTF8Encoding]::new($false))
 
       - name: Restore
