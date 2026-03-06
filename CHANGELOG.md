@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.1.1...v1.2.0) (2026-03-06)
+
+
+### Features
+
+* configure Store identity and update signing cert to match Store publisher ([03ae6d9](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/03ae6d989c13e9c766c7a26b93bf40b45c54ebbb))
+
 ## [1.1.1](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.1.0...v1.1.1) (2026-03-06)
 
 
