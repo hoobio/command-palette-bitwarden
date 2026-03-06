@@ -43,6 +43,13 @@
     <PackageReference Include="Otp.NET" />
     <PackageReference Include="Shmuelie.WinRTServer" />
 
+    <!-- Workaround: Microsoft.Windows.SDK.BuildTools.MSIX net6.0 task DLL depends on
+         System.Security.Permissions v8.0.0.0 but doesn't ship it alongside itself.
+         Restore the package here so Directory.Build.targets can copy it into place. -->
+    <PackageReference Include="System.Security.Permissions">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+
     <!-- Needed to enable building an MSIX package -->
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX">
       <PrivateAssets>all</PrivateAssets>

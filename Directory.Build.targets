@@ -1,0 +1,20 @@
+<Project>
+  <!--
+    Workaround for https://github.com/microsoft/windowsappsdk/issues/XXXX
+    Microsoft.Windows.SDK.BuildTools.MSIX task DLL (net6.0) depends on
+    System.Security.Permissions v8.0.0.0 but doesn't ship it alongside itself.
+    Copy it into the task folder before the manifest validation target runs.
+  -->
+  <Target Name="FixMsixBuildToolsSystemSecurityPermissions"
+          BeforeTargets="_ValidatePresenceOfAppxManifestItems"
+          Condition="'$(MSBuildRuntimeType)' == 'Core'">
+    <PropertyGroup>
+      <_SSPSource>$(NuGetPackageRoot)system.security.permissions\8.0.0\lib\net6.0\System.Security.Permissions.dll</_SSPSource>
+      <_MsixToolsDir>$(NuGetPackageRoot)microsoft.windows.sdk.buildtools.msix\1.7.20250829.1\tools\net6.0\</_MsixToolsDir>
+    </PropertyGroup>
+    <Copy SourceFiles="$(_SSPSource)"
+          DestinationFolder="$(_MsixToolsDir)"
+          Condition="Exists('$(_SSPSource)') and Exists('$(_MsixToolsDir)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>
