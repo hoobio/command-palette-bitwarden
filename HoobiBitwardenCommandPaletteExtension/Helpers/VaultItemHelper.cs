@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -8,6 +9,7 @@ using Windows.System;
 using HoobiBitwardenCommandPaletteExtension.Commands;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
+using OtpNet;
 
 namespace HoobiBitwardenCommandPaletteExtension.Helpers;
 
@@ -54,6 +56,8 @@ internal static partial class VaultItemHelper
         break;
     }
 
+    AddCustomFieldContextItems(items, item, id);
+
     items.Add(new CommandContextItem(Track(id, BuildOpenInBitwardenCommand(id)))
     {
       Title = "Open in Bitwarden",
@@ -75,11 +79,75 @@ internal static partial class VaultItemHelper
     return items.ToArray();
   }
 
+  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null)
+  {
+    var tags = new List<Tag>();
+
+    if (AccessTracker.IsLastCopied(item.Id))
+      tags.Add(new Tag("Recent") { Foreground = ColorHelpers.FromRgb(0x87, 0xD9, 0x6C) });
+
+    if (item.Favorite)
+      tags.Add(new Tag("\u2605") { Foreground = ColorHelpers.FromRgb(0xFA, 0xCC, 0x6E) });
+
+    if (context != null && ContextAwarenessService.ContextScore(context, item) > 0)
+    {
+      tags.Add(new Tag("Context") { Foreground = ColorHelpers.FromRgb(0x40, 0x9F, 0xFF) });
+    }
+
+    if (item.HasTotp)
+    {
+      var totpTag = GetTotpTag(item.TotpSecret!);
+      if (totpTag != null)
+        tags.Add(totpTag);
+    }
+
+    if (showWatchtowerTags)
+      AddWatchtowerTags(tags, item);
+
+    return tags.Count > 0 ? [.. tags] : [];
+  }
+
+  private static Tag? GetTotpTag(string totpSecret)
+  {
+    try
+    {
+      var (key, digits, period) = CopyOtpCommand.ParseTotpSecret(totpSecret);
+      var totp = new Totp(key, step: period, totpSize: digits);
+      var code = totp.ComputeTotp();
+      var remaining = totp.RemainingSeconds();
+
+      return new Tag($"{code} ({remaining}s)") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };
+    }
+    catch
+    {
+      return new Tag("TOTP") { Foreground = ColorHelpers.FromRgb(0x68, 0x68, 0x68) };
+    }
+  }
+
+  private static void AddWatchtowerTags(List<Tag> tags, BitwardenItem item)
+  {
+    if (item.Type != BitwardenItemType.Login)
+      return;
+
+    if (!string.IsNullOrEmpty(item.Password))
+    {
+      if (item.Password.Length < 8)
+        tags.Add(new Tag("Weak") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) });
+
+      var lastChanged = item.PasswordRevisionDate ?? item.RevisionDate;
+      if (DateTime.UtcNow - lastChanged > TimeSpan.FromDays(365))
+        tags.Add(new Tag("Old") { Foreground = ColorHelpers.FromRgb(0xFF, 0xD1, 0x73) });
+    }
+
+    if (item.Uris.Count > 0 && item.Uris.Any(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
+      tags.Add(new Tag("Insecure URL") { Foreground = ColorHelpers.FromRgb(0xF2, 0x87, 0x79) });
+  }
+
   private static void AddLoginContextItems(List<CommandContextItem> items, BitwardenItem item, string id)
   {
     if (!string.IsNullOrEmpty(item.Username))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.Username!, "Username")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.Username!, "Username")))
       {
         Title = "Copy Username",
         Icon = new IconInfo("\uE77B"),
@@ -89,7 +157,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.Password))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.Password!, "Password")))
+      items.Add(new CommandContextItem(Track(id, CopySensitive(item.Password!, "Password")))
       {
         Title = "Copy Password",
         Icon = new IconInfo("\uE72E"),
@@ -122,7 +190,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.Notes))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.Notes!, "Notes")))
+      items.Add(new CommandContextItem(Track(id, CopySensitive(item.Notes!, "Notes")))
       {
         Title = "Copy Notes",
         Icon = new IconInfo("\uE70B"),
@@ -135,7 +203,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.CardNumber))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.CardNumber!, "Card Number")))
+      items.Add(new CommandContextItem(Track(id, CopySensitive(item.CardNumber!, "Card Number")))
       {
         Title = "Copy Card Number",
         Icon = new IconInfo("\uE8C7"),
@@ -145,7 +213,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.CardCode))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.CardCode!, "Security Code")))
+      items.Add(new CommandContextItem(Track(id, CopySensitive(item.CardCode!, "Security Code")))
       {
         Title = "Copy Security Code",
         Icon = new IconInfo("\uE72E"),
@@ -155,7 +223,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.CardholderName))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.CardholderName!, "Cardholder Name")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.CardholderName!, "Cardholder Name")))
       {
         Title = "Copy Cardholder Name",
         Icon = new IconInfo("\uE77B"),
@@ -165,7 +233,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.CardExpiration))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.CardExpiration!, "Expiration")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.CardExpiration!, "Expiration")))
       {
         Title = "Copy Expiration",
         Icon = new IconInfo("\uE787"),
@@ -178,7 +246,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.IdentityEmail))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityEmail!, "Email")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.IdentityEmail!, "Email")))
       {
         Title = "Copy Email",
         Icon = new IconInfo("\uE715"),
@@ -188,7 +256,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityFullName))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityFullName!, "Name")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.IdentityFullName!, "Name")))
       {
         Title = "Copy Name",
         Icon = new IconInfo("\uE77B"),
@@ -198,7 +266,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityPhone))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityPhone!, "Phone")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.IdentityPhone!, "Phone")))
       {
         Title = "Copy Phone",
         Icon = new IconInfo("\uE717"),
@@ -208,7 +276,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityUsername))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityUsername!, "Username")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.IdentityUsername!, "Username")))
       {
         Title = "Copy Username",
         Icon = new IconInfo("\uE77B"),
@@ -218,7 +286,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityAddress))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityAddress!, "Address")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.IdentityAddress!, "Address")))
       {
         Title = "Copy Address",
         Icon = new IconInfo("\uE80F"),
@@ -231,7 +299,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.SshPublicKey))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.SshPublicKey!, "Public Key")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.SshPublicKey!, "Public Key")))
       {
         Title = "Copy Public Key",
         Icon = new IconInfo("\uE8D7"),
@@ -241,7 +309,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.SshFingerprint))
     {
-      items.Add(new CommandContextItem(Track(id, CopyText(item.SshFingerprint!, "Fingerprint")))
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(item.SshFingerprint!, "Fingerprint")))
       {
         Title = "Copy Fingerprint",
         Icon = new IconInfo("\uE928"),
@@ -256,6 +324,28 @@ internal static partial class VaultItemHelper
         Title = "Open SSH Session",
         Icon = new IconInfo("\uE756"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(alt: true, vkey: VirtualKey.Enter),
+      });
+    }
+  }
+
+  private static void AddCustomFieldContextItems(List<CommandContextItem> items, BitwardenItem item, string id)
+  {
+    if (item.CustomFields.Count == 0)
+      return;
+
+    foreach (var (fieldName, fieldValue) in item.CustomFields)
+    {
+      if (string.IsNullOrEmpty(fieldValue))
+        continue;
+
+      // Skip the 'host' custom field as it's handled by SSH context items
+      if (item.Type == BitwardenItemType.SshKey && fieldName.Equals("host", StringComparison.OrdinalIgnoreCase))
+        continue;
+
+      items.Add(new CommandContextItem(Track(id, CopyNonSensitive(fieldValue, fieldName)))
+      {
+        Title = $"Copy \"{fieldName}\"",
+        Icon = new IconInfo("\uE8C8"),
       });
     }
   }
@@ -306,7 +396,15 @@ internal static partial class VaultItemHelper
   [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$")]
   private static partial Regex SshHostPattern();
 
-  private static AnonymousCommand CopyText(string text, string label) => new(() => ClipboardHelper.SetText(text))
+  private static AnonymousCommand CopySensitive(string text, string label) => new(() =>
+      SecureClipboardService.CopySensitive(text))
+  {
+    Name = $"Copy {label}",
+    Result = CommandResult.ShowToast($"Copied {label} to clipboard"),
+  };
+
+  private static AnonymousCommand CopyNonSensitive(string text, string label) => new(() =>
+      SecureClipboardService.CopyNonSensitive(text))
   {
     Name = $"Copy {label}",
     Result = CommandResult.ShowToast($"Copied {label} to clipboard"),

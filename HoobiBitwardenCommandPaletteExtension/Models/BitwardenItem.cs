@@ -20,6 +20,10 @@ internal sealed class BitwardenItem
   public BitwardenItemType Type { get; init; }
   public string? Notes { get; init; }
   public DateTime RevisionDate { get; init; }
+  public bool Favorite { get; init; }
+  public string? FolderId { get; init; }
+  public string? OrganizationId { get; init; }
+  public int Reprompt { get; init; }
 
   // Login
   public string? Username { get; init; }
@@ -28,6 +32,7 @@ internal sealed class BitwardenItem
   public string? TotpSecret { get; init; }
   public List<string> Uris { get; init; } = [];
   public string? FirstUri => Uris.Count > 0 ? Uris[0] : null;
+  public DateTime? PasswordRevisionDate { get; init; }
 
   // Card
   public string? CardholderName { get; init; }
