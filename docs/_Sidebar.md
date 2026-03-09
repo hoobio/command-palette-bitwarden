@@ -1,0 +1,14 @@
+- [Home](Home)
+- **Getting Started**
+  - [Installation & Setup](Getting-Started)
+- **Features**
+  - [Search & Filtering](Search-and-Filtering)
+  - [Vault Item Actions](Vault-Item-Actions)
+  - [Context Awareness](Context-Awareness)
+  - [TOTP Codes](TOTP-Codes)
+  - [Clipboard Security](Clipboard-Security)
+  - [Watchtower Tags](Watchtower-Tags)
+- **Configuration**
+  - [Settings](Settings)
+- **Development**
+  - [Architecture](Architecture)

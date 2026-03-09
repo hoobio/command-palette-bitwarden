@@ -120,3 +120,17 @@ When you need to look up SDK types, interfaces, properties, or capabilities, use
 - `CommandResult` - Return value from commands (`Dismiss`, `GoBack`, `KeepOpen`, `ShowToast`, etc.)
 - `StatusMessage` - Status bar message with `MessageState` (`Info`, `Success`, `Warning`, `Error`)
 - `IconInfo` - Icon from Segoe MDL2 Assets unicode or image URL
+
+---
+
+## Wiki Documentation (`docs/`)
+
+The `docs/` folder contains GitHub Wiki pages documenting all extension functionality. **Keep these pages up to date when making changes.**
+
+### When to Update
+
+- **Adding a feature**: Add relevant details to the appropriate wiki page, or create a new page if the feature is significant. Update [Home.md](../docs/Home.md) and [\_Sidebar.md](../docs/_Sidebar.md) if adding a new page.
+- **Changing behavior**: Update the page that describes the affected feature.
+- **Adding/changing settings**: Update [Settings.md](../docs/Settings.md) with the new setting's type, default, and description.
+- **Changing sort order or tags**: Update [Search-and-Filtering.md](../docs/Search-and-Filtering.md) and/or [Watchtower-Tags.md](../docs/Watchtower-Tags.md).
+- **Changing architecture/services**: Update [Architecture.md](../docs/Architecture.md).
