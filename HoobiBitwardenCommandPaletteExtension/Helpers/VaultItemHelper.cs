@@ -79,7 +79,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.Username))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.Username)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.Username!, "Username")))
       {
         Title = "Copy Username",
         Icon = new IconInfo("\uE77B"),
@@ -89,7 +89,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.Password))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.Password)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.Password!, "Password")))
       {
         Title = "Copy Password",
         Icon = new IconInfo("\uE72E"),
@@ -122,7 +122,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.Notes))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.Notes)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.Notes!, "Notes")))
       {
         Title = "Copy Notes",
         Icon = new IconInfo("\uE70B"),
@@ -135,7 +135,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.CardNumber))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardNumber)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.CardNumber!, "Card Number")))
       {
         Title = "Copy Card Number",
         Icon = new IconInfo("\uE8C7"),
@@ -145,7 +145,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.CardCode))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardCode)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.CardCode!, "Security Code")))
       {
         Title = "Copy Security Code",
         Icon = new IconInfo("\uE72E"),
@@ -155,7 +155,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.CardholderName))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardholderName)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.CardholderName!, "Cardholder Name")))
       {
         Title = "Copy Cardholder Name",
         Icon = new IconInfo("\uE77B"),
@@ -165,7 +165,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.CardExpiration))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardExpiration)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.CardExpiration!, "Expiration")))
       {
         Title = "Copy Expiration",
         Icon = new IconInfo("\uE787"),
@@ -178,7 +178,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.IdentityEmail))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityEmail)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityEmail!, "Email")))
       {
         Title = "Copy Email",
         Icon = new IconInfo("\uE715"),
@@ -188,7 +188,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityFullName))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityFullName)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityFullName!, "Name")))
       {
         Title = "Copy Name",
         Icon = new IconInfo("\uE77B"),
@@ -198,7 +198,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityPhone))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityPhone)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityPhone!, "Phone")))
       {
         Title = "Copy Phone",
         Icon = new IconInfo("\uE717"),
@@ -208,7 +208,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityUsername))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityUsername)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityUsername!, "Username")))
       {
         Title = "Copy Username",
         Icon = new IconInfo("\uE77B"),
@@ -218,7 +218,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.IdentityAddress))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityAddress)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.IdentityAddress!, "Address")))
       {
         Title = "Copy Address",
         Icon = new IconInfo("\uE80F"),
@@ -231,7 +231,7 @@ internal static partial class VaultItemHelper
   {
     if (!string.IsNullOrEmpty(item.SshPublicKey))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.SshPublicKey)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.SshPublicKey!, "Public Key")))
       {
         Title = "Copy Public Key",
         Icon = new IconInfo("\uE8D7"),
@@ -241,7 +241,7 @@ internal static partial class VaultItemHelper
 
     if (!string.IsNullOrEmpty(item.SshFingerprint))
     {
-      items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.SshFingerprint)))
+      items.Add(new CommandContextItem(Track(id, CopyText(item.SshFingerprint!, "Fingerprint")))
       {
         Title = "Copy Fingerprint",
         Icon = new IconInfo("\uE928"),
@@ -305,6 +305,12 @@ internal static partial class VaultItemHelper
 
   [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$")]
   private static partial Regex SshHostPattern();
+
+  private static AnonymousCommand CopyText(string text, string label) => new(() => ClipboardHelper.SetText(text))
+  {
+    Name = $"Copy {label}",
+    Result = CommandResult.ShowToast($"Copied {label} to clipboard"),
+  };
 
   private static TrackedInvokable Track(string itemId, InvokableCommand inner) => new(inner, itemId);
 

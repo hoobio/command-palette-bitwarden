@@ -100,6 +100,40 @@ jobs:
           name: publish-${{ matrix.platform }}
           path: HoobiBitwardenCommandPaletteExtension/bin/Release/**/publish/
 
+  wack:
+    needs: [build]
+    runs-on: windows-latest
+    steps:
+      - name: Download x64 MSIX
+        uses: actions/download-artifact@v8
+        with:
+          name: msix-x64
+          path: msix
+
+      - name: Run Windows App Certification Kit
+        shell: pwsh
+        run: |
+          $appCert = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\App Certification Kit" -Filter appcert.exe -Recurse | 
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $appCert) { 
+            Write-Host "##[warning]WACK not found, skipping"
+            exit 0 
+          }
+          $msix = Get-ChildItem msix -Recurse -Filter *.msix | Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Running WACK on: $msix"
+          & $appCert test -apptype windowspackagedapp -appxpackagepath $msix -reportoutputpath wack-report.xml
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "##[error]WACK failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+
+      - name: Upload WACK report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wack-report
+          path: wack-report.xml
+
   release:
     needs: [release-please, build]
     if: needs.release-please.outputs.release_created == 'true'

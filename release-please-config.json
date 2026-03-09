@@ -5,7 +5,14 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "changelog-path": "CHANGELOG.md",
-      "include-component-in-tag": false
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "xml",
+          "path": "HoobiBitwardenCommandPaletteExtension/Package.appxmanifest",
+          "xpath": "//*[local-name()='Identity']/@Version"
+        }
+      ]
     }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"

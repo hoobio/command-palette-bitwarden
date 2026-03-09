@@ -25,7 +25,7 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
       var code = totp.ComputeTotp();
 
       ClipboardHelper.SetText(code);
-      return CommandResult.ShowToast("OTP copied to clipboard");
+      return CommandResult.ShowToast("Copied TOTP to clipboard");
     }
     catch
     {

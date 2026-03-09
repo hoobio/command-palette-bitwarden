@@ -89,6 +89,10 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     <EnableAotAnalyzer>true</EnableAotAnalyzer>
+
+    <!-- Add .Debug suffix to package name for side-by-side installation -->
+    <PackageNameSuffix>.Debug</PackageNameSuffix>
+    <DisplayNameSuffix> (Dev)</DisplayNameSuffix>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'!='Debug'">
@@ -98,7 +102,38 @@
 
     <!-- In release, also ignore the aforementioned ILLink warning -->
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
+
+    <!-- No suffix for release builds -->
+    <PackageNameSuffix></PackageNameSuffix>
+    <DisplayNameSuffix></DisplayNameSuffix>
   </PropertyGroup>
+
+  <Target Name="StampPackageIdentityName" BeforeTargets="Build;_ConvertItems">
+    <PropertyGroup>
+      <AppxManifestPath>$(MSBuildProjectDirectory)\Package.appxmanifest</AppxManifestPath>
+      <BasePackageName>Hoobi.BitwardenCommandPaletteExtension</BasePackageName>
+      <FullPackageName>$(BasePackageName)$(PackageNameSuffix)</FullPackageName>
+      <BaseDisplayName>Bitwarden Command Palette Extension</BaseDisplayName>
+      <FullDisplayName>$(BaseDisplayName)$(DisplayNameSuffix)</FullDisplayName>
+    </PropertyGroup>
+    <Message Text="Stamping package identity: $(FullPackageName) with display name: $(FullDisplayName)" Importance="high" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Identity/@Name"
+             Value="$(FullPackageName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Properties/ns:DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/uap:VisualElements/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
+  </Target>
 
 
 </Project>

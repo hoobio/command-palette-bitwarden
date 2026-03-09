@@ -1,6 +1,5 @@
 using System;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -11,12 +10,12 @@ internal sealed partial class SetServerPage : ContentPage
 {
   private readonly SetServerForm _form;
 
-  public SetServerPage(BitwardenCliService service)
+  public SetServerPage(BitwardenCliService service, Action<string>? onSubmit = null)
   {
     Name = "Set Server";
     Title = "Set Bitwarden Server";
     Icon = new IconInfo("\uE774");
-    _form = new SetServerForm(service);
+    _form = new SetServerForm(service, onSubmit);
   }
 
   public override IContent[] GetContent() => [_form];
@@ -25,6 +24,7 @@ internal sealed partial class SetServerPage : ContentPage
 internal sealed partial class SetServerForm : FormContent
 {
   private readonly BitwardenCliService _service;
+  private readonly Action<string>? _onSubmit;
 
   private static string BuildTemplate()
   {
@@ -71,9 +71,10 @@ internal sealed partial class SetServerForm : FormContent
     """;
   }
 
-  public SetServerForm(BitwardenCliService service)
+  public SetServerForm(BitwardenCliService service, Action<string>? onSubmit = null)
   {
     _service = service;
+    _onSubmit = onSubmit;
     TemplateJson = BuildTemplate();
   }
 
@@ -88,15 +89,7 @@ internal sealed partial class SetServerForm : FormContent
     if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https")
       return CommandResult.ShowToast("Invalid URL: must start with https://");
 
-    var error = Task.Run(() => _service.SetServerUrlAsync(url)).GetAwaiter().GetResult();
-
-    if (error != null)
-    {
-      TemplateJson = BuildTemplate();
-      return CommandResult.ShowToast(error);
-    }
-
-    TemplateJson = BuildTemplate();
+    _onSubmit?.Invoke(url);
     return CommandResult.GoBack();
   }
 }

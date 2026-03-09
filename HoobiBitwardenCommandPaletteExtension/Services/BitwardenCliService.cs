@@ -36,6 +36,7 @@ internal sealed class BitwardenCliService
 
   public event Action? CacheUpdated;
   public event Action? StatusChanged;
+  public event Action? WarmupCompleted;
 
   public BitwardenCliService(BitwardenSettingsManager? settings = null)
   {
@@ -179,12 +180,29 @@ internal sealed class BitwardenCliService
       }
 
       var error = stderr.Trim();
+
+      if (error.Contains("not logged in", StringComparison.OrdinalIgnoreCase))
+        ResetToLoggedOut();
+
       return (false, string.IsNullOrEmpty(error) ? "Unlock failed" : error);
     }
     catch (Exception ex)
     {
       return (false, ex.Message);
     }
+  }
+
+  private void ResetToLoggedOut()
+  {
+    _sessionKey = null;
+    SetStatus(VaultStatus.Unauthenticated);
+    lock (_cacheLock)
+    {
+      _cache = [];
+      _cacheLoaded = false;
+    }
+    SessionStore.Clear();
+    StatusChanged?.Invoke();
   }
 
   private async Task FetchServerUrlAsync()
@@ -206,9 +224,13 @@ internal sealed class BitwardenCliService
   {
     try
     {
-      var args = $"login \"{email}\" --passwordenv BW_MP";
+      var sanitizedEmail = email.Replace("\"", "");
+      var args = $"login \"{sanitizedEmail}\" --passwordenv BW_MP";
       if (!string.IsNullOrEmpty(twoFactorCode))
-        args += $" --method {twoFactorMethod ?? 0} --code \"{twoFactorCode}\"";
+      {
+        var sanitizedCode = twoFactorCode.Replace("\"", "");
+        args += $" --method {twoFactorMethod ?? 0} --code \"{sanitizedCode}\"";
+      }
       args += " --raw";
 
       var psi = new ProcessStartInfo("bw", args)
@@ -260,9 +282,8 @@ internal sealed class BitwardenCliService
 
   public async Task LogoutAsync()
   {
-    try { await RunCliAsync("logout"); } catch { }
     _sessionKey = null;
-    _lastStatus = null;
+    SetStatus(VaultStatus.Unauthenticated);
     lock (_cacheLock)
     {
       _cache = [];
@@ -271,11 +292,12 @@ internal sealed class BitwardenCliService
     SessionStore.Clear();
     ServerUrl = null;
     StatusChanged?.Invoke();
+
+    try { await RunCliAsync("logout"); } catch { }
   }
 
   public async Task LockAsync()
   {
-    try { await RunCliAsync("lock"); } catch { }
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
     lock (_cacheLock)
@@ -285,6 +307,8 @@ internal sealed class BitwardenCliService
     }
     SessionStore.Clear();
     StatusChanged?.Invoke();
+
+    try { await RunCliAsync("lock"); } catch { }
   }
 
   public async Task<string?> SetServerUrlAsync(string url)
@@ -370,6 +394,7 @@ internal sealed class BitwardenCliService
     var status = await GetVaultStatusAsync();
     if (status == VaultStatus.Unlocked)
       await RefreshCacheAsync();
+    WarmupCompleted?.Invoke();
   }
 
 
@@ -434,29 +459,6 @@ internal sealed class BitwardenCliService
   private async Task<string> RunCliAsync(string args)
   {
     using var process = StartProcess(args);
-    var output = await process.StandardOutput.ReadToEndAsync();
-    await process.WaitForExitAsync();
-    return output;
-  }
-
-  private async Task<string> RunCliWithStdinAsync(string args, string stdinInput)
-  {
-    var psi = new ProcessStartInfo("bw", args)
-    {
-      UseShellExecute = false,
-      RedirectStandardOutput = true,
-      RedirectStandardError = true,
-      RedirectStandardInput = true,
-      CreateNoWindow = true,
-    };
-
-    if (_sessionKey != null)
-      psi.Environment["BW_SESSION"] = _sessionKey;
-
-    using var process = Process.Start(psi)!;
-    await process.StandardInput.WriteLineAsync(stdinInput);
-    process.StandardInput.Close();
-
     var output = await process.StandardOutput.ReadToEndAsync();
     await process.WaitForExitAsync();
     return output;

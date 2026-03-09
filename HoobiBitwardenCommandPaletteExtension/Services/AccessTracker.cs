@@ -17,6 +17,8 @@ internal static class AccessTracker
   private static Dictionary<string, DateTime>? _data;
   private static readonly Lock _lock = new();
 
+  public static event Action? ItemAccessed;
+
   public static void Record(string itemId)
   {
     lock (_lock)
@@ -25,6 +27,7 @@ internal static class AccessTracker
       data[itemId] = DateTime.UtcNow;
       Save(data);
     }
+    ItemAccessed?.Invoke();
   }
 
   public static DateTime GetLastAccess(string itemId)
