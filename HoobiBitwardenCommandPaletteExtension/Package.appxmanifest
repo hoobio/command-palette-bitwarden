@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" IgnorableNamespaces="uap uap3 rescap">
-  <Identity Name="Hoobi.BitwardenCommandPaletteExtension.Debug" Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71" Version="1.4.1.0" />
+  <Identity Name="Hoobi.BitwardenCommandPaletteExtension.Debug" Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71" Version="1.5.1.0" />
   <Properties>
     <DisplayName>Bitwarden Command Palette Extension (Dev)</DisplayName>
     <PublisherDisplayName>Hoobi</PublisherDisplayName>
