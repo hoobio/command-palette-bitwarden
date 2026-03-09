@@ -11,6 +11,8 @@ on:
       - "**/Package.appxmanifest"
       - "version.txt"
       - ".github/workflows/build.yaml"
+      - "release-please-config.json"
+      - ".release-please-manifest.json"
   pull_request:
     branches: [main]
     paths:
@@ -21,6 +23,8 @@ on:
       - "**/Package.appxmanifest"
       - "version.txt"
       - ".github/workflows/build.yaml"
+      - "release-please-config.json"
+      - ".release-please-manifest.json"
   workflow_dispatch:
 
 permissions:
