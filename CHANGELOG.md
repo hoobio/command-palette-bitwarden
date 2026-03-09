@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.2](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.5.1...v1.5.2) (2026-03-09)
+
+
+### Bug Fixes
+
+* add id-token and attestations permissions for build provenance ([dcd20d8](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/dcd20d88c3eb9f6a4176c5c7b7a7758d1ef9d4dd))
+* add id-token and attestations permissions for build provenance ([#31](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/31)) ([85d2b15](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/85d2b15e85398272686adfb7da70dc164efcf4ed))
+
 ## [1.5.1](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.5.0...v1.5.1) (2026-03-09)
 
 
