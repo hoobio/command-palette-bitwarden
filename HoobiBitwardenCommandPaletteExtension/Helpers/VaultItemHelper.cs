@@ -57,6 +57,7 @@ internal static partial class VaultItemHelper
     items.Add(new CommandContextItem(Track(id, BuildOpenInBitwardenCommand(id)))
     {
       Title = "Open in Bitwarden",
+      Icon = new IconInfo("\uE8A7"),
       RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.O),
     });
 
@@ -66,6 +67,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new OpenUrlCommand($"{serverUrl}/#/vault?itemId={Uri.EscapeDataString(id)}")))
       {
         Title = "View in Web Vault",
+        Icon = new IconInfo("\uE774"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.O),
       });
     }
@@ -80,6 +82,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.Username)))
       {
         Title = "Copy Username",
+        Icon = new IconInfo("\uE77B"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
       });
     }
@@ -89,6 +92,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.Password)))
       {
         Title = "Copy Password",
+        Icon = new IconInfo("\uE72E"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
       });
     }
@@ -98,6 +102,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyOtpCommand(item.TotpSecret!)))
       {
         Title = "Copy OTP",
+        Icon = new IconInfo("\uE916"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, alt: true, vkey: VirtualKey.C),
       });
     }
@@ -107,6 +112,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new OpenUrlCommand(item.FirstUri)))
       {
         Title = "Open in Browser",
+        Icon = new IconInfo("\uE774"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(alt: true, vkey: VirtualKey.Enter),
       });
     }
@@ -119,6 +125,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.Notes)))
       {
         Title = "Copy Notes",
+        Icon = new IconInfo("\uE70B"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
       });
     }
@@ -131,6 +138,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardNumber)))
       {
         Title = "Copy Card Number",
+        Icon = new IconInfo("\uE8C7"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
       });
     }
@@ -140,6 +148,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardCode)))
       {
         Title = "Copy Security Code",
+        Icon = new IconInfo("\uE72E"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
       });
     }
@@ -149,6 +158,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardholderName)))
       {
         Title = "Copy Cardholder Name",
+        Icon = new IconInfo("\uE77B"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, alt: true, vkey: VirtualKey.C),
       });
     }
@@ -158,6 +168,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.CardExpiration)))
       {
         Title = "Copy Expiration",
+        Icon = new IconInfo("\uE787"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.E),
       });
     }
@@ -170,6 +181,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityEmail)))
       {
         Title = "Copy Email",
+        Icon = new IconInfo("\uE715"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
       });
     }
@@ -179,6 +191,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityFullName)))
       {
         Title = "Copy Name",
+        Icon = new IconInfo("\uE77B"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
       });
     }
@@ -188,6 +201,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityPhone)))
       {
         Title = "Copy Phone",
+        Icon = new IconInfo("\uE717"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, alt: true, vkey: VirtualKey.C),
       });
     }
@@ -197,6 +211,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityUsername)))
       {
         Title = "Copy Username",
+        Icon = new IconInfo("\uE77B"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.U),
       });
     }
@@ -206,6 +221,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.IdentityAddress)))
       {
         Title = "Copy Address",
+        Icon = new IconInfo("\uE80F"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.A),
       });
     }
@@ -218,6 +234,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.SshPublicKey)))
       {
         Title = "Copy Public Key",
+        Icon = new IconInfo("\uE8D7"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
       });
     }
@@ -227,6 +244,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, new CopyTextCommand(item.SshFingerprint)))
       {
         Title = "Copy Fingerprint",
+        Icon = new IconInfo("\uE928"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
       });
     }
@@ -236,6 +254,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(Track(id, BuildSshCommand(item.SshHost!)))
       {
         Title = "Open SSH Session",
+        Icon = new IconInfo("\uE756"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(alt: true, vkey: VirtualKey.Enter),
       });
     }

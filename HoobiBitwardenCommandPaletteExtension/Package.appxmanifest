@@ -11,7 +11,7 @@
   <Identity
     Name="Hoobi.BitwardenCommandPaletteExtension"
     Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71"
-    Version="0.0.1.0" />
+    Version="1.3.0.0" />
 
   <Properties>
     <DisplayName>Bitwarden Command Palette Extension</DisplayName>

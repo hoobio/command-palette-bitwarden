@@ -17,7 +17,7 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
   private CancellationTokenSource? _cts;
 
   public BitwardenFallbackItem(BitwardenCliService service)
-      : base(new NoOpCommand(), "Search Bitwarden")
+      : base(new NoOpCommand(), "Search Bitwarden", "hoobi.bitwarden.fallback")
   {
     _service = service;
     Title = string.Empty;

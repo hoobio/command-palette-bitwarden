@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;

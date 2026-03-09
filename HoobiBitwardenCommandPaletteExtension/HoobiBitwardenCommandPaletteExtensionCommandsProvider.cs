@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -12,7 +13,11 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
 
     public HoobiBitwardenCommandPaletteExtensionCommandsProvider()
     {
+#if DEBUG
+        DisplayName = "Bitwarden (Dev)";
+#else
         DisplayName = "Bitwarden";
+#endif
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
 
         _settingsManager = new BitwardenSettingsManager();
@@ -27,6 +32,8 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         ];
 
         Settings = _settingsManager.Settings;
+
+        _ = Task.Run(service.WarmCacheAsync);
     }
 
     public override ICommandItem[] TopLevelCommands() => _commands;
