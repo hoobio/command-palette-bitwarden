@@ -2,7 +2,7 @@ name: PR Title Check
 
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, edited, reopened]
 
 permissions:
   pull-requests: write
