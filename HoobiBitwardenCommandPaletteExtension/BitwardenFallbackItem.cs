@@ -13,13 +13,15 @@ namespace HoobiBitwardenCommandPaletteExtension;
 internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisposable
 {
   private readonly BitwardenCliService _service;
+  private readonly BitwardenSettingsManager? _settings;
   private readonly Lock _lock = new();
   private CancellationTokenSource? _cts;
 
-  public BitwardenFallbackItem(BitwardenCliService service)
+  public BitwardenFallbackItem(BitwardenCliService service, BitwardenSettingsManager? settings = null)
       : base(new NoOpCommand(), "Search Bitwarden", "hoobi.bitwarden.fallback")
   {
     _service = service;
+    _settings = settings;
     Title = string.Empty;
     Subtitle = string.Empty;
     Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
@@ -99,7 +101,7 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
       Title = string.Empty;
       Subtitle = string.Empty;
       Command = new NoOpCommand();
-      MoreCommands = null!;
+      MoreCommands = [];
     }
   }
 
@@ -128,8 +130,8 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
       Title = $"Bitwarden: {items.Count} results for \"{query}\"";
       Subtitle = "View all results";
       Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
-      Command = new HoobiBitwardenCommandPaletteExtensionPage(_service);
-      MoreCommands = null!;
+      Command = new HoobiBitwardenCommandPaletteExtensionPage(_service, _settings);
+      MoreCommands = [];
     }
   }
 

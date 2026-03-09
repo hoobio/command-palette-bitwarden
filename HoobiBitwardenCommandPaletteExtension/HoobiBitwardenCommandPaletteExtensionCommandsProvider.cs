@@ -22,7 +22,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
 
         _settingsManager = new BitwardenSettingsManager();
         var service = new BitwardenCliService(_settingsManager);
-        _fallbackItem = new BitwardenFallbackItem(service);
+        _fallbackItem = new BitwardenFallbackItem(service, _settingsManager);
         _commands = [
             new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(service, _settingsManager))
             {

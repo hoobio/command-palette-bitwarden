@@ -15,7 +15,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private readonly BitwardenCliService _service;
     private readonly BitwardenSettingsManager? _settings;
     private IListItem[] _currentItems = [];
-    private bool _initialized;
+    private bool _initialLoadStarted;
     private string _currentSearchText = string.Empty;
     private string? _errorMessage;
 
@@ -25,6 +25,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _settings = settings;
         _service.CacheUpdated += OnCacheUpdated;
         _service.StatusChanged += OnStatusChanged;
+        _service.WarmupCompleted += OnWarmupCompleted;
+        AccessTracker.ItemAccessed += OnItemAccessed;
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         Title = "Bitwarden";
         Name = "Open";
@@ -33,9 +35,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     public override IListItem[] GetItems()
     {
-        if (!_initialized)
+        if (_currentItems.Length > 0)
         {
-            _initialized = true;
+            IsLoading = false;
+            return _currentItems;
+        }
+
+        if (!_initialLoadStarted)
+        {
+            _initialLoadStarted = true;
+            IsLoading = true;
+            _currentItems = BuildLoadingPlaceholder("Checking vault status...", "bw status");
             _ = Task.Run(InitializeAsync);
         }
 
@@ -44,7 +54,13 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
     {
+        if (oldSearch == newSearch && _currentItems.Length > 0)
+            return;
+
         _currentSearchText = newSearch;
+
+        if (_service.LastStatus != VaultStatus.Unlocked)
+            return;
 
         if (_service.IsCacheLoaded)
         {
@@ -70,22 +86,18 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         IsLoading = false;
     }
 
-    private void OnStatusChanged()
-    {
-        _initialized = false;
-        _currentItems = [];
-        RaiseItemsChanged();
-    }
+    private void OnStatusChanged() => RebuildForCurrentStatus();
 
-    private async Task InitializeAsync()
-    {
-        IsLoading = true;
+    private void OnWarmupCompleted() => RebuildForCurrentStatus();
 
-        var status = _service.LastStatus ?? await _service.GetVaultStatusAsync();
-        switch (status)
+    private void RebuildForCurrentStatus()
+    {
+        IsLoading = false;
+
+        switch (_service.LastStatus)
         {
-            case VaultStatus.CliNotFound:
-                _currentItems = BuildCliNotFoundItems();
+            case VaultStatus.Unlocked when _service.IsCacheLoaded:
+                _currentItems = BuildListItems(_service.SearchCached(_currentSearchText));
                 break;
             case VaultStatus.Unauthenticated:
                 _currentItems = BuildUnauthenticatedItems();
@@ -93,15 +105,52 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             case VaultStatus.Locked:
                 _currentItems = BuildLockedItems();
                 break;
-            case VaultStatus.Unlocked:
-                if (!_service.IsCacheLoaded)
-                    await _service.RefreshCacheAsync();
-                _currentItems = BuildListItems(_service.SearchCached(null));
+            case VaultStatus.CliNotFound:
+                _currentItems = BuildCliNotFoundItems();
+                break;
+            default:
+                _currentItems = [];
                 break;
         }
 
         RaiseItemsChanged();
-        IsLoading = false;
+    }
+
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            var status = _service.LastStatus;
+            if (status is null)
+                status = await _service.GetVaultStatusAsync();
+
+            switch (status)
+            {
+                case VaultStatus.CliNotFound:
+                    _currentItems = BuildCliNotFoundItems();
+                    break;
+                case VaultStatus.Unauthenticated:
+                    _currentItems = BuildUnauthenticatedItems();
+                    break;
+                case VaultStatus.Locked:
+                    _currentItems = BuildLockedItems();
+                    break;
+                case VaultStatus.Unlocked:
+                    if (!_service.IsCacheLoaded)
+                    {
+                        ShowLoadingStatus("Retrieving items from vault...", "bw list items");
+                        await _service.RefreshCacheAsync();
+                    }
+                    _currentItems = BuildListItems(_service.SearchCached(null));
+                    break;
+            }
+
+            RaiseItemsChanged();
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     private static IListItem[] BuildCliNotFoundItems() =>
@@ -114,16 +163,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         },
     ];
 
-    private IListItem[] BuildUnauthenticatedItems() =>
-    [
-        new ListItem(new Pages.LoginPage(_service, _settings, OnLoginSubmitted))
+    private IListItem[] BuildUnauthenticatedItems()
+    {
+        var item = new ListItem(new Pages.LoginPage(_service, _settings, OnLoginSubmitted))
         {
             Title = "Login to Bitwarden",
             Subtitle = _errorMessage ?? "Sign in with your email and master password",
             Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
-        },
-        BuildSetServerItem(),
-    ];
+        };
+
+        if (_errorMessage != null)
+            item.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xFF, 0x44, 0x44) }];
+
+        return [item, BuildSetServerItem()];
+    }
 
     private IListItem[] BuildLockedItems() =>
     [
@@ -132,12 +185,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         BuildLogoutItem(),
     ];
 
-    private ListItem BuildUnlockItem() => new(new Pages.UnlockVaultPage(_service, _settings, OnUnlockSubmitted))
+    private ListItem BuildUnlockItem()
     {
-        Title = "Vault is locked",
-        Subtitle = _errorMessage ?? "Click to unlock your Bitwarden vault",
-        Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
-    };
+        var item = new ListItem(new Pages.UnlockVaultPage(_service, _settings, OnUnlockSubmitted))
+        {
+            Title = "Vault is locked",
+            Subtitle = _errorMessage ?? "Click to unlock your Bitwarden vault",
+            Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
+        };
+
+        if (_errorMessage != null)
+            item.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xFF, 0x44, 0x44) }];
+
+        return item;
+    }
 
     private ListItem BuildSetServerItem() => new(new Pages.SetServerPage(_service))
     {
@@ -187,6 +248,14 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         _service.CacheUpdated -= OnCacheUpdated;
         _service.StatusChanged -= OnStatusChanged;
+        _service.WarmupCompleted -= OnWarmupCompleted;
+        AccessTracker.ItemAccessed -= OnItemAccessed;
+    }
+
+    private void OnItemAccessed()
+    {
+        if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            _currentItems = BuildListItems(_service.SearchCached(_currentSearchText));
     }
 
     private void OnUnlockSubmitted(string password)
@@ -198,16 +267,29 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         _ = Task.Run(async () =>
         {
+            ShowLoadingStatus("Unlocking vault...", "bw unlock");
             var (success, error) = await _service.UnlockAsync(password);
             if (!success)
             {
-                _errorMessage = error ?? "Unlock failed";
-                _currentItems = BuildLockedItems();
+                if (_service.LastStatus == VaultStatus.Unauthenticated)
+                {
+                    _errorMessage = "You are not logged in";
+                    _currentItems = BuildUnauthenticatedItems();
+                }
+                else
+                {
+                    _errorMessage = error?.Contains("key", StringComparison.OrdinalIgnoreCase) == true
+                        ? "Invalid password entered"
+                        : error ?? "Unlock failed";
+                    _currentItems = BuildLockedItems();
+                }
+
                 RaiseItemsChanged();
                 IsLoading = false;
                 return;
             }
 
+            ShowLoadingStatus("Retrieving items from vault...", "bw list items");
             await _service.RefreshCacheAsync();
             _currentItems = BuildListItems(_service.SearchCached(null));
             RaiseItemsChanged();
@@ -224,6 +306,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         _ = Task.Run(async () =>
         {
+            ShowLoadingStatus("Logging in...", "bw login");
             var (success, error, twoFactorRequired) = await _service.LoginAsync(email, password, twoFactorCode);
             if (!success)
             {
@@ -238,10 +321,27 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 return;
             }
 
+            ShowLoadingStatus("Retrieving items from vault...", "bw list items");
             await _service.RefreshCacheAsync();
             _currentItems = BuildListItems(_service.SearchCached(null));
             RaiseItemsChanged();
             IsLoading = false;
         });
     }
+
+    private void ShowLoadingStatus(string title, string command)
+    {
+        _currentItems = BuildLoadingPlaceholder(title, command);
+        RaiseItemsChanged();
+    }
+
+    private static IListItem[] BuildLoadingPlaceholder(string title, string command) =>
+    [
+        new ListItem(new NoOpCommand())
+        {
+            Title = title,
+            Subtitle = $"Running: {command}",
+            Icon = new IconInfo("\uE895"),
+        },
+    ];
 }
