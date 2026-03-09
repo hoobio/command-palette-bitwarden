@@ -15,7 +15,10 @@ internal static class AccessTracker
       "HoobiBitwardenCommandPalette", "access.json");
 
   private static Dictionary<string, DateTime>? _data;
+  private static string? _lastCopiedId;
+  private static Timer? _recentClearTimer;
   private static readonly Lock _lock = new();
+  private static readonly TimeSpan RecentExpiry = TimeSpan.FromMinutes(5);
 
   public static event Action? ItemAccessed;
 
@@ -23,6 +26,9 @@ internal static class AccessTracker
   {
     lock (_lock)
     {
+      _lastCopiedId = itemId;
+      _recentClearTimer?.Dispose();
+      _recentClearTimer = new Timer(ClearRecent, null, RecentExpiry, Timeout.InfiniteTimeSpan);
       var data = Load();
       data[itemId] = DateTime.UtcNow;
       Save(data);
@@ -30,12 +36,27 @@ internal static class AccessTracker
     ItemAccessed?.Invoke();
   }
 
-  public static DateTime GetLastAccess(string itemId)
+  public static bool IsLastCopied(string itemId)
+  {
+    lock (_lock)
+      return _lastCopiedId != null && _lastCopiedId == itemId;
+  }
+
+  private static void ClearRecent(object? state)
   {
     lock (_lock)
     {
-      return Load().TryGetValue(itemId, out var dt) ? dt : DateTime.MinValue;
+      _lastCopiedId = null;
+      _recentClearTimer?.Dispose();
+      _recentClearTimer = null;
     }
+    ItemAccessed?.Invoke();
+  }
+
+  public static DateTime GetLastAccess(string itemId)
+  {
+    lock (_lock)
+      return Load().TryGetValue(itemId, out var dt) ? dt : DateTime.MinValue;
   }
 
   private static Dictionary<string, DateTime> Load()
@@ -63,10 +84,7 @@ internal static class AccessTracker
     try
     {
       if (data.Count > 500)
-      {
-        _data = data = new Dictionary<string, DateTime>(
-            data.OrderByDescending(kvp => kvp.Value).Take(500));
-      }
+        _data = data = new Dictionary<string, DateTime>(data.OrderByDescending(kvp => kvp.Value).Take(500));
 
       Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
       File.WriteAllText(FilePath, JsonSerializer.Serialize(data, AccessJsonContext.Default.DictionaryStringDateTime));

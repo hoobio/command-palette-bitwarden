@@ -2,6 +2,7 @@ using System;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using OtpNet;
+using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Commands;
 
@@ -24,7 +25,7 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
       var totp = new Totp(key, step: period, totpSize: digits);
       var code = totp.ComputeTotp();
 
-      ClipboardHelper.SetText(code);
+      SecureClipboardService.CopySensitive(code);
       return CommandResult.ShowToast("Copied TOTP to clipboard");
     }
     catch
@@ -33,7 +34,7 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
     }
   }
 
-  private static (byte[] Key, int Digits, int Period) ParseTotpSecret(string secret)
+  internal static (byte[] Key, int Digits, int Period) ParseTotpSecret(string secret)
   {
     if (secret.StartsWith("otpauth://", StringComparison.OrdinalIgnoreCase))
     {
@@ -48,13 +49,14 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
           parameters[Uri.UnescapeDataString(parts[0])] = Uri.UnescapeDataString(parts[1]);
       }
 
-      var key = Base32Encoding.ToBytes(parameters.TryGetValue("secret", out var s) ? s : secret);
+      var rawSecret = parameters.TryGetValue("secret", out var s) ? s : secret;
+      var key = Base32Encoding.ToBytes(rawSecret.Replace(" ", "").Replace("-", ""));
       _ = int.TryParse(parameters.TryGetValue("digits", out var d) ? d : null, out var digits);
       _ = int.TryParse(parameters.TryGetValue("period", out var p) ? p : null, out var period);
 
       return (key, digits > 0 ? digits : 6, period > 0 ? period : 30);
     }
 
-    return (Base32Encoding.ToBytes(secret), 6, 30);
+    return (Base32Encoding.ToBytes(secret.Replace(" ", "").Replace("-", "")), 6, 30);
   }
 }
