@@ -39,6 +39,7 @@ jobs:
         id: release
         with:
           release-type: simple
+          token: ${{ secrets.GH_PAT }}
 
   build:
     runs-on: windows-latest
