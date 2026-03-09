@@ -26,8 +26,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  id-token: write
-  attestations: write
 
 jobs:
   release-please:
@@ -108,12 +106,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($_.Name)" }
           }
 
-      - name: Attest MSIX packages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: 'AppPackages/**/*.msix'
-
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v7
         with:
@@ -166,6 +158,10 @@ jobs:
     needs: [release-please, build]
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
     steps:
       - name: Download x64 artifacts
         uses: actions/download-artifact@v8
@@ -178,6 +174,11 @@ jobs:
         with:
           name: msix-ARM64
           path: release/ARM64
+
+      - name: Attest MSIX packages
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'release/**/*.msix'
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
