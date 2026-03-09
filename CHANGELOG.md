@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.4.1...v1.5.0) (2026-03-09)
+
+
+### Features
+
+* improve vault UX with loading states, error handling, and toast messages ([9383b60](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/9383b6065e0ddd2bfd093ec0b4a6c02bbbc68f3d))
+* keep palette open for Lock/Logout/SetServer with loading states ([fa1c23f](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/fa1c23f0b96a86abd75f7da4fedaf71ac7a1c40f))
+
+
+### Bug Fixes
+
+* clear vault cache immediately before lock and logout ([1b1d368](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/1b1d36839976205aaeaeaaf61eb03b12118a937d))
+
 ## [1.4.1](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.4.0...v1.4.1) (2026-03-09)
 
 
