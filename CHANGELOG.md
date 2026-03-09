@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.5.2...v1.6.0) (2026-03-09)
+
+
+### Features
+
+* 1Password parity features - clipboard, context awareness, tags, search syntax ([#63](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/63)) ([5ff2011](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/5ff201110be20287d8666d07ef260d34c29131bb))
+
 ## [1.5.2](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.5.1...v1.5.2) (2026-03-09)
 
 
