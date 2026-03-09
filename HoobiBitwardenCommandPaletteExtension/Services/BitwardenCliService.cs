@@ -260,7 +260,8 @@ internal sealed class BitwardenCliService
 
   public async Task LogoutAsync()
   {
-    try { await RunCliAsync("logout"); } catch { }
+    // Clear cache and reset state FIRST, before calling CLI
+    // This ensures immediate UI update even if CLI is slow
     _sessionKey = null;
     _lastStatus = null;
     lock (_cacheLock)
@@ -271,11 +272,15 @@ internal sealed class BitwardenCliService
     SessionStore.Clear();
     ServerUrl = null;
     StatusChanged?.Invoke();
+
+    // Now actually logout in the CLI (fire and forget if it fails)
+    try { await RunCliAsync("logout"); } catch { }
   }
 
   public async Task LockAsync()
   {
-    try { await RunCliAsync("lock"); } catch { }
+    // Clear cache and set status FIRST, before calling CLI
+    // This ensures immediate UI update even if CLI is slow
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
     lock (_cacheLock)
@@ -285,6 +290,9 @@ internal sealed class BitwardenCliService
     }
     SessionStore.Clear();
     StatusChanged?.Invoke();
+
+    // Now actually lock in the CLI (fire and forget if it fails)
+    try { await RunCliAsync("lock"); } catch { }
   }
 
   public async Task<string?> SetServerUrlAsync(string url)
