@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.1](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.4.0...v1.4.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* correct release-please to check refs/heads/main ([#23](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/23)) ([b44010e](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/b44010eab5de63fe10e78dd0a748b92c1f923ae8))
+* correct release-please to run on refs/heads/main (AB[#0](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/0)) ([#20](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/20)) ([de597e6](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/de597e6e086ebcd27a08cecb7762023d1cff3930))
+* SDK update, Win32 credentials, lock vault, UX improvements and workflow fixes (AB[#0](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/0)) ([#17](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/17)) ([0709164](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/07091642785e2c06dac7157bd27fd3409c32058f))
+* sync release-please workflow configuration from dev (AB[#0](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/0)) ([#18](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/18)) ([68bd60b](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/68bd60bbc23181f0013cbb78da92f9b2be435f21))
+
 ## [1.4.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.3.0...v1.4.0) (2026-03-09)
 
 
