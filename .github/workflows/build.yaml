@@ -198,12 +198,32 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Read version
+      - name: Get next version from release PR
         id: version
-        run: echo "version=$(cat version.txt)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find open release-please PR
+          PR_TITLE=$(gh pr list \
+            --repo ${{ github.repository }} \
+            --state open \
+            --head "release-please--branches--main" \
+            --json title \
+            --jq '.[0].title')
+          
+          if [ -n "$PR_TITLE" ]; then
+            # Extract version from "chore(main): release X.Y.Z"
+            VERSION=$(echo "$PR_TITLE" | grep -oP '(?<=release )\d+\.\d+\.\d+')
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Found next version from PR: $VERSION"
+          else
+            # Fallback to version.txt if no PR exists
+            VERSION=$(cat version.txt)
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "No release PR found, using version.txt: $VERSION"
+          fi
 
       - name: Download x64 artifacts
         uses: actions/download-artifact@v8
