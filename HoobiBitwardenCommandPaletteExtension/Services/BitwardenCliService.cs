@@ -25,6 +25,7 @@ internal sealed class BitwardenCliService
   private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(5);
 
   private VaultStatus? _lastStatus;
+  private Dictionary<string, string> _folders = [];
 
   public bool IsUnlocked => _sessionKey != null;
 
@@ -33,6 +34,11 @@ internal sealed class BitwardenCliService
   public VaultStatus? LastStatus => _lastStatus;
 
   internal static string? ServerUrl { get; private set; }
+
+  internal IReadOnlyDictionary<string, string> Folders
+  {
+    get { lock (_cacheLock) return _folders; }
+  }
 
   public event Action? CacheUpdated;
   public event Action? StatusChanged;
@@ -118,8 +124,9 @@ internal sealed class BitwardenCliService
     try
     {
       using var process = StartProcess("sync");
-      await process.StandardOutput.ReadToEndAsync();
-      await process.WaitForExitAsync();
+      using var cts = new CancellationTokenSource(CliTimeoutMs);
+      await process.StandardOutput.ReadToEndAsync(cts.Token);
+      await process.WaitForExitAsync(cts.Token);
       if (process.ExitCode == 0)
       {
         await FetchServerUrlAsync();
@@ -165,9 +172,10 @@ internal sealed class BitwardenCliService
         psi.Environment["BW_SESSION"] = _sessionKey;
 
       using var process = Process.Start(psi)!;
-      var stdout = await process.StandardOutput.ReadToEndAsync();
-      var stderr = await process.StandardError.ReadToEndAsync();
-      await process.WaitForExitAsync();
+      using var cts = new CancellationTokenSource(CliTimeoutMs);
+      var stdout = await process.StandardOutput.ReadToEndAsync(cts.Token);
+      var stderr = await process.StandardError.ReadToEndAsync(cts.Token);
+      await process.WaitForExitAsync(cts.Token);
 
       var key = stdout.Trim();
       if (process.ExitCode == 0 && !string.IsNullOrEmpty(key))
@@ -245,9 +253,10 @@ internal sealed class BitwardenCliService
       psi.Environment["BW_MP"] = password;
 
       using var process = Process.Start(psi)!;
+      using var cts = new CancellationTokenSource(CliTimeoutMs);
       process.StandardInput.Close();
 
-      var stdoutTask = process.StandardOutput.ReadToEndAsync();
+      var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
       var (stderr, twoFactorDetected) = await ReadStderrWithTwoFactorDetectionAsync(process);
 
       if (twoFactorDetected)
@@ -256,7 +265,7 @@ internal sealed class BitwardenCliService
         return (false, "Two-factor authentication required - enter your 2FA code", true);
       }
 
-      await process.WaitForExitAsync();
+      await process.WaitForExitAsync(cts.Token);
 
       var key = (await stdoutTask).Trim();
       if (process.ExitCode == 0 && !string.IsNullOrEmpty(key))
@@ -314,9 +323,10 @@ internal sealed class BitwardenCliService
   public async Task<string?> SetServerUrlAsync(string url)
   {
     using var process = StartProcess($"config server \"{url}\"");
-    var stdout = await process.StandardOutput.ReadToEndAsync();
-    var stderr = await process.StandardError.ReadToEndAsync();
-    await process.WaitForExitAsync();
+    using var cts = new CancellationTokenSource(CliTimeoutMs);
+    var stdout = await process.StandardOutput.ReadToEndAsync(cts.Token);
+    var stderr = await process.StandardError.ReadToEndAsync(cts.Token);
+    await process.WaitForExitAsync(cts.Token);
 
     if (process.ExitCode == 0)
     {
@@ -329,22 +339,127 @@ internal sealed class BitwardenCliService
     return string.IsNullOrEmpty(error) ? "Failed to set server URL" : error;
   }
 
-  public List<BitwardenItem> SearchCached(string? query = null)
+  public List<BitwardenItem> SearchCached(string? query = null, ForegroundContext? context = null)
   {
     lock (_cacheLock)
     {
-      if (string.IsNullOrWhiteSpace(query))
-        return [.. _cache.OrderByDescending(i => AccessTracker.GetLastAccess(i.Id)).ThenByDescending(i => i.RevisionDate)];
+      var (filters, textQuery) = ParseSearchFilters(query);
 
-      var q = query.Trim();
-      return _cache
-          .Where(i => Matches(i, q))
-          .OrderBy(i => Relevance(i, q))
+      IEnumerable<BitwardenItem> results = _cache;
+
+      foreach (var filter in filters)
+        results = ApplyFilter(results, filter);
+
+      if (string.IsNullOrWhiteSpace(textQuery))
+        return [.. results
+            .OrderByDescending(i => AccessTracker.IsLastCopied(i.Id) ? 1 : 0)
+            .ThenByDescending(i => i.Favorite ? 1 : 0)
+            .ThenByDescending(i => ContextBoost(i, context))
+            .ThenByDescending(i => AccessTracker.GetLastAccess(i.Id))
+            .ThenByDescending(i => i.RevisionDate)
+            .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)];
+
+      return results
+          .Where(i => Matches(i, textQuery))
+          .OrderBy(i => Relevance(i, textQuery))
+          .ThenByDescending(i => AccessTracker.IsLastCopied(i.Id) ? 1 : 0)
+          .ThenByDescending(i => i.Favorite ? 1 : 0)
+          .ThenByDescending(i => ContextBoost(i, context))
           .ThenByDescending(i => AccessTracker.GetLastAccess(i.Id))
           .ThenByDescending(i => i.RevisionDate)
+          .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
           .ToList();
     }
   }
+
+  internal string? GetFolderName(string? folderId)
+  {
+    if (folderId == null) return null;
+    lock (_cacheLock)
+      return _folders.GetValueOrDefault(folderId);
+  }
+
+  private static int ContextBoost(BitwardenItem item, ForegroundContext? context)
+  {
+    if (context == null)
+      return 0;
+
+    return ContextAwarenessService.ContextScore(context, item);
+  }
+
+  private static (List<(string Key, string Value)> Filters, string? TextQuery) ParseSearchFilters(string? query)
+  {
+    var filters = new List<(string Key, string Value)>();
+    if (string.IsNullOrWhiteSpace(query))
+      return (filters, null);
+
+    var remaining = new System.Text.StringBuilder();
+    foreach (var token in query.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+    {
+      var colonIdx = token.IndexOf(':');
+      if (colonIdx > 0 && colonIdx < token.Length - 1)
+      {
+        var key = token[..colonIdx].ToLowerInvariant();
+        var value = token[(colonIdx + 1)..];
+        if (IsKnownFilter(key))
+        {
+          filters.Add((key, value));
+          continue;
+        }
+      }
+
+      if (token.StartsWith("has:", StringComparison.OrdinalIgnoreCase) && token.Length > 4)
+      {
+        filters.Add(("has", token[4..].ToLowerInvariant()));
+        continue;
+      }
+
+      if (token.Equals("is:favorite", StringComparison.OrdinalIgnoreCase)
+          || token.Equals("is:fav", StringComparison.OrdinalIgnoreCase))
+      {
+        filters.Add(("is", "favorite"));
+        continue;
+      }
+
+      if (remaining.Length > 0) remaining.Append(' ');
+      remaining.Append(token);
+    }
+
+    var text = remaining.Length > 0 ? remaining.ToString() : null;
+    return (filters, text);
+  }
+
+  private static bool IsKnownFilter(string key) => key is "folder" or "url" or "host" or "type" or "org";
+
+  private IEnumerable<BitwardenItem> ApplyFilter(IEnumerable<BitwardenItem> items, (string Key, string Value) filter) => filter.Key switch
+  {
+    "folder" => items.Where(i =>
+    {
+      var name = GetFolderName(i.FolderId);
+      return name != null && name.Contains(filter.Value, StringComparison.OrdinalIgnoreCase);
+    }),
+    "url" or "host" => items.Where(i =>
+        i.Type == BitwardenItemType.Login && i.Uris.Any(u => u.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))),
+    "type" => items.Where(i => i.Type.ToString().Equals(filter.Value, StringComparison.OrdinalIgnoreCase)
+        || ((int)i.Type).ToString(System.Globalization.CultureInfo.InvariantCulture) == filter.Value),
+    "org" => items.Where(i => i.OrganizationId != null && i.OrganizationId.Contains(filter.Value, StringComparison.OrdinalIgnoreCase)),
+    "has" => filter.Value switch
+    {
+      "totp" or "otp" => items.Where(i => i.HasTotp),
+      "password" or "pw" => items.Where(i => !string.IsNullOrEmpty(i.Password)),
+      "url" or "uri" => items.Where(i => i.Uris.Count > 0),
+      "notes" or "note" => items.Where(i => !string.IsNullOrEmpty(i.Notes)),
+      "folder" => items.Where(i => i.FolderId != null),
+      "attachment" or "attachments" => items, // not tracked yet, pass-through
+      _ => items,
+    },
+    "is" => filter.Value switch
+    {
+      "favorite" or "fav" => items.Where(i => i.Favorite),
+      _ => items,
+    },
+    _ => items,
+  };
 
   private static int Relevance(BitwardenItem item, string query)
   {
@@ -362,16 +477,25 @@ internal sealed class BitwardenCliService
 
     try
     {
-      var output = await RunCliAsync("list items");
-      var items = ParseItems(output);
+      var foldersTask = RunCliAsync("list folders");
+      var itemsTask = RunCliAsync("list items");
+      await Task.WhenAll(foldersTask, itemsTask);
+
+      var folders = ParseFolders(await foldersTask);
+      var items = ParseItems(await itemsTask);
       lock (_cacheLock)
       {
+        _folders = folders;
         _cache = items;
         _cacheLoaded = true;
         _lastRefresh = DateTime.UtcNow;
       }
 
       CacheUpdated?.Invoke();
+    }
+    catch (InvalidOperationException)
+    {
+      throw;
     }
     catch
     {
@@ -383,10 +507,17 @@ internal sealed class BitwardenCliService
     }
   }
 
+  public async Task SyncVaultAsync()
+  {
+    await RunCliAsync("sync");
+    Interlocked.Exchange(ref _refreshing, 0);
+    await RefreshCacheAsync();
+  }
+
   public void TriggerBackgroundRefreshIfStale()
   {
     if (_refreshing == 0 && DateTime.UtcNow - _lastRefresh > RefreshInterval)
-      _ = Task.Run(RefreshCacheAsync);
+      _ = Task.Run(async () => { try { await RefreshCacheAsync(); } catch { } });
   }
 
   public async Task WarmCacheAsync()
@@ -456,12 +587,79 @@ internal sealed class BitwardenCliService
     return (sb.ToString(), false);
   }
 
+  private const int CliTimeoutMs = 30_000;
+
   private async Task<string> RunCliAsync(string args)
   {
     using var process = StartProcess(args);
-    var output = await process.StandardOutput.ReadToEndAsync();
-    await process.WaitForExitAsync();
-    return output;
+    using var cts = new CancellationTokenSource(CliTimeoutMs);
+    try
+    {
+      var stderrTask = ReadStderrWithSessionDetectionAsync(process, cts.Token);
+      var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+      var (stderr, sessionInvalid) = await stderrTask;
+
+      if (sessionInvalid)
+      {
+        try { process.Kill(); } catch { }
+        HandleInvalidSession();
+        throw new InvalidOperationException("Session expired — vault is locked");
+      }
+
+      await process.WaitForExitAsync(cts.Token);
+      var output = await stdoutTask;
+      var error = stderr.Trim();
+
+      if (process.ExitCode != 0 && IsSessionInvalidError(error))
+      {
+        HandleInvalidSession();
+        throw new InvalidOperationException("Session expired — vault is locked");
+      }
+
+      return output;
+    }
+    catch (OperationCanceledException)
+    {
+      try { process.Kill(); } catch { }
+      throw new TimeoutException($"Bitwarden CLI timed out after {CliTimeoutMs / 1000}s running: bw {args.Split(' ')[0]}");
+    }
+  }
+
+  private static async Task<(string Content, bool SessionInvalid)> ReadStderrWithSessionDetectionAsync(Process process, CancellationToken token)
+  {
+    var sb = new System.Text.StringBuilder();
+    var buffer = new char[256];
+    while (true)
+    {
+      var count = await process.StandardError.ReadAsync(buffer.AsMemory(), token);
+      if (count == 0) break;
+      sb.Append(buffer, 0, count);
+      var text = sb.ToString();
+      if (text.Contains("Master password", StringComparison.OrdinalIgnoreCase)
+          || text.Contains("? Password", StringComparison.OrdinalIgnoreCase)
+          || IsSessionInvalidError(text))
+        return (text, true);
+    }
+    return (sb.ToString(), false);
+  }
+
+  private static bool IsSessionInvalidError(string error) =>
+      error.Contains("not logged in", StringComparison.OrdinalIgnoreCase)
+      || error.Contains("vault is locked", StringComparison.OrdinalIgnoreCase)
+      || error.Contains("invalid session", StringComparison.OrdinalIgnoreCase)
+      || error.Contains("session key is invalid", StringComparison.OrdinalIgnoreCase);
+
+  private void HandleInvalidSession()
+  {
+    _sessionKey = null;
+    SessionStore.Clear();
+    lock (_cacheLock)
+    {
+      _cache = [];
+      _cacheLoaded = false;
+    }
+    SetStatus(VaultStatus.Locked);
+    StatusChanged?.Invoke();
   }
 
   private static List<BitwardenItem> ParseItems(string json)
@@ -489,14 +687,18 @@ internal sealed class BitwardenCliService
         var notes = node["notes"]?.GetValue<string>();
         var revisionDate = DateTime.TryParse(node["revisionDate"]?.GetValue<string>(), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue;
         var customFields = ParseCustomFields(node["fields"]);
+        var favorite = node["favorite"]?.GetValue<bool>() ?? false;
+        var folderId = node["folderId"]?.GetValue<string>();
+        var organizationId = node["organizationId"]?.GetValue<string>();
+        var reprompt = node["reprompt"]?.GetValue<int>() ?? 0;
 
         var item = type switch
         {
-          BitwardenItemType.Login => ParseLogin(node["login"], id, name, notes, revisionDate, customFields),
-          BitwardenItemType.SecureNote => new BitwardenItem { Id = id, Name = name, Type = type, Notes = notes, RevisionDate = revisionDate, CustomFields = customFields },
-          BitwardenItemType.Card => ParseCard(node["card"], id, name, notes, revisionDate, customFields),
-          BitwardenItemType.Identity => ParseIdentity(node["identity"], id, name, notes, revisionDate, customFields),
-          BitwardenItemType.SshKey => ParseSshKey(node["sshKey"], id, name, notes, revisionDate, customFields),
+          BitwardenItemType.Login => ParseLogin(node["login"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
+          BitwardenItemType.SecureNote => new BitwardenItem { Id = id, Name = name, Type = type, Notes = notes, RevisionDate = revisionDate, CustomFields = customFields, Favorite = favorite, FolderId = folderId, OrganizationId = organizationId, Reprompt = reprompt },
+          BitwardenItemType.Card => ParseCard(node["card"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
+          BitwardenItemType.Identity => ParseIdentity(node["identity"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
+          BitwardenItemType.SshKey => ParseSshKey(node["sshKey"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
           _ => null,
         };
 
@@ -511,13 +713,15 @@ internal sealed class BitwardenCliService
     return items;
   }
 
-  private static BitwardenItem ParseLogin(JsonNode? login, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields)
+  private static BitwardenItem ParseLogin(JsonNode? login, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)
   {
     var uris = login?["uris"]?.AsArray()
         ?.Select(u => u?["uri"]?.GetValue<string>())
         .Where(u => !string.IsNullOrEmpty(u))
         .Cast<string>()
         .ToList() ?? [];
+
+    var passwordRevision = DateTime.TryParse(login?["passwordRevisionDate"]?.GetValue<string>(), out var prd) ? (DateTime?)prd.ToUniversalTime() : null;
 
     return new BitwardenItem
     {
@@ -527,15 +731,20 @@ internal sealed class BitwardenCliService
       Notes = notes,
       RevisionDate = revisionDate,
       CustomFields = customFields,
+      Favorite = favorite,
+      FolderId = folderId,
+      OrganizationId = organizationId,
+      Reprompt = reprompt,
       Username = login?["username"]?.GetValue<string>(),
       Password = login?["password"]?.GetValue<string>(),
       HasTotp = !string.IsNullOrEmpty(login?["totp"]?.GetValue<string>()),
       TotpSecret = login?["totp"]?.GetValue<string>(),
       Uris = uris,
+      PasswordRevisionDate = passwordRevision,
     };
   }
 
-  private static BitwardenItem ParseCard(JsonNode? card, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields) => new()
+  private static BitwardenItem ParseCard(JsonNode? card, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields, bool favorite, string? folderId, string? organizationId, int reprompt) => new()
   {
     Id = id,
     Name = name,
@@ -543,6 +752,10 @@ internal sealed class BitwardenCliService
     Notes = notes,
     RevisionDate = revisionDate,
     CustomFields = customFields,
+    Favorite = favorite,
+    FolderId = folderId,
+    OrganizationId = organizationId,
+    Reprompt = reprompt,
     CardholderName = card?["cardholderName"]?.GetValue<string>(),
     CardBrand = card?["brand"]?.GetValue<string>(),
     CardNumber = card?["number"]?.GetValue<string>(),
@@ -551,7 +764,7 @@ internal sealed class BitwardenCliService
     CardCode = card?["code"]?.GetValue<string>(),
   };
 
-  private static BitwardenItem ParseIdentity(JsonNode? id_node, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields)
+  private static BitwardenItem ParseIdentity(JsonNode? id_node, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)
   {
     var parts = new[] { id_node?["firstName"]?.GetValue<string>(), id_node?["middleName"]?.GetValue<string>(), id_node?["lastName"]?.GetValue<string>() };
     var fullName = string.Join(" ", parts.Where(p => !string.IsNullOrEmpty(p)));
@@ -571,6 +784,10 @@ internal sealed class BitwardenCliService
       Notes = notes,
       RevisionDate = revisionDate,
       CustomFields = customFields,
+      Favorite = favorite,
+      FolderId = folderId,
+      OrganizationId = organizationId,
+      Reprompt = reprompt,
       IdentityFullName = string.IsNullOrEmpty(fullName) ? null : fullName,
       IdentityEmail = id_node?["email"]?.GetValue<string>(),
       IdentityPhone = id_node?["phone"]?.GetValue<string>(),
@@ -583,7 +800,7 @@ internal sealed class BitwardenCliService
     };
   }
 
-  private static BitwardenItem ParseSshKey(JsonNode? ssh, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields) => new()
+  private static BitwardenItem ParseSshKey(JsonNode? ssh, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, string> customFields, bool favorite, string? folderId, string? organizationId, int reprompt) => new()
   {
     Id = id,
     Name = name,
@@ -591,6 +808,10 @@ internal sealed class BitwardenCliService
     Notes = notes,
     RevisionDate = revisionDate,
     CustomFields = customFields,
+    Favorite = favorite,
+    FolderId = folderId,
+    OrganizationId = organizationId,
+    Reprompt = reprompt,
     SshPublicKey = ssh?["publicKey"]?.GetValue<string>(),
     SshFingerprint = ssh?["keyFingerprint"]?.GetValue<string>(),
     SshPrivateKey = ssh?["privateKey"]?.GetValue<string>(),
@@ -609,6 +830,26 @@ internal sealed class BitwardenCliService
         result.TryAdd(fieldName, fieldValue);
     }
 
+    return result;
+  }
+
+  private static Dictionary<string, string> ParseFolders(string json)
+  {
+    var result = new Dictionary<string, string>(StringComparer.Ordinal);
+    try
+    {
+      var array = JsonNode.Parse(json)?.AsArray();
+      if (array == null) return result;
+
+      foreach (var node in array)
+      {
+        var id = node?["id"]?.GetValue<string>();
+        var name = node?["name"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
+          result[id] = name;
+      }
+    }
+    catch { }
     return result;
   }
 }
