@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.3.0...v1.4.0) (2026-03-09)
+
+
+### Features
+
+* SDK update, Win32 credentials, lock vault and UX improvements ([#11](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/11)) ([a5cc96b](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/a5cc96b9d71912fbde900cd0d5d44cb5c9dc577b))
+
 ## [1.3.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.2.0...v1.3.0) (2026-03-06)
 
 
