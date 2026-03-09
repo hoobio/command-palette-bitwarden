@@ -1,13 +1,5 @@
 # Changelog
 
-## [1.5.1](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.5.0...v1.5.1) (2026-03-09)
-
-
-### Bug Fixes
-
-* add build attestation ([#29](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/29)) ([71b501c](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/71b501cb81d943dd5bbdd1c04113a63224244ba3))
-* add build attestation for MSIX packages ([e134583](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/e13458377436709030b2db55f069298631e88a60))
-
 ## [1.5.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.4.1...v1.5.0) (2026-03-09)
 
 
