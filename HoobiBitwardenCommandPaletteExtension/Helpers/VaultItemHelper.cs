@@ -79,7 +79,7 @@ internal static partial class VaultItemHelper
     return items.ToArray();
   }
 
-  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showTotpTag = true)
+  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off")
   {
     var tags = new List<Tag>();
 
@@ -94,9 +94,9 @@ internal static partial class VaultItemHelper
       tags.Add(new Tag("Context") { Foreground = ColorHelpers.FromRgb(0x40, 0x9F, 0xFF) });
     }
 
-    if (showTotpTag && item.HasTotp)
+    if (totpTagStyle != "off" && item.HasTotp)
     {
-      var totpTag = GetTotpTag(item.TotpSecret!);
+      var totpTag = totpTagStyle == "live" ? GetLiveTotpTag(item.TotpSecret!) : GetStaticTotpTag();
       if (totpTag != null)
         tags.Add(totpTag);
     }
@@ -107,7 +107,10 @@ internal static partial class VaultItemHelper
     return tags.Count > 0 ? [.. tags] : [];
   }
 
-  private static Tag? GetTotpTag(string totpSecret)
+  private static Tag GetStaticTotpTag() =>
+    new Tag("2FA") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };
+
+  private static Tag? GetLiveTotpTag(string totpSecret)
   {
     try
     {

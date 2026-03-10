@@ -297,7 +297,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var list = new List<IListItem>();
         var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
         var showContextTag = _settings?.ShowContextTag.Value != false;
-        var showTotpTag = _settings?.ShowTotpTag.Value != false;
+        var totpTagStyle = _settings?.TotpTagStyle.Value ?? "off";
         var totpTracked = new List<(ListItem, BitwardenItem, bool)>();
 
         var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
@@ -317,9 +317,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     allowContextTag = isContextMatch && contextTagsUsed < contextLimit;
                     if (allowContextTag) contextTagsUsed++;
                 }
-                var listItem = BuildListItem(item, showWatchtower, allowContextTag, showTotpTag);
+                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle);
                 list.Add(listItem);
-                if (showTotpTag && item.HasTotp)
+                if (totpTagStyle == "live" && item.HasTotp)
                     totpTracked.Add((listItem, item, allowContextTag));
             }
         }
@@ -341,7 +341,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return list.ToArray();
     }
 
-    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, bool showTotpTag)
+    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle)
     {
         var listItem = new ListItem(VaultItemHelper.GetDefaultCommand(item))
         {
@@ -351,7 +351,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             MoreCommands = VaultItemHelper.BuildContextItems(item),
         };
 
-        var tags = VaultItemHelper.BuildTags(item, showWatchtower, _context, showContextTag, showTotpTag);
+        var tags = VaultItemHelper.BuildTags(item, showWatchtower, _context, showContextTag, totpTagStyle);
         if (tags.Length > 0)
             listItem.Tags = tags;
 
@@ -373,9 +373,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (items == null) return;
 
         var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
-        var showTotpTag = _settings?.ShowTotpTag.Value != false;
         foreach (var (listItem, vaultItem, allowContextTag) in items)
-            listItem.Tags = VaultItemHelper.BuildTags(vaultItem, showWatchtower, _context, allowContextTag, showTotpTag);
+            listItem.Tags = VaultItemHelper.BuildTags(vaultItem, showWatchtower, _context, allowContextTag, "live");
     }
 
     private void OnItemAccessed()
