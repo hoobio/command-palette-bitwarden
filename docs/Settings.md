@@ -37,6 +37,40 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | On |
 | **Description** | Detect open applications and browser tabs to boost matching vault items. When disabled, no window information is captured and no context boosting or tagging occurs. See [Context Awareness](Context-Awareness) for details. |
 
+### Show Context Tag
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | Off |
+| **Description** | Display a "Context" tag on vault items that match the foreground application. Requires Context Awareness to be enabled. |
+
+### Show Passkey Tag
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | On |
+| **Description** | Display a "Passkey" tag on vault items that have a FIDO2 credential registered for passwordless sign-in. |
+
+### TOTP Tag Style
+
+| | |
+|---|---|
+| **Type** | Choice (dropdown) |
+| **Default** | Static |
+| **Options** | Off, Static (show 2FA badge only), Live (show live code + countdown) |
+| **Description** | Controls how TOTP-enabled vault items are tagged. **Off** hides the tag entirely, **Static** shows a "2FA" badge, and **Live** displays the current code with a countdown timer that updates every second. |
+
+### Context Items Limit
+
+| | |
+|---|---|
+| **Type** | Choice (dropdown) |
+| **Default** | 3 items |
+| **Options** | 1 item, 2 items, 3 items, 5 items, 10 items, Unlimited |
+| **Description** | Maximum number of context-matched vault items to show when no search text is entered. Set to **Unlimited** to show all matching items. |
+
 ### Background Refresh Interval
 
 | | |
