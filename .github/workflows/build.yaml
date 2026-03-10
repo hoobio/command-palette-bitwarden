@@ -191,7 +191,6 @@ jobs:
           }
 
   build:
-    needs: [lint-and-test]
     runs-on: windows-latest
     strategy:
       matrix:
@@ -360,7 +359,7 @@ jobs:
           }
 
   release:
-    needs: [release-please, build]
+    needs: [release-please, build, lint-and-test]
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -393,7 +392,7 @@ jobs:
             release/**/*.msix
 
   pre-release:
-    needs: [release-please, build]
+    needs: [release-please, build, lint-and-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.release-please.outputs.release_created != 'true'
     runs-on: ubuntu-latest
     permissions:
