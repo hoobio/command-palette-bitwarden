@@ -95,6 +95,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Patterns excluded from threshold (UI/infra code that can't be unit tested)
+          $excludeFromThreshold = @('Pages[\\/]', 'Program\.cs$', 'FaviconService\.cs$')
+
           $changedFiles = git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.cs' |
             Where-Object { $_ -notmatch '\.Tests[\\/]' } |
             ForEach-Object { (Resolve-Path $_).Path }
@@ -105,46 +108,57 @@ jobs:
           }
 
           [xml]$cobertura = Get-Content "${{ github.workspace }}/coverage/report/Cobertura.xml"
-          $totalLines = 0
-          $coveredLines = 0
-          $fileStats = @()
+          $fileMap = @{}
 
           foreach ($pkg in $cobertura.coverage.packages.package) {
             foreach ($cls in $pkg.classes.class) {
               $file = $cls.filename
               if ($changedFiles | Where-Object { $file -eq $_ }) {
-                $fTotal = 0; $fCovered = 0
+                $rel = ($file -replace [regex]::Escape("${{ github.workspace }}$([IO.Path]::DirectorySeparatorChar)"), '')
+                if (-not $fileMap.ContainsKey($rel)) { $fileMap[$rel] = @{ Covered=0; Total=0 } }
                 foreach ($line in $cls.lines.line) {
-                  $totalLines++; $fTotal++
-                  if ([int]$line.hits -gt 0) { $coveredLines++; $fCovered++ }
-                }
-                if ($fTotal -gt 0) {
-                  $rel = ($file -replace [regex]::Escape("${{ github.workspace }}$([IO.Path]::DirectorySeparatorChar)"), '')
-                  $pct = [math]::Round(($fCovered / $fTotal) * 100, 1)
-                  $fileStats += [pscustomobject]@{ File=$rel; Covered=$fCovered; Total=$fTotal; Pct=$pct }
+                  $fileMap[$rel].Total++
+                  if ([int]$line.hits -gt 0) { $fileMap[$rel].Covered++ }
                 }
               }
             }
           }
 
-          if ($totalLines -eq 0) {
+          if ($fileMap.Count -eq 0) {
             Write-Host "No coverable lines found in changed files, skipping"
             exit 0
           }
 
-          $coverage = [math]::Round(($coveredLines / $totalLines) * 100, 2)
+          # Build per-file stats
+          $fileStats = $fileMap.GetEnumerator() | ForEach-Object {
+            $pct = if ($_.Value.Total -gt 0) { [math]::Round(($_.Value.Covered / $_.Value.Total) * 100, 1) } else { 0 }
+            $excluded = ($excludeFromThreshold | Where-Object { $_.Key -match $_ }).Count -gt 0
+            [pscustomobject]@{ File=$_.Key; Covered=$_.Value.Covered; Total=$_.Value.Total; Pct=$pct; Excluded=$excluded }
+          }
+
+          # Calculate threshold only on non-excluded files
+          $thresholdFiles = $fileStats | Where-Object { -not $_.Excluded }
+          $thresholdTotal = ($thresholdFiles | Measure-Object -Property Total -Sum).Sum
+          $thresholdCovered = ($thresholdFiles | Measure-Object -Property Covered -Sum).Sum
+          $thresholdPct = if ($thresholdTotal -gt 0) { [math]::Round(($thresholdCovered / $thresholdTotal) * 100, 2) } else { 100 }
+
+          $allTotal = ($fileStats | Measure-Object -Property Total -Sum).Sum
+          $allCovered = ($fileStats | Measure-Object -Property Covered -Sum).Sum
+          $allPct = if ($allTotal -gt 0) { [math]::Round(($allCovered / $allTotal) * 100, 2) } else { 100 }
           $threshold = 60
 
           # Build PR comment
-          $icon = if ($coverage -ge $threshold) { ':white_check_mark:' } else { ':x:' }
+          $icon = if ($thresholdPct -ge $threshold) { ':white_check_mark:' } else { ':x:' }
           $body = "## $icon Code Coverage — Changed Files`n`n"
           $body += "| File | Lines | Coverage |`n|---|---|---|`n"
           foreach ($f in $fileStats | Sort-Object Pct -Descending) {
             $bar = if ($f.Pct -ge 80) { ':green_circle:' } elseif ($f.Pct -ge 50) { ':yellow_circle:' } else { ':red_circle:' }
-            $body += "| ``$($f.File)`` | $($f.Covered)/$($f.Total) | $bar $($f.Pct)% |`n"
+            $suffix = if ($f.Excluded) { ' *(excluded)*' } else { '' }
+            $body += "| ``$($f.File)`` | $($f.Covered)/$($f.Total) | $bar $($f.Pct)%$suffix |`n"
           }
-          $body += "`n**Overall: $coverage%** ($coveredLines/$totalLines lines, threshold: $threshold%)`n"
-          $body += "<!-- coverage-bot -->"
+          $body += "`n**Testable: $thresholdPct%** ($thresholdCovered/$thresholdTotal lines, threshold: $threshold%)"
+          if ($thresholdTotal -ne $allTotal) { $body += " | Overall: $allPct% ($allCovered/$allTotal)" }
+          $body += "`n<!-- coverage-bot -->"
 
           # Upsert comment: find existing bot comment or create new
           $prNumber = "${{ github.event.pull_request.number }}"
@@ -157,9 +171,9 @@ jobs:
             Write-Host "Created coverage comment"
           }
 
-          Write-Host "Changed-file coverage: $coverage% ($coveredLines/$totalLines lines, threshold: $threshold%)"
-          if ($coverage -lt $threshold) {
-            Write-Host "::error::Coverage on changed files ($coverage%) is below the $threshold% threshold"
+          Write-Host "Testable coverage: $thresholdPct% ($thresholdCovered/$thresholdTotal lines, threshold: $threshold%)"
+          if ($thresholdPct -lt $threshold) {
+            Write-Host "::error::Coverage on testable changed files ($thresholdPct%) is below the $threshold% threshold"
             exit 1
           }
 
