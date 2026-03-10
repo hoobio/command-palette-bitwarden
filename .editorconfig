@@ -121,3 +121,5 @@ indent_size = 2
 # Test projects: allow underscores in method names (xUnit convention)
 [*Tests/*.cs]
 dotnet_diagnostic.CA1707.severity = none
+# Allow new Regex() in tests (needed for passing to production code under test)
+dotnet_diagnostic.MA0110.severity = none

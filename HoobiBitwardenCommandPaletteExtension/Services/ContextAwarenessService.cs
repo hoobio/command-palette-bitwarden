@@ -85,7 +85,7 @@ internal static partial class ContextAwarenessService
       processName.Equals("PowerToys.CmdPal", StringComparison.OrdinalIgnoreCase)
       || processName.Contains("CmdPal", StringComparison.OrdinalIgnoreCase);
 
-  private static string? ExtractUrlFromTitle(string? title)
+  internal static string? ExtractUrlFromTitle(string? title)
   {
     if (string.IsNullOrEmpty(title))
       return null;
@@ -142,7 +142,7 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  private static bool UriMatchesBrowserContext(Models.ItemUri entry, string? browserUrl, string? browserHost)
+  internal static bool UriMatchesBrowserContext(Models.ItemUri entry, string? browserUrl, string? browserHost)
   {
     var itemHost = ExtractHost(entry.Uri);
 
@@ -166,7 +166,7 @@ internal static partial class ContextAwarenessService
     };
   }
 
-  private static string NormalizeUrl(string url)
+  internal static string NormalizeUrl(string url)
   {
     if (!url.Contains("://"))
       url = "https://" + url;
@@ -179,7 +179,7 @@ internal static partial class ContextAwarenessService
     "Google Chrome", "Mozilla Firefox", "Microsoft Edge", "Brave", "Opera", "Vivaldi", "Arc", "Thorium", "Waterfox", "LibreWolf"
   ];
 
-  private static string? StripBrowserSuffix(string? title, string? processName)
+  internal static string? StripBrowserSuffix(string? title, string? processName)
   {
     if (string.IsNullOrEmpty(title))
       return null;
@@ -198,7 +198,7 @@ internal static partial class ContextAwarenessService
     return title;
   }
 
-  private static bool ProcessNameMatchesItem(string? processName, string? windowTitle, Models.BitwardenItem item)
+  internal static bool ProcessNameMatchesItem(string? processName, string? windowTitle, Models.BitwardenItem item)
   {
     if (string.IsNullOrEmpty(processName) && string.IsNullOrEmpty(windowTitle))
       return false;
@@ -233,7 +233,7 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  private static bool NamesSimilar(string a, string b)
+  internal static bool NamesSimilar(string a, string b)
   {
     if (a.Equals(b, StringComparison.OrdinalIgnoreCase))
       return true;
@@ -242,7 +242,7 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  private static bool ContainsWholeWord(string text, string word)
+  internal static bool ContainsWholeWord(string text, string word)
   {
     var idx = text.IndexOf(word, StringComparison.OrdinalIgnoreCase);
     while (idx >= 0)
@@ -256,7 +256,7 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  private static string? ExtractHost(string url)
+  internal static string? ExtractHost(string url)
   {
     try
     {
@@ -273,7 +273,7 @@ internal static partial class ContextAwarenessService
   // Suffix-based subdomain matching (not true eTLD+1). Can false-positive on public suffixes
   // like .co.uk, but true eTLD+1 requires a public suffix list dependency. Acceptable since
   // this only affects context boosting priority, not authentication or access control.
-  private static bool HostsMatch(string a, string b)
+  internal static bool HostsMatch(string a, string b)
   {
     if (a.Equals(b, StringComparison.OrdinalIgnoreCase))
       return true;
@@ -386,7 +386,7 @@ internal static partial class ContextAwarenessService
     return null;
   }
 
-  private static bool LooksLikeUrl(string value)
+  internal static bool LooksLikeUrl(string value)
   {
     if (string.IsNullOrWhiteSpace(value) || value.Length > 2048)
       return false;

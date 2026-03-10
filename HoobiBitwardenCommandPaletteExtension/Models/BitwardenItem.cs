@@ -92,7 +92,7 @@ internal sealed class BitwardenItem
     _ => string.Empty,
   };
 
-  private static string? TruncateLine(string? text, int max)
+  internal static string? TruncateLine(string? text, int max)
   {
     if (string.IsNullOrEmpty(text)) return null;
     var line = text.Split('\n').FirstOrDefault()?.Trim();

@@ -411,7 +411,7 @@ internal static partial class VaultItemHelper
     Result = CommandResult.Dismiss(),
   };
 
-  private static bool IsValidSshHost(string? host) =>
+  internal static bool IsValidSshHost(string? host) =>
       !string.IsNullOrEmpty(host) && SshHostPattern().IsMatch(host);
 
   [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$", RegexOptions.None, matchTimeoutMilliseconds: 100)]

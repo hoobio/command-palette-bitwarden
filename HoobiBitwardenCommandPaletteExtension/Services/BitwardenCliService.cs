@@ -473,7 +473,7 @@ internal sealed class BitwardenCliService
     return ContextAwarenessService.ContextScore(context, item);
   }
 
-  private static (List<(string Key, string Value)> Filters, string? TextQuery) ParseSearchFilters(string? query)
+  internal static (List<(string Key, string Value)> Filters, string? TextQuery) ParseSearchFilters(string? query)
   {
     var filters = new List<(string Key, string Value)>();
     if (string.IsNullOrWhiteSpace(query))
@@ -508,7 +508,7 @@ internal sealed class BitwardenCliService
     return (filters, text);
   }
 
-  private static bool IsKnownFilter(string key) => key is "folder" or "url" or "host" or "type" or "org" or "is";
+  internal static bool IsKnownFilter(string key) => key is "folder" or "url" or "host" or "type" or "org" or "is";
 
   private IEnumerable<BitwardenItem> ApplyFilter(IEnumerable<BitwardenItem> items, (string Key, string Value) filter) => filter.Key switch
   {
@@ -552,7 +552,7 @@ internal sealed class BitwardenCliService
     _ => items,
   };
 
-  private static int Relevance(BitwardenItem item, string query, Regex wordBoundaryRegex)
+  internal static int Relevance(BitwardenItem item, string query, Regex wordBoundaryRegex)
   {
     if (item.Name.Equals(query, StringComparison.OrdinalIgnoreCase)) return 0;
     if (item.Name.StartsWith(query, StringComparison.OrdinalIgnoreCase)) return 1;
@@ -623,7 +623,7 @@ internal sealed class BitwardenCliService
 
 
 
-  private static bool Matches(BitwardenItem item, string query)
+  internal static bool Matches(BitwardenItem item, string query)
   {
     if (item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
     if (item.Notes?.Contains(query, StringComparison.OrdinalIgnoreCase) == true) return true;
@@ -737,7 +737,7 @@ internal sealed class BitwardenCliService
     return (sb.ToString(), false);
   }
 
-  private static bool IsSessionInvalidError(string error) =>
+  internal static bool IsSessionInvalidError(string error) =>
       error.Contains("not logged in", StringComparison.OrdinalIgnoreCase)
       || error.Contains("vault is locked", StringComparison.OrdinalIgnoreCase)
       || error.Contains("invalid session", StringComparison.OrdinalIgnoreCase)
@@ -756,7 +756,7 @@ internal sealed class BitwardenCliService
     StatusChanged?.Invoke();
   }
 
-  private static List<BitwardenItem> ParseItems(string json)
+  internal static List<BitwardenItem> ParseItems(string json)
   {
     var items = new List<BitwardenItem>();
 
@@ -938,7 +938,7 @@ internal sealed class BitwardenCliService
     return result;
   }
 
-  private static Dictionary<string, string> ParseFolders(string json)
+  internal static Dictionary<string, string> ParseFolders(string json)
   {
     var result = new Dictionary<string, string>(StringComparer.Ordinal);
     try

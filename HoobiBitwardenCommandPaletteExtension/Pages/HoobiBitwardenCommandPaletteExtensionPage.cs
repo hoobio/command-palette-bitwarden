@@ -335,7 +335,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return _service.SearchCached(query, _context, limit);
     }
 
-    private static bool MatchesCommand(string search, string command)
+    internal static bool MatchesCommand(string search, string command)
         => search.Length >= 2 && command.StartsWith(search, StringComparison.OrdinalIgnoreCase);
 
     private IListItem[] BuildListItems(List<BitwardenItem> items)
