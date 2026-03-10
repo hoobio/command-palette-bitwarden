@@ -287,9 +287,10 @@ jobs:
       - name: Run Windows App Certification Kit
         shell: pwsh
         run: |
+          # Prefer native (non-x86) install to avoid TAEF architecture mismatch on ARM64
           $searchRoots = @(
-            "C:\Program Files (x86)\Windows Kits\10\App Certification Kit",
-            "C:\Program Files\Windows Kits\10\App Certification Kit"
+            "C:\Program Files\Windows Kits\10\App Certification Kit",
+            "C:\Program Files (x86)\Windows Kits\10\App Certification Kit"
           )
           $appCert = $searchRoots |
             Where-Object { Test-Path $_ } |
