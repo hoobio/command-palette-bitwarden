@@ -287,15 +287,16 @@ jobs:
       - name: Run Windows App Certification Kit
         shell: pwsh
         run: |
-          # Prefer native (non-x86) install to avoid TAEF architecture mismatch on ARM64
-          $searchRoots = @(
-            "C:\Program Files\Windows Kits\10\App Certification Kit",
-            "C:\Program Files (x86)\Windows Kits\10\App Certification Kit"
-          )
-          $appCert = $searchRoots |
-            Where-Object { Test-Path $_ } |
-            ForEach-Object { Get-ChildItem $_ -Filter appcert.exe -Recurse } |
-            Select-Object -First 1 -ExpandProperty FullName
+          # Only use WACK that matches the runner architecture to avoid TAEF DLL load failures.
+          # windows-11-arm currently ships only the x64 WACK; skip rather than run a broken tool.
+          $nativeArch = $env:PROCESSOR_ARCHITECTURE  # AMD64 or ARM64
+          $appCert = if ($nativeArch -eq 'ARM64') {
+            Get-ChildItem "C:\Program Files\Windows Kits\10\App Certification Kit" -Filter appcert.exe -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+          } else {
+            Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\App Certification Kit" -Filter appcert.exe -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
           if (-not $appCert) { 
             Write-Host "##[warning]WACK not found, skipping"
             exit 0 
