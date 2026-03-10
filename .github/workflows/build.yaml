@@ -182,7 +182,7 @@ jobs:
       - name: Attest MSIX packages
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: 'release/**/*.msix'
+          subject-path: "release/**/*.msix"
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
@@ -211,7 +211,7 @@ jobs:
             --head "release-please--branches--main" \
             --json title \
             --jq '.[0].title')
-          
+
           if [ -n "$PR_TITLE" ]; then
             # Extract version from "chore(main): release X.Y.Z"
             VERSION=$(echo "$PR_TITLE" | grep -oP '(?<=release )\d+\.\d+\.\d+')
