@@ -89,15 +89,18 @@ internal sealed class BitwardenCliService
       _autoLockTimer.Change(_autoLockTimeout, Timeout.InfiniteTimeSpan);
   }
 
-  private async void OnAutoLockTick(object? _)
+  private void OnAutoLockTick(object? _)
   {
-    try
+    _ = Task.Run(async () =>
     {
-      AutoLocking?.Invoke();
-      await LockAsync();
-      AutoLocked?.Invoke();
-    }
-    catch { }
+      try
+      {
+        AutoLocking?.Invoke();
+        await LockAsync();
+        AutoLocked?.Invoke();
+      }
+      catch { }
+    });
   }
 
   public void SetSession(string sessionKey) => _sessionKey = sessionKey;

@@ -319,7 +319,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return $"Last synced: {FormatAge(DateTime.UtcNow - last)}";
     }
 
-    private static string FormatAge(TimeSpan age) => age.TotalSeconds switch
+    internal static string FormatAge(TimeSpan age) => age.TotalSeconds switch
     {
         < 5 => "just now",
         < 60 => $"{(int)age.TotalSeconds} seconds ago",

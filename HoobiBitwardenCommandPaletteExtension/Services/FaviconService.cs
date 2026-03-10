@@ -133,13 +133,15 @@ internal static partial class FaviconService
         var ras = new InMemoryRandomAccessStream();
         using var writer = new DataWriter(ras.GetOutputStreamAt(0));
         writer.WriteBytes(bytes);
+#pragma warning disable VSTHRD002 // In-memory stream write completes synchronously
         writer.StoreAsync().AsTask().GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
         writer.DetachStream();
         return IconInfo.FromStream(ras);
     }
 
     private static IconInfo Fallback() => new("\uE774");
 
-    [GeneratedRegex(@"[^\w\-\.]")]
+    [GeneratedRegex(@"[^\w\-\.]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
     private static partial Regex InvalidFilenameChars();
 }

@@ -403,7 +403,7 @@ internal static partial class VaultItemHelper
 
   private static AnonymousCommand BuildSshCommand(string host) => new(() =>
   {
-    try { Process.Start(new ProcessStartInfo("ssh", host) { UseShellExecute = true }); }
+    try { Process.Start(new ProcessStartInfo("ssh", host) { UseShellExecute = false }); }
     catch { }
   })
   {
@@ -414,7 +414,7 @@ internal static partial class VaultItemHelper
   private static bool IsValidSshHost(string? host) =>
       !string.IsNullOrEmpty(host) && SshHostPattern().IsMatch(host);
 
-  [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$")]
+  [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex SshHostPattern();
 
   private static AnonymousCommand CopySensitive(string text, string label) => new(() =>
