@@ -4,21 +4,21 @@ on:
   push:
     branches: [main]
     paths:
-      - '**.cs'
-      - '**.csproj'
-      - '*.props'
-      - '*.targets'
-      - '.github/workflows/codeql.yml'
+      - "**.cs"
+      - "**.csproj"
+      - "*.props"
+      - "*.targets"
+      - ".github/workflows/codeql.yml"
   pull_request:
     branches: [main]
     paths:
-      - '**.cs'
-      - '**.csproj'
-      - '*.props'
-      - '*.targets'
-      - '.github/workflows/codeql.yml'
+      - "**.cs"
+      - "**.csproj"
+      - "*.props"
+      - "*.targets"
+      - ".github/workflows/codeql.yml"
   schedule:
-    - cron: '22 1 * * 5'
+    - cron: "22 1 * * 5"
 
 permissions:
   security-events: write
