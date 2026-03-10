@@ -25,6 +25,7 @@ permissions:
   packages: read
   actions: read
   contents: read
+  pull-requests: write
 
 jobs:
   analyze:
@@ -45,3 +46,59 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:csharp"
+
+      - name: Post CodeQL results to PR
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $prNumber = "${{ github.event.pull_request.number }}"
+          $ref = "${{ github.event.pull_request.head.ref }}"
+
+          # Query code scanning alerts for this PR's ref
+          $alerts = gh api "repos/${{ github.repository }}/code-scanning/alerts?ref=$ref&state=open&per_page=100" 2>$null | ConvertFrom-Json
+          if (-not $alerts) { $alerts = @() }
+
+          $critical = @($alerts | Where-Object { $_.rule.security_severity_level -in @('critical') })
+          $high     = @($alerts | Where-Object { $_.rule.security_severity_level -in @('high') })
+          $medium   = @($alerts | Where-Object { $_.rule.security_severity_level -in @('medium') })
+          $low      = @($alerts | Where-Object { $_.rule.security_severity_level -in @('low') -or (-not $_.rule.security_severity_level) })
+
+          $icon = if ($critical.Count + $high.Count -eq 0) { ':white_check_mark:' } else { ':x:' }
+          $body = "## $icon CodeQL Security Scan`n`n"
+
+          if ($alerts.Count -eq 0) {
+            $body += ":tada: **No security alerts found.**`n"
+          } else {
+            $body += "**$($alerts.Count) alert(s) found:**`n`n"
+            if ($critical.Count -gt 0) { $body += ":red_circle: **$($critical.Count) critical** " }
+            if ($high.Count -gt 0) { $body += ":orange_circle: **$($high.Count) high** " }
+            if ($medium.Count -gt 0) { $body += ":yellow_circle: **$($medium.Count) medium** " }
+            if ($low.Count -gt 0) { $body += ":white_circle: **$($low.Count) low/note** " }
+            $body += "`n`n| Severity | Rule | File | Message |`n|---|---|---|---|`n"
+            foreach ($a in $alerts | Sort-Object { $_.rule.security_severity_level }) {
+              $sev = switch ($a.rule.security_severity_level) {
+                'critical' { ':red_circle: Critical' }
+                'high'     { ':orange_circle: High' }
+                'medium'   { ':yellow_circle: Medium' }
+                default    { ':white_circle: Low' }
+              }
+              $loc = $a.most_recent_instance.location
+              $file = if ($loc.path) { $loc.path } else { '' }
+              $line = if ($loc.start_line) { "#L$($loc.start_line)" } else { '' }
+              $msg = ($a.most_recent_instance.message.text -replace '[\r\n]+', ' ')
+              if ($msg.Length -gt 100) { $msg = $msg.Substring(0, 100) + '...' }
+              $body += "| $sev | ``$($a.rule.id)`` | ``$file``$line | $msg |`n"
+            }
+          }
+          $body += "`n<!-- codeql-bot -->"
+
+          $existing = gh api "repos/${{ github.repository }}/issues/$prNumber/comments" --paginate --jq '.[] | select(.body | contains("<!-- codeql-bot -->")) | .id' 2>$null | Select-Object -First 1
+          if ($existing) {
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$existing" -f body=$body | Out-Null
+            Write-Host "Updated existing CodeQL comment"
+          } else {
+            gh pr comment $prNumber --body $body
+            Write-Host "Created CodeQL comment"
+          }

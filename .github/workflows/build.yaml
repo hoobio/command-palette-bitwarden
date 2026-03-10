@@ -276,6 +276,60 @@ jobs:
           name: wack-report
           path: wack-report.xml
 
+      - name: Post WACK results to PR
+        if: always() && github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $reportPath = "wack-report.xml"
+          $prNumber = "${{ github.event.pull_request.number }}"
+
+          if (-not (Test-Path $reportPath)) {
+            $body = "## :warning: WACK Results`n`nWACK report was not generated (tool may not be available on runner).`n<!-- wack-bot -->"
+          } else {
+            [xml]$report = Get-Content $reportPath
+            $tests = $report.REPORT.REQUIREMENTS.REQUIREMENT.TEST
+            $passed = @($tests | Where-Object { $_.RESULT -eq 'PASS' })
+            $failed = @($tests | Where-Object { $_.RESULT -eq 'FAIL' })
+            $skipped = @($tests | Where-Object { $_.RESULT -eq 'NOT_APPLICABLE' })
+
+            $icon = if ($failed.Count -eq 0) { ':white_check_mark:' } else { ':x:' }
+            $body = "## $icon WACK Results`n`n"
+            $body += ":green_circle: **$($passed.Count) passed** "
+            if ($failed.Count -gt 0) { $body += ":red_circle: **$($failed.Count) failed** " }
+            if ($skipped.Count -gt 0) { $body += ":white_circle: **$($skipped.Count) skipped** " }
+            $body += "`n`n"
+
+            if ($failed.Count -gt 0) {
+              $body += "### Failed Tests`n| Test | Details |`n|---|---|`n"
+              foreach ($t in $failed) {
+                $desc = if ($t.DESCRIPTION) { $t.DESCRIPTION.Trim() -replace '[\r\n]+', ' ' } else { '' }
+                if ($desc.Length -gt 120) { $desc = $desc.Substring(0, 120) + '...' }
+                $body += "| ``$($t.NAME)`` | $desc |`n"
+              }
+              $body += "`n"
+            }
+
+            $body += "<details><summary>All tests</summary>`n`n"
+            $body += "| Test | Result |`n|---|---|`n"
+            foreach ($t in $tests | Sort-Object RESULT) {
+              $r = switch ($t.RESULT) { 'PASS' { ':green_circle: Pass' } 'FAIL' { ':red_circle: Fail' } default { ':white_circle: Skip' } }
+              $body += "| ``$($t.NAME)`` | $r |`n"
+            }
+            $body += "`n</details>`n"
+            $body += "<!-- wack-bot -->"
+          }
+
+          $existing = gh api "repos/${{ github.repository }}/issues/$prNumber/comments" --paginate --jq '.[] | select(.body | contains("<!-- wack-bot -->")) | .id' 2>$null | Select-Object -First 1
+          if ($existing) {
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$existing" -f body=$body | Out-Null
+            Write-Host "Updated existing WACK comment"
+          } else {
+            gh pr comment $prNumber --body $body
+            Write-Host "Created WACK comment"
+          }
+
   release:
     needs: [release-please, build]
     if: needs.release-please.outputs.release_created == 'true'
