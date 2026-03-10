@@ -37,9 +37,11 @@ A free, open-source replacement for 1Password Quick Access, built for the [Power
 
 ## Installation
 
-### From Microsoft Store (Recommended)
+### From Microsoft Store
 
 **[Get it from Microsoft Store](https://apps.microsoft.com/detail/9P5KS8T80MV3)** — easiest way to install with automatic updates.
+
+> **Note:** The Store version may lag behind GitHub Releases due to Microsoft's certification process, which can be slow and unreliable. If you need the latest version immediately, install from GitHub Releases instead.
 
 ### From GitHub Releases
 
