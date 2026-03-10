@@ -1,4 +1,4 @@
-# Hoobi Bitwarden Command Palette Extension
+# Command Palette Extension for Bitwarden
 
 A free, open-source replacement for 1Password Quick Access, built for the [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/) and Bitwarden.
 

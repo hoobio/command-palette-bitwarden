@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Bitwarden Command Palette Extension**
+**Command Palette Extension for Bitwarden**
 
 *Last updated: March 6, 2026*
 

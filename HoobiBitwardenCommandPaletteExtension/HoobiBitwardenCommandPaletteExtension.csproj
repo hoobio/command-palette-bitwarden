@@ -113,7 +113,7 @@
       <AppxManifestPath>$(MSBuildProjectDirectory)\Package.appxmanifest</AppxManifestPath>
       <BasePackageName>Hoobi.BitwardenCommandPaletteExtension</BasePackageName>
       <FullPackageName>$(BasePackageName)$(PackageNameSuffix)</FullPackageName>
-      <BaseDisplayName>Bitwarden Command Palette Extension</BaseDisplayName>
+      <BaseDisplayName>Command Palette Extension for Bitwarden</BaseDisplayName>
       <FullDisplayName>$(BaseDisplayName)$(DisplayNameSuffix)</FullDisplayName>
     </PropertyGroup>
     <Message Text="Stamping package identity: $(FullPackageName) with display name: $(FullDisplayName)" Importance="high" />
