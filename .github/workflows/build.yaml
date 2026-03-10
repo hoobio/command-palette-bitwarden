@@ -151,10 +151,16 @@ jobs:
           $icon = if ($thresholdPct -ge $threshold) { ':white_check_mark:' } else { ':x:' }
           $body = "## $icon Code Coverage — Changed Files`n`n"
           $body += "| File | Lines | Coverage |`n|---|---|---|`n"
+          $repoUrl = "https://github.com/${{ github.repository }}"
+          $headSha = "${{ github.event.pull_request.head.sha }}"
+          $commonPrefix = "HoobiBitwardenCommandPaletteExtension$([IO.Path]::DirectorySeparatorChar)"
           foreach ($f in $fileStats | Sort-Object Pct -Descending) {
             $bar = if ($f.Pct -ge 80) { ':green_circle:' } elseif ($f.Pct -ge 50) { ':yellow_circle:' } else { ':red_circle:' }
             $suffix = if ($f.Excluded) { ' *(excluded)*' } else { '' }
-            $body += "| ``$($f.File)`` | $($f.Covered)/$($f.Total) | $bar $($f.Pct)%$suffix |`n"
+            $displayName = $f.File -replace [regex]::Escape($commonPrefix), ''
+            $urlPath = $f.File -replace '\\', '/'
+            $link = "[$displayName]($repoUrl/blob/$headSha/$urlPath)"
+            $body += "| $link | $($f.Covered)/$($f.Total) | $bar $($f.Pct)%$suffix |`n"
           }
           $body += "`n**Testable: $thresholdPct%** ($thresholdCovered/$thresholdTotal lines, threshold: $threshold%)"
           if ($thresholdTotal -ne $allTotal) { $body += " | Overall: $allPct% ($allCovered/$allTotal)" }
