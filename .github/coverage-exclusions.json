@@ -1,0 +1,18 @@
+[
+  {
+    "pattern": "Pages[\\\\/]",
+    "reason": "WinUI page classes — pure UI construction, no testable logic"
+  },
+  {
+    "pattern": "Program\\.cs$",
+    "reason": "Entry point — WinRT activation boilerplate"
+  },
+  {
+    "pattern": "FaviconService\\.cs$",
+    "reason": "HTTP client wrapper — requires live network I/O"
+  },
+  {
+    "pattern": "VaultItemHelper\\.cs$",
+    "reason": "WinRT UI helpers — returns SDK types that cannot be instantiated in unit tests"
+  }
+]

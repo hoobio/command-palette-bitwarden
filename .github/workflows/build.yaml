@@ -95,8 +95,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Patterns excluded from threshold (UI/infra code that can't be unit tested)
-          $excludeFromThreshold = @('Pages[\\/]', 'Program\.cs$', 'FaviconService\.cs$', 'VaultItemHelper\.cs$')
+          # Patterns excluded from threshold — defined in .github/coverage-exclusions.json
+          $exclusions = Get-Content "${{ github.workspace }}/.github/coverage-exclusions.json" | ConvertFrom-Json
+          $excludeFromThreshold = $exclusions | Select-Object -ExpandProperty pattern
 
           $changedFiles = git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.cs' |
             Where-Object { $_ -notmatch '\.Tests[\\/]' } |
@@ -148,12 +149,9 @@ jobs:
           $allPct = if ($allTotal -gt 0) { [math]::Round(($allCovered / $allTotal) * 100, 2) } else { 100 }
           $threshold = 60
 
-          # Link to the exclusion list line in this workflow file
           $repoUrl = "https://github.com/${{ github.repository }}"
           $headSha = "${{ github.event.pull_request.head.sha }}"
-          $workflowFile = "${{ github.workspace }}/.github/workflows/build.yaml"
-          $excludeLine = (Select-String -Path $workflowFile -Pattern 'excludeFromThreshold\s*=' | Select-Object -First 1).LineNumber
-          $excludeLink = "$repoUrl/blob/$headSha/.github/workflows/build.yaml#L$excludeLine"
+          $excludeLink = "$repoUrl/blob/$headSha/.github/coverage-exclusions.json"
 
           # Build PR comment
           $icon = if ($thresholdPct -ge $threshold) { ':white_check_mark:' } else { ':x:' }
