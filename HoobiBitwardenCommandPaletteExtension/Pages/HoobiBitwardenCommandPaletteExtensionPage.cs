@@ -18,7 +18,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private readonly Lock _itemsLock = new();
     private IListItem[] _currentItems = [];
     private bool _initialLoadStarted;
-    private bool _handlingAction;
+    private volatile bool _initComplete;
+    private volatile bool _handlingAction;
     private string _currentSearchText = string.Empty;
     private string? _errorMessage;
     private string? _pendingEmail;
@@ -30,6 +31,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private List<(ListItem ListItem, BitwardenItem VaultItem, bool AllowContextTag)>? _totpItems;
     private Timer? _syncTimer;
     private ListItem? _syncItem;
+    private readonly Timer _iconRefreshTimer;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -41,6 +43,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.AutoLocking += OnAutoLocking;
         _service.AutoLocked += OnAutoLocked;
         AccessTracker.ItemAccessed += OnItemAccessed;
+        FaviconService.IconCached += OnIconCached;
+        _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         Title = "Bitwarden";
         Name = "Open";
@@ -83,7 +87,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
             }
 
-            IsLoading = false;
+            if (_initComplete && !_handlingAction)
+                IsLoading = false;
             return _currentItems;
         }
     }
@@ -186,7 +191,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                         ShowLoadingStatus("Retrieving items from vault...", "bw list items");
                         await _service.RefreshCacheAsync();
                     }
-                    _currentItems = BuildListItems(Search(_currentSearchText));
+                    if (_service.IsCacheLoaded)
+                        _currentItems = BuildListItems(Search(_currentSearchText));
+                    else
+                        // RefreshCacheAsync returned early because warmup held the lock.
+                        // CacheUpdated/WarmupCompleted will fire shortly and show items.
+                        return;
                     break;
             }
 
@@ -198,7 +208,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
         finally
         {
-            IsLoading = false;
+            _initComplete = true;
+            // If awaiting warmup (early-return path), keep IsLoading=true so the spinner
+            // stays visible until CacheUpdated/WarmupCompleted fires.
+            if (_service.IsCacheLoaded || _service.LastStatus != VaultStatus.Unlocked)
+                IsLoading = false;
         }
     }
 
@@ -331,6 +345,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var showContextTag = _settings?.ShowContextTag.Value != false;
         var totpTagStyle = _settings?.TotpTagStyle.Value ?? "off";
         var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
+        var showWebsiteIcons = _settings?.ShowWebsiteIcons.Value != false;
         var totpTracked = new List<(ListItem, BitwardenItem, bool)>();
 
         var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
@@ -359,7 +374,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     allowContextTag = isContextMatch && contextTagsUsed < contextLimit;
                     if (allowContextTag) contextTagsUsed++;
                 }
-                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag);
+                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showWebsiteIcons);
                 list.Add(listItem);
                 if (totpTagStyle == "live" && item.HasTotp)
                     totpTracked.Add((listItem, item, allowContextTag));
@@ -385,13 +400,13 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return list.ToArray();
     }
 
-    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag)
+    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showWebsiteIcons = true)
     {
         var listItem = new ListItem(VaultItemHelper.GetDefaultCommand(item))
         {
             Title = item.Name,
             Subtitle = item.Subtitle,
-            Icon = VaultItemHelper.GetIcon(item),
+            Icon = VaultItemHelper.GetIcon(item, showWebsiteIcons),
             MoreCommands = VaultItemHelper.BuildContextItems(item),
         };
 
@@ -406,12 +421,24 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         _totpTimer?.Dispose();
         _syncTimer?.Dispose();
+        _iconRefreshTimer.Dispose();
         _service.CacheUpdated -= OnCacheUpdated;
         _service.StatusChanged -= OnStatusChanged;
         _service.WarmupCompleted -= OnWarmupCompleted;
         _service.AutoLocking -= OnAutoLocking;
         _service.AutoLocked -= OnAutoLocked;
         AccessTracker.ItemAccessed -= OnItemAccessed;
+        FaviconService.IconCached -= OnIconCached;
+    }
+
+    private void OnIconCached() => _iconRefreshTimer.Change(500, Timeout.Infinite);
+
+    private void OnIconRefreshTick(object? _)
+    {
+        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
+            return;
+        _currentItems = BuildListItems(Search(_currentSearchText));
+        RaiseItemsChanged();
     }
 
     private void OnSyncTimerTick(object? state)
@@ -457,7 +484,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void OnLockRequested()
     {
         _handlingAction = true;
-        SearchText = "";
+        ClearSearchText();
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Locking vault...", "bw lock");
@@ -480,7 +507,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void OnLogoutRequested()
     {
         _handlingAction = true;
-        SearchText = "";
+        ClearSearchText();
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Logging out...", "bw logout");
@@ -503,7 +530,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void OnSyncRequested()
     {
         _handlingAction = true;
-        SearchText = "";
+        ClearSearchText();
         IsLoading = true;
         ShowLoadingStatus("Syncing vault...", "bw sync");
         _ = Task.Run(async () =>
@@ -534,7 +561,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void OnSetServerSubmitted(string url)
     {
         _handlingAction = true;
-        SearchText = "";
+        ClearSearchText();
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Setting server URL...", "bw config server");
@@ -564,7 +591,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private void OnUnlockSubmitted(string password)
     {
-        SearchText = "";
+        _handlingAction = true;
+        ClearSearchText();
         _errorMessage = null;
         _currentItems = [];
         IsLoading = true;
@@ -572,39 +600,46 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         _ = Task.Run(async () =>
         {
-            ShowLoadingStatus("Unlocking vault...", "bw unlock");
-            var (success, error) = await _service.UnlockAsync(password);
-            if (!success)
+            try
             {
-                if (_service.LastStatus == VaultStatus.Unauthenticated)
+                ShowLoadingStatus("Unlocking vault...", "bw unlock");
+                var (success, error) = await _service.UnlockAsync(password);
+                if (!success)
                 {
-                    _errorMessage = "You are not logged in";
-                    _currentItems = BuildUnauthenticatedItems();
-                }
-                else
-                {
-                    _errorMessage = error?.Contains("key", StringComparison.OrdinalIgnoreCase) == true
-                        ? "Invalid password entered"
-                        : error ?? "Unlock failed";
-                    _currentItems = BuildLockedItems();
+                    if (_service.LastStatus == VaultStatus.Unauthenticated)
+                    {
+                        _errorMessage = "You are not logged in";
+                        _currentItems = BuildUnauthenticatedItems();
+                    }
+                    else
+                    {
+                        _errorMessage = error?.Contains("key", StringComparison.OrdinalIgnoreCase) == true
+                            ? "Invalid password entered"
+                            : error ?? "Unlock failed";
+                        _currentItems = BuildLockedItems();
+                    }
+
+                    RaiseItemsChanged();
+                    return;
                 }
 
+                ShowLoadingStatus("Retrieving items from vault...", "bw list items");
+                await _service.RefreshCacheAsync();
+                _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
-                IsLoading = false;
-                return;
             }
-
-            ShowLoadingStatus("Retrieving items from vault...", "bw list items");
-            await _service.RefreshCacheAsync();
-            _currentItems = BuildListItems(Search(_currentSearchText));
-            RaiseItemsChanged();
-            IsLoading = false;
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
         });
     }
 
     private void OnLoginSubmitted(string email, string password)
     {
-        SearchText = "";
+        _handlingAction = true;
+        ClearSearchText();
         _errorMessage = null;
         _twoFactorRequired = false;
         _pendingEmail = null;
@@ -615,38 +650,45 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         _ = Task.Run(async () =>
         {
-            ShowLoadingStatus("Logging in...", "bw login");
-            var (success, error, twoFactorRequired) = await _service.LoginAsync(email, password, null);
-            if (!success)
+            try
             {
-                if (twoFactorRequired)
+                ShowLoadingStatus("Logging in...", "bw login");
+                var (success, error, twoFactorRequired) = await _service.LoginAsync(email, password, null);
+                if (!success)
                 {
-                    _twoFactorRequired = true;
-                    _pendingEmail = email;
-                    _pendingPassword = password;
-                    _errorMessage = null;
-                }
-                else
-                {
-                    _errorMessage = error ?? "Login failed";
+                    if (twoFactorRequired)
+                    {
+                        _twoFactorRequired = true;
+                        _pendingEmail = email;
+                        _pendingPassword = password;
+                        _errorMessage = null;
+                    }
+                    else
+                    {
+                        _errorMessage = error ?? "Login failed";
+                    }
+
+                    _currentItems = BuildUnauthenticatedItems();
+                    RaiseItemsChanged();
+                    return;
                 }
 
-                _currentItems = BuildUnauthenticatedItems();
+                ShowLoadingStatus("Retrieving items from vault...", "bw list items");
+                await _service.RefreshCacheAsync();
+                _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
-                IsLoading = false;
-                return;
             }
-
-            ShowLoadingStatus("Retrieving items from vault...", "bw list items");
-            await _service.RefreshCacheAsync();
-            _currentItems = BuildListItems(Search(_currentSearchText));
-            RaiseItemsChanged();
-            IsLoading = false;
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
         });
     }
 
     private void OnTwoFactorSubmitted(string twoFactorCode)
     {
+        _handlingAction = true;
         var email = _pendingEmail;
         var password = _pendingPassword;
         _errorMessage = null;
@@ -656,27 +698,33 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         _ = Task.Run(async () =>
         {
-            ShowLoadingStatus("Verifying 2FA code...", "bw login");
-            var (success, error, _) = await _service.LoginAsync(email!, password!, twoFactorCode);
-            if (!success)
+            try
             {
-                _errorMessage = error?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true
-                    ? "Invalid 2FA code — try again"
-                    : error ?? "Verification failed";
-                _currentItems = BuildUnauthenticatedItems();
-                RaiseItemsChanged();
-                IsLoading = false;
-                return;
-            }
+                ShowLoadingStatus("Verifying 2FA code...", "bw login");
+                var (success, error, _) = await _service.LoginAsync(email!, password!, twoFactorCode);
+                if (!success)
+                {
+                    _errorMessage = error?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true
+                        ? "Invalid 2FA code — try again"
+                        : error ?? "Verification failed";
+                    _currentItems = BuildUnauthenticatedItems();
+                    RaiseItemsChanged();
+                    return;
+                }
 
-            _twoFactorRequired = false;
-            _pendingEmail = null;
-            _pendingPassword = null;
-            ShowLoadingStatus("Retrieving items from vault...", "bw list items");
-            await _service.RefreshCacheAsync();
-            _currentItems = BuildListItems(Search(_currentSearchText));
-            RaiseItemsChanged();
-            IsLoading = false;
+                _twoFactorRequired = false;
+                _pendingEmail = null;
+                _pendingPassword = null;
+                ShowLoadingStatus("Retrieving items from vault...", "bw list items");
+                await _service.RefreshCacheAsync();
+                _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
+            }
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
         });
     }
 
@@ -684,6 +732,15 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         _currentItems = BuildLoadingPlaceholder(title, command);
         RaiseItemsChanged();
+    }
+
+    // DynamicListPage.SearchText setter calls SetSearchNoUpdate (no PropertyChanged event).
+    // Call OnPropertyChanged explicitly so the host updates the visible search box.
+    private void ClearSearchText()
+    {
+        SetSearchNoUpdate(string.Empty);
+        _currentSearchText = string.Empty;
+        OnPropertyChanged(nameof(SearchText));
     }
 
     private static IListItem[] BuildLoadingPlaceholder(string title, string command) =>
