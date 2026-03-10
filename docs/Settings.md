@@ -12,6 +12,15 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | Off |
 | **Description** | Persist the Bitwarden session key in Windows Credential Manager so the vault stays unlocked across restarts. When disabled, the session key is stored only in memory and lost when the extension process exits. |
 
+### Auto-Lock Timeout
+
+| | |
+|---|---|
+| **Type** | Choice (dropdown) |
+| **Default** | Never |
+| **Options** | Never, 1 minute, 2 minutes, 5 minutes, 15 minutes, 30 minutes, 1 hour |
+| **Description** | Automatically lock the vault after a period of inactivity. The timer resets whenever you copy a vault item. Selecting **Never** disables the inactivity lock entirely. |
+
 ### Show Watchtower Tags
 
 | | |
@@ -27,6 +36,15 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Type** | Toggle |
 | **Default** | On |
 | **Description** | Detect open applications and browser tabs to boost matching vault items. When disabled, no window information is captured and no context boosting or tagging occurs. See [Context Awareness](Context-Awareness) for details. |
+
+### Background Refresh Interval
+
+| | |
+|---|---|
+| **Type** | Choice (dropdown) |
+| **Default** | 5 minutes |
+| **Options** | Never, 5 minutes, 15 minutes, 30 minutes, 1 hour |
+| **Description** | How often vault items are automatically refreshed in the background while the vault is open. The time since last sync is shown on the Sync Vault item. Set to **Never** to only sync manually. |
 
 ### Auto-Clear Clipboard
 

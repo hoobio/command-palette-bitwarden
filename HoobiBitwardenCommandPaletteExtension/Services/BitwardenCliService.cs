@@ -12,6 +12,7 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal enum VaultStatus { Unlocked, Locked, Unauthenticated, CliNotFound }
 
+#pragma warning disable CA1001 // singleton-lifetime; timer disposed when lock fires
 internal sealed class BitwardenCliService
 {
   private readonly BitwardenSettingsManager? _settings;
@@ -22,10 +23,22 @@ internal sealed class BitwardenCliService
   private bool _cacheLoaded;
   private DateTime _lastRefresh;
   private int _refreshing;
-  private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(5);
+  private TimeSpan RefreshInterval
+  {
+    get
+    {
+      var minutes = int.TryParse(_settings?.BackgroundRefresh.Value, out var m) ? m : 5;
+      return minutes > 0 ? TimeSpan.FromMinutes(minutes) : Timeout.InfiniteTimeSpan;
+    }
+  }
+
+  public DateTime LastRefresh => _lastRefresh;
 
   private VaultStatus? _lastStatus;
   private Dictionary<string, string> _folders = [];
+
+  private Timer? _autoLockTimer;
+  private TimeSpan _autoLockTimeout;
 
   public bool IsUnlocked => _sessionKey != null;
 
@@ -43,10 +56,44 @@ internal sealed class BitwardenCliService
   public event Action? CacheUpdated;
   public event Action? StatusChanged;
   public event Action? WarmupCompleted;
+  public event Action? AutoLocking;
+  public event Action? AutoLocked;
 
   public BitwardenCliService(BitwardenSettingsManager? settings = null)
   {
     _settings = settings;
+    ApplyAutoLockSetting();
+    AccessTracker.ItemAccessed += ResetAutoLockTimer;
+    if (_settings != null)
+      _settings.Settings.SettingsChanged += (_, _) => ApplyAutoLockSetting();
+  }
+
+  private void ApplyAutoLockSetting()
+  {
+    var minutes = int.TryParse(_settings?.AutoLockTimeout.Value, out var m) ? m : 0;
+    _autoLockTimeout = minutes > 0 ? TimeSpan.FromMinutes(minutes) : Timeout.InfiniteTimeSpan;
+    ResetAutoLockTimer();
+  }
+
+  public void ResetAutoLockTimer()
+  {
+    if (_autoLockTimeout == Timeout.InfiniteTimeSpan || !IsUnlocked)
+    {
+      _autoLockTimer?.Dispose();
+      _autoLockTimer = null;
+      return;
+    }
+    if (_autoLockTimer == null)
+      _autoLockTimer = new Timer(OnAutoLockTick, null, _autoLockTimeout, Timeout.InfiniteTimeSpan);
+    else
+      _autoLockTimer.Change(_autoLockTimeout, Timeout.InfiniteTimeSpan);
+  }
+
+  private async void OnAutoLockTick(object? _)
+  {
+    AutoLocking?.Invoke();
+    await LockAsync();
+    AutoLocked?.Invoke();
   }
 
   public void SetSession(string sessionKey) => _sessionKey = sessionKey;
@@ -96,6 +143,13 @@ internal sealed class BitwardenCliService
   private VaultStatus SetStatus(VaultStatus status)
   {
     _lastStatus = status;
+    if (status == VaultStatus.Unlocked)
+      ResetAutoLockTimer();
+    else
+    {
+      _autoLockTimer?.Dispose();
+      _autoLockTimer = null;
+    }
     return status;
   }
 
@@ -545,7 +599,9 @@ internal sealed class BitwardenCliService
 
   public void TriggerBackgroundRefreshIfStale()
   {
-    if (_refreshing == 0 && DateTime.UtcNow - _lastRefresh > RefreshInterval)
+    var interval = RefreshInterval;
+    if (interval == Timeout.InfiniteTimeSpan) return;
+    if (_refreshing == 0 && DateTime.UtcNow - _lastRefresh > interval)
       _ = Task.Run(async () => { try { await RefreshCacheAsync(); } catch { } });
   }
 

@@ -51,6 +51,20 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             new("Live (show live code + countdown)", "live"),
         ]);
 
+    public ChoiceSetSetting AutoLockTimeout { get; } = new(
+        "autoLockTimeout",
+        "Auto-Lock Timeout",
+        "Automatically lock the vault after a period of inactivity",
+        [
+            new("Never", "0"),
+            new("1 minute", "1"),
+            new("2 minutes", "2"),
+            new("5 minutes", "5"),
+            new("15 minutes", "15"),
+            new("30 minutes", "30"),
+            new("1 hour", "60"),
+        ]);
+
     public ToggleSetting AutoClearClipboard { get; } = new(
         "autoClearClipboard",
         "Auto-Clear Clipboard",
@@ -69,7 +83,17 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
           new("10 items", "10"),
           new("Unlimited", "0"),
         ]);
-
+    public ChoiceSetSetting BackgroundRefresh { get; } = new(
+        "backgroundRefresh",
+        "Background Refresh Interval",
+        "How often to automatically sync vault items in the background while the vault is open",
+        [
+            new("Never", "0"),
+            new("5 minutes", "5"),
+            new("15 minutes", "15"),
+            new("30 minutes", "30"),
+            new("1 hour", "60"),
+        ]);
     public ChoiceSetSetting ClipboardClearDelay { get; } = new(
         "clipboardClearDelay",
         "Clipboard Clear Delay",
@@ -88,13 +112,16 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         FilePath = Path.Combine(SettingsDir, "settings.json");
         ContextItemLimit.Value = "3";
         TotpTagStyle.Value = "static";
+        BackgroundRefresh.Value = "5";
         Settings.Add(RememberSession);
+        Settings.Add(AutoLockTimeout);
         Settings.Add(ShowWatchtowerTags);
         Settings.Add(ContextAwareness);
         Settings.Add(ShowContextTag);
         Settings.Add(ShowPasskeyTag);
         Settings.Add(TotpTagStyle);
         Settings.Add(ContextItemLimit);
+        Settings.Add(BackgroundRefresh);
         Settings.Add(AutoClearClipboard);
         Settings.Add(ClipboardClearDelay);
         Settings.SettingsChanged += OnSettingsChanged;

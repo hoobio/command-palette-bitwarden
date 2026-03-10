@@ -28,6 +28,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private DateTime _lastContextCapture = DateTime.MinValue;
     private Timer? _totpTimer;
     private List<(ListItem ListItem, BitwardenItem VaultItem, bool AllowContextTag)>? _totpItems;
+    private Timer? _syncTimer;
+    private ListItem? _syncItem;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -36,6 +38,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.CacheUpdated += OnCacheUpdated;
         _service.StatusChanged += OnStatusChanged;
         _service.WarmupCompleted += OnWarmupCompleted;
+        _service.AutoLocking += OnAutoLocking;
+        _service.AutoLocked += OnAutoLocked;
         AccessTracker.ItemAccessed += OnItemAccessed;
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         Title = "Bitwarden";
@@ -88,6 +92,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         CaptureContext(force: true);
         _currentSearchText = newSearch;
+
+        if (_service.IsUnlocked)
+            _service.ResetAutoLockTimer();
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked)
             return;
@@ -278,12 +285,34 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Icon = new IconInfo("\uE72E"),
     };
 
-    private ListItem BuildSyncItem() => new(new AnonymousCommand(OnSyncRequested)
-    { Name = "Sync", Result = CommandResult.KeepOpen() })
+    private ListItem BuildSyncItem()
     {
-        Title = "Sync Vault",
-        Subtitle = "Force sync and refresh vault items from server",
-        Icon = new IconInfo("\uE895"),
+        var item = new ListItem(new AnonymousCommand(OnSyncRequested)
+        { Name = "Sync", Result = CommandResult.KeepOpen() })
+        {
+            Title = "Sync Vault",
+            Subtitle = GetSyncSubtitle(),
+            Icon = new IconInfo("\uE895"),
+        };
+        _syncItem = item;
+        return item;
+    }
+
+    private string GetSyncSubtitle()
+    {
+        var last = _service.LastRefresh;
+        if (last == default) return "Force sync and refresh vault items from server";
+        return $"Last synced: {FormatAge(DateTime.UtcNow - last)}";
+    }
+
+    private static string FormatAge(TimeSpan age) => age.TotalSeconds switch
+    {
+        < 5 => "just now",
+        < 60 => $"{(int)age.TotalSeconds} seconds ago",
+        < 120 => "1 minute ago",
+        < 3600 => $"{(int)age.TotalMinutes} minutes ago",
+        < 7200 => "1 hour ago",
+        _ => $"{(int)age.TotalHours} hours ago",
     };
 
     private List<BitwardenItem> Search(string? query = null)
@@ -291,6 +320,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var limit = int.TryParse(_settings?.ContextItemLimit.Value, out var v) ? v : 3;
         return _service.SearchCached(query, _context, limit);
     }
+
+    private static bool MatchesCommand(string search, string command)
+        => search.Length >= 2 && command.StartsWith(search, StringComparison.OrdinalIgnoreCase);
 
     private IListItem[] BuildListItems(List<BitwardenItem> items)
     {
@@ -305,7 +337,16 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var contextTagsUsed = 0;
         var capContextTags = showContextTag && string.IsNullOrWhiteSpace(_currentSearchText) && contextLimit > 0;
 
-        if (items.Count == 0)
+        var search = (_currentSearchText ?? "").Trim();
+        var boostSync = MatchesCommand(search, "sync");
+        var boostLock = MatchesCommand(search, "lock");
+        var boostLogout = MatchesCommand(search, "logout");
+
+        if (boostSync) list.Add(BuildSyncItem());
+        if (boostLock) list.Add(BuildLockItem());
+        if (boostLogout) list.Add(BuildLogoutItem());
+
+        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout)
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
         else
         {
@@ -325,10 +366,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             }
         }
 
-        list.Add(BuildSyncItem());
+        if (!boostSync) list.Add(BuildSyncItem());
         list.Add(BuildSetServerItem());
-        list.Add(BuildLockItem());
-        list.Add(BuildLogoutItem());
+        if (!boostLock) list.Add(BuildLockItem());
+        if (!boostLogout) list.Add(BuildLogoutItem());
 
         _totpItems = totpTracked.Count > 0 ? totpTracked : null;
         if (_totpItems != null)
@@ -338,6 +379,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             _totpTimer?.Dispose();
             _totpTimer = null;
         }
+
+        _syncTimer ??= new Timer(OnSyncTimerTick, null, 10000, 10000);
 
         return list.ToArray();
     }
@@ -362,10 +405,19 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     public void Dispose()
     {
         _totpTimer?.Dispose();
+        _syncTimer?.Dispose();
         _service.CacheUpdated -= OnCacheUpdated;
         _service.StatusChanged -= OnStatusChanged;
         _service.WarmupCompleted -= OnWarmupCompleted;
+        _service.AutoLocking -= OnAutoLocking;
+        _service.AutoLocked -= OnAutoLocked;
         AccessTracker.ItemAccessed -= OnItemAccessed;
+    }
+
+    private void OnSyncTimerTick(object? state)
+    {
+        if (_syncItem is { } item)
+            item.Subtitle = GetSyncSubtitle();
     }
 
     private void OnTotpTimerTick(object? state)
@@ -377,6 +429,19 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
         foreach (var (listItem, vaultItem, allowContextTag) in items)
             listItem.Tags = VaultItemHelper.BuildTags(vaultItem, showWatchtower, _context, allowContextTag, "live", showPasskeyTag);
+    }
+
+    private void OnAutoLocking()
+    {
+        _handlingAction = true;
+        ShowLoadingStatus("Locking vault...", "bw lock");
+    }
+
+    private void OnAutoLocked()
+    {
+        _currentItems = BuildLockedItems();
+        RaiseItemsChanged();
+        _handlingAction = false;
     }
 
     private void OnItemAccessed()
