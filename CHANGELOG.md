@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.6.0](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.5.2...v1.6.0) (2026-03-10)
+
+
+### Features
+
+* 1Password parity features - clipboard, context awareness, tags, search syntax ([#63](https://github.com/hoobio/hoobi-bitwarden-command-palette/issues/63)) ([5ff2011](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/5ff201110be20287d8666d07ef260d34c29131bb))
+* add auto-lock timeout, background refresh, and live sync status ([ded724a](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/ded724a062b05d2dc41a37ae5f869cd56137d652))
+* add context item limit and tag visibility settings ([5b39135](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/5b391353bae28d2f354b53f08a43ec4c5fccaf9d))
+* add is:weak, is:old, is:insecure, is:watchtower search filters ([adcbeed](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/adcbeed1d382f33ef09dd6226be0b7eb9eaf2557))
+* add passkey tag and has:passkey search filter ([066a618](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/066a618b2ac2f6c88e0d39a7af0032f533665d67))
+* replace ShowTotpTag with TotpTagStyle choice setting (off/static/live) ([fd5afb4](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/fd5afb49cad708701c0aff855978c2fd9ede17c5))
+* respect Bitwarden URI match type in context detection ([5f367a3](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/5f367a32c76b7fd13aa12937a5cc4d9b45763c71))
+* split login into two-step flow for 2FA usability ([8a0f30b](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/8a0f30b0f1538a72ec9fc064c9e836cf7b26c21f))
+* wire up 2FA flow, clear search on vault ops, context limit and tag settings ([727b426](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/727b42616d67fe922fb37c6bbb7b721c28d77aae))
+
+
+### Bug Fixes
+
+* address security and correctness findings from code audit ([c77f981](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/c77f9816f75b60e4cba0712734304bf252a66e62))
+* cap context tag to top N items matching the context item limit ([c9393b1](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/c9393b1a2cd73c133e595b6810f532c40dbd5902))
+* preserve context tag cap in TOTP timer tick ([c34cee3](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/c34cee36b8108a27d018cf2adfc05537efd575d7))
+* re-sort context remainder list without context boost ([3009ae2](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/3009ae29e5cbebfac659fa45d2fca850eb75291f))
+* show all items when context limit is set, not only context matches ([80d8bc1](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/80d8bc14c3cfb163c26c25cc3770672c321c589e))
+
+
+### Documentation
+
+* add missing settings to Settings.md ([21212ce](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/21212ceca5d7acc78f9751767e928e386c9bb433))
+
+
+### Styles
+
+* reformat build.yaml and release-please-config.json ([92841c8](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/92841c86b73890e2e017e3aed1f679f40e400082))
+
+
+### Build System
+
+* stamp manifest version via MSBuild XmlPoke and remove from release-please extra-files ([9a626e6](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/9a626e621ff1b9d14b73e325ab4cb08956bda875))
+
+
+### Continuous Integration
+
+* add pre-release job for non-release main pushes ([47b0a03](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/47b0a03c341702243c2d0a7e9b15ae28fb313bdd))
+* add wiki sync workflow ([4d1d972](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/4d1d9724118bf8553a7d021229d83529437ad36c))
+* allow release-please to run on workflow_dispatch ([ef31806](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/ef318065c501761ca2070dc9cddbf3991c76d81f))
+* explicitly set hidden:false for all changelog sections ([124a7c8](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/124a7c8e9f2c12af5bc03c0f6ba6aaf28a98328b))
+* generate commit-based release notes for pre-releases ([90f2c5c](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/90f2c5c566844d9f148ac6956752f0b498c77f6b))
+* prune old pre-releases, keep 3 per version ([69c5df0](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/69c5df0462c87cf2e149664b45538c7d8d8cb986))
+* remove inline release-type so release-please uses config file ([040d037](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/040d037761c5a586e21bce4b3b4d068777f6e805))
+* remove schema from manifest to fix release-please parsing ([96ca9d8](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/96ca9d878dda99943e9e5f4225f4ec5df68ab142))
+* trigger release-please with fresh branch ([09802fa](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/09802fa5633e23ffc15e1980c5e57e16c1077e72))
+* use next version from release PR for pre-releases and include all commit types in changelog ([00c8219](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/00c82199c298e87c68f573c11014afeee7564dac))
+* use non-semver pre-release tag to avoid poisoning release-please ([e8be016](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/e8be016cac1adb125189f1562b9cc2af13a7970a))
+* use semver pre-release tags with make_latest:false for proper sorting ([6e9904a](https://github.com/hoobio/hoobi-bitwarden-command-palette/commit/6e9904a742c98b27e3cafd15ecabd0f09f061c20))
+
 ## [1.5.2](https://github.com/hoobio/hoobi-bitwarden-command-palette/compare/v1.5.1...v1.5.2) (2026-03-09)
 
 
