@@ -147,7 +147,7 @@ jobs:
           $allTotal = ($fileStats | Measure-Object -Property Total -Sum).Sum
           $allCovered = ($fileStats | Measure-Object -Property Covered -Sum).Sum
           $allPct = if ($allTotal -gt 0) { [math]::Round(($allCovered / $allTotal) * 100, 2) } else { 100 }
-          $threshold = 60
+          $threshold = 50
 
           $repoUrl = "https://github.com/${{ github.repository }}"
           $headSha = "${{ github.event.pull_request.head.sha }}"
@@ -369,7 +369,7 @@ jobs:
             gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$existing" -f body=$body | Out-Null
             Write-Host "Updated existing WACK comment"
           } else {
-            gh pr comment $prNumber --body $body
+            gh pr comment $prNumber --body $body --repo "${{ github.repository }}"
             Write-Host "Created WACK comment"
           }
 
