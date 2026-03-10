@@ -366,7 +366,10 @@ internal sealed class BitwardenCliService
         {
           var contextMatches = sorted.Where(i => ContextBoost(i, context) > 0).Take(maxContextItems).ToList();
           if (contextMatches.Count > 0)
-            return contextMatches;
+          {
+            var contextMatchIds = contextMatches.Select(i => i.Id).ToHashSet();
+            return [.. contextMatches, .. sorted.Where(i => !contextMatchIds.Contains(i.Id))];
+          }
         }
 
         return sorted;
