@@ -1,0 +1,103 @@
+name: Build (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string
+    secrets:
+      SIGNING_CERTIFICATE:
+        required: false
+      SIGNING_CERTIFICATE_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content version.txt -Raw).Trim()
+          "APP_VERSION=$ver.0" | Out-File -Append $env:GITHUB_ENV
+          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+
+      - name: Stamp Package.appxmanifest version
+        shell: pwsh
+        run: |
+          $manifest = Resolve-Path "HoobiBitwardenCommandPaletteExtension\Package.appxmanifest"
+          $content = [System.IO.File]::ReadAllText($manifest)
+          $content = $content -creplace '(?<=<Identity\s[^>]*)Version="[\d.]+"', "Version=`"$env:APP_VERSION`""
+          [System.IO.File]::WriteAllText($manifest, $content, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Restore
+        run: dotnet restore -p:Platform=${{ inputs.platform }}
+
+      - name: Build
+        run: dotnet build -c Release -p:Platform=${{ inputs.platform }} --no-restore
+
+      - name: Create MSIX package
+        run: |
+          dotnet publish -c Release -p:Platform=${{ inputs.platform }} `
+            -p:AppxPackageDir=${{ github.workspace }}\AppPackages\ `
+            -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxBundle=Never
+        working-directory: HoobiBitwardenCommandPaletteExtension
+
+      - name: Find produced MSIX (diagnostic)
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Filter *.msix -ErrorAction SilentlyContinue
+          if ($found) {
+            Write-Host "Found MSIX file(s):"
+            $found | ForEach-Object { Write-Host "  $($_.FullName)" }
+          } else {
+            Write-Host "::warning::No .msix files found anywhere in workspace after publish"
+          }
+
+      - name: Import signing certificate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $pfxBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
+          $pfxPath = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+          $pwd = ConvertTo-SecureString "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" -AsPlainText -Force
+          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $pwd
+          Remove-Item $pfxPath
+
+      - name: Sign MSIX package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match 'x64\\signtool' } |
+            Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*','$1') } -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          Get-ChildItem "${{ github.workspace }}\AppPackages" -Recurse -Filter *.msix | ForEach-Object {
+            & $signtool sign /fd SHA256 /sha1 "${{ vars.SIGNING_CERT_THUMBPRINT }}" /td SHA256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($_.Name)" }
+          }
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: msix-${{ inputs.platform }}
+          path: "**/*.msix"
+
+      - name: Upload publish output
+        uses: actions/upload-artifact@v7
+        with:
+          name: publish-${{ inputs.platform }}
+          path: HoobiBitwardenCommandPaletteExtension/bin/Release/**/publish/

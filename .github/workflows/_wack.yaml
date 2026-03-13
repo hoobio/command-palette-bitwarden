@@ -1,0 +1,186 @@
+name: WACK (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  wack:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (for wack-exclusions.json)
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/wack-exclusions.json
+          sparse-checkout-cone-mode: false
+
+      - name: Download ${{ inputs.platform }} MSIX
+        uses: actions/download-artifact@v8
+        with:
+          name: msix-${{ inputs.platform }}
+          path: msix
+
+      - name: Run Windows App Certification Kit
+        shell: pwsh
+        run: |
+          # WACK can test any package architecture regardless of its own bitness,
+          # so both x64 and ARM64 packages are tested on the windows-latest x64 runner.
+          $appCert = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\App Certification Kit' `
+            -Filter appcert.exe -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Using appcert: $appCert"
+          if (-not $appCert) {
+            Write-Host "##[warning]WACK not found, skipping"
+            exit 0
+          }
+          $msix = Get-ChildItem msix -Recurse -Filter *.msix | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $msix) {
+            Write-Host "::error::No .msix found under msix/ — listing directory contents for diagnosis:"
+            Get-ChildItem msix -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+            exit 1
+          }
+          $reportPath = Join-Path $PWD "wack-report.xml"
+          Write-Host "Running WACK on: $msix"
+          Write-Host "Report will be saved to: $reportPath"
+          # Exit code is handled by the post-step after applying exclusions; don't fail here.
+          # Disable native-command error propagation so appcert's non-zero exit doesn't terminate the step.
+          $PSNativeCommandErrorActionPreference = $false
+          & $appCert test -apptype windowspackagedapp -appxpackagepath $msix -reportoutputpath $reportPath
+          Write-Host "appcert exited with code $LASTEXITCODE"
+          exit 0
+
+      - name: Upload WACK report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wack-report-${{ inputs.platform }}
+          path: wack-report.xml
+
+      - name: Fail on non-excluded WACK failures (non-PR)
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: |
+          $reportPath = "wack-report.xml"
+          if (-not (Test-Path $reportPath)) { exit 0 }
+
+          $exclusionMap = @{}
+          $exclusionsPath = ".github/wack-exclusions.json"
+          if (Test-Path $exclusionsPath) {
+            (Get-Content $exclusionsPath | ConvertFrom-Json) | ForEach-Object { $exclusionMap[$_.test] = $_.reason }
+          }
+
+          [xml]$report = Get-Content $reportPath
+          $realFailures = @($report.SelectNodes("//TEST") |
+            Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'FAIL' } |
+            Where-Object { -not $exclusionMap.ContainsKey($_.GetAttribute("NAME")) })
+
+          if ($realFailures.Count -gt 0) {
+            Write-Host "::error::$($realFailures.Count) non-excluded WACK test(s) failed: $(($realFailures | ForEach-Object { $_.GetAttribute('NAME') }) -join ', ')"
+            exit 1
+          }
+
+      - name: Post WACK results to PR
+        if: always() && github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $reportPath = "wack-report.xml"
+          $prNumber = "${{ github.event.pull_request.number }}"
+          $platform = "${{ inputs.platform }}"
+          $marker = "<!-- wack-bot-$platform -->"
+
+          if (-not (Test-Path $reportPath)) {
+            $body = "## :warning: WACK Results ($platform)`n`nWACK report was not generated (tool may not be available on runner).`n$marker"
+          } else {
+            # Load exclusions — map test name -> reason
+            $exclusionMap = @{}
+            $exclusionsPath = ".github/wack-exclusions.json"
+            if (Test-Path $exclusionsPath) {
+              (Get-Content $exclusionsPath | ConvertFrom-Json) | ForEach-Object { $exclusionMap[$_.test] = $_.reason }
+            }
+
+            [xml]$report = Get-Content $reportPath
+            # Use OVERALL_RESULT attribute and XPath+InnerText to reliably read CDATA result nodes
+            $tests = $report.SelectNodes("//TEST")
+            $passed   = @($tests | Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'PASS' })
+            $failed   = @($tests | Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'FAIL' })
+            $skipped  = @($tests | Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'NOT_APPLICABLE' })
+
+            $excluded    = @($failed | Where-Object { $exclusionMap.ContainsKey($_.GetAttribute("NAME")) })
+            $realFailures = @($failed | Where-Object { -not $exclusionMap.ContainsKey($_.GetAttribute("NAME")) })
+
+            $icon = if ($realFailures.Count -eq 0) { ':white_check_mark:' } else { ':x:' }
+            $body = "## $icon WACK Results ($platform)`n`n"
+            $body += ":green_circle: **$($passed.Count) passed** "
+            if ($realFailures.Count -gt 0) { $body += ":red_circle: **$($realFailures.Count) failed** " }
+            if ($excluded.Count -gt 0)     { $body += ":warning: **$($excluded.Count) excluded** " }
+            if ($skipped.Count -gt 0)      { $body += ":white_circle: **$($skipped.Count) N/A** " }
+            $body += "`n`n"
+
+            if ($realFailures.Count -gt 0) {
+              $body += "### Failed Tests`n| Test | Message |`n|---|---|`n"
+              foreach ($t in $realFailures) {
+                $name = $t.GetAttribute("NAME")
+                $msgs = @($t.SelectNodes("MESSAGES/MESSAGE")) | ForEach-Object { $_.GetAttribute("TEXT") }
+                $detail = ($msgs -join '; ') -replace '[\r\n]+', ' '
+                if ($detail.Length -gt 200) { $detail = $detail.Substring(0, 200) + '...' }
+                if (-not $detail) { $detail = $t.GetAttribute("DESCRIPTION") }
+                $body += "| ``$name`` | $detail |`n"
+              }
+              $body += "`n"
+            }
+
+            if ($excluded.Count -gt 0) {
+              $body += "### Excluded Tests`n| Test | Message | Reason |`n|---|---|---|`n"
+              foreach ($t in $excluded) {
+                $name = $t.GetAttribute("NAME")
+                $msgs = @($t.SelectNodes("MESSAGES/MESSAGE")) | ForEach-Object { $_.GetAttribute("TEXT") }
+                $detail = ($msgs -join '; ') -replace '[\r\n]+', ' '
+                if ($detail.Length -gt 200) { $detail = $detail.Substring(0, 200) + '...' }
+                if (-not $detail) { $detail = $t.GetAttribute("DESCRIPTION") }
+                $reason = $exclusionMap[$name]
+                $body += "| ``$name`` | $detail | $reason |`n"
+              }
+              $body += "`n"
+            }
+
+            $body += "<details><summary>All tests</summary>`n`n"
+            $body += "| Test | Result |`n|---|---|`n"
+            foreach ($t in $tests | Sort-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() }) {
+              $name   = $t.GetAttribute('NAME')
+              $result = $t.SelectSingleNode("RESULT").InnerText.Trim()
+              $r = if ($result -eq 'PASS') { ':green_circle: Pass' }
+                   elseif ($result -eq 'FAIL' -and $exclusionMap.ContainsKey($name)) { ':warning: Excluded' }
+                   elseif ($result -eq 'FAIL') { ':red_circle: Fail' }
+                   else { ':white_circle: N/A' }
+              $body += "| ``$name`` | $r |`n"
+            }
+            $body += "`n</details>`n"
+            $body += $marker
+
+            if ($realFailures.Count -gt 0) {
+              Write-Host "::error::$($realFailures.Count) non-excluded WACK test(s) failed: $(($realFailures | ForEach-Object { $_.GetAttribute('NAME') }) -join ', ')"
+              # Upsert comment before exiting with failure
+            }
+          }
+
+          # Use ConvertFrom-Json + PowerShell filtering to avoid jq escaping issues
+          $comments = gh api "repos/${{ github.repository }}/issues/$prNumber/comments" --paginate | ConvertFrom-Json
+          $existing = $comments | Where-Object { $_.body -like "*$marker*" } | Select-Object -First 1 -ExpandProperty id
+          if ($existing) {
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$existing" -f body=$body | Out-Null
+            Write-Host "Updated existing WACK comment ($platform)"
+          } else {
+            gh pr comment $prNumber --body $body --repo "${{ github.repository }}"
+            Write-Host "Created WACK comment ($platform)"
+          }
+
+          if ($realFailures -and $realFailures.Count -gt 0) { exit 1 }
