@@ -1,6 +1,8 @@
 # Command Palette Extension for Bitwarden
 
-A free, open-source replacement for 1Password Quick Access, built for the [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/) and Bitwarden. Born out of frustration with 1Password's unwarranted price increases, this extension brings the same instant credential search and copy experience, powered by your Bitwarden vault, directly into the PowerToys Command Palette.
+A free, open-source [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/) extension for Bitwarden. Instant credential search and copy, directly from your keyboard.
+
+Built as an alternative to 1Password Quick Access after their unjustified price increases. Same experience, powered by your Bitwarden vault.
 
 [![Get it from Microsoft Store](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/9P5KS8T80MV3)
 &nbsp;&nbsp;&nbsp;&nbsp;
@@ -19,40 +21,40 @@ A free, open-source replacement for 1Password Quick Access, built for the [Power
 
 ## Features
 
-- **Vault search** with fallback suggestions — search all item types directly from the Command Palette
-- **Secure clipboard** — passwords excluded from clipboard history, auto-cleared on a configurable timer
-- **Favorites & smart sorting** — recently used, favorites, and context-matched items float to the top
-- **TOTP display** — live codes with countdown timers shown as tags
-- **Search filters** — prefix syntax like `is:fav`, `folder:Work`, `has:totp`, `url:github`
-- **Watchtower tags** — visual warnings for weak, old, or insecure passwords
-- **Context awareness** — detects your open apps and browser tabs to boost relevant vault items
+- **Vault search** with fallback suggestions across all item types
+- **Secure clipboard**: passwords excluded from clipboard history, auto-cleared on a configurable timer
+- **Smart sorting**: recently used, favorites, and context-matched items float to the top
+- **TOTP display**: live codes with countdown timers
+- **Search filters**: prefix syntax like `is:fav`, `folder:Work`, `has:totp`, `url:github`
+- **Watchtower tags**: visual warnings for weak, old, or reused passwords
+- **Context awareness**: detects open apps and browser tabs to surface relevant items
 - **Custom field copy**, **SSH quick-connect**, **manual vault sync**, and more
 
-> **📖 [Full documentation on the Wiki](../../wiki)** — detailed guides for [search filters](../../wiki/Search-and-Filtering), [context awareness](../../wiki/Context-Awareness), [clipboard security](../../wiki/Clipboard-Security), [settings](../../wiki/Settings), and [all item actions](../../wiki/Vault-Item-Actions).
+> **📖 [Full documentation on the Wiki](../../wiki)**: [search filters](../../wiki/Search-and-Filtering), [context awareness](../../wiki/Context-Awareness), [clipboard security](../../wiki/Clipboard-Security), [settings](../../wiki/Settings), and [item actions](../../wiki/Vault-Item-Actions).
 
 ## Prerequisites
 
-- **Windows 10 (19041+)** or later with [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/) enabled
-- **[Bitwarden CLI](https://bitwarden.com/help/cli/)** (`bw`) installed and available on your `PATH`
+- **Windows 10 (19041+)** with [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/) enabled
+- **[Bitwarden CLI](https://bitwarden.com/help/cli/)** (`bw`) on your `PATH`
 
 ## Installation
 
-### From Microsoft Store
+### Microsoft Store
 
-**[Get it from Microsoft Store](https://apps.microsoft.com/detail/9P5KS8T80MV3)** — easiest way to install with automatic updates.
+**[Get it from the Microsoft Store](https://apps.microsoft.com/detail/9P5KS8T80MV3)** for automatic updates.
 
-> **Note:** The Store version may lag behind GitHub Releases due to Microsoft's certification process, which can be slow and unreliable. If you need the latest version immediately, install from GitHub Releases instead.
+> The Store version may lag behind GitHub Releases due to Microsoft's certification process. Install from GitHub if you need the latest version immediately.
 
-### From GitHub Releases
+### GitHub Releases
 
-1. Download the `.msix` package for your architecture (x64 or ARM64) from [Releases](../../releases)
-2. Download and install the signing certificate ([`HoobiBitwardenCommandPaletteExtension.cer`](HoobiBitwardenCommandPaletteExtension.cer)) to the **Trusted People** store:
-   - Double-click the `.cer` file → **Install Certificate** → **Local Machine** → **Place all certificates in the following store** → **Trusted People** → Finish
+1. Download the `.msix` for your architecture (x64 or ARM64) from [Releases](../../releases)
+2. Install the signing certificate ([`HoobiBitwardenCommandPaletteExtension.cer`](HoobiBitwardenCommandPaletteExtension.cer)) to the **Trusted People** store:
+   - Double-click the `.cer` file → **Install Certificate** → **Local Machine** → **Trusted People** → Finish
    - Or via PowerShell (admin):
      ```powershell
      Import-Certificate -FilePath .\HoobiBitwardenCommandPaletteExtension.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
      ```
-3. Double-click the `.msix` to install, or use PowerShell:
+3. Double-click the `.msix` to install, or:
    ```powershell
    Add-AppxPackage -Path .\HoobiBitwardenCommandPaletteExtension_x64.msix
    ```
@@ -67,17 +69,19 @@ dotnet build -c Debug -p:Platform=x64
 
 ## Usage
 
-1. Open the Command Palette (default: `Win + Ctrl + Space`)
+1. Open the Command Palette (`Win + Ctrl + Space`)
 2. Type **"Bitwarden"** to open the vault browser, or just start typing. Matching items appear as fallback results
 3. If your vault is locked, you'll be prompted for your master password
-4. Click an item for its default action, or use the context menu for more options (copy password, TOTP, etc.)
+4. Click an item for its default action, or open the context menu for more options
 
 ## Security
 
-- Master passwords are sent to the Bitwarden CLI via **environment variables** (never as command-line arguments visible in process lists)
-- Session keys are stored in **Windows Credential Manager** (OS-level encryption) when "Remember Session" is enabled
-- **Sensitive clipboard data** (passwords, TOTP codes, card numbers, security codes) is excluded from Windows clipboard history
-- Clipboard is **automatically cleared** after a configurable delay for sensitive data
+- Master passwords are passed to the Bitwarden CLI via **environment variables**, not command-line arguments
+- Session keys are stored in **Windows Credential Manager** when "Remember Session" is enabled
+- Sensitive clipboard data (passwords, TOTP, card numbers) is excluded from Windows clipboard history and auto-cleared
+- Vault cache is **in-memory only**, cleared on lock/exit
+- No vault data is written to disk (only access timestamps for sorting)
+- All search input is **regex-escaped** before use
 
 ## Building
 
@@ -85,17 +89,10 @@ dotnet build -c Debug -p:Platform=x64
 # Debug
 dotnet build -p:Platform=x64
 
-# Release (with trimming)
+# Release
 dotnet publish -c Release -p:Platform=x64
 ```
 
 ## License
 
 [MIT](LICENSE)
-- The vault cache is held **in-memory only** and cleared on lock/exit
-- All user search input is **regex-escaped** before use in pattern matching
-- No vault data is written to disk (only access timestamps for sorting)
-
-## License
-
-MIT
