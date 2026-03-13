@@ -281,15 +281,11 @@ jobs:
 
   wack:
     needs: [build]
-    runs-on: ${{ matrix.runner }}
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: x64
-            runner: windows-latest
-          - platform: ARM64
-            runner: windows-11-arm
+        platform: [x64, ARM64]
     steps:
       - name: Checkout (for wack-exclusions.json)
         uses: actions/checkout@v6
@@ -306,26 +302,15 @@ jobs:
       - name: Run Windows App Certification Kit
         shell: pwsh
         run: |
-          # WACK can test any package architecture regardless of its own bitness.
-          # On ARM64 runners the native ARM64 kit may not be present, so fall back to
-          # the x64 kit installed under Program Files (x86) via WoW64.
-          $nativeArch = $env:PROCESSOR_ARCHITECTURE  # AMD64 or ARM64
-          $searchPaths = if ($nativeArch -eq 'ARM64') {
-            @(
-              'C:\Program Files\Windows Kits\10\App Certification Kit',
-              'C:\Program Files (x86)\Windows Kits\10\App Certification Kit'
-            )
-          } else {
-            @('C:\Program Files (x86)\Windows Kits\10\App Certification Kit')
-          }
-          $appCert = $searchPaths | ForEach-Object {
-            Get-ChildItem $_ -Filter appcert.exe -Recurse -ErrorAction SilentlyContinue |
-              Select-Object -First 1 -ExpandProperty FullName
-          } | Where-Object { $_ } | Select-Object -First 1
+          # WACK can test any package architecture regardless of its own bitness,
+          # so both x64 and ARM64 packages are tested on the windows-latest x64 runner.
+          $appCert = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\App Certification Kit' `
+            -Filter appcert.exe -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
           Write-Host "Using appcert: $appCert"
-          if (-not $appCert) { 
+          if (-not $appCert) {
             Write-Host "##[warning]WACK not found, skipping"
-            exit 0 
+            exit 0
           }
           $msix = Get-ChildItem msix -Recurse -Filter *.msix | Select-Object -First 1 -ExpandProperty FullName
           if (-not $msix) {
