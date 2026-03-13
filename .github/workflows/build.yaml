@@ -305,7 +305,8 @@ jobs:
           path: HoobiBitwardenCommandPaletteExtension/bin/Release/**/publish/
 
   wack:
-    needs: [build]
+    needs: [build, detect-changes]
+    if: always() && needs.build.result == 'success'
     runs-on: windows-latest
     strategy:
       fail-fast: false
