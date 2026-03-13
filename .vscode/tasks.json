@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build (Debug x64)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\HoobiBitwardenCommandPaletteExtension.csproj",
+        "-c",
+        "Debug",
+        "/p:Platform=x64"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Kill PowerToys",
+      "type": "shell",
+      "command": "$pt = Get-Process PowerToys -ErrorAction SilentlyContinue; if ($pt) { $pt.CloseMainWindow() | Out-Null; if (!$pt.WaitForExit(5000)) { $pt | Stop-Process -Force }; Write-Host 'Stopped PowerToys' } else { Write-Host 'PowerToys was not running' }",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Deploy (Debug x64)",
+      "type": "shell",
+      "command": "Add-AppxPackage -Register -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net9.0-windows10.0.26100.0\\win-x64\\AppX\\AppxManifest.xml' -ForceUpdateFromAnyVersion; Write-Host 'Deployed.'",
+      "options": {
+        "shell": {
+          "executable": "powershell.exe",
+          "args": [
+            "-NoProfile",
+            "-Command"
+          ]
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Start PowerToys",
+      "type": "shell",
+      "command": "Start-Process 'shell:AppsFolder\\Microsoft.PowerToysWin32'; Write-Host 'PowerToys started.'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build, Kill & Deploy (Debug x64)",
+      "dependsOn": [
+        "Build (Debug x64)",
+        "Kill PowerToys",
+        "Deploy (Debug x64)",
+        "Start PowerToys"
+      ],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}
