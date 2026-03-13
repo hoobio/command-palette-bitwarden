@@ -1,0 +1,6 @@
+[
+  {
+    "test": "Blocked executables",
+    "reason": "mscordbi.dll and Microsoft.CommandPalette.Extensions.Toolkit.dll (PowerToys SDK) reference CreateProcessW — these are third-party binaries outside our control"
+  }
+]
