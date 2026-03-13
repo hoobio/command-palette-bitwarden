@@ -67,23 +67,24 @@ Can specify affected area: `feat(auth): add OAuth support`
 
 Include work item in description: `fix: resolve login timeout (AB#123)`
 
-### Multiple Changes in One Commit
+### Multiple Changes — PR Description Format
 
-To represent multiple fixes or features in a single commit (each gets its own changelog entry), add additional conventional commit messages as footers at the **bottom** of the commit body:
+This repo uses **squash merges**, so the PR description becomes the commit message. To represent multiple changes in one PR (each gets its own changelog entry), add additional conventional commit messages as footers at the **bottom** of the PR description body:
 
 ```
 feat: add primary feature description
 
-Optional body text explaining the commit.
+Optional body text explaining the PR.
 
 fix(utils): secondary fix description
 BREAKING-CHANGE: describe breaking change if applicable
-feat(utils): another feature in the same commit
+feat(utils): another feature in the same PR
 ```
 
 - Each footer entry must follow the same `type(scope): description` format
 - `BREAKING-CHANGE:` footer triggers a MAJOR version bump
 - Additional entries must appear **after** any free-form body text
+- Only `feat`, `fix`, `perf`, and `revert` types produce changelog entries; `ci`, `test`, `docs`, `chore` do not
 - These additional entries each produce their own changelog line
 
 ## Notes
