@@ -11,13 +11,6 @@ on:
       - ".github/workflows/codeql.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "**.cs"
-      - "**.csproj"
-      - "*.props"
-      - "*.targets"
-      - ".github/workflows/codeql.yml"
-      - ".release-please-manifest.json"
   schedule:
     - cron: "22 1 * * 5"
 
@@ -29,7 +22,30 @@ permissions:
   pull-requests: write
 
 jobs:
+  detect-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code_changed:
+              - "**.cs"
+              - "**.csproj"
+              - "*.props"
+              - "*.targets"
+              - ".github/workflows/codeql.yml"
+              - ".release-please-manifest.json"
+
   analyze:
+    needs: [detect-changes]
+    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     name: Analyze C#
     runs-on: windows-latest
 
