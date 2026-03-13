@@ -10,6 +10,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
     private readonly ICommandItem[] _commands;
     private readonly BitwardenFallbackItem _fallbackItem;
     private readonly BitwardenSettingsManager _settingsManager;
+    private readonly BitwardenCliService _service;
 
     public HoobiBitwardenCommandPaletteExtensionCommandsProvider()
     {
@@ -21,10 +22,10 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
 
         _settingsManager = new BitwardenSettingsManager();
-        var service = new BitwardenCliService(_settingsManager);
-        _fallbackItem = new BitwardenFallbackItem(service, _settingsManager);
+        _service = new BitwardenCliService(_settingsManager);
+        _fallbackItem = new BitwardenFallbackItem(_service, _settingsManager);
         _commands = [
-            new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(service, _settingsManager))
+            new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(_service, _settingsManager))
             {
                 Title = "Bitwarden",
                 Subtitle = "Search your vault",
@@ -32,8 +33,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         ];
 
         Settings = _settingsManager.Settings;
-
-        _ = Task.Run(service.WarmCacheAsync);
+        _service.WarmCacheAsync();
     }
 
     public override ICommandItem[] TopLevelCommands() => _commands;

@@ -618,7 +618,18 @@ internal sealed class BitwardenCliService
       _ = Task.Run(async () => { try { await RefreshCacheAsync(); } catch { } });
   }
 
-  public async Task WarmCacheAsync()
+  private Task _warmupTask = Task.CompletedTask;
+  public Task WarmupTask => _warmupTask;
+
+  public Task WarmCacheAsync()
+  {
+    // Set _warmupTask synchronously so InitializeAsync always awaits the real task,
+    // but run the actual CLI work on ThreadPool to avoid blocking the COM activation thread.
+    _warmupTask = Task.Run(RunWarmupAsync);
+    return _warmupTask;
+  }
+
+  private async Task RunWarmupAsync()
   {
     var status = await GetVaultStatusAsync();
     if (status == VaultStatus.Unlocked)

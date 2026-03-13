@@ -75,8 +75,44 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             if (!_initialLoadStarted)
             {
                 _initialLoadStarted = true;
-                IsLoading = true;
                 CaptureContext(force: true);
+
+                // If warmup already ran, skip async init and show results immediately.
+                if (_service.LastStatus != null)
+                {
+                    _initComplete = true;
+                    switch (_service.LastStatus)
+                    {
+                        case VaultStatus.Unlocked when _service.IsCacheLoaded:
+                            _currentItems = BuildListItems(Search(_currentSearchText));
+                            IsLoading = false;
+                            break;
+                        case VaultStatus.Unlocked:
+                            // Vault open but warmup is still loading the cache.
+                            _currentItems = BuildLoadingPlaceholder("Retrieving items from vault...", "bw list items");
+                            IsLoading = true;
+                            break;
+                        case VaultStatus.Unauthenticated:
+                            _currentItems = BuildUnauthenticatedItems();
+                            IsLoading = false;
+                            break;
+                        case VaultStatus.Locked:
+                            _currentItems = BuildLockedItems();
+                            IsLoading = false;
+                            break;
+                        case VaultStatus.CliNotFound:
+                            _currentItems = BuildCliNotFoundItems();
+                            IsLoading = false;
+                            break;
+                        default:
+                            _currentItems = [];
+                            IsLoading = false;
+                            break;
+                    }
+                    return _currentItems;
+                }
+
+                IsLoading = true;
                 _currentItems = BuildLoadingPlaceholder("Checking vault status...", "bw status");
                 _ = Task.Run(InitializeAsync);
                 return _currentItems;
@@ -143,6 +179,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void RebuildForCurrentStatus()
     {
         IsLoading = false;
+        _initComplete = true;
 
         switch (_service.LastStatus)
         {
@@ -164,15 +201,24 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
 
         RaiseItemsChanged();
+
+        // Belt-and-suspenders: if the first RaiseItemsChanged fired before the SDK had
+        // subscribed to ItemsChanged (i.e. before the palette was first opened), it lands
+        // in the void. Re-raise after a short delay so the palette picks it up.
+        _ = Task.Delay(300).ContinueWith(_ => RaiseItemsChanged(), TaskScheduler.Default);
     }
 
     private async Task InitializeAsync()
     {
         try
         {
+            // Await the ongoing warmup instead of firing a concurrent bw status call,
+            // which can cause the CLI to hang when both run simultaneously.
+            await _service.WarmupTask.ConfigureAwait(false);
+
             var status = _service.LastStatus;
             if (status is null)
-                status = await _service.GetVaultStatusAsync();
+                status = await _service.GetVaultStatusAsync().ConfigureAwait(false);
 
             switch (status)
             {
