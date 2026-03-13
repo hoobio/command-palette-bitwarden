@@ -214,7 +214,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         {
             // Await the ongoing warmup instead of firing a concurrent bw status call,
             // which can cause the CLI to hang when both run simultaneously.
+#pragma warning disable VSTHRD003 // WarmupTask is a ThreadPool task; InitializeAsync is already on ThreadPool via Task.Run
             await _service.WarmupTask.ConfigureAwait(false);
+#pragma warning restore VSTHRD003
 
             var status = _service.LastStatus;
             if (status is null)
