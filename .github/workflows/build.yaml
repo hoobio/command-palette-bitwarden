@@ -46,6 +46,16 @@ jobs:
         with:
           token: ${{ secrets.GH_PAT }}
 
+      - name: Delete release-please bot comment
+        if: steps.release.outputs.pr
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          pr="${{ steps.release.outputs.pr }}"
+          gh api "repos/${{ github.repository }}/issues/${pr}/comments" --paginate \
+            | jq -r '.[] | select(.body | test("^🤖 I have created a release")) | .id' \
+            | xargs -I {} gh api --method DELETE "repos/${{ github.repository }}/issues/comments/{}"
+
   lint-and-test:
     runs-on: windows-latest
     steps:
