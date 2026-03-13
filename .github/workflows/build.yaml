@@ -16,17 +16,6 @@ on:
       - ".release-please-manifest.json"
   pull_request:
     branches: [main]
-    paths:
-      - "**.cs"
-      - "**.csproj"
-      - "*.props"
-      - "*.targets"
-      - ".editorconfig"
-      - "**/Package.appxmanifest"
-      - "version.txt"
-      - ".github/workflows/build.yaml"
-      - "release-please-config.json"
-      - ".release-please-manifest.json"
   workflow_dispatch:
 
 permissions:
@@ -34,6 +23,52 @@ permissions:
   pull-requests: write
 
 jobs:
+  detect-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect code changes
+        id: filter
+        shell: bash
+        run: |
+          CODE_PATTERNS=(
+            '\.cs$'
+            '\.csproj$'
+            '(^|/)Directory\.Build\.props$'
+            '(^|/)Directory\.Build\.targets$'
+            '(^|/)Directory\.Packages\.props$'
+            '\.editorconfig$'
+            'Package\.appxmanifest$'
+            '^version\.txt$'
+            '^\.github/workflows/build\.yaml$'
+            '^release-please-config\.json$'
+            '^\.release-please-manifest\.json$'
+          )
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          MATCH=false
+          for file in $CHANGED; do
+            for pattern in "${CODE_PATTERNS[@]}"; do
+              if echo "$file" | grep -qE "$pattern"; then
+                MATCH=true
+                break 2
+              fi
+            done
+          done
+          echo "code_changed=$MATCH" >> "$GITHUB_OUTPUT"
+          if [ "$MATCH" = "false" ]; then
+            echo "::notice::No code changes detected — build, lint-and-test, and WACK will be skipped"
+            echo "### 💭 No code changes detected" >> "$GITHUB_STEP_SUMMARY"
+            echo "Build, lint-and-test, and WACK checks were skipped because this PR only contains non-code changes." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   release-please:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
@@ -47,6 +82,8 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
   lint-and-test:
+    needs: [detect-changes]
+    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -191,6 +228,8 @@ jobs:
           }
 
   build:
+    needs: [detect-changes]
+    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     runs-on: windows-latest
     strategy:
       matrix:
