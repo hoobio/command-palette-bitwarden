@@ -28,46 +28,32 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     outputs:
       code_changed: ${{ steps.filter.outputs.code_changed }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Detect code changes
+      - uses: dorny/paths-filter@v3
         id: filter
-        shell: bash
+        with:
+          filters: |
+            code_changed:
+              - "**.cs"
+              - "**.csproj"
+              - "*.props"
+              - "*.targets"
+              - ".editorconfig"
+              - "**/Package.appxmanifest"
+              - "version.txt"
+              - ".github/workflows/build.yaml"
+              - "release-please-config.json"
+              - ".release-please-manifest.json"
+
+      - name: Summarize skip
+        if: steps.filter.outputs.code_changed == 'false'
         run: |
-          CODE_PATTERNS=(
-            '\.cs$'
-            '\.csproj$'
-            '(^|/)Directory\.Build\.props$'
-            '(^|/)Directory\.Build\.targets$'
-            '(^|/)Directory\.Packages\.props$'
-            '\.editorconfig$'
-            'Package\.appxmanifest$'
-            '^version\.txt$'
-            '^\.github/workflows/build\.yaml$'
-            '^release-please-config\.json$'
-            '^\.release-please-manifest\.json$'
-          )
-          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          MATCH=false
-          for file in $CHANGED; do
-            for pattern in "${CODE_PATTERNS[@]}"; do
-              if echo "$file" | grep -qE "$pattern"; then
-                MATCH=true
-                break 2
-              fi
-            done
-          done
-          echo "code_changed=$MATCH" >> "$GITHUB_OUTPUT"
-          if [ "$MATCH" = "false" ]; then
-            echo "::notice::No code changes detected — build, lint-and-test, and WACK will be skipped"
-            echo "### 💭 No code changes detected" >> "$GITHUB_STEP_SUMMARY"
-            echo "Build, lint-and-test, and WACK checks were skipped because this PR only contains non-code changes." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo "::notice::No code changes detected — build, lint-and-test, and WACK will be skipped"
+          echo "### 💭 No code changes detected" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build, lint-and-test, and WACK checks were skipped because this PR only contains non-code changes." >> "$GITHUB_STEP_SUMMARY"
 
   release-please:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
