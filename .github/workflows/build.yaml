@@ -213,278 +213,44 @@ jobs:
             exit 1
           }
 
-  build:
+  build_x64:
+    name: build (x64)
     needs: [detect-changes]
     if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        platform: [x64, ARM64]
-    steps:
-      - uses: actions/checkout@v6
+    uses: ./.github/workflows/_build.yaml
+    with:
+      platform: x64
+    secrets: inherit
 
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "9.0.x"
+  build_arm64:
+    name: build (ARM64)
+    needs: [detect-changes]
+    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    uses: ./.github/workflows/_build.yaml
+    with:
+      platform: ARM64
+    secrets: inherit
 
-      - name: Read version
-        id: version
-        shell: pwsh
-        run: |
-          $ver = (Get-Content version.txt -Raw).Trim()
-          "APP_VERSION=$ver.0" | Out-File -Append $env:GITHUB_ENV
-          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+  wack_x64:
+    name: wack (x64)
+    needs: [build_x64, detect-changes]
+    if: always() && needs.build_x64.result == 'success'
+    uses: ./.github/workflows/_wack.yaml
+    with:
+      platform: x64
+    secrets: inherit
 
-      - name: Stamp Package.appxmanifest version
-        shell: pwsh
-        run: |
-          $manifest = Resolve-Path "HoobiBitwardenCommandPaletteExtension\Package.appxmanifest"
-          $content = [System.IO.File]::ReadAllText($manifest)
-          $content = $content -creplace '(?<=<Identity\s[^>]*)Version="[\d.]+"', "Version=`"$env:APP_VERSION`""
-          [System.IO.File]::WriteAllText($manifest, $content, [System.Text.UTF8Encoding]::new($false))
-
-      - name: Restore
-        run: dotnet restore -p:Platform=${{ matrix.platform }}
-
-      - name: Build
-        run: dotnet build -c Release -p:Platform=${{ matrix.platform }} --no-restore
-
-      - name: Create MSIX package
-        run: |
-          dotnet publish -c Release -p:Platform=${{ matrix.platform }} `
-            -p:AppxPackageDir=${{ github.workspace }}\AppPackages\ `
-            -p:GenerateAppxPackageOnBuild=true `
-            -p:AppxBundle=Never
-        working-directory: HoobiBitwardenCommandPaletteExtension
-
-      - name: Find produced MSIX (diagnostic)
-        shell: pwsh
-        run: |
-          $found = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Filter *.msix -ErrorAction SilentlyContinue
-          if ($found) {
-            Write-Host "Found MSIX file(s):"
-            $found | ForEach-Object { Write-Host "  $($_.FullName)" }
-          } else {
-            Write-Host "::warning::No .msix files found anywhere in workspace after publish"
-          }
-
-      - name: Import signing certificate
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: pwsh
-        run: |
-          $pfxBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
-          $pfxPath = Join-Path $env:RUNNER_TEMP "signing.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
-          $pwd = ConvertTo-SecureString "${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}" -AsPlainText -Force
-          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $pwd
-          Remove-Item $pfxPath
-
-      - name: Sign MSIX package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: pwsh
-        run: |
-          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match 'x64\\signtool' } |
-            Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*','$1') } -Descending |
-            Select-Object -First 1 -ExpandProperty FullName
-          Get-ChildItem "${{ github.workspace }}\AppPackages" -Recurse -Filter *.msix | ForEach-Object {
-            & $signtool sign /fd SHA256 /sha1 "${{ vars.SIGNING_CERT_THUMBPRINT }}" /td SHA256 $_.FullName
-            if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($_.Name)" }
-          }
-
-      - name: Upload MSIX artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: msix-${{ matrix.platform }}
-          path: "**/*.msix"
-
-      - name: Upload publish output
-        uses: actions/upload-artifact@v7
-        with:
-          name: publish-${{ matrix.platform }}
-          path: HoobiBitwardenCommandPaletteExtension/bin/Release/**/publish/
-
-  wack:
-    needs: [build, detect-changes]
-    if: always() && needs.build.result == 'success'
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [x64, ARM64]
-    steps:
-      - name: Checkout (for wack-exclusions.json)
-        uses: actions/checkout@v6
-        with:
-          sparse-checkout: .github/wack-exclusions.json
-          sparse-checkout-cone-mode: false
-
-      - name: Download ${{ matrix.platform }} MSIX
-        uses: actions/download-artifact@v8
-        with:
-          name: msix-${{ matrix.platform }}
-          path: msix
-
-      - name: Run Windows App Certification Kit
-        shell: pwsh
-        run: |
-          # WACK can test any package architecture regardless of its own bitness,
-          # so both x64 and ARM64 packages are tested on the windows-latest x64 runner.
-          $appCert = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\App Certification Kit' `
-            -Filter appcert.exe -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 1 -ExpandProperty FullName
-          Write-Host "Using appcert: $appCert"
-          if (-not $appCert) {
-            Write-Host "##[warning]WACK not found, skipping"
-            exit 0
-          }
-          $msix = Get-ChildItem msix -Recurse -Filter *.msix | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $msix) {
-            Write-Host "::error::No .msix found under msix/ — listing directory contents for diagnosis:"
-            Get-ChildItem msix -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
-            exit 1
-          }
-          $reportPath = Join-Path $PWD "wack-report.xml"
-          Write-Host "Running WACK on: $msix"
-          Write-Host "Report will be saved to: $reportPath"
-          # Exit code is handled by the post-step after applying exclusions; don't fail here.
-          # Disable native-command error propagation so appcert's non-zero exit doesn't terminate the step.
-          $PSNativeCommandErrorActionPreference = $false
-          & $appCert test -apptype windowspackagedapp -appxpackagepath $msix -reportoutputpath $reportPath
-          Write-Host "appcert exited with code $LASTEXITCODE"
-          exit 0
-
-      - name: Upload WACK report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: wack-report-${{ matrix.platform }}
-          path: wack-report.xml
-
-      - name: Fail on non-excluded WACK failures (non-PR)
-        if: github.event_name != 'pull_request'
-        shell: pwsh
-        run: |
-          $reportPath = "wack-report.xml"
-          if (-not (Test-Path $reportPath)) { exit 0 }
-
-          $exclusionMap = @{}
-          $exclusionsPath = ".github/wack-exclusions.json"
-          if (Test-Path $exclusionsPath) {
-            (Get-Content $exclusionsPath | ConvertFrom-Json) | ForEach-Object { $exclusionMap[$_.test] = $_.reason }
-          }
-
-          [xml]$report = Get-Content $reportPath
-          $realFailures = @($report.SelectNodes("//TEST") |
-            Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'FAIL' } |
-            Where-Object { -not $exclusionMap.ContainsKey($_.GetAttribute("NAME")) })
-
-          if ($realFailures.Count -gt 0) {
-            Write-Host "::error::$($realFailures.Count) non-excluded WACK test(s) failed: $(($realFailures | ForEach-Object { $_.GetAttribute('NAME') }) -join ', ')"
-            exit 1
-          }
-
-      - name: Post WACK results to PR
-        if: always() && github.event_name == 'pull_request'
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $reportPath = "wack-report.xml"
-          $prNumber = "${{ github.event.pull_request.number }}"
-          $platform = "${{ matrix.platform }}"
-          $marker = "<!-- wack-bot-$platform -->"
-
-          if (-not (Test-Path $reportPath)) {
-            $body = "## :warning: WACK Results ($platform)`n`nWACK report was not generated (tool may not be available on runner).`n$marker"
-          } else {
-            # Load exclusions — map test name -> reason
-            $exclusionMap = @{}
-            $exclusionsPath = ".github/wack-exclusions.json"
-            if (Test-Path $exclusionsPath) {
-              (Get-Content $exclusionsPath | ConvertFrom-Json) | ForEach-Object { $exclusionMap[$_.test] = $_.reason }
-            }
-
-            [xml]$report = Get-Content $reportPath
-            # Use OVERALL_RESULT attribute and XPath+InnerText to reliably read CDATA result nodes
-            $tests = $report.SelectNodes("//TEST")
-            $passed   = @($tests | Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'PASS' })
-            $failed   = @($tests | Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'FAIL' })
-            $skipped  = @($tests | Where-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() -eq 'NOT_APPLICABLE' })
-
-            $excluded    = @($failed | Where-Object { $exclusionMap.ContainsKey($_.GetAttribute("NAME")) })
-            $realFailures = @($failed | Where-Object { -not $exclusionMap.ContainsKey($_.GetAttribute("NAME")) })
-
-            $icon = if ($realFailures.Count -eq 0) { ':white_check_mark:' } else { ':x:' }
-            $body = "## $icon WACK Results ($platform)`n`n"
-            $body += ":green_circle: **$($passed.Count) passed** "
-            if ($realFailures.Count -gt 0) { $body += ":red_circle: **$($realFailures.Count) failed** " }
-            if ($excluded.Count -gt 0)     { $body += ":warning: **$($excluded.Count) excluded** " }
-            if ($skipped.Count -gt 0)      { $body += ":white_circle: **$($skipped.Count) N/A** " }
-            $body += "`n`n"
-
-            if ($realFailures.Count -gt 0) {
-              $body += "### Failed Tests`n| Test | Message |`n|---|---|`n"
-              foreach ($t in $realFailures) {
-                $name = $t.GetAttribute("NAME")
-                $msgs = @($t.SelectNodes("MESSAGES/MESSAGE")) | ForEach-Object { $_.GetAttribute("TEXT") }
-                $detail = ($msgs -join '; ') -replace '[\r\n]+', ' '
-                if ($detail.Length -gt 200) { $detail = $detail.Substring(0, 200) + '...' }
-                if (-not $detail) { $detail = $t.GetAttribute("DESCRIPTION") }
-                $body += "| ``$name`` | $detail |`n"
-              }
-              $body += "`n"
-            }
-
-            if ($excluded.Count -gt 0) {
-              $body += "### Excluded Tests`n| Test | Message | Reason |`n|---|---|---|`n"
-              foreach ($t in $excluded) {
-                $name = $t.GetAttribute("NAME")
-                $msgs = @($t.SelectNodes("MESSAGES/MESSAGE")) | ForEach-Object { $_.GetAttribute("TEXT") }
-                $detail = ($msgs -join '; ') -replace '[\r\n]+', ' '
-                if ($detail.Length -gt 200) { $detail = $detail.Substring(0, 200) + '...' }
-                if (-not $detail) { $detail = $t.GetAttribute("DESCRIPTION") }
-                $reason = $exclusionMap[$name]
-                $body += "| ``$name`` | $detail | $reason |`n"
-              }
-              $body += "`n"
-            }
-
-            $body += "<details><summary>All tests</summary>`n`n"
-            $body += "| Test | Result |`n|---|---|`n"
-            foreach ($t in $tests | Sort-Object { $_.SelectSingleNode("RESULT").InnerText.Trim() }) {
-              $name   = $t.GetAttribute('NAME')
-              $result = $t.SelectSingleNode("RESULT").InnerText.Trim()
-              $r = if ($result -eq 'PASS') { ':green_circle: Pass' }
-                   elseif ($result -eq 'FAIL' -and $exclusionMap.ContainsKey($name)) { ':warning: Excluded' }
-                   elseif ($result -eq 'FAIL') { ':red_circle: Fail' }
-                   else { ':white_circle: N/A' }
-              $body += "| ``$name`` | $r |`n"
-            }
-            $body += "`n</details>`n"
-            $body += $marker
-
-            if ($realFailures.Count -gt 0) {
-              Write-Host "::error::$($realFailures.Count) non-excluded WACK test(s) failed: $(($realFailures | ForEach-Object { $_.GetAttribute('NAME') }) -join ', ')"
-              # Upsert comment before exiting with failure
-            }
-          }
-
-          # Use ConvertFrom-Json + PowerShell filtering to avoid jq escaping issues
-          $comments = gh api "repos/${{ github.repository }}/issues/$prNumber/comments" --paginate | ConvertFrom-Json
-          $existing = $comments | Where-Object { $_.body -like "*$marker*" } | Select-Object -First 1 -ExpandProperty id
-          if ($existing) {
-            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$existing" -f body=$body | Out-Null
-            Write-Host "Updated existing WACK comment ($platform)"
-          } else {
-            gh pr comment $prNumber --body $body --repo "${{ github.repository }}"
-            Write-Host "Created WACK comment ($platform)"
-          }
-
-          if ($realFailures -and $realFailures.Count -gt 0) { exit 1 }
+  wack_arm64:
+    name: wack (ARM64)
+    needs: [build_arm64, detect-changes]
+    if: always() && needs.build_arm64.result == 'success'
+    uses: ./.github/workflows/_wack.yaml
+    with:
+      platform: ARM64
+    secrets: inherit
 
   release:
-    needs: [release-please, build, lint-and-test, wack]
+    needs: [release-please, build_x64, build_arm64, lint-and-test, wack_x64, wack_arm64]
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -528,7 +294,7 @@ jobs:
             | gh api --method PATCH "repos/${{ github.repository }}/releases/$ID" --input -
 
   pre-release:
-    needs: [release-please, build, lint-and-test]
+    needs: [release-please, build_x64, build_arm64, lint-and-test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.release-please.outputs.release_created != 'true'
     runs-on: ubuntu-latest
     permissions:

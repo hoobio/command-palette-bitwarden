@@ -144,6 +144,14 @@ When you need to look up SDK types, interfaces, properties, or capabilities, use
 
 ---
 
+## PowerShell Terminal Commands
+
+- In PowerShell, the escape character is a backtick (`` ` ``), **not** a backslash (`\`)
+- When constructing multi-line strings or escaping quotes in terminal commands, use `` `" `` not `\"`
+- Example: `gh pr create --body "line one`nline two"` not `"line one\nline two"`
+
+---
+
 ## Code Coverage
 
 Every C# source file touched in a PR must meet **50% line coverage** (measured against unit tests in `HoobiBitwardenCommandPaletteExtension.Tests`). The CI pipeline enforces this and will fail the PR if the threshold is not met.
