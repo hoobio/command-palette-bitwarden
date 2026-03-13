@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.6.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.1...v1.6.2) (2026-03-13)
+
+
+### Bug Fixes
+
+* resolve warmup race condition causing vault status hang ([#77](https://github.com/hoobio/command-palette-bitwarden/issues/77)) ([f1e6fb0](https://github.com/hoobio/command-palette-bitwarden/commit/f1e6fb0e4655e6ae48611768dc48fb8538319bcb))
+
+
+### Documentation
+
+* note that Store version may lag behind GitHub Releases ([#73](https://github.com/hoobio/command-palette-bitwarden/issues/73)) ([515ab67](https://github.com/hoobio/command-palette-bitwarden/commit/515ab67d9cb6ef09fb53c5717ab4c76be1906efb))
+
+
+### Miscellaneous Chores
+
+* update repo URLs to hoobio/command-palette-bitwarden ([#76](https://github.com/hoobio/command-palette-bitwarden/issues/76)) ([7caaecc](https://github.com/hoobio/command-palette-bitwarden/commit/7caaeccf18dfa138f199251332bf49a99f907ef3))
+
+
+### Continuous Integration
+
+* add linting, 255 unit tests, coverage, WACK, and CodeQL ([#74](https://github.com/hoobio/command-palette-bitwarden/issues/74)) ([9e8fd13](https://github.com/hoobio/command-palette-bitwarden/commit/9e8fd1376b19ad976611246f810f3ea30ad69713))
+* trigger CodeQL on release-please PRs ([#79](https://github.com/hoobio/command-palette-bitwarden/issues/79)) ([419bba4](https://github.com/hoobio/command-palette-bitwarden/commit/419bba421788a470744adc025af0f207357c3eb4))
+* trigger CodeQL on release-please PRs via manifest path filter ([419bba4](https://github.com/hoobio/command-palette-bitwarden/commit/419bba421788a470744adc025af0f207357c3eb4))
+
 ## [1.6.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.0...v1.6.1) (2026-03-10)
 
 
