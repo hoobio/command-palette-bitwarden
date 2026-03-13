@@ -504,7 +504,7 @@ jobs:
           path: release/ARM64
 
       - name: Attest MSIX packages
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "release/**/*.msix"
 
