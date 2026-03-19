@@ -64,14 +64,6 @@ internal sealed partial class LoginForm : FormContent
                 "placeholder": "Enter your master password"
             },
             {
-                "type": "Input.Toggle",
-                "id": "RememberSession",
-                "title": "Remember session (stay unlocked between launches)",
-                "valueOn": "true",
-                "valueOff": "false",
-                "value": "{{(rememberChecked ? "true" : "false")}}"
-            },
-            {
                 "type": "ActionSet",
                 "actions": [
                     {
@@ -79,6 +71,14 @@ internal sealed partial class LoginForm : FormContent
                         "title": "Login"
                     }
                 ]
+            },
+            {
+                "type": "Input.Toggle",
+                "id": "RememberSession",
+                "title": "Remember session (stay unlocked between launches)",
+                "valueOn": "true",
+                "valueOff": "false",
+                "value": "{{(rememberChecked ? "true" : "false")}}"
             },
             {
                 "type": "TextBlock",
