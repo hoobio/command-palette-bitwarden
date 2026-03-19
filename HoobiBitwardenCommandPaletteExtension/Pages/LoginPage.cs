@@ -21,79 +21,6 @@ internal sealed partial class LoginPage : ContentPage
   public override IContent[] GetContent() => [_form];
 }
 
-internal sealed partial class TwoFactorPage : ContentPage
-{
-  private readonly TwoFactorForm _form;
-
-  public TwoFactorPage(Action<string>? onSubmit = null)
-  {
-    Name = "Two-Factor";
-    Title = "Two-Factor Authentication";
-    Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
-    _form = new TwoFactorForm(onSubmit);
-  }
-
-  public override IContent[] GetContent() => [_form];
-}
-
-internal sealed partial class TwoFactorForm : FormContent
-{
-  private readonly Action<string>? _onSubmit;
-
-  public TwoFactorForm(Action<string>? onSubmit = null)
-  {
-    _onSubmit = onSubmit;
-    TemplateJson = """
-    {
-        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-        "type": "AdaptiveCard",
-        "version": "1.6",
-        "body": [
-            {
-                "type": "TextBlock",
-                "size": "medium",
-                "weight": "bolder",
-                "text": "Two-Factor Authentication",
-                "horizontalAlignment": "center",
-                "wrap": true,
-                "style": "heading"
-            },
-            {
-                "type": "TextBlock",
-                "text": "Open your authenticator app to get your 2FA code, then enter it below.",
-                "wrap": true,
-                "isSubtle": true
-            },
-            {
-                "type": "Input.Text",
-                "label": "Two-Factor Code",
-                "id": "TwoFactorCode",
-                "isRequired": true,
-                "errorMessage": "Code is required",
-                "placeholder": "6-digit code"
-            }
-        ],
-        "actions": [
-            {
-                "type": "Action.Submit",
-                "title": "Verify"
-            }
-        ]
-    }
-    """;
-  }
-
-  public override ICommandResult SubmitForm(string inputs, string data)
-  {
-    var code = JsonNode.Parse(inputs)?.AsObject()?["TwoFactorCode"]?.GetValue<string>()?.Trim();
-    if (string.IsNullOrEmpty(code))
-      return CommandResult.KeepOpen();
-
-    _onSubmit?.Invoke(code);
-    return CommandResult.GoBack();
-  }
-}
-
 internal sealed partial class LoginForm : FormContent
 {
   private readonly BitwardenCliService _service;
@@ -145,17 +72,20 @@ internal sealed partial class LoginForm : FormContent
                 "value": "{{(rememberChecked ? "true" : "false")}}"
             },
             {
+                "type": "ActionSet",
+                "actions": [
+                    {
+                        "type": "Action.Submit",
+                        "title": "Login"
+                    }
+                ]
+            },
+            {
                 "type": "TextBlock",
-                "text": "Press the Login button below or [upvote this issue](https://github.com/microsoft/PowerToys/issues/46003) to help bring Enter key support.",
+                "text": "[Upvote this issue](https://github.com/microsoft/PowerToys/issues/46003) to help bring Enter key support.",
                 "wrap": true,
                 "isSubtle": true,
                 "size": "small"
-            }
-        ],
-        "actions": [
-            {
-                "type": "Action.Submit",
-                "title": "Login"
             }
         ]
     }

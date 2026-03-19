@@ -63,17 +63,20 @@ internal sealed partial class UnlockForm : FormContent
                 "value": "{{(rememberChecked ? "true" : "false")}}"
             },
             {
+                "type": "ActionSet",
+                "actions": [
+                    {
+                        "type": "Action.Submit",
+                        "title": "Unlock"
+                    }
+                ]
+            },
+            {
                 "type": "TextBlock",
-                "text": "Press the Unlock button below or [upvote this issue](https://github.com/microsoft/PowerToys/issues/46003) to help bring Enter key support.",
+                "text": "[Upvote this issue](https://github.com/microsoft/PowerToys/issues/46003) to help bring Enter key support.",
                 "wrap": true,
                 "isSubtle": true,
                 "size": "small"
-            }
-        ],
-        "actions": [
-            {
-                "type": "Action.Submit",
-                "title": "Unlock"
             }
         ]
     }
