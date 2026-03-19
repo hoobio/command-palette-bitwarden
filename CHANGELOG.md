@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.6.3](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.2...v1.6.3) (2026-03-19)
+
+
+### Bug Fixes
+
+* server config presets, device verification OTP, and version display ([#90](https://github.com/hoobio/command-palette-bitwarden/issues/90)) ([d2deb2f](https://github.com/hoobio/command-palette-bitwarden/commit/d2deb2fb153793f55e7c7a2597bfe8c75494d053))
+
+
+### Build System
+
+* **deps:** bump actions/attest-build-provenance from 2 to 4 ([#83](https://github.com/hoobio/command-palette-bitwarden/issues/83)) ([64ac5a0](https://github.com/hoobio/command-palette-bitwarden/commit/64ac5a054ec0b370fcc7c5abf7f6f9eaddd1a2d3))
+* **deps:** bump actions/checkout from 4 to 6 ([#84](https://github.com/hoobio/command-palette-bitwarden/issues/84)) ([eaa5076](https://github.com/hoobio/command-palette-bitwarden/commit/eaa50768b10fe40b02dcef6c6e34494fac8222f3))
+* **deps:** bump actions/github-script from 7 to 8 ([#80](https://github.com/hoobio/command-palette-bitwarden/issues/80)) ([2785f65](https://github.com/hoobio/command-palette-bitwarden/commit/2785f657a57a66e03fbbfc42d059e111ebe374f6))
+* **deps:** bump peter-evans/create-or-update-comment from 4 to 5 ([#82](https://github.com/hoobio/command-palette-bitwarden/issues/82)) ([8f8dd7a](https://github.com/hoobio/command-palette-bitwarden/commit/8f8dd7ae6fb7b6086de6f47da1edf958795ff252))
+* **deps:** bump peter-evans/find-comment from 3 to 4 ([#81](https://github.com/hoobio/command-palette-bitwarden/issues/81)) ([ac7daaa](https://github.com/hoobio/command-palette-bitwarden/commit/ac7daaa9dc78ec26323d8154404d86ed1c07a538))
+
+
+### Continuous Integration
+
+* extract build and wack into reusable workflows to fix required check naming ([#87](https://github.com/hoobio/command-palette-bitwarden/issues/87)) ([734e5de](https://github.com/hoobio/command-palette-bitwarden/commit/734e5def42762b9bfb8864eb323ee1659eb5244b))
+* skip build/lint/wack on PRs with no code changes ([#85](https://github.com/hoobio/command-palette-bitwarden/issues/85)) ([657edee](https://github.com/hoobio/command-palette-bitwarden/commit/657edee236dfe955f324cfc37a24fe1c895ce0d6))
+
 ## [1.6.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.1...v1.6.2) (2026-03-13)
 
 
