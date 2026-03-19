@@ -17,6 +17,7 @@ internal sealed class BitwardenCliService
 {
   private readonly BitwardenSettingsManager? _settings;
   private string? _sessionKey;
+  private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Process> _runningProcesses = new();
 
   private List<BitwardenItem> _cache = [];
   private readonly Lock _cacheLock = new();
@@ -47,6 +48,7 @@ internal sealed class BitwardenCliService
   public VaultStatus? LastStatus => _lastStatus;
 
   internal static string? ServerUrl { get; private set; }
+  internal static string? IconsUrl { get; private set; }
 
   internal IReadOnlyDictionary<string, string> Folders
   {
@@ -165,7 +167,6 @@ internal sealed class BitwardenCliService
     return status;
   }
 
-  // Intentionally synchronous: runs once at startup on a fast-exit 'bw --version' process.
   private static bool IsCliAvailable()
   {
     try
@@ -177,8 +178,10 @@ internal sealed class BitwardenCliService
         RedirectStandardError = true,
         CreateNoWindow = true,
       })!;
-      process.WaitForExit(5000);
-      return process.ExitCode == 0;
+      var line = process.StandardOutput.ReadLine();
+      var available = line != null;
+      try { process.Kill(true); } catch { }
+      return available;
     }
     catch
     {
@@ -192,12 +195,17 @@ internal sealed class BitwardenCliService
     {
       using var process = StartProcess("sync");
       using var cts = new CancellationTokenSource(CliTimeoutMs);
-      await process.StandardOutput.ReadToEndAsync(cts.Token);
-      await process.WaitForExitAsync(cts.Token);
-      if (process.ExitCode == 0)
+      // Drain stderr in the background to prevent pipe buffer deadlock.
+      _ = process.StandardError.ReadToEndAsync(cts.Token).ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+      string? line;
+      while ((line = await process.StandardOutput.ReadLineAsync(cts.Token)) != null)
       {
-        await FetchServerUrlAsync();
-        return true;
+        if (line.Contains("Syncing complete.", StringComparison.OrdinalIgnoreCase))
+        {
+          try { process.Kill(true); } catch { }
+          await FetchServerUrlAsync();
+          return true;
+        }
       }
     }
     catch { }
@@ -231,6 +239,7 @@ internal sealed class BitwardenCliService
         UseShellExecute = false,
         RedirectStandardOutput = true,
         RedirectStandardError = true,
+        RedirectStandardInput = true,
         CreateNoWindow = true,
       };
 
@@ -239,13 +248,16 @@ internal sealed class BitwardenCliService
         psi.Environment["BW_SESSION"] = _sessionKey;
 
       using var process = Process.Start(psi)!;
+      process.StandardInput.Close();
       using var cts = new CancellationTokenSource(CliTimeoutMs);
-      var stdout = await process.StandardOutput.ReadToEndAsync(cts.Token);
-      var stderr = await process.StandardError.ReadToEndAsync(cts.Token);
-      await process.WaitForExitAsync(cts.Token);
+      var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+      var stdout = await stdoutTask;
+      var stderr = await stderrTask;
+      try { process.Kill(true); } catch { }
 
       var key = stdout.Trim();
-      if (process.ExitCode == 0 && !string.IsNullOrEmpty(key))
+      if (!string.IsNullOrEmpty(key) && !key.Contains(' '))
       {
         _sessionKey = key;
         SetStatus(VaultStatus.Unlocked);
@@ -358,6 +370,7 @@ internal sealed class BitwardenCliService
 
   public async Task LogoutAsync()
   {
+    KillAllRunning();
     _sessionKey = null;
     SetStatus(VaultStatus.Unauthenticated);
     lock (_cacheLock)
@@ -366,10 +379,9 @@ internal sealed class BitwardenCliService
       _cacheLoaded = false;
     }
     SessionStore.Clear();
-    ServerUrl = null;
     StatusChanged?.Invoke();
 
-    try { await RunCliAsync("logout"); } catch { }
+    try { await RunCliAsync("logout", CliLogoutTimeoutMs, "You have logged out."); } catch { }
   }
 
   public async Task LockAsync()
@@ -384,27 +396,46 @@ internal sealed class BitwardenCliService
     SessionStore.Clear();
     StatusChanged?.Invoke();
 
-    try { await RunCliAsync("lock"); } catch { }
+    try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); } catch { }
   }
 
-  public async Task<string?> SetServerUrlAsync(string url)
+  public async Task<string?> SetServerUrlAsync(ServerConfig config)
   {
-    var sanitizedUrl = url.Replace("\"", "");
-    using var process = StartProcess($"config server \"{sanitizedUrl}\"");
+    KillAllRunning();
+    static string Sanitize(string url) => url.Replace("\"", "");
+    var args = "config server \"" + Sanitize(config.BaseUrl) + "\"";
+    if (config.WebVaultUrl != null) args += " --web-vault \"" + Sanitize(config.WebVaultUrl) + "\"";
+    if (config.ApiUrl != null) args += " --api \"" + Sanitize(config.ApiUrl) + "\"";
+    if (config.IdentityUrl != null) args += " --identity \"" + Sanitize(config.IdentityUrl) + "\"";
+    if (config.IconsUrl != null) args += " --icons \"" + Sanitize(config.IconsUrl) + "\"";
+    if (config.NotificationsUrl != null) args += " --notifications \"" + Sanitize(config.NotificationsUrl) + "\"";
+    if (config.EventsUrl != null) args += " --events \"" + Sanitize(config.EventsUrl) + "\"";
+    if (config.KeyConnectorUrl != null) args += " --key-connector \"" + Sanitize(config.KeyConnectorUrl) + "\"";
+
+    using var process = StartProcess(args);
     using var cts = new CancellationTokenSource(CliTimeoutMs);
-    var stdout = await process.StandardOutput.ReadToEndAsync(cts.Token);
-    var stderr = await process.StandardError.ReadToEndAsync(cts.Token);
-    await process.WaitForExitAsync(cts.Token);
-
-    if (process.ExitCode == 0)
+    var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+    try
     {
-      ServerUrl = sanitizedUrl.TrimEnd('/');
-      StatusChanged?.Invoke();
-      return null;
+      string? line;
+      while ((line = await process.StandardOutput.ReadLineAsync(cts.Token)) != null)
+      {
+        if (line.Contains("Saved", StringComparison.OrdinalIgnoreCase))
+        {
+          try { process.Kill(true); } catch { }
+          ServerUrl = config.BaseUrl.TrimEnd('/');
+          IconsUrl = config.IconsUrl?.TrimEnd('/');
+          SetStatus(VaultStatus.Unauthenticated);
+          StatusChanged?.Invoke();
+          return null;
+        }
+      }
     }
+    catch (OperationCanceledException) { }
+    try { process.Kill(true); } catch { }
 
-    var error = stderr.Trim();
-    return string.IsNullOrEmpty(error) ? "Failed to set server URL" : error;
+    var stderr = (await stderrTask.WaitAsync(TimeSpan.FromSeconds(2))).Trim();
+    return string.IsNullOrEmpty(stderr) ? "Failed to set server URL" : stderr;
   }
 
   public List<BitwardenItem> SearchCached(string? query = null, ForegroundContext? context = null, int maxContextItems = 0)
@@ -434,15 +465,25 @@ internal sealed class BitwardenCliService
           var contextMatches = sorted.Where(i => ContextBoost(i, context) > 0).Take(maxContextItems).ToList();
           if (contextMatches.Count > 0)
           {
-            var contextMatchIds = contextMatches.Select(i => i.Id).ToHashSet();
+            var recentItem = sorted.FirstOrDefault(i => AccessTracker.IsLastCopied(i.Id));
+            var pinnedIds = contextMatches.Select(i => i.Id).ToHashSet();
+            if (recentItem != null)
+              pinnedIds.Add(recentItem.Id);
+
             var remainder = sorted
-                .Where(i => !contextMatchIds.Contains(i.Id))
-                .OrderByDescending(i => AccessTracker.IsLastCopied(i.Id) ? 1 : 0)
-                .ThenByDescending(i => i.Favorite ? 1 : 0)
+                .Where(i => !pinnedIds.Contains(i.Id))
+                .OrderByDescending(i => i.Favorite ? 1 : 0)
                 .ThenByDescending(i => AccessTracker.GetLastAccess(i.Id))
                 .ThenByDescending(i => i.RevisionDate)
                 .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase);
-            return [.. contextMatches, .. remainder];
+
+            var contextWithoutRecent = recentItem != null
+                ? contextMatches.Where(i => i.Id != recentItem.Id)
+                : contextMatches;
+
+            return recentItem != null
+                ? [recentItem, .. contextWithoutRecent, .. remainder]
+                : [.. contextMatches, .. remainder];
           }
         }
 
@@ -605,7 +646,7 @@ internal sealed class BitwardenCliService
 
   public async Task SyncVaultAsync()
   {
-    await RunCliAsync("sync");
+    await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
     Interlocked.Exchange(ref _refreshing, 0);
     await RefreshCacheAsync();
   }
@@ -671,14 +712,28 @@ internal sealed class BitwardenCliService
       UseShellExecute = false,
       RedirectStandardOutput = true,
       RedirectStandardError = true,
-      RedirectStandardInput = false,
+      RedirectStandardInput = true,
       CreateNoWindow = true,
     };
 
     if (_sessionKey != null)
       psi.Environment["BW_SESSION"] = _sessionKey;
 
-    return Process.Start(psi)!;
+    var process = Process.Start(psi)!;
+    process.StandardInput.Close();
+    _runningProcesses[process.Id] = process;
+    process.Exited += (_, _) => _runningProcesses.TryRemove(process.Id, out _);
+    process.EnableRaisingEvents = true;
+    return process;
+  }
+
+  private void KillAllRunning()
+  {
+    foreach (var kvp in _runningProcesses)
+    {
+      try { kvp.Value.Kill(true); } catch { }
+      _runningProcesses.TryRemove(kvp.Key, out _);
+    }
   }
 
   private static async Task<(string Content, bool TwoFactorDetected)> ReadStderrWithTwoFactorDetectionAsync(Process process, CancellationToken token)
@@ -698,40 +753,58 @@ internal sealed class BitwardenCliService
   }
 
   private const int CliTimeoutMs = 30_000;
+  private const int CliLogoutTimeoutMs = 3_000;
 
-  private async Task<string> RunCliAsync(string args)
+  // Reads stdout line-by-line. Returns immediately on the first valid JSON line (object or array),
+  // or on the first line matching earlyExitText. Falls back to returning all accumulated stdout
+  // if neither is found. Concurrent stderr session detection is active throughout.
+  // The process is killed on early exit so that Process.Dispose() returns immediately.
+  private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
   {
     using var process = StartProcess(args);
-    using var cts = new CancellationTokenSource(CliTimeoutMs);
+    using var cts = new CancellationTokenSource(timeoutMs);
     try
     {
       var stderrTask = ReadStderrWithSessionDetectionAsync(process, cts.Token);
-      var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+      var fallbackLines = new System.Text.StringBuilder();
+      string? line;
+      while ((line = await process.StandardOutput.ReadLineAsync(cts.Token)) != null)
+      {
+        var trimmed = line.Trim();
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+        {
+          try
+          {
+            JsonNode.Parse(trimmed);
+            _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+            try { process.Kill(true); } catch { }
+            return trimmed;
+          }
+          catch (System.Text.Json.JsonException) { }
+        }
+        if (earlyExitText != null && line.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
+        {
+          _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+          try { process.Kill(true); } catch { }
+          return line;
+        }
+        fallbackLines.AppendLine(line);
+      }
+
       var (stderr, sessionInvalid) = await stderrTask;
 
-      if (sessionInvalid)
-      {
-        try { process.Kill(); } catch { }
-        HandleInvalidSession();
-        throw new InvalidOperationException("Session expired — vault is locked");
-      }
-
-      await process.WaitForExitAsync(cts.Token);
-      var output = await stdoutTask;
-      var error = stderr.Trim();
-
-      if (process.ExitCode != 0 && IsSessionInvalidError(error))
+      if (sessionInvalid || IsSessionInvalidError(stderr.Trim()))
       {
         HandleInvalidSession();
         throw new InvalidOperationException("Session expired — vault is locked");
       }
 
-      return output;
+      return fallbackLines.ToString();
     }
     catch (OperationCanceledException)
     {
       try { process.Kill(); } catch { }
-      throw new TimeoutException($"Bitwarden CLI timed out after {CliTimeoutMs / 1000}s running: bw {args.Split(' ')[0]}");
+      throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}");
     }
   }
 
