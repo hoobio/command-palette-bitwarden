@@ -371,13 +371,23 @@ internal static partial class VaultItemHelper
       if (string.IsNullOrEmpty(host))
         return new IconInfo("\uE774");
 
-      // Match Bitwarden desktop client behaviour:
-      //   - Cloud (no custom server): https://icons.bitwarden.net/{domain}/icon.png
-      //   - Self-hosted: {serverUrl}/icons/{domain}/icon.png
+      // Match Bitwarden region CDN behaviour:
+      //   - US cloud (serverUrl null):  https://icons.bitwarden.net/{domain}/icon.png
+      //   - EU cloud:                   https://icons.bitwarden.eu/{domain}/icon.png
+      //   - Self-hosted (override set): {iconsUrl}/{domain}/icon.png
+      //   - Self-hosted (no override):  {serverUrl}/icons/{domain}/icon.png
       var serverUrl = BitwardenCliService.ServerUrl;
-      var iconUrl = string.IsNullOrEmpty(serverUrl)
-        ? $"https://icons.bitwarden.net/{host}/icon.png"
-        : $"{serverUrl}/icons/{host}/icon.png";
+      var iconsUrl = BitwardenCliService.IconsUrl;
+      string iconBase;
+      if (!string.IsNullOrEmpty(iconsUrl))
+        iconBase = iconsUrl;
+      else if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+        iconBase = "https://icons.bitwarden.net";
+      else if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+        iconBase = "https://vault.bitwarden.eu/icons";
+      else
+        iconBase = serverUrl + "/icons";
+      var iconUrl = $"{iconBase}/{host}/icon.png";
 
       return FaviconService.GetOrQueue(host, iconUrl);
     }
