@@ -18,5 +18,13 @@
   {
     "pattern": "VaultItemHelper\\.cs$",
     "reason": "WinRT UI helpers, returns SDK types that cannot be instantiated in unit tests"
+  },
+  {
+    "pattern": "ServerConfig\\.cs$",
+    "reason": "Pure data record with no logic, only positional parameters"
+  },
+  {
+    "pattern": "ICliProcess\\.cs$",
+    "reason": "Interface + thin RealCliProcess wrapper delegating to System.Diagnostics.Process, no testable logic"
   }
 ]

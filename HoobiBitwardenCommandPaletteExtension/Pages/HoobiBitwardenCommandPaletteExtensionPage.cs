@@ -25,6 +25,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private string? _pendingEmail;
     private string? _pendingPassword;
     private bool _twoFactorRequired;
+    private bool _deviceVerificationRequired;
     private ForegroundContext? _context;
     private DateTime _lastContextCapture = DateTime.MinValue;
     private Timer? _totpTimer;
@@ -46,7 +47,13 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         FaviconService.IconCached += OnIconCached;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
-        Title = "Bitwarden";
+        var v = Windows.ApplicationModel.Package.Current.Id.Version;
+        var version = $"{v.Major}.{v.Minor}.{v.Build}";
+#if DEBUG
+        Title = $"Bitwarden {version} (Dev)";
+#else
+        Title = $"Bitwarden {version}";
+#endif
         Name = "Open";
         PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
         CaptureContext();
@@ -136,6 +143,23 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_service.IsUnlocked)
             _service.ResetAutoLockTimer();
+
+        if ((_twoFactorRequired || _deviceVerificationRequired) && !_handlingAction)
+        {
+            var code = newSearch.Trim();
+            if (code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _))
+            {
+                if (_deviceVerificationRequired)
+                    OnDeviceVerificationSubmitted(code);
+                else
+                    OnTwoFactorSubmitted(code);
+                return;
+            }
+
+            _currentItems = BuildUnauthenticatedItems();
+            RaiseItemsChanged();
+            return;
+        }
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked)
             return;
@@ -278,16 +302,33 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         if (_twoFactorRequired && _pendingEmail != null && _pendingPassword != null)
         {
-            var twoFactorItem = new ListItem(new Pages.TwoFactorPage(OnTwoFactorSubmitted))
+            PlaceholderText = "Enter your 2FA code...";
+            var hint = new ListItem(new NoOpCommand())
             {
                 Title = "Two-Factor Authentication Required",
-                Subtitle = _errorMessage ?? "Enter the code from your authenticator app",
-                Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
+                Subtitle = _errorMessage ?? "Type your 6-digit code above and press Enter",
+                Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
-                twoFactorItem.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return [twoFactorItem];
+                hint.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
+            return [hint];
         }
+
+        if (_deviceVerificationRequired && _pendingEmail != null && _pendingPassword != null)
+        {
+            PlaceholderText = "Enter device verification code...";
+            var hint = new ListItem(new NoOpCommand())
+            {
+                Title = "New Device Verification Required",
+                Subtitle = _errorMessage ?? "Enter the OTP code sent to your login email",
+                Icon = new IconInfo("\uE8D7"),
+            };
+            if (_errorMessage != null)
+                hint.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
+            return [hint];
+        }
+
+        PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
 
         var item = new ListItem(new Pages.LoginPage(_service, _settings, OnLoginSubmitted))
         {
@@ -313,9 +354,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         var item = new ListItem(new Pages.UnlockVaultPage(_service, _settings, OnUnlockSubmitted))
         {
-            Title = "Vault is locked",
-            Subtitle = _errorMessage ?? "Click to unlock your Bitwarden vault",
-            Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
+            Title = "Unlock Vault",
+            Subtitle = _errorMessage ?? "Vault is locked, select to unlock your Bitwarden vault",
+            Icon = new IconInfo("\uE785"),
         };
 
         if (_errorMessage != null)
@@ -327,7 +368,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private ListItem BuildSetServerItem() => new(new Pages.SetServerPage(_service, OnSetServerSubmitted))
     {
         Title = "Set Bitwarden Server",
-        Subtitle = BitwardenCliService.ServerUrl ?? "https://vault.bitwarden.com",
+        Subtitle = BitwardenCliService.ServerUrl ?? "bitwarden.com",
         Icon = new IconInfo("\uE774"),
     };
 
@@ -606,7 +647,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         });
     }
 
-    private void OnSetServerSubmitted(string url)
+    private void OnSetServerSubmitted(Models.ServerConfig config)
     {
         _handlingAction = true;
         ClearSearchText();
@@ -617,7 +658,14 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         {
             try
             {
-                var error = await _service.SetServerUrlAsync(url);
+                var status = _service.LastStatus;
+                if (status == Services.VaultStatus.Locked || status == Services.VaultStatus.Unlocked)
+                {
+                    ShowLoadingStatus("Logging out before server change...", "bw logout");
+                    await _service.LogoutAsync();
+                }
+
+                var error = await _service.SetServerUrlAsync(config);
                 if (error != null)
                 {
                     _errorMessage = error;
@@ -625,8 +673,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     return;
                 }
 
-                ShowLoadingStatus("Checking vault status...", "bw status");
-                await _service.GetVaultStatusAsync();
                 RebuildForCurrentStatus();
             }
             finally
@@ -690,6 +736,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         ClearSearchText();
         _errorMessage = null;
         _twoFactorRequired = false;
+        _deviceVerificationRequired = false;
         _pendingEmail = null;
         _pendingPassword = null;
         _currentItems = [];
@@ -701,12 +748,19 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             try
             {
                 ShowLoadingStatus("Logging in...", "bw login");
-                var (success, error, twoFactorRequired) = await _service.LoginAsync(email, password, null);
+                var (success, error, twoFactorRequired, deviceVerificationRequired) = await _service.LoginAsync(email, password, null);
                 if (!success)
                 {
                     if (twoFactorRequired)
                     {
                         _twoFactorRequired = true;
+                        _pendingEmail = email;
+                        _pendingPassword = password;
+                        _errorMessage = null;
+                    }
+                    else if (deviceVerificationRequired)
+                    {
+                        _deviceVerificationRequired = true;
                         _pendingEmail = email;
                         _pendingPassword = password;
                         _errorMessage = null;
@@ -721,8 +775,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     return;
                 }
 
-                ShowLoadingStatus("Retrieving items from vault...", "bw list items");
-                await _service.RefreshCacheAsync();
+                ShowLoadingStatus("Syncing vault...", "bw sync");
+                await _service.SyncVaultAsync();
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }
@@ -737,6 +791,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void OnTwoFactorSubmitted(string twoFactorCode)
     {
         _handlingAction = true;
+        ClearSearchText();
         var email = _pendingEmail;
         var password = _pendingPassword;
         _errorMessage = null;
@@ -749,7 +804,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             try
             {
                 ShowLoadingStatus("Verifying 2FA code...", "bw login");
-                var (success, error, _) = await _service.LoginAsync(email!, password!, twoFactorCode);
+                var (success, error, _, _) = await _service.LoginAsync(email!, password!, twoFactorCode);
                 if (!success)
                 {
                     _errorMessage = error?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true
@@ -763,8 +818,49 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _twoFactorRequired = false;
                 _pendingEmail = null;
                 _pendingPassword = null;
-                ShowLoadingStatus("Retrieving items from vault...", "bw list items");
-                await _service.RefreshCacheAsync();
+                PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
+                ShowLoadingStatus("Syncing vault...", "bw sync");
+                await _service.SyncVaultAsync();
+                _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
+            }
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
+        });
+    }
+
+    private void OnDeviceVerificationSubmitted(string otpCode)
+    {
+        _handlingAction = true;
+        ClearSearchText();
+        _errorMessage = null;
+        _currentItems = [];
+        IsLoading = true;
+        RaiseItemsChanged();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                ShowLoadingStatus("Verifying device...", "bw login");
+                var (success, error) = await _service.SubmitDeviceVerificationAsync(otpCode);
+                if (!success)
+                {
+                    _errorMessage = error ?? "Verification failed — try again";
+                    _currentItems = BuildUnauthenticatedItems();
+                    RaiseItemsChanged();
+                    return;
+                }
+
+                _deviceVerificationRequired = false;
+                _pendingEmail = null;
+                _pendingPassword = null;
+                PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
+                ShowLoadingStatus("Syncing vault...", "bw sync");
+                await _service.SyncVaultAsync();
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }

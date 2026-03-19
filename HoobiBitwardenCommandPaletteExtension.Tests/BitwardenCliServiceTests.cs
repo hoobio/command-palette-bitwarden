@@ -1320,4 +1320,41 @@ public class BitwardenCliServiceTests
     Assert.Equal("exact", result[0].Id);
     Assert.Equal("partial", result[1].Id);
   }
+
+  [Fact]
+  public void SearchCached_RecentItemPinnedAboveContextMatches()
+  {
+    var svc = new BitwardenCliService();
+    var now = DateTime.UtcNow;
+    svc.LoadTestData([
+      new() { Id = "ctx1", Name = "GitHub", Type = BitwardenItemType.Login, Uris = [new ItemUri("https://github.com", UriMatchType.Default)], RevisionDate = now },
+      new() { Id = "ctx2", Name = "GitLab", Type = BitwardenItemType.Login, Uris = [new ItemUri("https://gitlab.com", UriMatchType.Default)], RevisionDate = now },
+      new() { Id = "recent", Name = "Amazon", Type = BitwardenItemType.Login, Uris = [], RevisionDate = now },
+    ], []);
+
+    AccessTracker.Record("recent");
+    try
+    {
+      var context = new ForegroundContext
+      {
+        Windows =
+        [
+          new WindowContext { ProcessName = "chrome", WindowTitle = "GitHub", IsBrowser = true, BrowserUrl = "https://github.com" },
+          new WindowContext { ProcessName = "chrome", WindowTitle = "GitLab", IsBrowser = true, BrowserUrl = "https://gitlab.com" },
+        ]
+      };
+
+      var result = svc.SearchCached(null, context, 3);
+
+      Assert.Equal("recent", result[0].Id);
+      var contextIds = result.Skip(1).Take(2).Select(i => i.Id).ToHashSet();
+      Assert.Contains("ctx1", contextIds);
+      Assert.Contains("ctx2", contextIds);
+    }
+    finally
+    {
+      // Clear static state so other tests are not affected
+      AccessTracker.Record("__clear__");
+    }
+  }
 }
