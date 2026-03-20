@@ -1166,14 +1166,23 @@ internal sealed class BitwardenCliService
         var trimmed = line.Trim();
         if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
         {
+          var candidate = trimmed;
           try
           {
-            JsonNode.Parse(trimmed);
+            JsonNode.Parse(candidate);
+          }
+          catch (System.Text.Json.JsonException)
+          {
+            candidate = trimmed.StartsWith('[') ? ExtractJsonArray(trimmed) : null;
+            if (candidate != null)
+              try { JsonNode.Parse(candidate); } catch (System.Text.Json.JsonException) { candidate = null; }
+          }
+          if (candidate != null)
+          {
             _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
             try { process.Kill(true); } catch { }
-            return trimmed;
+            return candidate;
           }
-          catch (System.Text.Json.JsonException) { }
         }
         if (earlyExitText != null && line.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
         {
@@ -1259,21 +1268,45 @@ internal sealed class BitwardenCliService
 
   internal static string ExtractJsonArray(string output)
   {
-    var start = output.IndexOf('[');
-    if (start < 0) return output;
+    if (string.IsNullOrEmpty(output)) return output ?? string.Empty;
 
-    var depth = 0;
-    var inString = false;
-    var escape = false;
-    for (var i = start; i < output.Length; i++)
+    var pos = 0;
+    while (pos < output.Length)
     {
-      var c = output[i];
-      if (escape) { escape = false; continue; }
-      if (c == '\\' && inString) { escape = true; continue; }
-      if (c == '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (c == '[') depth++;
-      else if (c == ']') { depth--; if (depth == 0) { var extracted = output[start..(i + 1)]; if (extracted.Length != output.TrimEnd().Length) DebugLogService.Log("CLI", $"ExtractJsonArray trimmed {output.Length - extracted.Length} trailing chars from CLI output"); return extracted; } }
+      var start = output.IndexOf('[', pos);
+      if (start < 0) return output;
+
+      var depth = 0;
+      var inString = false;
+      var escape = false;
+      var matched = false;
+      for (var i = start; i < output.Length; i++)
+      {
+        var c = output[i];
+        if (escape) { escape = false; continue; }
+        if (c == '\\' && inString) { escape = true; continue; }
+        if (c == '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (c == '[') depth++;
+        else if (c == ']')
+        {
+          depth--;
+          if (depth == 0)
+          {
+            var extracted = output[start..(i + 1)];
+            if (extracted.Length <= 2 || extracted.Contains('{'))
+            {
+              if (extracted != output.TrimEnd())
+                DebugLogService.Log("CLI", $"ExtractJsonArray trimmed trailing content from CLI output");
+              return extracted;
+            }
+            pos = i + 1;
+            matched = true;
+            break;
+          }
+        }
+      }
+      if (!matched) return output;
     }
 
     return output;

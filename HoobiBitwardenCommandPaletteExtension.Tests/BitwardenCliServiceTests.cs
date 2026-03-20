@@ -382,6 +382,25 @@ public class BitwardenCliServiceTests
     Assert.Equal("Test", items[0].Name);
   }
 
+  [Fact]
+  public void ExtractJsonArray_EmptyArray_ReturnsEmptyArray()
+  {
+    Assert.Equal("[]", BitwardenCliService.ExtractJsonArray("[]"));
+  }
+
+  [Fact]
+  public void ExtractJsonArray_BracketTextBeforeRealArray_SkipsIt()
+  {
+    var input = "? Master password: [hidden]\n[{\"id\":\"1\"}]";
+    Assert.Equal("[{\"id\":\"1\"}]", BitwardenCliService.ExtractJsonArray(input));
+  }
+
+  [Fact]
+  public void ExtractJsonArray_EmptyString_ReturnsEmpty()
+  {
+    Assert.Equal(string.Empty, BitwardenCliService.ExtractJsonArray(string.Empty));
+  }
+
   // --- ParseItems ---
 
   [Fact]
