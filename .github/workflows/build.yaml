@@ -45,6 +45,8 @@ jobs:
               - "**/Package.appxmanifest"
               - "version.txt"
               - ".github/workflows/build.yaml"
+              - ".github/workflows/_build.yaml"
+              - ".github/workflows/_wack.yaml"
               - "release-please-config.json"
               - ".release-please-manifest.json"
 
@@ -260,7 +262,15 @@ jobs:
     secrets: inherit
 
   release:
-    needs: [release-please, build_x64, build_arm64, lint-and-test, wack_x64, wack_arm64]
+    needs:
+      [
+        release-please,
+        build_x64,
+        build_arm64,
+        lint-and-test,
+        wack_x64,
+        wack_arm64,
+      ]
     if: >-
       always()
       && needs.release-please.outputs.release_created == 'true'
