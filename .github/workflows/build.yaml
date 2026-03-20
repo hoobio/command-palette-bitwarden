@@ -2,7 +2,7 @@ name: Build & Release
 
 on:
   push:
-    branches: [main, dev, release-please--branches--main]
+    branches: [main, dev]
     paths:
       - "**.cs"
       - "**.csproj"
@@ -62,10 +62,18 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - name: Generate release-please app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ steps.app-token.outputs.token }}
 
   lint-and-test:
     needs: [detect-changes]
@@ -306,8 +314,8 @@ jobs:
     needs: [build_x64, build_arm64, lint-and-test]
     if: >-
       always()
-      && github.ref == 'refs/heads/release-please--branches--main'
-      && github.event_name == 'push'
+      && github.event_name == 'pull_request'
+      && github.head_ref == 'release-please--branches--main'
       && needs.build_x64.result == 'success'
       && needs.build_arm64.result == 'success'
       && needs.lint-and-test.result == 'success'
