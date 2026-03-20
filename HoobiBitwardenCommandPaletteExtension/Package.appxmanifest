@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" IgnorableNamespaces="uap uap3 rescap">
-  <Identity Name="Hoobi.BitwardenCommandPaletteExtension.Debug" Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71" Version="1.6.2.0" />
+  <Identity Name="Hoobi.BitwardenCommandPaletteExtension.Debug" Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71" Version="1.6.3.0" />
   <Properties>
     <DisplayName>Command Palette Extension for Bitwarden (Dev)</DisplayName>
     <PublisherDisplayName>Hoobi</PublisherDisplayName>
@@ -15,7 +15,7 @@
   </Resources>
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
-      <uap:VisualElements DisplayName="Command Palette Extension for Bitwarden (Dev)" Description="Command Palette Extension for Bitwarden" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
+      <uap:VisualElements DisplayName="Command Palette Extension for Bitwarden (Dev)" Description="Command Palette Extension for Bitwarden (Dev)" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
@@ -23,12 +23,12 @@
         <com:Extension Category="windows.comServer">
           <com:ComServer>
             <com:ExeServer Executable="HoobiBitwardenCommandPaletteExtension.exe" Arguments="-RegisterProcessAsComServer" DisplayName="Command Palette Extension for Bitwarden (Dev)">
-              <com:Class Id="8345c10d-0df8-4116-a767-3f8647adf4df" DisplayName="Command Palette Extension for Bitwarden" />
+              <com:Class Id="8345c10d-0df8-4116-a767-3f8647adf4df" DisplayName="Command Palette Extension for Bitwarden (Dev)" />
             </com:ExeServer>
           </com:ComServer>
         </com:Extension>
         <uap3:Extension Category="windows.appExtension">
-          <uap3:AppExtension Name="com.microsoft.commandpalette" Id="ID" PublicFolder="Public" DisplayName="Command Palette Extension for Bitwarden" Description="Command Palette Extension for Bitwarden">
+          <uap3:AppExtension Name="com.microsoft.commandpalette" Id="ID" PublicFolder="Public" DisplayName="Command Palette Extension for Bitwarden (Dev)" Description="Command Palette Extension for Bitwarden (Dev)">
             <uap3:Properties>
               <CmdPalProvider>
                 <Activation>

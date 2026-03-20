@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using Windows.System;
+using Windows.UI.ViewManagement;
 using HoobiBitwardenCommandPaletteExtension.Commands;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -19,7 +20,9 @@ internal static partial class VaultItemHelper
   {
     BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item.FirstUri) : new IconInfo("\uE774"),
     BitwardenItemType.SecureNote => new IconInfo("\uE70B"),
-    BitwardenItemType.Card => new IconInfo("\uE8C7"),
+    BitwardenItemType.Card => showWebsiteIcons && item.CardBrand != null
+      ? GetCardBrandIcon(item.CardBrand)
+      : new IconInfo("\uE8C7"),
     BitwardenItemType.Identity => new IconInfo("\uE77B"),
     BitwardenItemType.SshKey => new IconInfo("\uE8D7"),
     _ => new IconInfo("\uE72E"),
@@ -360,6 +363,44 @@ internal static partial class VaultItemHelper
     }
   }
 
+  private static readonly UISettings _uiSettings = new();
+
+  private static bool IsDarkTheme() =>
+    _uiSettings.GetColorValue(UIColorType.Background).R < 128;
+
+  private static string GetVaultBaseUrl()
+  {
+    var serverUrl = BitwardenCliService.ServerUrl;
+    if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+      return "https://vault.bitwarden.com";
+    if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+      return "https://vault.bitwarden.eu";
+    return serverUrl;
+  }
+
+  internal static string SanitizeBrandSlug(string brand) =>
+    UnsafeSlugChars().Replace(brand.ToLowerInvariant().Replace(" ", "_"), "");
+
+  internal static string GetCardBrandImageUrl(string brand, bool isDark)
+  {
+    var slug = SanitizeBrandSlug(brand);
+    var theme = isDark ? "dark" : "light";
+    return $"{GetVaultBaseUrl()}/images/{slug}-{theme}.png";
+  }
+
+  internal static IconInfo GetCardBrandIcon(string brand)
+  {
+    var isDark = IsDarkTheme();
+    var slug = SanitizeBrandSlug(brand);
+    var theme = isDark ? "dark" : "light";
+    // Fixed [@Performance-Agent]: delegate URL construction to GetCardBrandImageUrl so the
+    // URL format is maintained in exactly one place (avoids drift on future changes).
+    return FaviconService.GetOrQueue(
+      $"card-brand:{slug}:{theme}",
+      GetCardBrandImageUrl(brand, isDark),
+      new IconInfo("\uE8C7"));
+  }
+
   internal static IconInfo GetFaviconIcon(string? uri)
   {
     if (string.IsNullOrEmpty(uri))
@@ -426,6 +467,10 @@ internal static partial class VaultItemHelper
 
   [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex SshHostPattern();
+
+  // Fixed [@Security-Agent]: Strip path-traversal / special chars from brand slugs
+  [GeneratedRegex(@"[^a-z0-9_]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
+  private static partial Regex UnsafeSlugChars();
 
   private static AnonymousCommand CopySensitive(string text, string label) => new(() =>
       SecureClipboardService.CopySensitive(text))

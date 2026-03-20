@@ -12,7 +12,7 @@ The tag updates every second via a background timer. The countdown shows the num
 
 ## Copying
 
-Select **Copy TOTP Code** from the item's actions to copy the current code. It's copied through the secure clipboard service — excluded from clipboard history and auto-cleared.
+Select **Copy TOTP Code** from the item's actions to copy the current code. It's copied through the secure clipboard service, excluded from clipboard history and auto-cleared.
 
 ## Base32 Key Handling
 

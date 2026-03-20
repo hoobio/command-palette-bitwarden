@@ -18,7 +18,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Download and display website favicons for login items. Icons are fetched from `icons.bitwarden.net` (cloud) or your self-hosted server's `/icons/` endpoint, then cached locally for 7 days so each domain is only fetched once. Disable for privacy — a generic icon will be shown instead. See [Bitwarden's website icon documentation](https://bitwarden.com/help/website-icons/) for more details. |
+| **Description** | Download and display website favicons for login items. Icons are fetched from `icons.bitwarden.net` (cloud) or your self-hosted server's `/icons/` endpoint, then cached locally for 7 days. Disable for privacy; a generic icon will be shown instead. See [Bitwarden's website icon documentation](https://bitwarden.com/help/website-icons/) for more details. |
 
 ### Auto-Lock Timeout
 
@@ -35,7 +35,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Display security warning tags (Weak, Old Password, HTTP, Reused, No Password) on vault items. Disable for a cleaner list without security indicators. See [Watchtower Tags](Watchtower-Tags) for details. |
+| **Description** | Display security warning tags (Weak, Old, Insecure URL) on vault items. See [Watchtower Tags](Watchtower-Tags) for details. |
 
 ### Context Awareness
 
@@ -104,3 +104,27 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | 10 seconds |
 | **Options** | 10 seconds, 15 seconds, 30 seconds, 60 seconds, 2 minutes |
 | **Description** | How long to wait before auto-clearing sensitive clipboard data. Only applies when Auto-Clear Clipboard is enabled. |
+
+### CLI Path Override
+
+| | |
+|---|---|
+| **Type** | Text |
+| **Default** | *(empty)* |
+| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. |
+
+### Use CLI Path as Data Directory
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | Off |
+| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Requires **CLI Path Override** to be set. Useful for fully portable Bitwarden setups. |
+
+### CLI Data Directory Override
+
+| | |
+|---|---|
+| **Type** | Text |
+| **Default** | *(empty)* |
+| **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. |

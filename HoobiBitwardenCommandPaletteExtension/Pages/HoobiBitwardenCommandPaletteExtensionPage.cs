@@ -43,6 +43,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.WarmupCompleted += OnWarmupCompleted;
         _service.AutoLocking += OnAutoLocking;
         _service.AutoLocked += OnAutoLocked;
+        _service.CliConfigChanged += OnCliConfigChanged;
         AccessTracker.ItemAccessed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
@@ -516,6 +517,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.WarmupCompleted -= OnWarmupCompleted;
         _service.AutoLocking -= OnAutoLocking;
         _service.AutoLocked -= OnAutoLocked;
+        _service.CliConfigChanged -= OnCliConfigChanged;
         AccessTracker.ItemAccessed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
     }
@@ -551,6 +553,26 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         _handlingAction = true;
         ShowLoadingStatus("Locking vault...", "bw lock");
+    }
+
+    // Fixed [@Core-Logic-Agent + @Concurrency-Agent]: _initialLoadStarted must be true here,
+    // not false. We are already launching InitializeAsync below; leaving it false causes
+    // the next GetItems() call (which acquires _itemsLock) to see !_initialLoadStarted==true
+    // and fire a *second* concurrent InitializeAsync, racing on _sessionKey, _currentItems,
+    // and CacheUpdated notifications.
+    private void OnCliConfigChanged()
+    {
+        _handlingAction = false;
+        _initialLoadStarted = true;
+        _initComplete = false;
+        _twoFactorRequired = false;
+        _deviceVerificationRequired = false;
+        _pendingEmail = null;
+        _pendingPassword = null;
+        _errorMessage = null;
+        IsLoading = true;
+        ShowLoadingStatus("Checking vault status...", "bw status");
+        _ = Task.Run(InitializeAsync);
     }
 
     private void OnAutoLocked()

@@ -1,9 +1,48 @@
 using HoobiBitwardenCommandPaletteExtension.Helpers;
+using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
 public class VaultItemHelperTests
 {
+  [Theory]
+  [InlineData("Mastercard", true, "https://vault.bitwarden.com/images/mastercard-dark.png")]
+  [InlineData("Mastercard", false, "https://vault.bitwarden.com/images/mastercard-light.png")]
+  [InlineData("Visa", false, "https://vault.bitwarden.com/images/visa-light.png")]
+  [InlineData("American Express", true, "https://vault.bitwarden.com/images/american_express-dark.png")]
+  [InlineData("Diners Club", false, "https://vault.bitwarden.com/images/diners_club-light.png")]
+  public void GetCardBrandImageUrl_BuildsExpectedUrl(string brand, bool isDark, string expected)
+  {
+    BitwardenCliService.ResetStaticState();
+    Assert.Equal(expected, VaultItemHelper.GetCardBrandImageUrl(brand, isDark));
+  }
+
+  [Theory]
+  [InlineData("../../admin", "admin")]
+  [InlineData("Visa<script>", "visascript")]
+  [InlineData("Normal Brand", "normal_brand")]
+  public void SanitizeBrandSlug_StripsUnsafeChars(string brand, string expected)
+  {
+    Assert.Equal(expected, VaultItemHelper.SanitizeBrandSlug(brand));
+  }
+
+  [Fact]
+  public void GetIcon_Card_NoBrand_ReturnsCardGlyph()
+  {
+    var item = new BitwardenItem { Type = BitwardenItemType.Card };
+    var icon = VaultItemHelper.GetIcon(item, showWebsiteIcons: true);
+    Assert.Equal("\uE8C7", icon.Dark.Icon);
+  }
+
+  [Fact]
+  public void GetIcon_Card_BrandSet_WebIconsDisabled_ReturnsCardGlyph()
+  {
+    var item = new BitwardenItem { Type = BitwardenItemType.Card, CardBrand = "Visa" };
+    var icon = VaultItemHelper.GetIcon(item, showWebsiteIcons: false);
+    Assert.Equal("\uE8C7", icon.Dark.Icon);
+  }
+
   [Theory]
   [InlineData("user@host.com", true)]
   [InlineData("git@github.com", true)]

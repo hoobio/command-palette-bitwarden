@@ -9,6 +9,7 @@ A free, open-source replacement for 1Password Quick Access, built for the [Power
 - [Context Awareness](Context-Awareness)
 - [Clipboard Security](Clipboard-Security)
 - [TOTP Codes](TOTP-Codes)
+- [SSH Quick Connect](SSH-Quick-Connect)
 - [Watchtower Tags](Watchtower-Tags)
 - [Settings](Settings)
 - [Vault Item Actions](Vault-Item-Actions)
@@ -21,8 +22,9 @@ A free, open-source replacement for 1Password Quick Access, built for the [Power
 | Vault search | Search all vault items directly from the Command Palette |
 | Fallback search | Bitwarden results appear as fallback suggestions when typing anywhere |
 | Secure clipboard | Passwords excluded from clipboard history, auto-cleared on a timer |
-| Favorites | ★ tag and priority sorting for favorite items |
+| Favorites | Star tag and priority sorting for favorite items |
 | TOTP display | Live TOTP codes with countdown timers shown as tags |
+| SSH quick connect | Copy public keys, fingerprints, and quick-connect via `ssh` |
 | Search filters | Prefix syntax like `is:fav`, `folder:Work`, `has:totp` |
 | Watchtower tags | Visual warnings for weak/old/insecure passwords |
 | Context awareness | Matches vault items to your open apps and browser tabs |

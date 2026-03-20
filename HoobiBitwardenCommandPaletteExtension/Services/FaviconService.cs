@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,11 +20,11 @@ internal static partial class FaviconService
         "HoobiBitwardenCommandPalette", "Icons");
 
     private static readonly TimeSpan PositiveTtl = TimeSpan.FromDays(7);
-    private static readonly TimeSpan NegativeTtl = TimeSpan.FromHours(1);
+    private static readonly TimeSpan NegativeTtl = TimeSpan.FromMinutes(5);
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
-    // null value = negative cache (host has no icon); missing key = not yet tried
+    // Cached icon: raster bytes streamed via COM. null = negative cache (host has no icon); missing key = not yet tried
     private static readonly ConcurrentDictionary<string, byte[]?> _memCache = new();
     private static readonly HashSet<string> _pending = [];
     private static readonly Lock _pendingLock = new();
@@ -33,6 +35,8 @@ internal static partial class FaviconService
     static FaviconService()
     {
         Directory.CreateDirectory(CacheDir);
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd($"HoobiBitwarden/{version}");
     }
 
     /// <summary>
@@ -40,10 +44,11 @@ internal static partial class FaviconService
     /// Uses the disk cache when available; otherwise returns the fallback icon and
     /// schedules a background download.
     /// </summary>
-    public static IconInfo GetOrQueue(string host, string iconUrl)
+    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null)
     {
+        fallback ??= new IconInfo("\uE774");
         if (_memCache.TryGetValue(host, out var cachedBytes))
-            return cachedBytes is not null ? MakeIconInfo(cachedBytes) : Fallback();
+            return cachedBytes is not null ? MakeIconInfo(cachedBytes) : fallback;
 
         var posPath = GetPositivePath(host);
         var negPath = GetNegativePath(host);
@@ -58,7 +63,7 @@ internal static partial class FaviconService
         if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
         {
             _memCache[host] = null;
-            return Fallback();
+            return fallback;
         }
 
         bool shouldFetch;
@@ -68,7 +73,7 @@ internal static partial class FaviconService
         if (shouldFetch)
             _ = Task.Run(() => DownloadAsync(host, iconUrl));
 
-        return Fallback();
+        return fallback;
     }
 
     private static async Task DownloadAsync(string host, string iconUrl)
@@ -79,7 +84,7 @@ internal static partial class FaviconService
             using var resp = await _http.GetAsync(iconUrl);
             if (!resp.IsSuccessStatusCode)
             {
-                await NegCacheAsync(negPath);
+                await NegCacheAsync(negPath, $"{iconUrl}\nHTTP {(int)resp.StatusCode} {resp.ReasonPhrase}");
                 _memCache[host] = null;
                 return;
             }
@@ -87,19 +92,39 @@ internal static partial class FaviconService
             var bytes = await resp.Content.ReadAsByteArrayAsync();
             if (bytes.Length < 10)
             {
-                await NegCacheAsync(negPath);
+                await NegCacheAsync(negPath, $"{iconUrl}\nEmpty response ({bytes.Length} bytes)");
                 _memCache[host] = null;
                 return;
             }
 
-            var posPath = GetPositivePath(host);
-            await File.WriteAllBytesAsync(posPath, bytes);
-            _memCache[host] = bytes;
+            var contentType = resp.Content.Headers.ContentType?.MediaType ?? "";
+            byte[] pngBytes;
+            if (IsSvg(contentType, bytes))
+            {
+                var rasterized = SvgRasterizer.TryRasterize(bytes);
+                if (rasterized is null)
+                {
+                    await NegCacheAsync(negPath, $"{iconUrl}\nSVG rasterization failed");
+                    _memCache[host] = null;
+                    return;
+                }
+
+                pngBytes = rasterized;
+            }
+            else
+            {
+                pngBytes = bytes;
+            }
+
+            await File.WriteAllBytesAsync(GetPositivePath(host), pngBytes);
+            _memCache[host] = pngBytes;
+
+            try { File.Delete(negPath); } catch { }
             IconCached?.Invoke();
         }
-        catch
+        catch (Exception ex)
         {
-            try { await NegCacheAsync(negPath); } catch { }
+            try { await NegCacheAsync(negPath, $"{iconUrl}\nException: {ex.GetType().Name}: {ex.Message}"); } catch { }
             _memCache[host] = null;
         }
         finally
@@ -109,7 +134,8 @@ internal static partial class FaviconService
         }
     }
 
-    private static Task NegCacheAsync(string path) => File.WriteAllBytesAsync(path, []);
+    private static Task NegCacheAsync(string path, string? reason = null) =>
+        File.WriteAllTextAsync(path, reason ?? "");
 
     private static bool IsExpired(string path, TimeSpan ttl)
     {
@@ -140,7 +166,13 @@ internal static partial class FaviconService
         return IconInfo.FromStream(ras);
     }
 
-    private static IconInfo Fallback() => new("\uE774");
+    internal static bool IsSvg(string contentType, byte[] bytes)
+    {
+        if (contentType.Contains("svg", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var head = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 256));
+        return head.Contains("<svg", StringComparison.OrdinalIgnoreCase);
+    }
 
     [GeneratedRegex(@"[^\w\-\.]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
     private static partial Regex InvalidFilenameChars();

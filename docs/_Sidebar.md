@@ -6,6 +6,7 @@
   - [Vault Item Actions](Vault-Item-Actions)
   - [Context Awareness](Context-Awareness)
   - [TOTP Codes](TOTP-Codes)
+  - [SSH Quick Connect](SSH-Quick-Connect)
   - [Clipboard Security](Clipboard-Security)
   - [Watchtower Tags](Watchtower-Tags)
 - **Configuration**

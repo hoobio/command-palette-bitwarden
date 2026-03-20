@@ -46,6 +46,7 @@
     <PackageReference Include="Microsoft.Windows.CsWinRT" />
     <PackageReference Include="Otp.NET" />
     <PackageReference Include="Shmuelie.WinRTServer" />
+    <PackageReference Include="Svg.Skia" />
 
     <!-- Workaround: Microsoft.Windows.SDK.BuildTools.MSIX net6.0 task DLL depends on
          System.Security.Permissions v8.0.0.0 but doesn't ship it alongside itself.
@@ -134,9 +135,25 @@
              Value="$(FullDisplayName)"
              Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10'/&gt;" />
     <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/uap:VisualElements/@Description"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
              Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/@DisplayName"
              Value="$(FullDisplayName)"
              Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/com:Class/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/@Description"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
   </Target>
 
 

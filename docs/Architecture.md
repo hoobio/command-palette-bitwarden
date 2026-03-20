@@ -3,20 +3,21 @@
 ## Technology Stack
 
 - **.NET 9** / C# targeting `net9.0-windows10.0.26100.0`
-- **Microsoft.CommandPalette.Extensions SDK** — WinRT-based extension API for PowerToys Command Palette
-- **Win32 P/Invoke** via `LibraryImport` — clipboard APIs, window management APIs
-- **UI Automation COM Interop** — browser address bar URL extraction
-- **OtpNet** — TOTP code generation
-- **Bitwarden CLI** (`bw`) — vault operations (login, unlock, list, sync)
-- **Windows Credential Manager** — session key persistence
-- **MSIX** — packaging and distribution
+- **Microsoft.CommandPalette.Extensions SDK** - WinRT-based extension API for PowerToys Command Palette
+- **Win32 P/Invoke** via `LibraryImport` - clipboard APIs, window management
+- **UI Automation COM Interop** - browser address bar URL extraction
+- **OtpNet** - TOTP code generation
+- **Svg.Skia / SkiaSharp** - SVG rasterization (converts SVG favicons to PNG for display)
+- **Bitwarden CLI** (`bw`) - vault operations (login, unlock, list, sync)
+- **Windows Credential Manager** - session key persistence
+- **MSIX** - packaging and distribution
 
 ## Project Structure
 
 ```
 HoobiBitwardenCommandPaletteExtension/
 ├── Program.cs                          # COM server entry point
-├── HoobiBitwardenCommandPaletteExtension.cs  # IExtension — returns providers to host
+├── HoobiBitwardenCommandPaletteExtension.cs  # IExtension - returns providers to host
 ├── HoobiBitwardenCommandPaletteExtensionCommandsProvider.cs  # Instantiates pages, settings, fallback
 ├── BitwardenFallbackItem.cs            # Fallback search for short queries
 ├── Commands/
@@ -35,8 +36,11 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── BitwardenCliService.cs         # CLI interaction, caching, search, sorting
 │   ├── BitwardenSettingsManager.cs    # Extension settings (toggles + choices)
 │   ├── ContextAwarenessService.cs     # Window detection, URL extraction, context scoring
+│   ├── FaviconService.cs              # Favicon download, disk/memory cache, icon refresh events
+│   ├── ICliProcess.cs                 # Process abstraction for unit testing
 │   ├── SecureClipboardService.cs      # Clipboard security + auto-clear
-│   └── SessionStore.cs               # Windows Credential Manager wrapper
+│   ├── SessionStore.cs               # Windows Credential Manager wrapper
+│   └── SvgRasterizer.cs              # SVG to PNG conversion via SkiaSharp
 └── Assets/                            # Icons and images
 ```
 
@@ -67,8 +71,9 @@ User selects an action
 | `SecureClipboardService` | Static | Clipboard operations with history exclusion and configurable auto-clear timer |
 | `SessionStore` | Static | Reads/writes session keys to Windows Credential Manager |
 | `AccessTracker` | Static | Tracks item access times (persisted to JSON) and recent-copy state (5-min in-memory timer) |
-| `BitwardenSettingsManager` | Instance | Manages 5 user-configurable settings via Command Palette settings UI |
+| `BitwardenSettingsManager` | Instance | Manages user-configurable settings via Command Palette settings UI |
+| `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; fires `IconCached` to refresh the list UI |
 
 ## Extension Registration
 
-The extension is a COM out-of-process server. `Program.cs` registers it with the PowerToys host. The host calls into `IExtension.GetProvider()` to get the `CommandsProvider`, which supplies the main vault page and the fallback search item.
+The extension is a COM out-of-process server. `Program.cs` registers it with the PowerToys host. The host calls `IExtension.GetProvider()` to get the `CommandsProvider`, which supplies the main vault page and the fallback search item.

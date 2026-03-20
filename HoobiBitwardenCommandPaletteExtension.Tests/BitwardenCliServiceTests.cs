@@ -7,6 +7,86 @@ namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
 public class BitwardenCliServiceTests
 {
+  // --- ResolveCliExecutable ---
+
+  [Theory]
+  [InlineData(null, "bw")]
+  [InlineData("", "bw")]
+  [InlineData("  ", "bw")]
+  public void ResolveCliExecutable_EmptyOrNull_ReturnsBw(string? dir, string expected)
+  {
+    Assert.Equal(expected, BitwardenCliService.ResolveCliExecutable(dir));
+  }
+
+  [Fact]
+  public void ResolveCliExecutable_WithDirectory_ReturnsCombinedPath()
+  {
+    var result = BitwardenCliService.ResolveCliExecutable(@"C:\tools\bitwarden");
+    Assert.Equal(@"C:\tools\bitwarden\bw", result);
+  }
+
+  [Fact]
+  public void ResolveCliExecutable_WithExePath_ReturnsAsIs()
+  {
+    var result = BitwardenCliService.ResolveCliExecutable(@"C:\tools\bw-windows-2026.2.0\bw.exe");
+    Assert.Equal(@"C:\tools\bw-windows-2026.2.0\bw.exe", result);
+  }
+
+  [Fact]
+  public void ResolveCliExecutable_WithBwFilename_ReturnsAsIs()
+  {
+    var result = BitwardenCliService.ResolveCliExecutable(@"C:\tools\bw-windows-2026.2.0\bw");
+    Assert.Equal(@"C:\tools\bw-windows-2026.2.0\bw", result);
+  }
+
+  // --- ResolveDataDirectory ---
+
+  [Fact]
+  public void ResolveDataDirectory_AllEmpty_ReturnsNull()
+  {
+    Assert.Null(BitwardenCliService.ResolveDataDirectory(null, false, null));
+  }
+
+  [Fact]
+  public void ResolveDataDirectory_ExplicitOverride_TakesPrecedence()
+  {
+    var result = BitwardenCliService.ResolveDataDirectory(@"C:\cli", true, @"C:\custom-data");
+    Assert.Equal(@"C:\custom-data", result);
+  }
+
+  [Fact]
+  public void ResolveDataDirectory_PortableWithDirectory_ReturnsCliDir()
+  {
+    var result = BitwardenCliService.ResolveDataDirectory(@"C:\tools\bw-portable", true, null);
+    Assert.Equal(@"C:\tools\bw-portable", result);
+  }
+
+  [Fact]
+  public void ResolveDataDirectory_PortableWithExePath_ReturnsParentDir()
+  {
+    var result = BitwardenCliService.ResolveDataDirectory(@"C:\tools\bw-portable\bw.exe", true, null);
+    Assert.Equal(@"C:\tools\bw-portable", result);
+  }
+
+  [Fact]
+  public void ResolveDataDirectory_PortableWithBwFilename_ReturnsParentDir()
+  {
+    var result = BitwardenCliService.ResolveDataDirectory(@"C:\tools\bw-portable\bw", true, "");
+    Assert.Equal(@"C:\tools\bw-portable", result);
+  }
+
+  [Fact]
+  public void ResolveDataDirectory_PortableDisabled_ReturnsNull()
+  {
+    Assert.Null(BitwardenCliService.ResolveDataDirectory(@"C:\tools\bw-portable", false, null));
+  }
+
+  [Fact]
+  public void ResolveDataDirectory_PortableEnabledNoCliPath_ReturnsNull()
+  {
+    Assert.Null(BitwardenCliService.ResolveDataDirectory(null, true, null));
+  }
+
   // --- IsKnownFilter ---
 
   [Theory]

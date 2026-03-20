@@ -112,6 +112,24 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             new("2 minutes", "120"),
         ]);
 
+    public TextSetting CliDirectoryOverride { get; } = new(
+        "cliDirectoryOverride",
+        "CLI Path Override",
+        "Path to the Bitwarden CLI. Accepts a directory containing bw, or a direct path to bw/bw.exe. Leave empty to use the system PATH",
+        "");
+
+    public ToggleSetting UsePortableDataDirectory { get; } = new(
+        "usePortableDataDirectory",
+        "Use CLI Path as Data Directory",
+        "Store Bitwarden CLI data (data.json) alongside the CLI executable instead of the default location. Requires CLI Path Override to be set",
+        false);
+
+    public TextSetting CliDataDirectoryOverride { get; } = new(
+        "cliDataDirectoryOverride",
+        "CLI Data Directory Override",
+        "Custom directory for Bitwarden CLI data (data.json). Overrides both the default location and the portable directory toggle. Leave empty to use the default or portable location",
+        "");
+
     public BitwardenSettingsManager()
     {
         Directory.CreateDirectory(SettingsDir);
@@ -131,6 +149,9 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         Settings.Add(BackgroundRefresh);
         Settings.Add(AutoClearClipboard);
         Settings.Add(ClipboardClearDelay);
+        Settings.Add(CliDirectoryOverride);
+        Settings.Add(UsePortableDataDirectory);
+        Settings.Add(CliDataDirectoryOverride);
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();
         SyncClipboardSettings();

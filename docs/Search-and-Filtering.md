@@ -4,7 +4,7 @@
 
 Type any text in the vault browser to search across item names, usernames, URIs, and notes. Results are ranked by relevance with smart sorting applied on top.
 
-You can also type anywhere in the Command Palette — matching vault items appear as **fallback suggestions** without needing to open the Bitwarden page first.
+You can also type anywhere in the Command Palette; matching vault items appear as **fallback suggestions** without needing to open the Bitwarden page first.
 
 ## Search Filters
 
@@ -43,11 +43,11 @@ This shows only favorite items with TOTP that are in a folder containing "Person
 
 Items are sorted in this priority order:
 
-1. **Recently copied** — the last item you copied from (pinned for 5 minutes, shown with a "Recent" tag)
-2. **Favorites** — items marked as favorites in Bitwarden
-3. **Context match** — items matching your currently open applications (scored by Z-order proximity)
-4. **Last accessed** — items you've interacted with recently via this extension
-5. **Revision date** — most recently modified items
-6. **Alphabetical** — by item name
+1. **Recently copied** - the last item you copied from (pinned for 5 minutes, shown with a "Recent" tag)
+2. **Favorites** - items marked as favorites in Bitwarden
+3. **Context match** - items matching your currently open applications (scored by Z-order proximity)
+4. **Last accessed** - items you've interacted with recently via this extension
+5. **Revision date** - most recently modified items
+6. **Alphabetical** - by item name
 
 When a text search is active, relevance score takes priority, with the above tiers as tiebreakers.
