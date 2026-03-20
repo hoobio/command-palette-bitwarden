@@ -6,6 +6,10 @@ on:
       platform:
         required: true
         type: string
+      skip:
+        required: false
+        type: boolean
+        default: false
     secrets:
       SIGNING_CERTIFICATE:
         required: false
@@ -20,12 +24,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
+        if: ${{ !inputs.skip }}
 
       - uses: actions/setup-dotnet@v5
+        if: ${{ !inputs.skip }}
         with:
           dotnet-version: "9.0.x"
 
       - name: Read version
+        if: ${{ !inputs.skip }}
         id: version
         shell: pwsh
         run: |
@@ -34,6 +41,7 @@ jobs:
           "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
 
       - name: Stamp Package.appxmanifest version
+        if: ${{ !inputs.skip }}
         shell: pwsh
         run: |
           $manifest = Resolve-Path "HoobiBitwardenCommandPaletteExtension\Package.appxmanifest"
@@ -42,12 +50,15 @@ jobs:
           [System.IO.File]::WriteAllText($manifest, $content, [System.Text.UTF8Encoding]::new($false))
 
       - name: Restore
+        if: ${{ !inputs.skip }}
         run: dotnet restore -p:Platform=${{ inputs.platform }}
 
       - name: Build
+        if: ${{ !inputs.skip }}
         run: dotnet build -c Release -p:Platform=${{ inputs.platform }} --no-restore
 
       - name: Create MSIX package
+        if: ${{ !inputs.skip }}
         run: |
           dotnet publish -c Release -p:Platform=${{ inputs.platform }} `
             -p:AppxPackageDir=${{ github.workspace }}\AppPackages\ `
@@ -56,6 +67,7 @@ jobs:
         working-directory: HoobiBitwardenCommandPaletteExtension
 
       - name: Find produced MSIX (diagnostic)
+        if: ${{ !inputs.skip }}
         shell: pwsh
         run: |
           $found = Get-ChildItem -Path "${{ github.workspace }}" -Recurse -Filter *.msix -ErrorAction SilentlyContinue
@@ -67,7 +79,7 @@ jobs:
           }
 
       - name: Import signing certificate
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: ${{ !inputs.skip && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: pwsh
         run: |
           $pfxBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
@@ -78,7 +90,7 @@ jobs:
           Remove-Item $pfxPath
 
       - name: Sign MSIX package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: ${{ !inputs.skip && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: pwsh
         run: |
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
@@ -91,12 +103,14 @@ jobs:
           }
 
       - name: Upload MSIX artifact
+        if: ${{ !inputs.skip }}
         uses: actions/upload-artifact@v7
         with:
           name: msix-${{ inputs.platform }}
           path: "**/*.msix"
 
       - name: Upload publish output
+        if: ${{ !inputs.skip }}
         uses: actions/upload-artifact@v7
         with:
           name: publish-${{ inputs.platform }}

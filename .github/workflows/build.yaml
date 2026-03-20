@@ -2,7 +2,7 @@ name: Build & Release
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, release-please--branches--main]
     paths:
       - "**.cs"
       - "**.csproj"
@@ -216,25 +216,27 @@ jobs:
   build_x64:
     name: build (x64)
     needs: [detect-changes]
-    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    if: always()
     uses: ./.github/workflows/_build.yaml
     with:
       platform: x64
+      skip: ${{ needs.detect-changes.result == 'success' && needs.detect-changes.outputs.code_changed != 'true' }}
     secrets: inherit
 
   build_arm64:
     name: build (ARM64)
     needs: [detect-changes]
-    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    if: always()
     uses: ./.github/workflows/_build.yaml
     with:
       platform: ARM64
+      skip: ${{ needs.detect-changes.result == 'success' && needs.detect-changes.outputs.code_changed != 'true' }}
     secrets: inherit
 
   wack_x64:
     name: wack (x64)
     needs: [build_x64, detect-changes]
-    if: always() && needs.build_x64.result == 'success'
+    if: always() && needs.build_x64.result == 'success' && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     uses: ./.github/workflows/_wack.yaml
     with:
       platform: x64
@@ -243,7 +245,7 @@ jobs:
   wack_arm64:
     name: wack (ARM64)
     needs: [build_arm64, detect-changes]
-    if: always() && needs.build_arm64.result == 'success'
+    if: always() && needs.build_arm64.result == 'success' && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     uses: ./.github/workflows/_wack.yaml
     with:
       platform: ARM64
@@ -301,13 +303,11 @@ jobs:
             | gh api --method PATCH "repos/${{ github.repository }}/releases/$ID" --input -
 
   pre-release:
-    needs: [release-please, build_x64, build_arm64, lint-and-test]
+    needs: [build_x64, build_arm64, lint-and-test]
     if: >-
       always()
-      && github.ref == 'refs/heads/main'
+      && github.ref == 'refs/heads/release-please--branches--main'
       && github.event_name == 'push'
-      && needs.release-please.outputs.release_created != 'true'
-      && needs.release-please.result == 'success'
       && needs.build_x64.result == 'success'
       && needs.build_arm64.result == 'success'
       && needs.lint-and-test.result == 'success'
@@ -321,30 +321,12 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Get next version from release PR
+      - name: Get version
         id: version
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Find open release-please PR
-          PR_TITLE=$(gh pr list \
-            --repo ${{ github.repository }} \
-            --state open \
-            --head "release-please--branches--main" \
-            --json title \
-            --jq '.[0].title')
-
-          if [ -n "$PR_TITLE" ]; then
-            # Extract version from "chore(main): release X.Y.Z"
-            VERSION=$(echo "$PR_TITLE" | grep -oP '(?<=release )\d+\.\d+\.\d+')
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-            echo "Found next version from PR: $VERSION"
-          else
-            # Fallback to version.txt if no PR exists
-            VERSION=$(cat version.txt)
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-            echo "No release PR found, using version.txt: $VERSION"
-          fi
+          VERSION=$(cat version.txt)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
 
       - name: Generate release notes
         id: notes
