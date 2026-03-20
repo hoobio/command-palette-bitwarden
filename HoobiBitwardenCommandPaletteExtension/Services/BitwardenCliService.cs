@@ -1383,6 +1383,13 @@ internal sealed class BitwardenCliService
     catch (Exception ex)
     {
       DebugLogService.Log("Cache", $"ParseItems exception after {items.Count} items: {ex.GetType().Name}: {ex.Message}");
+      if (ex is System.Text.Json.JsonException jsonEx && jsonEx.BytePositionInLine is long pos && pos > 0 && pos < json.Length)
+      {
+        var start = (int)Math.Max(0, pos - 60);
+        var end = (int)Math.Min(json.Length, pos + 60);
+        var snippet = json[start..(int)pos] + ">>HERE<<" + json[(int)pos..end];
+        DebugLogService.Log("Cache", $"ParseItems context around error: ...{snippet}...");
+      }
     }
 
     return items;
