@@ -555,10 +555,15 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         ShowLoadingStatus("Locking vault...", "bw lock");
     }
 
+    // Fixed [@Core-Logic-Agent + @Concurrency-Agent]: _initialLoadStarted must be true here,
+    // not false. We are already launching InitializeAsync below; leaving it false causes
+    // the next GetItems() call (which acquires _itemsLock) to see !_initialLoadStarted==true
+    // and fire a *second* concurrent InitializeAsync, racing on _sessionKey, _currentItems,
+    // and CacheUpdated notifications.
     private void OnCliConfigChanged()
     {
         _handlingAction = false;
-        _initialLoadStarted = false;
+        _initialLoadStarted = true;
         _initComplete = false;
         _twoFactorRequired = false;
         _deviceVerificationRequired = false;

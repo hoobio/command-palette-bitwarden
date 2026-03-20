@@ -393,9 +393,11 @@ internal static partial class VaultItemHelper
     var isDark = IsDarkTheme();
     var slug = SanitizeBrandSlug(brand);
     var theme = isDark ? "dark" : "light";
+    // Fixed [@Performance-Agent]: delegate URL construction to GetCardBrandImageUrl so the
+    // URL format is maintained in exactly one place (avoids drift on future changes).
     return FaviconService.GetOrQueue(
       $"card-brand:{slug}:{theme}",
-      $"{GetVaultBaseUrl()}/images/{slug}-{theme}.png",
+      GetCardBrandImageUrl(brand, isDark),
       new IconInfo("\uE8C7"));
   }
 
