@@ -131,8 +131,6 @@ internal sealed class BitwardenCliService
   public event Action? AutoLocking;
   public event Action? AutoLocked;
   public event Action? CliConfigChanged;
-
-  // Fixed [@Concurrency-Agent]: Track both exe and data dir for change detection
   private readonly Lock _configChangeLock = new();
   private string _lastCliExecutable;
   private string? _lastDataDirectory;
@@ -164,8 +162,6 @@ internal sealed class BitwardenCliService
     ResetAutoLockTimer();
   }
 
-  // Fixed [@Core-Logic-Agent]: Detect CliExecutable changes, not just DataDirectory
-  // Fixed [@Concurrency-Agent]: Lock to prevent race on concurrent SettingsChanged events
   private void CheckCliConfigChanged()
   {
     lock (_configChangeLock)
@@ -475,7 +471,7 @@ internal sealed class BitwardenCliService
 
   public async Task<(bool Success, string? Error, bool TwoFactorRequired, bool DeviceVerificationRequired)> LoginAsync(string email, string password, string? twoFactorCode = null, int? twoFactorMethod = null)
   {
-    DebugLogService.Log("Auth", $"LoginAsync started for {email}");
+    DebugLogService.Log("Auth", "LoginAsync started");
     DisposeDeviceVerificationProcess();
     try
     {
@@ -980,7 +976,7 @@ internal sealed class BitwardenCliService
     // but run the actual CLI work on ThreadPool to avoid blocking the COM activation thread.
     _warmupTask = Task.Run(RunWarmupAsync);
     if (DebugLogService.Enabled)
-      _ = Task.Run(LogEnvironmentInfoAsync);
+      _ = Task.Run(async () => { try { await LogEnvironmentInfoAsync(); } catch (Exception ex) { DebugLogService.Log("Env", $"Environment info logging failed: {ex.GetType().Name}: {ex.Message}"); } });
     return _warmupTask;
   }
 
@@ -994,11 +990,20 @@ internal sealed class BitwardenCliService
     string powerToysVersion = "not found";
     try
     {
-      var pt = Process.GetProcessesByName("PowerToys").FirstOrDefault();
-      if (pt?.MainModule is { } m)
-        powerToysVersion = FileVersionInfo.GetVersionInfo(m.FileName).ProductVersion ?? "unknown";
+      var processes = Process.GetProcessesByName("PowerToys");
+      try
+      {
+        var pt = processes.FirstOrDefault();
+        if (pt?.MainModule is { } m)
+          powerToysVersion = FileVersionInfo.GetVersionInfo(m.FileName).ProductVersion ?? "unknown";
+      }
+      finally
+      {
+        foreach (var p in processes)
+          p.Dispose();
+      }
     }
-    catch { }
+    catch (Exception) { }
 
     DebugLogService.Log("Env", $"Extension={appVersion}, Windows={windowsVersion}, PowerToys={powerToysVersion}");
 

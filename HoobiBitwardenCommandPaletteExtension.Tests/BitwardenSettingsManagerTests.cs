@@ -51,9 +51,6 @@ public class BitwardenSettingsManagerTests : IDisposable
         var m = CreateManager();
         Assert.Equal("", m.CliDirectoryOverride.Value);
         Assert.Equal("", m.CliDataDirectoryOverride.Value);
-        // Fixed [@Core-Logic-Agent]: assert portable-dir toggle defaults off; if it were
-        // accidentally flipped to true, CLI data would silently migrate to the exe's
-        // directory without the user opting in, potentially breaking existing vault access.
         Assert.False(m.UsePortableDataDirectory.Value);
     }
 
