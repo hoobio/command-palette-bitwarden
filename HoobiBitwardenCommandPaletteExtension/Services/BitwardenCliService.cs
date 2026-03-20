@@ -621,19 +621,39 @@ internal sealed class BitwardenCliService
       await process.StandardInput.WriteLineAsync(otpCode.AsMemory(), cts.Token);
       process.StandardInput.Close();
 
-      // For each stream: if its reader already returned (detected the prompt),
+      // For each stream: if its reader already returned having detected a prompt,
       // create a new ReadToEndAsync to capture post-OTP output (e.g. session key).
+      // If its reader completed without detecting a prompt, use its result directly
+      // (the stream was fully consumed — a new read would return empty).
       // If its reader is still running (blocked waiting for data), await it —
       // it will complete once the process exits after processing the OTP.
-      var stdoutRead = existingStdoutTask != null && existingStdoutTask.IsCompleted
-          ? process.StandardOutput.ReadToEndAsync(cts.Token)
-          : (existingStdoutTask ?? Task.FromResult((Content: "", Detected: false)))
-              .ContinueWith(t => t.Result.Content, cts.Token, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+      Task<string> stdoutRead;
+      if (existingStdoutTask != null && existingStdoutTask.IsCompleted)
+      {
+        var r = await existingStdoutTask;
+        stdoutRead = r.Detected
+            ? process.StandardOutput.ReadToEndAsync(cts.Token)
+            : Task.FromResult(r.Content);
+      }
+      else
+      {
+        stdoutRead = (existingStdoutTask ?? Task.FromResult((Content: "", Detected: false)))
+            .ContinueWith(t => t.Result.Content, cts.Token, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+      }
 
-      var stderrRead = existingStderrTask != null && existingStderrTask.IsCompleted
-          ? process.StandardError.ReadToEndAsync(cts.Token)
-          : (existingStderrTask ?? Task.FromResult((Content: "", Detected: false)))
-              .ContinueWith(t => t.Result.Content, cts.Token, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+      Task<string> stderrRead;
+      if (existingStderrTask != null && existingStderrTask.IsCompleted)
+      {
+        var r = await existingStderrTask;
+        stderrRead = r.Detected
+            ? process.StandardError.ReadToEndAsync(cts.Token)
+            : Task.FromResult(r.Content);
+      }
+      else
+      {
+        stderrRead = (existingStderrTask ?? Task.FromResult((Content: "", Detected: false)))
+            .ContinueWith(t => t.Result.Content, cts.Token, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+      }
 
       await Task.WhenAll(stdoutRead, stderrRead);
       await process.WaitForExitAsync(cts.Token);
