@@ -378,9 +378,12 @@ internal static partial class VaultItemHelper
     return serverUrl;
   }
 
+  internal static string SanitizeBrandSlug(string brand) =>
+    UnsafeSlugChars().Replace(brand.ToLowerInvariant().Replace(" ", "_"), "");
+
   internal static string GetCardBrandImageUrl(string brand, bool isDark)
   {
-    var slug = brand.ToLowerInvariant().Replace(" ", "_");
+    var slug = SanitizeBrandSlug(brand);
     var theme = isDark ? "dark" : "light";
     return $"{GetVaultBaseUrl()}/images/{slug}-{theme}.png";
   }
@@ -388,10 +391,12 @@ internal static partial class VaultItemHelper
   internal static IconInfo GetCardBrandIcon(string brand)
   {
     var isDark = IsDarkTheme();
-    var slug = brand.ToLowerInvariant().Replace(" ", "_");
+    var slug = SanitizeBrandSlug(brand);
     var theme = isDark ? "dark" : "light";
-    var url = GetCardBrandImageUrl(brand, isDark);
-    return FaviconService.GetOrQueue($"card-brand:{slug}:{theme}", url, new IconInfo("\uE8C7"));
+    return FaviconService.GetOrQueue(
+      $"card-brand:{slug}:{theme}",
+      $"{GetVaultBaseUrl()}/images/{slug}-{theme}.png",
+      new IconInfo("\uE8C7"));
   }
 
   internal static IconInfo GetFaviconIcon(string? uri)
@@ -460,6 +465,10 @@ internal static partial class VaultItemHelper
 
   [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex SshHostPattern();
+
+  // Fixed [@Security-Agent]: Strip path-traversal / special chars from brand slugs
+  [GeneratedRegex(@"[^a-z0-9_]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
+  private static partial Regex UnsafeSlugChars();
 
   private static AnonymousCommand CopySensitive(string text, string label) => new(() =>
       SecureClipboardService.CopySensitive(text))

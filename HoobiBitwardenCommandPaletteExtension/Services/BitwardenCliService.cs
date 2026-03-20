@@ -131,12 +131,16 @@ internal sealed class BitwardenCliService
   public event Action? AutoLocked;
   public event Action? CliConfigChanged;
 
+  // Fixed [@Concurrency-Agent]: Track both exe and data dir for change detection
+  private readonly Lock _configChangeLock = new();
+  private string _lastCliExecutable;
   private string? _lastDataDirectory;
 
   public BitwardenCliService(BitwardenSettingsManager? settings = null, CliProcessFactory? processFactory = null)
   {
     _settings = settings;
     _processFactory = processFactory ?? DefaultProcessFactory;
+    _lastCliExecutable = CliExecutable;
     _lastDataDirectory = DataDirectory;
     ApplyAutoLockSetting();
     AccessTracker.ItemAccessed += ResetAutoLockTimer;
@@ -159,11 +163,18 @@ internal sealed class BitwardenCliService
     ResetAutoLockTimer();
   }
 
+  // Fixed [@Core-Logic-Agent]: Detect CliExecutable changes, not just DataDirectory
+  // Fixed [@Concurrency-Agent]: Lock to prevent race on concurrent SettingsChanged events
   private void CheckCliConfigChanged()
   {
-    var newData = DataDirectory;
-    if (newData == _lastDataDirectory) return;
-    _lastDataDirectory = newData;
+    lock (_configChangeLock)
+    {
+      var newExe = CliExecutable;
+      var newData = DataDirectory;
+      if (newExe == _lastCliExecutable && newData == _lastDataDirectory) return;
+      _lastCliExecutable = newExe;
+      _lastDataDirectory = newData;
+    }
     ResetForCliConfigChange();
   }
 

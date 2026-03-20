@@ -18,6 +18,15 @@ public class VaultItemHelperTests
     Assert.Equal(expected, VaultItemHelper.GetCardBrandImageUrl(brand, isDark));
   }
 
+  [Theory]
+  [InlineData("../../admin", "admin")]
+  [InlineData("Visa<script>", "visascript")]
+  [InlineData("Normal Brand", "normal_brand")]
+  public void SanitizeBrandSlug_StripsUnsafeChars(string brand, string expected)
+  {
+    Assert.Equal(expected, VaultItemHelper.SanitizeBrandSlug(brand));
+  }
+
   [Fact]
   public void GetIcon_Card_NoBrand_ReturnsCardGlyph()
   {
