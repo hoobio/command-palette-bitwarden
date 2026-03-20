@@ -251,7 +251,14 @@ jobs:
 
   release:
     needs: [release-please, build_x64, build_arm64, lint-and-test, wack_x64, wack_arm64]
-    if: needs.release-please.outputs.release_created == 'true'
+    if: >-
+      always()
+      && needs.release-please.outputs.release_created == 'true'
+      && needs.build_x64.result == 'success'
+      && needs.build_arm64.result == 'success'
+      && needs.lint-and-test.result == 'success'
+      && needs.wack_x64.result == 'success'
+      && needs.wack_arm64.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -295,7 +302,15 @@ jobs:
 
   pre-release:
     needs: [release-please, build_x64, build_arm64, lint-and-test]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.release-please.outputs.release_created != 'true'
+    if: >-
+      always()
+      && github.ref == 'refs/heads/main'
+      && github.event_name == 'push'
+      && needs.release-please.outputs.release_created != 'true'
+      && needs.release-please.result == 'success'
+      && needs.build_x64.result == 'success'
+      && needs.build_arm64.result == 'success'
+      && needs.lint-and-test.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
