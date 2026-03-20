@@ -29,7 +29,11 @@ internal static partial class ContextAwarenessService
       var windows = CollectTopWindows();
       return windows.Count > 0 ? new ForegroundContext { Windows = windows } : null;
     }
-    catch { return null; }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Context", $"CaptureContext failed: {ex.GetType().Name}: {ex.Message}");
+      return null;
+    }
   }
 
   private static List<WindowContext> CollectTopWindows()

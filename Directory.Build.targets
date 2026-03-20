@@ -9,7 +9,7 @@
           BeforeTargets="Build"
           Condition="'$(MSBuildProjectName)' == 'HoobiBitwardenCommandPaletteExtension'">
     <PropertyGroup>
-      <AppVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)version.txt').Trim()).0</AppVersion>
+      <AppVersion>$(Version).0</AppVersion>
     </PropertyGroup>
     <XmlPoke XmlInputPath="$(MSBuildProjectDirectory)/Package.appxmanifest"
              Query="//*[local-name()='Identity']/@Version"

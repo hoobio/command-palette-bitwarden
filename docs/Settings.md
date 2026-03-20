@@ -128,3 +128,11 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Type** | Text |
 | **Default** | *(empty)* |
 | **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. |
+
+### Debug Logging
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | Off |
+| **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. Logs are kept in memory only and cleared when the extension process restarts. No sensitive data (passwords, session keys) is logged. |

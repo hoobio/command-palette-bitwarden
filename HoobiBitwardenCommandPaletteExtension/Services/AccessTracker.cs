@@ -73,7 +73,10 @@ internal static class AccessTracker
         return _data;
       }
     }
-    catch { }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("AccessTracker", $"Load failed: {ex.GetType().Name}: {ex.Message}");
+    }
 
     _data = [];
     return _data;
@@ -89,7 +92,10 @@ internal static class AccessTracker
       Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
       File.WriteAllText(FilePath, JsonSerializer.Serialize(data, AccessJsonContext.Default.DictionaryStringDateTime));
     }
-    catch { }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("AccessTracker", $"Save failed: {ex.GetType().Name}: {ex.Message}");
+    }
   }
 }
 

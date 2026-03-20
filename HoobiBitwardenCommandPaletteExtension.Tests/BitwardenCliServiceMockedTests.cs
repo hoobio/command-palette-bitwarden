@@ -4,6 +4,7 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
+[Collection("SessionStore")]
 public class BitwardenCliServiceMockedTests
 {
   private static (BitwardenCliService Service, FakeProcessFactory Factory) CreateService()

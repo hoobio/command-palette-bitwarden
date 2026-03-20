@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -130,10 +131,16 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Custom directory for Bitwarden CLI data (data.json). Overrides both the default location and the portable directory toggle. Leave empty to use the default or portable location",
         "");
 
-    public BitwardenSettingsManager()
+    public ToggleSetting DebugLogging { get; } = new(
+        "debugLogging",
+        "Debug Logging",
+        "Enable debug logging to help diagnose issues. When enabled, a 'Copy Debug Log' command appears in the vault browser. Logs are kept in memory only and cleared when the extension restarts",
+        false);
+
+    public BitwardenSettingsManager(string? settingsFilePath = null)
     {
         Directory.CreateDirectory(SettingsDir);
-        FilePath = Path.Combine(SettingsDir, "settings.json");
+        FilePath = settingsFilePath ?? Path.Combine(SettingsDir, "settings.json");
         ContextItemLimit.Value = "3";
         TotpTagStyle.Value = "static";
         BackgroundRefresh.Value = "5";
@@ -152,15 +159,21 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         Settings.Add(CliDirectoryOverride);
         Settings.Add(UsePortableDataDirectory);
         Settings.Add(CliDataDirectoryOverride);
+        Settings.Add(DebugLogging);
+        CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();
         SyncClipboardSettings();
+        DebugLogService.Enabled = DebugLogging.Value;
+        LogConfig("startup");
     }
 
     private void OnSettingsChanged(object sender, Settings e)
     {
         SaveSettings();
         SyncClipboardSettings();
+        DebugLogService.Enabled = DebugLogging.Value;
+        LogConfig("settings changed");
 
         if (!RememberSession.Value)
             SessionStore.Clear();
@@ -171,5 +184,53 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         SecureClipboardService.AutoClearEnabled = AutoClearClipboard.Value;
         if (int.TryParse(ClipboardClearDelay.Value, out var delay))
             SecureClipboardService.ClearDelaySeconds = delay;
+    }
+
+    private readonly Dictionary<string, object?> _defaults = [];
+
+    private void CaptureDefaults()
+    {
+        foreach (var setting in AllSettings())
+            _defaults[setting.Key] = setting.Value;
+    }
+
+    private void LogConfig(string reason)
+    {
+        if (!DebugLogService.Enabled) return;
+
+        var parts = new List<string>();
+        foreach (var setting in AllSettings())
+        {
+            _defaults.TryGetValue(setting.Key, out var def);
+            var val = setting.Value;
+            if (Equals(val, def)) continue;
+            var display = setting.Key is "cliDirectoryOverride" or "cliDataDirectoryOverride"
+                ? "[set]"
+                : val?.ToString() ?? "";
+            parts.Add($"{setting.Key}={display}");
+        }
+
+        var changed = parts.Count > 0 ? string.Join(" ", parts) : "(all defaults)";
+        DebugLogService.Log("Config", $"[{reason}] {changed}");
+    }
+
+    private IEnumerable<(string Key, object? Value)> AllSettings()
+    {
+        yield return (RememberSession.Key, (object?)RememberSession.Value);
+        yield return (ShowWebsiteIcons.Key, ShowWebsiteIcons.Value);
+        yield return (ShowWatchtowerTags.Key, ShowWatchtowerTags.Value);
+        yield return (ContextAwareness.Key, ContextAwareness.Value);
+        yield return (ShowContextTag.Key, ShowContextTag.Value);
+        yield return (ShowPasskeyTag.Key, ShowPasskeyTag.Value);
+        yield return (TotpTagStyle.Key, TotpTagStyle.Value);
+        yield return (AutoLockTimeout.Key, AutoLockTimeout.Value);
+        yield return (AutoClearClipboard.Key, AutoClearClipboard.Value);
+        yield return (ClipboardClearDelay.Key, ClipboardClearDelay.Value);
+        yield return (ContextItemLimit.Key, ContextItemLimit.Value);
+        yield return (BackgroundRefresh.Key, BackgroundRefresh.Value);
+        yield return (CliDirectoryOverride.Key, CliDirectoryOverride.Value);
+        yield return (UsePortableDataDirectory.Key, (object?)UsePortableDataDirectory.Value);
+        yield return (CliDataDirectoryOverride.Key, CliDataDirectoryOverride.Value);
+        yield return (DebugLogging.Key, (object?)DebugLogging.Value);
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -130,8 +131,6 @@ internal sealed class BitwardenCliService
   public event Action? AutoLocking;
   public event Action? AutoLocked;
   public event Action? CliConfigChanged;
-
-  // Fixed [@Concurrency-Agent]: Track both exe and data dir for change detection
   private readonly Lock _configChangeLock = new();
   private string _lastCliExecutable;
   private string? _lastDataDirectory;
@@ -163,8 +162,6 @@ internal sealed class BitwardenCliService
     ResetAutoLockTimer();
   }
 
-  // Fixed [@Core-Logic-Agent]: Detect CliExecutable changes, not just DataDirectory
-  // Fixed [@Concurrency-Agent]: Lock to prevent race on concurrent SettingsChanged events
   private void CheckCliConfigChanged()
   {
     lock (_configChangeLock)
@@ -180,6 +177,7 @@ internal sealed class BitwardenCliService
 
   private void ResetForCliConfigChange()
   {
+    DebugLogService.Log("Config", "CLI config changed, resetting all state");
     DisposeDeviceVerificationProcess();
     KillAllRunning();
     _sessionKey = null;
@@ -212,6 +210,7 @@ internal sealed class BitwardenCliService
 
   private void OnAutoLockTick(object? _)
   {
+    DebugLogService.Log("AutoLock", "Auto-lock timer fired");
     _ = Task.Run(async () =>
     {
       try
@@ -220,7 +219,10 @@ internal sealed class BitwardenCliService
         await LockAsync();
         AutoLocked?.Invoke();
       }
-      catch { }
+      catch (Exception ex)
+      {
+        DebugLogService.Log("AutoLock", $"Auto-lock exception: {ex.GetType().Name}: {ex.Message}");
+      }
     });
   }
 
@@ -239,18 +241,30 @@ internal sealed class BitwardenCliService
 
   public async Task<VaultStatus> GetVaultStatusAsync()
   {
+    DebugLogService.Log("Status", "GetVaultStatusAsync started");
     if (!IsCliAvailable())
+    {
+      DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
       return SetStatus(VaultStatus.CliNotFound);
+    }
+    DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable})");
 
-    if (_sessionKey != null && await VerifySessionAsync())
-      return SetStatus(VaultStatus.Unlocked);
+    if (_sessionKey != null)
+    {
+      DebugLogService.Log("Status", "In-memory session key present, verifying...");
+      if (await VerifySessionAsync())
+        return SetStatus(VaultStatus.Unlocked);
+      DebugLogService.Log("Status", "In-memory session verification failed");
+    }
 
     var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
     if (!string.IsNullOrWhiteSpace(envSession))
     {
+      DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
       _sessionKey = envSession;
       if (await VerifySessionAsync())
         return SetStatus(VaultStatus.Unlocked);
+      DebugLogService.Log("Status", "BW_SESSION env var verification failed");
     }
 
     if (_settings?.RememberSession.Value == true)
@@ -258,14 +272,22 @@ internal sealed class BitwardenCliService
       var stored = SessionStore.Load();
       if (!string.IsNullOrEmpty(stored))
       {
+        DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
         _sessionKey = stored;
         if (await VerifySessionAsync())
           return SetStatus(VaultStatus.Unlocked);
+        DebugLogService.Log("Status", "Stored session verification failed, clearing");
         SessionStore.Clear();
+      }
+      else
+      {
+        DebugLogService.Log("Status", "RememberSession enabled but no stored session found");
       }
     }
 
-    return SetStatus(await FetchStatusAsync());
+    var fallback = await FetchStatusAsync();
+    DebugLogService.Log("Status", $"Falling back to bw status: {fallback}");
+    return SetStatus(fallback);
   }
 
   private VaultStatus SetStatus(VaultStatus status)
@@ -309,22 +331,30 @@ internal sealed class BitwardenCliService
   {
     try
     {
+      DebugLogService.Log("Verify", "Running bw sync to verify session");
       using var process = StartProcess("sync");
       using var cts = new CancellationTokenSource(CliTimeoutMs);
       // Drain stderr in the background to prevent pipe buffer deadlock.
-      _ = process.StandardError.ReadToEndAsync(cts.Token).ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+      _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
       string? line;
       while ((line = await process.StandardOutput.ReadLineAsync(cts.Token)) != null)
       {
+        DebugLogService.Log("Verify", $"sync stdout: {line}");
         if (line.Contains("Syncing complete.", StringComparison.OrdinalIgnoreCase))
         {
           try { process.Kill(true); } catch { }
           await FetchServerUrlAsync();
+          DebugLogService.Log("Verify", "Session verified successfully");
           return true;
         }
       }
+      DebugLogService.Log("Verify", "sync completed without 'Syncing complete.' line");
     }
-    catch { }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Verify", $"Session verification exception: {ex.GetType().Name}: {ex.Message}");
+    }
     _sessionKey = null;
     return false;
   }
@@ -333,21 +363,28 @@ internal sealed class BitwardenCliService
   {
     try
     {
+      DebugLogService.Log("Status", "Running bw status");
       var output = await RunCliAsync("status");
       var json = JsonNode.Parse(output);
-      ServerUrl ??= json?["serverUrl"]?.GetValue<string>()?.TrimEnd('/');
-      return json?["status"]?.GetValue<string>() == "unauthenticated"
-          ? VaultStatus.Unauthenticated
-          : VaultStatus.Locked;
+      var rawServerUrl = json?["serverUrl"]?.GetValue<string>()?.TrimEnd('/');
+      ServerUrl ??= rawServerUrl;
+      var status = json?["status"]?.GetValue<string>();
+      var result = status == "unauthenticated" ? VaultStatus.Unauthenticated : VaultStatus.Locked;
+      var safeServer = SanitizeServerUrl(rawServerUrl);
+      DebugLogService.Log("Status", $"bw status: status='{status}', server={safeServer}, lastSync={json?["lastSync"]?.GetValue<string>()}");
+      DebugLogService.Log("Status", $"Parsed status: '{status}' -> {result}");
+      return result;
     }
-    catch
+    catch (Exception ex)
     {
+      DebugLogService.Log("Status", $"FetchStatusAsync exception: {ex.GetType().Name}: {ex.Message}");
       return VaultStatus.Locked;
     }
   }
 
   public async Task<(bool Success, string? Error)> UnlockAsync(string masterPassword)
   {
+    DebugLogService.Log("Unlock", "UnlockAsync started");
     try
     {
       var psi = new ProcessStartInfo(CliExecutable, "unlock --passwordenv BW_MP --raw")
@@ -376,26 +413,33 @@ internal sealed class BitwardenCliService
       {
         _sessionKey = key;
         SetStatus(VaultStatus.Unlocked);
+        DebugLogService.Log("Unlock", "Unlock successful, session key obtained");
         if (_settings?.RememberSession.Value == true)
           SessionStore.Save(key);
         return (true, null);
       }
 
       var error = stderr.Trim();
+      DebugLogService.Log("Unlock", $"Unlock failed: {(string.IsNullOrEmpty(error) ? "(no stderr)" : error)}");
 
       if (error.Contains("not logged in", StringComparison.OrdinalIgnoreCase))
+      {
+        DebugLogService.Log("Unlock", "Not logged in detected, resetting to logged out");
         ResetToLoggedOut();
+      }
 
       return (false, string.IsNullOrEmpty(error) ? "Unlock failed" : error);
     }
     catch (Exception ex)
     {
+      DebugLogService.Log("Unlock", $"UnlockAsync exception: {ex.GetType().Name}: {ex.Message}");
       return (false, ex.Message);
     }
   }
 
   private void ResetToLoggedOut()
   {
+    DebugLogService.Log("Auth", "ResetToLoggedOut: clearing session and cache");
     _sessionKey = null;
     SetStatus(VaultStatus.Unauthenticated);
     lock (_cacheLock)
@@ -419,11 +463,15 @@ internal sealed class BitwardenCliService
       if (!string.IsNullOrWhiteSpace(url))
         ServerUrl = url;
     }
-    catch { }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Status", $"FetchServerUrlAsync failed: {ex.GetType().Name}: {ex.Message}");
+    }
   }
 
   public async Task<(bool Success, string? Error, bool TwoFactorRequired, bool DeviceVerificationRequired)> LoginAsync(string email, string password, string? twoFactorCode = null, int? twoFactorMethod = null)
   {
+    DebugLogService.Log("Auth", "LoginAsync started");
     DisposeDeviceVerificationProcess();
     try
     {
@@ -609,6 +657,7 @@ internal sealed class BitwardenCliService
 
   public async Task LogoutAsync()
   {
+    DebugLogService.Log("Auth", "LogoutAsync called");
     DisposeDeviceVerificationProcess();
     KillAllRunning();
     _sessionKey = null;
@@ -621,11 +670,13 @@ internal sealed class BitwardenCliService
     SessionStore.Clear();
     StatusChanged?.Invoke();
 
-    try { await RunCliAsync("logout", CliLogoutTimeoutMs, "You have logged out."); } catch { }
+    try { await RunCliAsync("logout", CliLogoutTimeoutMs, "You have logged out."); }
+    catch (Exception ex) { DebugLogService.Log("Auth", $"bw logout failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
   }
 
   public async Task LockAsync()
   {
+    DebugLogService.Log("Lock", "LockAsync called");
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
     lock (_cacheLock)
@@ -636,7 +687,8 @@ internal sealed class BitwardenCliService
     SessionStore.Clear();
     StatusChanged?.Invoke();
 
-    try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); } catch { }
+    try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); }
+    catch (Exception ex) { DebugLogService.Log("Auth", $"bw lock failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
   }
 
   public async Task<string?> SetServerUrlAsync(ServerConfig config)
@@ -851,8 +903,12 @@ internal sealed class BitwardenCliService
   public async Task RefreshCacheAsync()
   {
     if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0)
+    {
+      DebugLogService.Log("Cache", "RefreshCacheAsync skipped: already refreshing");
       return;
+    }
 
+    DebugLogService.Log("Cache", "RefreshCacheAsync started");
     try
     {
       var foldersTask = RunCliAsync("list folders");
@@ -861,6 +917,7 @@ internal sealed class BitwardenCliService
 
       var folders = ParseFolders(await foldersTask);
       var items = ParseItems(await itemsTask);
+      DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders");
       lock (_cacheLock)
       {
         _folders = folders;
@@ -871,13 +928,14 @@ internal sealed class BitwardenCliService
 
       CacheUpdated?.Invoke();
     }
-    catch (InvalidOperationException)
+    catch (InvalidOperationException ex)
     {
+      DebugLogService.Log("Cache", $"RefreshCacheAsync session expired: {ex.Message}");
       throw;
     }
-    catch
+    catch (Exception ex)
     {
-      // Refresh failed: keep existing cache
+      DebugLogService.Log("Cache", $"RefreshCacheAsync failed (keeping existing cache): {ex.GetType().Name}: {ex.Message}");
     }
     finally
     {
@@ -887,9 +945,11 @@ internal sealed class BitwardenCliService
 
   public async Task SyncVaultAsync()
   {
+    DebugLogService.Log("Sync", "SyncVaultAsync started");
     await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
     Interlocked.Exchange(ref _refreshing, 0);
     await RefreshCacheAsync();
+    DebugLogService.Log("Sync", "SyncVaultAsync completed");
   }
 
   public void TriggerBackgroundRefreshIfStale()
@@ -897,7 +957,14 @@ internal sealed class BitwardenCliService
     var interval = RefreshInterval;
     if (interval == Timeout.InfiniteTimeSpan) return;
     if (_refreshing == 0 && DateTime.UtcNow - _lastRefresh > interval)
-      _ = Task.Run(async () => { try { await RefreshCacheAsync(); } catch { } });
+    {
+      DebugLogService.Log("Cache", $"Background refresh triggered (stale for {(DateTime.UtcNow - _lastRefresh).TotalSeconds:F0}s)");
+      _ = Task.Run(async () =>
+      {
+        try { await RefreshCacheAsync(); }
+        catch (Exception ex) { DebugLogService.Log("Cache", $"Background refresh failed: {ex.GetType().Name}: {ex.Message}"); }
+      });
+    }
   }
 
   private Task _warmupTask = Task.CompletedTask;
@@ -908,14 +975,57 @@ internal sealed class BitwardenCliService
     // Set _warmupTask synchronously so InitializeAsync always awaits the real task,
     // but run the actual CLI work on ThreadPool to avoid blocking the COM activation thread.
     _warmupTask = Task.Run(RunWarmupAsync);
+    if (DebugLogService.Enabled)
+      _ = Task.Run(async () => { try { await LogEnvironmentInfoAsync(); } catch (Exception ex) { DebugLogService.Log("Env", $"Environment info logging failed: {ex.GetType().Name}: {ex.Message}"); } });
     return _warmupTask;
+  }
+
+  private async Task LogEnvironmentInfoAsync()
+  {
+    var appVersion = Assembly.GetExecutingAssembly()
+        .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
+        ?.InformationalVersion?.Split('+')[0] ?? "unknown";
+    var windowsVersion = Environment.OSVersion.Version.ToString();
+
+    string powerToysVersion = "not found";
+    try
+    {
+      var processes = Process.GetProcessesByName("PowerToys");
+      try
+      {
+        var pt = processes.FirstOrDefault();
+        if (pt?.MainModule is { } m)
+          powerToysVersion = FileVersionInfo.GetVersionInfo(m.FileName).ProductVersion ?? "unknown";
+      }
+      finally
+      {
+        foreach (var p in processes)
+          p.Dispose();
+      }
+    }
+    catch (Exception) { }
+
+    DebugLogService.Log("Env", $"Extension={appVersion}, Windows={windowsVersion}, PowerToys={powerToysVersion}");
+
+    try
+    {
+      var bwVersion = (await RunCliAsync("--version", 5_000)).Trim();
+      DebugLogService.Log("Env", $"bw --version: {bwVersion}");
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Env", $"bw --version failed: {ex.GetType().Name}: {ex.Message}");
+    }
   }
 
   private async Task RunWarmupAsync()
   {
+    DebugLogService.Log("Warmup", "RunWarmupAsync started");
     var status = await GetVaultStatusAsync();
+    DebugLogService.Log("Warmup", $"Vault status: {status}");
     if (status == VaultStatus.Unlocked)
       await RefreshCacheAsync();
+    DebugLogService.Log("Warmup", "RunWarmupAsync completed");
     WarmupCompleted?.Invoke();
   }
 
@@ -1019,6 +1129,7 @@ internal sealed class BitwardenCliService
   // The process is killed on early exit so that Process.Dispose() returns immediately.
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
   {
+    DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
     using var process = StartProcess(args);
     using var cts = new CancellationTokenSource(timeoutMs);
     try
@@ -1053,14 +1164,17 @@ internal sealed class BitwardenCliService
 
       if (sessionInvalid || IsSessionInvalidError(stderr.Trim()))
       {
+        DebugLogService.Log("CLI", $"Session invalid detected in bw {args}: stderr='{stderr.Trim()}'");
         HandleInvalidSession();
         throw new InvalidOperationException("Session expired — vault is locked");
       }
 
+      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback output, {fallbackLines.Length} chars)");
       return fallbackLines.ToString();
     }
     catch (OperationCanceledException)
     {
+      DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {args} after {timeoutMs / 1000}s");
       try { process.Kill(); } catch { }
       throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}");
     }
@@ -1090,8 +1204,24 @@ internal sealed class BitwardenCliService
       || error.Contains("invalid session", StringComparison.OrdinalIgnoreCase)
       || error.Contains("session key is invalid", StringComparison.OrdinalIgnoreCase);
 
+  private static readonly HashSet<string> KnownPublicServers = new(StringComparer.OrdinalIgnoreCase)
+  {
+    "https://vault.bitwarden.com",
+    "https://vault.bitwarden.eu",
+    "bitwarden.com",
+    "bitwarden.eu",
+  };
+
+  internal static string SanitizeServerUrl(string? url)
+  {
+    if (string.IsNullOrWhiteSpace(url)) return "(default)";
+    var trimmed = url.TrimEnd('/');
+    return KnownPublicServers.Contains(trimmed) ? trimmed : "[custom server]";
+  }
+
   private void HandleInvalidSession()
   {
+    DebugLogService.Log("Session", "HandleInvalidSession: clearing session, cache, and locking vault");
     _sessionKey = null;
     SessionStore.Clear();
     lock (_cacheLock)
@@ -1111,7 +1241,10 @@ internal sealed class BitwardenCliService
     {
       var array = JsonNode.Parse(json)?.AsArray();
       if (array == null)
+      {
+        DebugLogService.Log("Cache", $"ParseItems: unexpected output (not a JSON array), first 200 chars: {json.Trim()[..Math.Min(200, json.Trim().Length)]}");
         return items;
+      }
 
       foreach (var node in array)
       {
@@ -1147,8 +1280,9 @@ internal sealed class BitwardenCliService
           items.Add(item);
       }
     }
-    catch
+    catch (Exception ex)
     {
+      DebugLogService.Log("Cache", $"ParseItems exception after {items.Count} items: {ex.GetType().Name}: {ex.Message}");
     }
 
     return items;
@@ -1301,7 +1435,10 @@ internal sealed class BitwardenCliService
           result[id] = name;
       }
     }
-    catch { }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Cache", $"ParseFolders failed: {ex.GetType().Name}: {ex.Message}");
+    }
     return result;
   }
 }

@@ -393,8 +393,6 @@ internal static partial class VaultItemHelper
     var isDark = IsDarkTheme();
     var slug = SanitizeBrandSlug(brand);
     var theme = isDark ? "dark" : "light";
-    // Fixed [@Performance-Agent]: delegate URL construction to GetCardBrandImageUrl so the
-    // URL format is maintained in exactly one place (avoids drift on future changes).
     return FaviconService.GetOrQueue(
       $"card-brand:{slug}:{theme}",
       GetCardBrandImageUrl(brand, isDark),
@@ -468,7 +466,6 @@ internal static partial class VaultItemHelper
   [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex SshHostPattern();
 
-  // Fixed [@Security-Agent]: Strip path-traversal / special chars from brand slugs
   [GeneratedRegex(@"[^a-z0-9_]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex UnsafeSlugChars();
 

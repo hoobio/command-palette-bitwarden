@@ -74,8 +74,9 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
         HandleResults(items, query, ct);
       }
       catch (OperationCanceledException) { }
-      catch
+      catch (Exception ex)
       {
+        DebugLogService.Log("Fallback", $"UpdateQuery failed: {ex.GetType().Name}: {ex.Message}");
         if (!ct.IsCancellationRequested)
           ClearResult(ct);
       }
