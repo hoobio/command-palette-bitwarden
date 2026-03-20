@@ -297,7 +297,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
     }
 
-    private static IListItem[] BuildCliNotFoundItems() =>
+    private static IListItem[] WithDebugLog(IListItem[] items) =>
+        DebugLogService.Enabled ? [.. items, BuildCopyDebugLogItem()] : items;
+
+    private static IListItem[] BuildCliNotFoundItems() => WithDebugLog(
     [
         new ListItem(new OpenUrlCommand("https://bitwarden.com/help/cli/#download-and-install"))
         {
@@ -305,7 +308,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             Subtitle = "Install the Bitwarden CLI (bw) and ensure it's in your PATH",
             Icon = new IconInfo("\uE783"),
         },
-    ];
+    ]);
 
     private IListItem[] BuildUnauthenticatedItems()
     {
@@ -320,7 +323,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             };
             if (_errorMessage != null)
                 hint.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return [hint];
+            return WithDebugLog([hint]);
         }
 
         if (_deviceVerificationRequired && _pendingEmail != null && _pendingPassword != null)
@@ -334,7 +337,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             };
             if (_errorMessage != null)
                 hint.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return [hint];
+            return WithDebugLog([hint]);
         }
 
         PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
@@ -349,15 +352,15 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_errorMessage != null)
             item.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
 
-        return [item, BuildSetServerItem()];
+        return WithDebugLog([item, BuildSetServerItem()]);
     }
 
-    private IListItem[] BuildLockedItems() =>
+    private IListItem[] BuildLockedItems() => WithDebugLog(
     [
         BuildUnlockItem(),
         BuildSetServerItem(),
         BuildLogoutItem(),
-    ];
+    ]);
 
     private ListItem BuildUnlockItem()
     {
@@ -579,11 +582,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         ShowLoadingStatus("Locking vault...", "bw lock");
     }
 
-    // Fixed [@Core-Logic-Agent + @Concurrency-Agent]: _initialLoadStarted must be true here,
-    // not false. We are already launching InitializeAsync below; leaving it false causes
-    // the next GetItems() call (which acquires _itemsLock) to see !_initialLoadStarted==true
-    // and fire a *second* concurrent InitializeAsync, racing on _sessionKey, _currentItems,
-    // and CacheUpdated notifications.
     private void OnCliConfigChanged()
     {
         _handlingAction = false;
