@@ -40,10 +40,11 @@ internal static partial class FaviconService
     /// Uses the disk cache when available; otherwise returns the fallback icon and
     /// schedules a background download.
     /// </summary>
-    public static IconInfo GetOrQueue(string host, string iconUrl)
+    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null)
     {
+        fallback ??= new IconInfo("\uE774");
         if (_memCache.TryGetValue(host, out var cachedBytes))
-            return cachedBytes is not null ? MakeIconInfo(cachedBytes) : Fallback();
+            return cachedBytes is not null ? MakeIconInfo(cachedBytes) : fallback;
 
         var posPath = GetPositivePath(host);
         var negPath = GetNegativePath(host);
@@ -58,7 +59,7 @@ internal static partial class FaviconService
         if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
         {
             _memCache[host] = null;
-            return Fallback();
+            return fallback;
         }
 
         bool shouldFetch;
@@ -68,7 +69,7 @@ internal static partial class FaviconService
         if (shouldFetch)
             _ = Task.Run(() => DownloadAsync(host, iconUrl));
 
-        return Fallback();
+        return fallback;
     }
 
     private static async Task DownloadAsync(string host, string iconUrl)
@@ -139,8 +140,6 @@ internal static partial class FaviconService
         writer.DetachStream();
         return IconInfo.FromStream(ras);
     }
-
-    private static IconInfo Fallback() => new("\uE774");
 
     [GeneratedRegex(@"[^\w\-\.]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
     private static partial Regex InvalidFilenameChars();
