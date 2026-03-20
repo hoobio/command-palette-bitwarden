@@ -79,7 +79,7 @@ jobs:
           }
 
       - name: Import signing certificate
-        if: ${{ !inputs.skip && secrets.SIGNING_CERTIFICATE != '' }}
+        if: ${{ !inputs.skip }}
         shell: pwsh
         run: |
           $pfxBytes = [Convert]::FromBase64String("${{ secrets.SIGNING_CERTIFICATE }}")
@@ -90,7 +90,7 @@ jobs:
           Remove-Item $pfxPath
 
       - name: Sign MSIX package
-        if: ${{ !inputs.skip && secrets.SIGNING_CERTIFICATE != '' }}
+        if: ${{ !inputs.skip }}
         shell: pwsh
         run: |
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
