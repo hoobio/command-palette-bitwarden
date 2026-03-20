@@ -342,6 +342,46 @@ public class BitwardenCliServiceTests
     Assert.Equal(4, BitwardenCliService.Relevance(item, "GitHub", regex));
   }
 
+  // --- ExtractJsonArray ---
+
+  [Fact]
+  public void ExtractJsonArray_CleanJson_ReturnsUnchanged()
+  {
+    var json = "[{\"id\":\"1\"}]";
+    Assert.Equal(json, BitwardenCliService.ExtractJsonArray(json));
+  }
+
+  [Fact]
+  public void ExtractJsonArray_TrailingText_StripsIt()
+  {
+    var json = "[{\"id\":\"1\"}]" + "\nplease enter your master password";
+    var result = BitwardenCliService.ExtractJsonArray(json);
+    Assert.Equal("[{\"id\":\"1\"}]", result);
+  }
+
+  [Fact]
+  public void ExtractJsonArray_LeadingAndTrailingText_ExtractsBrackets()
+  {
+    var result = BitwardenCliService.ExtractJsonArray("some output\n[{\"id\":\"1\"}]\nmore text");
+    Assert.Equal("[{\"id\":\"1\"}]", result);
+  }
+
+  [Fact]
+  public void ExtractJsonArray_NoArray_ReturnsOriginal()
+  {
+    Assert.Equal("not json at all", BitwardenCliService.ExtractJsonArray("not json at all"));
+  }
+
+  [Fact]
+  public void ExtractJsonArray_ParseItems_WithTrailingPrompt()
+  {
+    var json = "[{\"type\":2,\"id\":\"abc\",\"name\":\"Test\",\"notes\":null,\"revisionDate\":\"2026-01-01T00:00:00Z\",\"favorite\":false}]"
+        + "\n? Master password: [hidden]";
+    var items = BitwardenCliService.ParseItems(json);
+    Assert.Single(items);
+    Assert.Equal("Test", items[0].Name);
+  }
+
   // --- ParseItems ---
 
   [Fact]

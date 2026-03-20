@@ -39,6 +39,8 @@ internal sealed class BitwardenCliService
   private bool _cacheLoaded;
   private DateTime _lastRefresh;
   private int _refreshing;
+  private readonly Lock _statusLock = new();
+  private Task<VaultStatus>? _statusCheckInFlight;
   private TimeSpan RefreshInterval
   {
     get
@@ -239,55 +241,77 @@ internal sealed class BitwardenCliService
     }
   }
 
-  public async Task<VaultStatus> GetVaultStatusAsync()
+  public Task<VaultStatus> GetVaultStatusAsync()
   {
-    DebugLogService.Log("Status", "GetVaultStatusAsync started");
-    if (!IsCliAvailable())
+    lock (_statusLock)
     {
-      DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
-      return SetStatus(VaultStatus.CliNotFound);
-    }
-    DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable})");
-
-    if (_sessionKey != null)
-    {
-      DebugLogService.Log("Status", "In-memory session key present, verifying...");
-      if (await VerifySessionAsync())
-        return SetStatus(VaultStatus.Unlocked);
-      DebugLogService.Log("Status", "In-memory session verification failed");
-    }
-
-    var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
-    if (!string.IsNullOrWhiteSpace(envSession))
-    {
-      DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
-      _sessionKey = envSession;
-      if (await VerifySessionAsync())
-        return SetStatus(VaultStatus.Unlocked);
-      DebugLogService.Log("Status", "BW_SESSION env var verification failed");
-    }
-
-    if (_settings?.RememberSession.Value == true)
-    {
-      var stored = SessionStore.Load();
-      if (!string.IsNullOrEmpty(stored))
+      if (_statusCheckInFlight != null)
       {
-        DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
-        _sessionKey = stored;
+        DebugLogService.Log("Status", "GetVaultStatusAsync coalesced with in-flight check");
+        return _statusCheckInFlight;
+      }
+
+      _statusCheckInFlight = GetVaultStatusCoreAsync();
+      return _statusCheckInFlight;
+    }
+  }
+
+  private async Task<VaultStatus> GetVaultStatusCoreAsync()
+  {
+    try
+    {
+      DebugLogService.Log("Status", "GetVaultStatusAsync started");
+      if (!IsCliAvailable())
+      {
+        DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
+        return SetStatus(VaultStatus.CliNotFound);
+      }
+      DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable})");
+
+      if (_sessionKey != null)
+      {
+        DebugLogService.Log("Status", "In-memory session key present, verifying...");
         if (await VerifySessionAsync())
           return SetStatus(VaultStatus.Unlocked);
-        DebugLogService.Log("Status", "Stored session verification failed, clearing");
-        SessionStore.Clear();
+        DebugLogService.Log("Status", "In-memory session verification failed");
       }
-      else
-      {
-        DebugLogService.Log("Status", "RememberSession enabled but no stored session found");
-      }
-    }
 
-    var fallback = await FetchStatusAsync();
-    DebugLogService.Log("Status", $"Falling back to bw status: {fallback}");
-    return SetStatus(fallback);
+      var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
+      if (!string.IsNullOrWhiteSpace(envSession))
+      {
+        DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
+        _sessionKey = envSession;
+        if (await VerifySessionAsync())
+          return SetStatus(VaultStatus.Unlocked);
+        DebugLogService.Log("Status", "BW_SESSION env var verification failed");
+      }
+
+      if (_settings?.RememberSession.Value == true)
+      {
+        var stored = SessionStore.Load();
+        if (!string.IsNullOrEmpty(stored))
+        {
+          DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
+          _sessionKey = stored;
+          if (await VerifySessionAsync())
+            return SetStatus(VaultStatus.Unlocked);
+          DebugLogService.Log("Status", "Stored session verification failed, clearing");
+          SessionStore.Clear();
+        }
+        else
+        {
+          DebugLogService.Log("Status", "RememberSession enabled but no stored session found");
+        }
+      }
+
+      var fallback = await FetchStatusAsync();
+      DebugLogService.Log("Status", $"Falling back to bw status: {fallback}");
+      return SetStatus(fallback);
+    }
+    finally
+    {
+      lock (_statusLock) { _statusCheckInFlight = null; }
+    }
   }
 
   private VaultStatus SetStatus(VaultStatus status)
@@ -1233,9 +1257,32 @@ internal sealed class BitwardenCliService
     StatusChanged?.Invoke();
   }
 
+  internal static string ExtractJsonArray(string output)
+  {
+    var start = output.IndexOf('[');
+    if (start < 0) return output;
+
+    var depth = 0;
+    var inString = false;
+    var escape = false;
+    for (var i = start; i < output.Length; i++)
+    {
+      var c = output[i];
+      if (escape) { escape = false; continue; }
+      if (c == '\\' && inString) { escape = true; continue; }
+      if (c == '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (c == '[') depth++;
+      else if (c == ']') { depth--; if (depth == 0) { var extracted = output[start..(i + 1)]; if (extracted.Length != output.TrimEnd().Length) DebugLogService.Log("CLI", $"ExtractJsonArray trimmed {output.Length - extracted.Length} trailing chars from CLI output"); return extracted; } }
+    }
+
+    return output;
+  }
+
   internal static List<BitwardenItem> ParseItems(string json)
   {
     var items = new List<BitwardenItem>();
+    json = ExtractJsonArray(json);
 
     try
     {
@@ -1422,6 +1469,7 @@ internal sealed class BitwardenCliService
   internal static Dictionary<string, string> ParseFolders(string json)
   {
     var result = new Dictionary<string, string>(StringComparer.Ordinal);
+    json = ExtractJsonArray(json);
     try
     {
       var array = JsonNode.Parse(json)?.AsArray();
