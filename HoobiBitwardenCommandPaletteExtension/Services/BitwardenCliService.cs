@@ -339,6 +339,7 @@ internal sealed class BitwardenCliService
         CreateNoWindow = true,
       };
       ApplyEnvironment(psi);
+      psi.Environment["BW_NOINTERACTION"] = "true";
       using var process = _processFactory(psi);
       var line = process.StandardOutput.ReadLine();
       var available = line != null;
@@ -422,6 +423,7 @@ internal sealed class BitwardenCliService
 
       psi.Environment["BW_MP"] = masterPassword;
       ApplyEnvironment(psi);
+      psi.Environment["BW_NOINTERACTION"] = "true";
 
       using var process = _processFactory(psi);
       process.StandardInput.Close();
@@ -1112,6 +1114,7 @@ internal sealed class BitwardenCliService
     };
 
     ApplyEnvironment(psi);
+    psi.Environment["BW_NOINTERACTION"] = "true";
 
     var process = _processFactory(psi);
     process.StandardInput.Close();
@@ -1149,28 +1152,13 @@ internal sealed class BitwardenCliService
     return (sb.ToString(), false);
   }
 
-  private static async Task<(string Content, bool Detected)> ReadUntilPromptAsync(System.IO.StreamReader reader, string prompt, CancellationToken token)
-  {
-    var sb = new System.Text.StringBuilder();
-    var buffer = new char[256];
-    while (true)
-    {
-      var count = await reader.ReadAsync(buffer.AsMemory(), token);
-      if (count == 0) break;
-      sb.Append(buffer, 0, count);
-      if (sb.ToString().Contains(prompt, StringComparison.OrdinalIgnoreCase))
-        return (sb.ToString(), true);
-    }
-    return (sb.ToString(), false);
-  }
-
   private const int CliTimeoutMs = 30_000;
   private const int CliLogoutTimeoutMs = 3_000;
 
   // Reads stdout line-by-line. Returns immediately on the first valid JSON line (object or array),
   // or on the first line matching earlyExitText. Falls back to returning all accumulated stdout
-  // if neither is found. Concurrent stderr session detection is active throughout.
-  // The process is killed on early exit so that Process.Dispose() returns immediately.
+  // if neither is found. Stderr is drained in the background; on empty stdout the error is checked
+  // for session-invalid indicators (BW_NOINTERACTION ensures the CLI never prompts interactively).
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
   {
     DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
@@ -1178,7 +1166,7 @@ internal sealed class BitwardenCliService
     using var cts = new CancellationTokenSource(timeoutMs);
     try
     {
-      var stderrTask = ReadStderrWithSessionDetectionAsync(process, cts.Token);
+      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
       var fallbackLines = new System.Text.StringBuilder();
       string? line;
       while ((line = await process.StandardOutput.ReadLineAsync(cts.Token)) != null)
@@ -1186,23 +1174,9 @@ internal sealed class BitwardenCliService
         var trimmed = line.Trim();
         if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
         {
-          var candidate = trimmed;
-          try
-          {
-            JsonNode.Parse(candidate);
-          }
-          catch (System.Text.Json.JsonException)
-          {
-            candidate = trimmed.StartsWith('[') ? ExtractJsonArray(trimmed) : null;
-            if (candidate != null)
-              try { JsonNode.Parse(candidate); } catch (System.Text.Json.JsonException) { candidate = null; }
-          }
-          if (candidate != null)
-          {
-            _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
-            try { process.Kill(true); } catch { }
-            return candidate;
-          }
+          _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+          try { process.Kill(true); } catch { }
+          return trimmed;
         }
         if (earlyExitText != null && line.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
         {
@@ -1213,11 +1187,10 @@ internal sealed class BitwardenCliService
         fallbackLines.AppendLine(line);
       }
 
-      var (stderr, sessionInvalid) = await stderrTask;
-
-      if (sessionInvalid || IsSessionInvalidError(stderr.Trim()))
+      var stderr = (await stderrTask).Trim();
+      if (IsSessionInvalidError(stderr))
       {
-        DebugLogService.Log("CLI", $"Session invalid detected in bw {args}: stderr='{stderr.Trim()}'");
+        DebugLogService.Log("CLI", $"Session invalid detected in bw {args}: stderr='{stderr}'");
         HandleInvalidSession();
         throw new InvalidOperationException("Session expired — vault is locked");
       }
@@ -1231,24 +1204,6 @@ internal sealed class BitwardenCliService
       try { process.Kill(); } catch { }
       throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}");
     }
-  }
-
-  private static async Task<(string Content, bool SessionInvalid)> ReadStderrWithSessionDetectionAsync(ICliProcess process, CancellationToken token)
-  {
-    var sb = new System.Text.StringBuilder();
-    var buffer = new char[256];
-    while (true)
-    {
-      var count = await process.StandardError.ReadAsync(buffer.AsMemory(), token);
-      if (count == 0) break;
-      sb.Append(buffer, 0, count);
-      var text = sb.ToString();
-      if (text.Contains("Master password", StringComparison.OrdinalIgnoreCase)
-          || text.Contains("? Password", StringComparison.OrdinalIgnoreCase)
-          || IsSessionInvalidError(text))
-        return (text, true);
-    }
-    return (sb.ToString(), false);
   }
 
   internal static bool IsSessionInvalidError(string error) =>
@@ -1286,56 +1241,9 @@ internal sealed class BitwardenCliService
     StatusChanged?.Invoke();
   }
 
-  internal static string ExtractJsonArray(string output)
-  {
-    if (string.IsNullOrEmpty(output)) return output ?? string.Empty;
-
-    var pos = 0;
-    while (pos < output.Length)
-    {
-      var start = output.IndexOf('[', pos);
-      if (start < 0) return output;
-
-      var depth = 0;
-      var inString = false;
-      var escape = false;
-      var matched = false;
-      for (var i = start; i < output.Length; i++)
-      {
-        var c = output[i];
-        if (escape) { escape = false; continue; }
-        if (c == '\\' && inString) { escape = true; continue; }
-        if (c == '"') { inString = !inString; continue; }
-        if (inString) continue;
-        if (c == '[') depth++;
-        else if (c == ']')
-        {
-          depth--;
-          if (depth == 0)
-          {
-            var extracted = output[start..(i + 1)];
-            if (extracted.Length <= 2 || extracted.Contains('{'))
-            {
-              if (extracted != output.TrimEnd())
-                DebugLogService.Log("CLI", $"ExtractJsonArray trimmed trailing content from CLI output");
-              return extracted;
-            }
-            pos = i + 1;
-            matched = true;
-            break;
-          }
-        }
-      }
-      if (!matched) return output;
-    }
-
-    return output;
-  }
-
   internal static List<BitwardenItem> ParseItems(string json)
   {
     var items = new List<BitwardenItem>();
-    json = ExtractJsonArray(json);
 
     try
     {
@@ -1348,34 +1256,7 @@ internal sealed class BitwardenCliService
 
       foreach (var node in array)
       {
-        if (node == null)
-          continue;
-
-        var typeInt = node["type"]?.GetValue<int>() ?? 0;
-        if (typeInt < 1 || typeInt > 5)
-          continue;
-
-        var type = (BitwardenItemType)typeInt;
-        var id = node["id"]?.GetValue<string>() ?? string.Empty;
-        var name = node["name"]?.GetValue<string>() ?? string.Empty;
-        var notes = node["notes"]?.GetValue<string>();
-        var revisionDate = DateTime.TryParse(node["revisionDate"]?.GetValue<string>(), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue;
-        var customFields = ParseCustomFields(node["fields"]);
-        var favorite = node["favorite"]?.GetValue<bool>() ?? false;
-        var folderId = node["folderId"]?.GetValue<string>();
-        var organizationId = node["organizationId"]?.GetValue<string>();
-        var reprompt = node["reprompt"]?.GetValue<int>() ?? 0;
-
-        var item = type switch
-        {
-          BitwardenItemType.Login => ParseLogin(node["login"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
-          BitwardenItemType.SecureNote => new BitwardenItem { Id = id, Name = name, Type = type, Notes = notes, RevisionDate = revisionDate, CustomFields = customFields, Favorite = favorite, FolderId = folderId, OrganizationId = organizationId, Reprompt = reprompt },
-          BitwardenItemType.Card => ParseCard(node["card"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
-          BitwardenItemType.Identity => ParseIdentity(node["identity"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
-          BitwardenItemType.SshKey => ParseSshKey(node["sshKey"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
-          _ => null,
-        };
-
+        var item = TryParseItemNode(node);
         if (item != null)
           items.Add(item);
       }
@@ -1386,6 +1267,35 @@ internal sealed class BitwardenCliService
     }
 
     return items;
+  }
+
+  private static BitwardenItem? TryParseItemNode(JsonNode? node)
+  {
+    if (node == null) return null;
+
+    var typeInt = node["type"]?.GetValue<int>() ?? 0;
+    if (typeInt < 1 || typeInt > 5) return null;
+
+    var type = (BitwardenItemType)typeInt;
+    var id = node["id"]?.GetValue<string>() ?? string.Empty;
+    var name = node["name"]?.GetValue<string>() ?? string.Empty;
+    var notes = node["notes"]?.GetValue<string>();
+    var revisionDate = DateTime.TryParse(node["revisionDate"]?.GetValue<string>(), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue;
+    var customFields = ParseCustomFields(node["fields"]);
+    var favorite = node["favorite"]?.GetValue<bool>() ?? false;
+    var folderId = node["folderId"]?.GetValue<string>();
+    var organizationId = node["organizationId"]?.GetValue<string>();
+    var reprompt = node["reprompt"]?.GetValue<int>() ?? 0;
+
+    return type switch
+    {
+      BitwardenItemType.Login => ParseLogin(node["login"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
+      BitwardenItemType.SecureNote => new BitwardenItem { Id = id, Name = name, Type = type, Notes = notes, RevisionDate = revisionDate, CustomFields = customFields, Favorite = favorite, FolderId = folderId, OrganizationId = organizationId, Reprompt = reprompt },
+      BitwardenItemType.Card => ParseCard(node["card"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
+      BitwardenItemType.Identity => ParseIdentity(node["identity"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
+      BitwardenItemType.SshKey => ParseSshKey(node["sshKey"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
+      _ => null,
+    };
   }
 
   private static BitwardenItem ParseLogin(JsonNode? login, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)
@@ -1522,7 +1432,6 @@ internal sealed class BitwardenCliService
   internal static Dictionary<string, string> ParseFolders(string json)
   {
     var result = new Dictionary<string, string>(StringComparer.Ordinal);
-    json = ExtractJsonArray(json);
     try
     {
       var array = JsonNode.Parse(json)?.AsArray();
