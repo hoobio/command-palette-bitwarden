@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.7.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.3...v1.7.0) (2026-03-21)
+
+
+### Features
+
+* add debug logging system for diagnosing issues (AB[#88](https://github.com/hoobio/command-palette-bitwarden/issues/88)) ([#102](https://github.com/hoobio/command-palette-bitwarden/issues/102)) ([cc991fc](https://github.com/hoobio/command-palette-bitwarden/commit/cc991fc3809820df9ac0e5d9ae4d5dc67f7720e8))
+* CLI path overrides, portable data directory, and card brand logos ([#92](https://github.com/hoobio/command-palette-bitwarden/issues/92)) ([628f75c](https://github.com/hoobio/command-palette-bitwarden/commit/628f75c74f0a221fc62422351e424301c197c37f))
+
+
+### Bug Fixes
+
+* remove broken Open in Bitwarden command, promote View in Web Vault to Ctrl+O ([#108](https://github.com/hoobio/command-palette-bitwarden/issues/108)) ([0f983cb](https://github.com/hoobio/command-palette-bitwarden/commit/0f983cbf007d52191b41ee754b46ade47494f251)), closes [#99](https://github.com/hoobio/command-palette-bitwarden/issues/99)
+* resolve race condition in SubmitDeviceVerificationAsync stream handling ([#106](https://github.com/hoobio/command-palette-bitwarden/issues/106)) ([b9c8aa5](https://github.com/hoobio/command-palette-bitwarden/commit/b9c8aa583ee1c05aad38572231f8adf43a82b797))
+* strip trailing non-JSON CLI output and harden RunCliAsync json detection ([#104](https://github.com/hoobio/command-palette-bitwarden/issues/104)) ([a645c66](https://github.com/hoobio/command-palette-bitwarden/commit/a645c66671fecc9a278e2a54e6bb7a03fe3cdeb4))
+
+
+### Documentation
+
+* add community health files (CODE_OF_CONDUCT.md, CONTRIBUTING.md, ([15aa320](https://github.com/hoobio/command-palette-bitwarden/commit/15aa3204ee2fe7bbfbc798c6bbef58bab06a20d8))
+
+
+### Code Refactoring
+
+* remove ExtractJsonArray, ExtractTopLevelObjects and dead code ([#107](https://github.com/hoobio/command-palette-bitwarden/issues/107)) ([436ceef](https://github.com/hoobio/command-palette-bitwarden/commit/436ceef2b88919a760b4dc2112dfbf46471291f4))
+
+
+### Build System
+
+* **deps:** bump actions/create-github-app-token from 2 to 3 ([#100](https://github.com/hoobio/command-palette-bitwarden/issues/100)) ([7e90a77](https://github.com/hoobio/command-palette-bitwarden/commit/7e90a772332b3161ec356b026cd0e754e910f3b3))
+* **deps:** bump dorny/paths-filter from 3 to 4 ([#101](https://github.com/hoobio/command-palette-bitwarden/issues/101)) ([96fd512](https://github.com/hoobio/command-palette-bitwarden/commit/96fd51270327611c4421abdf856de9d05956e1e7))
+
+
+### Continuous Integration
+
+* fix pre-release and release jobs skipped on push to main ([#94](https://github.com/hoobio/command-palette-bitwarden/issues/94)) ([a4d01cc](https://github.com/hoobio/command-palette-bitwarden/commit/a4d01cc044f54da524dcc11e1d282d76ac72c262))
+* fix pre-release version stamping and required checks on docs PRs ([#95](https://github.com/hoobio/command-palette-bitwarden/issues/95)) ([15aa320](https://github.com/hoobio/command-palette-bitwarden/commit/15aa3204ee2fe7bbfbc798c6bbef58bab06a20d8))
+* sign MSIX packages on all builds, not just main pushes ([#103](https://github.com/hoobio/command-palette-bitwarden/issues/103)) ([d48d6a0](https://github.com/hoobio/command-palette-bitwarden/commit/d48d6a0d368c05cf97fdb278464e7a0f4167843a))
+* use GitHub App token for release-please and run pre-release in RP PR ([#96](https://github.com/hoobio/command-palette-bitwarden/issues/96)) ([aba50d7](https://github.com/hoobio/command-palette-bitwarden/commit/aba50d7c6f25a6fbc6b5f894a902a56d56b9844f))
+
 ## [1.6.3](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.2...v1.6.3) (2026-03-19)
 
 
