@@ -32,7 +32,7 @@ internal static partial class VaultItemHelper
   {
     BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) => new OpenUrlCommand(item.FirstUri),
     BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) => BuildSshCommand(item.SshHost!),
-    _ => BuildOpenInBitwardenCommand(item.Id),
+    _ => BuildOpenInWebVaultCommand(item.Id),
   });
 
   internal static CommandContextItem[] BuildContextItems(BitwardenItem item)
@@ -61,21 +61,14 @@ internal static partial class VaultItemHelper
 
     AddCustomFieldContextItems(items, item, id);
 
-    items.Add(new CommandContextItem(Track(id, BuildOpenInBitwardenCommand(id)))
-    {
-      Title = "Open in Bitwarden",
-      Icon = new IconInfo("\uE8A7"),
-      RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.O),
-    });
-
     var serverUrl = BitwardenCliService.ServerUrl;
     if (!string.IsNullOrEmpty(serverUrl))
     {
-      items.Add(new CommandContextItem(Track(id, new OpenUrlCommand($"{serverUrl}/#/vault?itemId={Uri.EscapeDataString(id)}")))
+      items.Add(new CommandContextItem(Track(id, BuildOpenInWebVaultCommand(id)))
       {
         Title = "View in Web Vault",
         Icon = new IconInfo("\uE774"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.O),
+        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.O),
       });
     }
 
@@ -436,19 +429,11 @@ internal static partial class VaultItemHelper
     }
   }
 
-  internal static AnonymousCommand BuildOpenInBitwardenCommand(string itemId) => new(() =>
-  {
-    try
+  internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>
+    new($"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(itemId)}")
     {
-      ClipboardHelper.SetText(itemId);
-      Process.Start(new ProcessStartInfo("bitwarden://") { UseShellExecute = true });
-    }
-    catch { }
-  })
-  {
-    Name = "Open in Bitwarden",
-    Result = CommandResult.Dismiss(),
-  };
+      Name = "View in Web Vault",
+    };
 
   private static AnonymousCommand BuildSshCommand(string host) => new(() =>
   {
