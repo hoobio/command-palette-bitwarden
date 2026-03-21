@@ -42,6 +42,20 @@ See [SSH Quick Connect](SSH-Quick-Connect) for full details.
 
 All custom fields on an item get their own copy action. **Hidden** custom fields are treated as sensitive (clipboard exclusion + auto-clear), while **text** and **boolean** fields use standard clipboard.
 
+## Master Password Re-prompt
+
+Vault items with **Master password re-prompt** enabled require you to re-enter your master password before any sensitive data can be copied. This applies to all item types.
+
+When an item has re-prompt enabled:
+
+- A **Protected** tag is shown on the item in the vault list
+- Secure Note subtitles are masked ("Protected — requires master password")
+- Selecting any sensitive copy action opens a master password verification form
+- Non-sensitive actions (Open in Browser, Copy Username, Open in Bitwarden) remain available without re-prompt
+- After entering the correct password, the copy action completes and a toast is shown
+
+This matches the Bitwarden desktop/web vault behaviour where re-prompt gates access to sensitive fields.
+
 ## Manual Sync
 
 **Sync Vault** triggers a full `bw sync` followed by a cache refresh.

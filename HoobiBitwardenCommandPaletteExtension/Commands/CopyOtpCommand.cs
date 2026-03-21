@@ -21,17 +21,20 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
   {
     try
     {
-      var (key, digits, period) = ParseTotpSecret(_totpSecret);
-      var totp = new Totp(key, step: period, totpSize: digits);
-      var code = totp.ComputeTotp();
-
-      SecureClipboardService.CopySensitive(code);
+      CopyToClipboard(_totpSecret);
       return CommandResult.ShowToast("Copied TOTP to clipboard");
     }
     catch
     {
       return CommandResult.ShowToast("Failed to compute OTP");
     }
+  }
+
+  internal static void CopyToClipboard(string totpSecret)
+  {
+    var (key, digits, period) = ParseTotpSecret(totpSecret);
+    var totp = new Totp(key, step: period, totpSize: digits);
+    SecureClipboardService.CopySensitive(totp.ComputeTotp());
   }
 
   internal static (byte[] Key, int Digits, int Period) ParseTotpSecret(string secret)

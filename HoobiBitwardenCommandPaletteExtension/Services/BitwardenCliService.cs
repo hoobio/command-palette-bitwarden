@@ -463,6 +463,45 @@ internal sealed class BitwardenCliService
     }
   }
 
+  public async Task<bool> VerifyMasterPasswordAsync(string password)
+  {
+    DebugLogService.Log("Reprompt", "Verifying master password for re-prompt");
+    try
+    {
+      var psi = new ProcessStartInfo(CliExecutable, "unlock --passwordenv BW_MP --raw")
+      {
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        RedirectStandardInput = true,
+        CreateNoWindow = true,
+      };
+
+      psi.Environment["BW_MP"] = password;
+      ApplyEnvironment(psi);
+      psi.Environment["BW_NOINTERACTION"] = "true";
+
+      using var process = _processFactory(psi);
+      process.StandardInput.Close();
+      using var cts = new CancellationTokenSource(CliTimeoutMs);
+      var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+      var stdout = await stdoutTask;
+      _ = await stderrTask;
+      try { process.Kill(true); } catch { }
+
+      var key = stdout.Trim();
+      var valid = !string.IsNullOrEmpty(key) && !key.Contains(' ');
+      DebugLogService.Log("Reprompt", $"Password verification: {(valid ? "success" : "failed")}");
+      return valid;
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Reprompt", $"Password verification exception: {ex.GetType().Name}: {ex.Message}");
+      return false;
+    }
+  }
+
   private void ResetToLoggedOut()
   {
     DebugLogService.Log("Auth", "ResetToLoggedOut: clearing session and cache");
