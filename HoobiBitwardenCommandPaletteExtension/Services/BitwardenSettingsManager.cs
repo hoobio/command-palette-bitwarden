@@ -149,11 +149,19 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             new("5 minutes", "300"),
         ]);
 
+    public ToggleSetting UseApiKeyAuthentication { get; } = new(
+        "useApiKeyAuthentication",
+        "Use API Key Authentication",
+        "Authenticate using your Bitwarden personal API key instead of email and master password. Useful if your account uses FIDO2 or Duo 2FA. Get your API key from the Bitwarden web vault: Settings → Security → Keys",
+        false);
+
     public ToggleSetting DebugLogging { get; } = new(
         "debugLogging",
         "Debug Logging",
         "Enable debug logging to help diagnose issues. When enabled, a 'Copy Debug Log' command appears in the vault browser. Logs are kept in memory only and cleared when the extension restarts",
         false);
+
+    private bool _lastUseApiKeyAuth;
 
     public BitwardenSettingsManager(string? settingsFilePath = null)
     {
@@ -164,6 +172,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         BackgroundRefresh.Value = "5";
         RepromptGracePeriod.Value = "60";
         Settings.Add(RememberSession);
+        Settings.Add(UseApiKeyAuthentication);
         Settings.Add(ShowWebsiteIcons);
         Settings.Add(AutoLockTimeout);
         Settings.Add(ShowWatchtowerTags);
@@ -184,6 +193,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();
+        _lastUseApiKeyAuth = UseApiKeyAuthentication.Value;
         SyncClipboardSettings();
         SyncRepromptSettings();
         DebugLogService.Enabled = DebugLogging.Value;
@@ -200,6 +210,13 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
 
         if (!RememberSession.Value)
             SessionStore.Clear();
+
+        if (UseApiKeyAuthentication.Value != _lastUseApiKeyAuth)
+        {
+            _lastUseApiKeyAuth = UseApiKeyAuthentication.Value;
+            ApiKeyStore.Clear();
+            SessionStore.Clear();
+        }
     }
 
     private void SyncClipboardSettings()
@@ -262,6 +279,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (UsePortableDataDirectory.Key, (object?)UsePortableDataDirectory.Value);
         yield return (CliDataDirectoryOverride.Key, CliDataDirectoryOverride.Value);
         yield return (RepromptGracePeriod.Key, RepromptGracePeriod.Value);
+        yield return (UseApiKeyAuthentication.Key, (object?)UseApiKeyAuthentication.Value);
         yield return (DebugLogging.Key, (object?)DebugLogging.Value);
     }
 }

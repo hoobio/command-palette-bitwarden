@@ -145,4 +145,53 @@ public class BitwardenSettingsManagerTests : IDisposable
 
         RepromptPage.GracePeriodSeconds = 60;
     }
+
+    [Fact]
+    public void UseApiKeyAuthentication_DefaultFalse()
+    {
+        var m = CreateManager();
+        Assert.False(m.UseApiKeyAuthentication.Value);
+    }
+
+    [Fact]
+    public void OnSettingsChanged_ClearsApiKeyStore_WhenToggleChanges()
+    {
+        var m = CreateManager();
+        ApiKeyStore.Save("user.test-id", "test-secret");
+        Assert.NotNull(ApiKeyStore.Load().ClientId);
+
+        m.UseApiKeyAuthentication.Value = true;
+        FireSettingsChanged(m);
+
+        Assert.Null(ApiKeyStore.Load().ClientId);
+    }
+
+    [Fact]
+    public void OnSettingsChanged_ClearsSessionStore_WhenApiKeyToggleChanges()
+    {
+        var m = CreateManager();
+        SessionStore.Save("some-session");
+        Assert.NotNull(SessionStore.Load());
+
+        m.UseApiKeyAuthentication.Value = true;
+        FireSettingsChanged(m);
+
+        Assert.Null(SessionStore.Load());
+    }
+
+    [Fact]
+    public void OnSettingsChanged_DoesNotClearStores_WhenApiKeyToggleUnchanged()
+    {
+        var m = CreateManager();
+        ApiKeyStore.Save("user.id", "secret");
+        SessionStore.Save("session");
+
+        m.UseApiKeyAuthentication.Value = false;
+        FireSettingsChanged(m);
+
+        Assert.NotNull(ApiKeyStore.Load().ClientId);
+
+        ApiKeyStore.Clear();
+        SessionStore.Clear();
+    }
 }

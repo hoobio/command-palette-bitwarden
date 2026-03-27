@@ -26,6 +26,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private string? _errorMessage;
     private string? _pendingEmail;
     private string? _pendingPassword;
+    private string? _pendingClientId;
+    private string? _pendingClientSecret;
     private bool _twoFactorRequired;
     private bool _deviceVerificationRequired;
     private ForegroundContext? _context;
@@ -347,10 +349,31 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
 
-        var item = new ListItem(new Pages.LoginPage(_service, _settings, OnLoginSubmitted))
+        var loginCallback = _service.IsApiKeyAuthEnabled
+            ? (Action<string, string>)OnApiKeyLoginSubmitted
+            : OnLoginSubmitted;
+
+        string? initialClientId = null;
+        string? initialClientSecret = null;
+        if (_service.IsApiKeyAuthEnabled)
+        {
+            initialClientId = _pendingClientId;
+            initialClientSecret = _pendingClientSecret;
+            if (initialClientId == null)
+            {
+                var (storedId, storedSecret) = ApiKeyStore.Load();
+                initialClientId = storedId;
+                initialClientSecret = storedSecret;
+            }
+        }
+
+        var item = new ListItem(new Pages.LoginPage(_service, _settings, loginCallback,
+            _pendingEmail, initialClientId, initialClientSecret))
         {
             Title = "Login to Bitwarden",
-            Subtitle = _errorMessage ?? "Sign in with your email and master password",
+            Subtitle = _errorMessage ?? (_service.IsApiKeyAuthEnabled
+                ? "Sign in with your API key (client ID and client secret)"
+                : "Sign in with your email and master password"),
             Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
         };
 
@@ -600,6 +623,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _deviceVerificationRequired = false;
         _pendingEmail = null;
         _pendingPassword = null;
+        _pendingClientId = null;
+        _pendingClientSecret = null;
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Checking vault status...", "bw status");
@@ -859,6 +884,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _deviceVerificationRequired = false;
         _pendingEmail = null;
         _pendingPassword = null;
+        _pendingClientId = null;
+        _pendingClientSecret = null;
         _currentItems = [];
         IsLoading = true;
         RaiseItemsChanged();
@@ -887,6 +914,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     }
                     else
                     {
+                        _pendingEmail = email;
                         _errorMessage = error ?? "Login failed";
                     }
 
@@ -898,6 +926,45 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
                 _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
+            }
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
+        });
+    }
+
+    private void OnApiKeyLoginSubmitted(string clientId, string clientSecret)
+    {
+        DebugLogService.Log("Action", "API key login submitted by user");
+        _handlingAction = true;
+        ClearSearchText();
+        _errorMessage = null;
+        _pendingClientId = null;
+        _pendingClientSecret = null;
+        _currentItems = [];
+        IsLoading = true;
+        RaiseItemsChanged();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                ShowLoadingStatus("Logging in with API key...", "bw login --apikey");
+                var (success, error) = await _service.LoginWithApiKeyAsync(clientId, clientSecret);
+                if (!success)
+                {
+                    _pendingClientId = clientId;
+                    _pendingClientSecret = clientSecret;
+                    _errorMessage = error ?? "Login failed";
+                    _currentItems = BuildUnauthenticatedItems();
+                    RaiseItemsChanged();
+                    return;
+                }
+
+                _currentItems = BuildLockedItems();
                 RaiseItemsChanged();
             }
             finally

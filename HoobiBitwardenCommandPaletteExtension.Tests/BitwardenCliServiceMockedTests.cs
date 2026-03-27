@@ -656,4 +656,87 @@ public class BitwardenCliServiceMockedTests
     var result = await svc.VerifyMasterPasswordAsync("pass");
     Assert.False(result);
   }
+
+  // --- LoginWithApiKeyAsync ---
+
+  [Fact]
+  public async Task LoginWithApiKey_Success_SetsLockedStatus()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", stderr: "", exitCode: 0));
+    var (success, error) = await svc.LoginWithApiKeyAsync("user.test-id", "test-secret");
+    Assert.True(success);
+    Assert.Null(error);
+    Assert.Equal(VaultStatus.Locked, svc.LastStatus);
+    Assert.False(svc.IsUnlocked);
+    ApiKeyStore.Clear();
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_Success_PassesEnvVars()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", stderr: "", exitCode: 0));
+    await svc.LoginWithApiKeyAsync("user.my-client-id", "my-secret");
+    Assert.Equal("user.my-client-id", factory.LastPsi?.Environment["BW_CLIENTID"]);
+    Assert.Equal("my-secret", factory.LastPsi?.Environment["BW_CLIENTSECRET"]);
+    ApiKeyStore.Clear();
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_Success_SavesApiKeyStore()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", stderr: "", exitCode: 0));
+    ApiKeyStore.Clear();
+    await svc.LoginWithApiKeyAsync("user.stored-id", "stored-secret");
+    var (clientId, clientSecret) = ApiKeyStore.Load();
+    Assert.Equal("user.stored-id", clientId);
+    Assert.Equal("stored-secret", clientSecret);
+    ApiKeyStore.Clear();
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_Failure_ReturnsError()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Invalid credentials.\n", exitCode: 1));
+    var (success, error) = await svc.LoginWithApiKeyAsync("user.bad-id", "bad-secret");
+    Assert.False(success);
+    Assert.Contains("Invalid credentials", error, StringComparison.OrdinalIgnoreCase);
+    Assert.NotEqual(VaultStatus.Locked, svc.LastStatus);
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_Failure_StillSavesApiKeyStore()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Invalid credentials.\n", exitCode: 1));
+    ApiKeyStore.Clear();
+    await svc.LoginWithApiKeyAsync("user.bad-id", "bad-secret");
+    var (clientId, clientSecret) = ApiKeyStore.Load();
+    Assert.Equal("user.bad-id", clientId);
+    Assert.Equal("bad-secret", clientSecret);
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_CliStateCorruption_RetriesAfterLogout()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "TypeError: Cannot read properties of null (reading 'toWrappedAccountCryptographicState')", exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "", exitCode: 0));
+    var (success, error) = await svc.LoginWithApiKeyAsync("user.my-id", "my-secret");
+    Assert.True(success);
+    Assert.Null(error);
+  }
+
+  // --- IsApiKeyAuthEnabled ---
+
+  [Fact]
+  public void IsApiKeyAuthEnabled_DefaultFalse_WhenNoSettings()
+  {
+    var (svc, _) = CreateService();
+    Assert.False(svc.IsApiKeyAuthEnabled);
+  }
 }

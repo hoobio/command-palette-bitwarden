@@ -136,6 +136,9 @@ internal sealed class BitwardenCliService
   private readonly Lock _configChangeLock = new();
   private string _lastCliExecutable;
   private string? _lastDataDirectory;
+  private bool _lastApiKeyAuthEnabled;
+
+  public bool IsApiKeyAuthEnabled => _settings?.UseApiKeyAuthentication.Value == true;
 
   public BitwardenCliService(BitwardenSettingsManager? settings = null, CliProcessFactory? processFactory = null)
   {
@@ -143,12 +146,14 @@ internal sealed class BitwardenCliService
     _processFactory = processFactory ?? DefaultProcessFactory;
     _lastCliExecutable = CliExecutable;
     _lastDataDirectory = DataDirectory;
+    _lastApiKeyAuthEnabled = IsApiKeyAuthEnabled;
     ApplyAutoLockSetting();
     AccessTracker.ItemAccessed += ResetAutoLockTimer;
     if (_settings != null)
     {
       _settings.Settings.SettingsChanged += (_, _) => ApplyAutoLockSetting();
       _settings.Settings.SettingsChanged += (_, _) => CheckCliConfigChanged();
+      _settings.Settings.SettingsChanged += (_, _) => CheckAuthMethodChanged();
     }
   }
 
@@ -175,6 +180,15 @@ internal sealed class BitwardenCliService
       _lastDataDirectory = newData;
     }
     ResetForCliConfigChange();
+  }
+
+  private void CheckAuthMethodChanged()
+  {
+    var current = IsApiKeyAuthEnabled;
+    if (current == _lastApiKeyAuthEnabled) return;
+    _lastApiKeyAuthEnabled = current;
+    DebugLogService.Log("Config", $"Auth method changed to {(current ? "API key" : "password")}, logging out");
+    _ = Task.Run(LogoutAsync);
   }
 
   private void ResetForCliConfigChange()
@@ -306,6 +320,16 @@ internal sealed class BitwardenCliService
 
       var fallback = await FetchStatusAsync();
       DebugLogService.Log("Status", $"Falling back to bw status: {fallback}");
+
+      if (fallback == VaultStatus.Unauthenticated && IsApiKeyAuthEnabled)
+      {
+        DebugLogService.Log("Status", "Unauthenticated with API key auth enabled, attempting auto-login");
+        var autoLoginResult = await TryAutoLoginWithApiKeyAsync();
+        if (autoLoginResult != VaultStatus.Unauthenticated)
+          return autoLoginResult;
+        DebugLogService.Log("Status", "Auto-login with API key failed or no stored key");
+      }
+
       return SetStatus(fallback);
     }
     finally
@@ -659,6 +683,88 @@ internal sealed class BitwardenCliService
     }
   }
 
+  public async Task<(bool Success, string? Error)> LoginWithApiKeyAsync(string clientId, string clientSecret)
+  {
+    DebugLogService.Log("Auth", "LoginWithApiKeyAsync started");
+    ApiKeyStore.Save(clientId, clientSecret);
+    return await LoginWithApiKeyCoreAsync(clientId, clientSecret, retried: false);
+  }
+
+  private async Task<(bool Success, string? Error)> LoginWithApiKeyCoreAsync(string clientId, string clientSecret, bool retried)
+  {
+    try
+    {
+      var psi = new ProcessStartInfo(CliExecutable, "login --apikey --raw")
+      {
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        RedirectStandardInput = true,
+        CreateNoWindow = true,
+        StandardOutputEncoding = System.Text.Encoding.UTF8,
+        StandardErrorEncoding = System.Text.Encoding.UTF8,
+      };
+
+      psi.Environment["BW_CLIENTID"] = clientId;
+      psi.Environment["BW_CLIENTSECRET"] = clientSecret;
+      ApplyEnvironment(psi);
+      psi.Environment["BW_NOINTERACTION"] = "true";
+
+      using var process = _processFactory(psi);
+      process.StandardInput.Close();
+      using var cts = new CancellationTokenSource(CliTimeoutMs);
+      var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+      var stdout = (await stdoutTask).Trim();
+      var stderr = (await stderrTask).Trim();
+      try { process.Kill(true); } catch { }
+
+      if (process.ExitCode == 0)
+      {
+        SetStatus(VaultStatus.Locked);
+        DebugLogService.Log("Auth", "API key login successful");
+        return (true, null);
+      }
+
+      var error = string.IsNullOrEmpty(stderr) ? stdout : stderr;
+      DebugLogService.Log("Auth", $"API key login failed: {error}");
+
+      if (!retried && IsCliStateCorruption(error))
+      {
+        DebugLogService.Log("Auth", "CLI state corruption detected, logging out and retrying");
+        try { await RunCliAsync("logout", CliLogoutTimeoutMs, "You have logged out."); }
+        catch { }
+        return await LoginWithApiKeyCoreAsync(clientId, clientSecret, retried: true);
+      }
+
+      return (false, string.IsNullOrEmpty(error) ? "Login failed" : error);
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Auth", $"LoginWithApiKeyAsync exception: {ex.GetType().Name}: {ex.Message}");
+      return (false, ex.Message);
+    }
+  }
+
+  private async Task<VaultStatus> TryAutoLoginWithApiKeyAsync()
+  {
+    var (clientId, clientSecret) = ApiKeyStore.Load();
+    if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+    {
+      DebugLogService.Log("Auth", "No stored API key credentials for auto-login");
+      return VaultStatus.Unauthenticated;
+    }
+
+    DebugLogService.Log("Auth", "Attempting auto-login with stored API key");
+    var (success, _) = await LoginWithApiKeyAsync(clientId, clientSecret);
+    if (success)
+      return SetStatus(VaultStatus.Locked);
+
+    DebugLogService.Log("Auth", "Auto-login failed, clearing stored API key");
+    ApiKeyStore.Clear();
+    return VaultStatus.Unauthenticated;
+  }
+
   public async Task<(bool Success, string? Error)> SubmitDeviceVerificationAsync(string otpCode)
   {
     var process = _pendingDeviceVerificationProcess;
@@ -758,6 +864,11 @@ internal sealed class BitwardenCliService
     }
     cts?.Dispose();
   }
+
+  private static bool IsCliStateCorruption(string error) =>
+    error.Contains("TypeError", StringComparison.OrdinalIgnoreCase)
+    || error.Contains("Cannot read properties of null", StringComparison.OrdinalIgnoreCase)
+    || error.Contains("Cannot read property", StringComparison.OrdinalIgnoreCase);
 
   public async Task LogoutAsync()
   {
