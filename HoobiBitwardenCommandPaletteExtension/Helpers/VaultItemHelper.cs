@@ -32,20 +32,7 @@ internal static partial class VaultItemHelper
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null)
   {
     if (item.Reprompt == 1 && service != null && !RepromptPage.IsWithinGracePeriod())
-    {
-      Action defaultAction = item.Type switch
-      {
-        BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) =>
-          () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FirstUri) { UseShellExecute = true }),
-        BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
-          () => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } }
-        ,
-        _ => () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-          $"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
-        { UseShellExecute = true }),
-      };
-      return new RepromptPage(service, defaultAction, "Open", CommandResult.Dismiss());
-    }
+      return new RepromptPage(service, BuildDefaultAction(item), "Open");
 
     return Track(item.Id, item.Type switch
     {
@@ -54,6 +41,17 @@ internal static partial class VaultItemHelper
       _ => BuildOpenInWebVaultCommand(item.Id),
     });
   }
+
+  private static Action BuildDefaultAction(BitwardenItem item) => item.Type switch
+  {
+    BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) =>
+      () => Process.Start(new ProcessStartInfo(item.FirstUri) { UseShellExecute = true }),
+    BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
+      () => { try { Process.Start(new ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } },
+    _ => () => Process.Start(new ProcessStartInfo(
+      $"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
+    { UseShellExecute = true }),
+  };
 
   internal static CommandContextItem[] BuildContextItems(BitwardenItem item, BitwardenCliService? service = null)
   {
@@ -494,11 +492,9 @@ internal static partial class VaultItemHelper
   {
     if (reprompt != null && !RepromptPage.IsWithinGracePeriod())
       return new RepromptPage(reprompt, () => SecureClipboardService.CopySensitive(text), label);
-    if (reprompt != null)
-      return Track(itemId, CopySensitive(text, label));
-    return isSensitive
-      ? Track(itemId, CopySensitive(text, label))
-      : Track(itemId, CopyNonSensitive(text, label));
+    return Track(itemId, isSensitive
+      ? CopySensitive(text, label)
+      : CopyNonSensitive(text, label));
   }
 
   private static ICommand SensitiveCommand(string itemId, Action action, string label, BitwardenCliService? reprompt)

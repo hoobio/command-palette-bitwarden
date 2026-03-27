@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.Threading;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using System.Text.Json.Nodes;
@@ -11,28 +13,32 @@ internal record VerificationRequest(string Password, BitwardenCliService Service
 internal sealed partial class RepromptPage : ContentPage
 {
   internal static int GracePeriodSeconds { get; set; } = 60;
-  private static DateTime _lastVerified = DateTime.MinValue;
+  private static long _lastVerifiedTs;
 
   internal static event Action? GraceStarted;
   internal static event Action<VerificationRequest>? VerificationRequested;
 
-  internal static bool IsWithinGracePeriod() =>
-    GracePeriodSeconds > 0 && (DateTime.UtcNow - _lastVerified).TotalSeconds < GracePeriodSeconds;
+  internal static bool IsWithinGracePeriod()
+  {
+    var ts = Interlocked.Read(ref _lastVerifiedTs);
+    return ts != 0 && GracePeriodSeconds > 0
+      && Stopwatch.GetElapsedTime(ts).TotalSeconds < GracePeriodSeconds;
+  }
 
   internal static void RecordVerification()
   {
-    _lastVerified = DateTime.UtcNow;
+    Interlocked.Exchange(ref _lastVerifiedTs, Stopwatch.GetTimestamp());
     GraceStarted?.Invoke();
   }
 
-  internal static void ClearGracePeriod() => _lastVerified = DateTime.MinValue;
+  internal static void ClearGracePeriod() => Interlocked.Exchange(ref _lastVerifiedTs, 0);
 
   internal static void RaiseVerificationRequested(VerificationRequest request) =>
     VerificationRequested?.Invoke(request);
 
   private readonly RepromptForm _form;
 
-  public RepromptPage(BitwardenCliService service, Action innerAction, string actionLabel, ICommandResult? successResult = null)
+  public RepromptPage(BitwardenCliService service, Action innerAction, string actionLabel)
   {
     Name = "Verify Password";
     Title = "Master Password Required";
@@ -43,26 +49,14 @@ internal sealed partial class RepromptPage : ContentPage
   public override IContent[] GetContent() => [_form];
 }
 
-internal sealed partial class RepromptForm : FormContent
+internal sealed partial class RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel) : FormContent
 {
-  private readonly BitwardenCliService _service;
-  private readonly Action _innerAction;
-  private readonly string _actionLabel;
-
   private bool _showError;
-
-  public RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel)
-  {
-    _service = service;
-    _innerAction = innerAction;
-    _actionLabel = actionLabel;
-    TemplateJson = BuildInitialTemplate();
-  }
 
   internal void ShowError()
   {
     _showError = true;
-    TemplateJson = BuildErrorTemplate();
+    TemplateJson = BuildTemplate(showError: true);
   }
 
   internal void ResetError()
@@ -70,11 +64,12 @@ internal sealed partial class RepromptForm : FormContent
     if (_showError)
     {
       _showError = false;
-      TemplateJson = BuildInitialTemplate();
+      TemplateJson = BuildTemplate(showError: false);
     }
   }
 
-  private static string BuildInitialTemplate() => """
+  private static string BuildTemplate(bool showError) =>
+    """
     {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type": "AdaptiveCard",
@@ -114,57 +109,15 @@ internal sealed partial class RepromptForm : FormContent
                     }
                 ]
             }
-        ]
-    }
-    """;
-
-  private static string BuildErrorTemplate() => """
-    {
-        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-        "type": "AdaptiveCard",
-        "version": "1.6",
-        "body": [
-            {
-                "type": "TextBlock",
-                "size": "medium",
-                "weight": "bolder",
-                "text": "Re-enter your master password",
-                "horizontalAlignment": "center",
-                "wrap": true,
-                "style": "heading"
-            },
-            {
-                "type": "TextBlock",
-                "text": "This item requires master password verification before you can access it.",
-                "wrap": true,
-                "isSubtle": true,
-                "size": "small"
-            },
-            {
-                "type": "Input.Text",
-                "label": "Master Password",
-                "style": "Password",
-                "id": "MasterPassword",
-                "isRequired": true,
-                "errorMessage": "Master password is required",
-                "placeholder": "Enter your master password"
-            },
-            {
-                "type": "ActionSet",
-                "actions": [
-                    {
-                        "type": "Action.Submit",
-                        "title": "Verify & Continue"
-                    }
-                ]
-            },
-            {
+    """ + (showError ? """
+            ,{
                 "type": "TextBlock",
                 "text": "Incorrect master password. Please try again.",
                 "color": "Attention",
                 "wrap": true,
                 "size": "small"
             }
+    """ : "") + """
         ]
     }
     """;
@@ -178,7 +131,7 @@ internal sealed partial class RepromptForm : FormContent
       return CommandResult.KeepOpen();
 
     RepromptPage.RaiseVerificationRequested(
-      new VerificationRequest(password, _service, _innerAction, _actionLabel));
+      new VerificationRequest(password, service, innerAction, actionLabel));
 
     return CommandResult.GoBack();
   }
