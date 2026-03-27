@@ -337,6 +337,8 @@ internal sealed class BitwardenCliService
         RedirectStandardOutput = true,
         RedirectStandardError = true,
         CreateNoWindow = true,
+        StandardOutputEncoding = System.Text.Encoding.UTF8,
+        StandardErrorEncoding = System.Text.Encoding.UTF8,
       };
       ApplyEnvironment(psi);
       psi.Environment["BW_NOINTERACTION"] = "true";
@@ -419,6 +421,8 @@ internal sealed class BitwardenCliService
         RedirectStandardError = true,
         RedirectStandardInput = true,
         CreateNoWindow = true,
+        StandardOutputEncoding = System.Text.Encoding.UTF8,
+        StandardErrorEncoding = System.Text.Encoding.UTF8,
       };
 
       psi.Environment["BW_MP"] = masterPassword;
@@ -519,6 +523,8 @@ internal sealed class BitwardenCliService
         RedirectStandardError = true,
         RedirectStandardInput = true,
         CreateNoWindow = true,
+        StandardOutputEncoding = System.Text.Encoding.UTF8,
+        StandardErrorEncoding = System.Text.Encoding.UTF8,
       };
 
       psi.Environment["BW_MP"] = password;
@@ -1111,6 +1117,8 @@ internal sealed class BitwardenCliService
       RedirectStandardError = true,
       RedirectStandardInput = true,
       CreateNoWindow = true,
+      StandardOutputEncoding = System.Text.Encoding.UTF8,
+      StandardErrorEncoding = System.Text.Encoding.UTF8,
     };
 
     ApplyEnvironment(psi);

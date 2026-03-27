@@ -1298,6 +1298,37 @@ public class BitwardenCliServiceTests
   }
 
   [Fact]
+  public void ParseItems_UnicodeCharactersPreserved()
+  {
+    var json = """
+    [
+      {
+        "id": "uni-1",
+        "type": 1,
+        "name": "*Test | áéíóőöúűü | \uD83D\uDE05\u26A0\uFE0F\uD83E\uDEBF | 中国 |中國 | Китай | סִין",
+        "revisionDate": "2026-03-27T06:00:27.991Z",
+        "login": {
+          "username": "café@naïve.com",
+          "password": "pässwörd",
+          "totp": null,
+          "uris": []
+        }
+      }
+    ]
+    """;
+
+    var items = BitwardenCliService.ParseItems(json);
+    Assert.Single(items);
+    var item = items[0];
+    Assert.Contains("áéíóőöúűü", item.Name, StringComparison.Ordinal);
+    Assert.Contains("中国", item.Name, StringComparison.Ordinal);
+    Assert.Contains("Китай", item.Name, StringComparison.Ordinal);
+    Assert.Contains("סִין", item.Name, StringComparison.Ordinal);
+    Assert.Equal("café@naïve.com", item.Username);
+    Assert.Equal("pässwörd", item.Password);
+  }
+
+  [Fact]
   public void LastStatus_Initial_IsNull()
   {
     var svc = new BitwardenCliService();

@@ -572,4 +572,18 @@ public class BitwardenCliServiceMockedTests
     await svc.GetVaultStatusAsync();
     Assert.Equal("https://custom.vault.com", BitwardenCliService.ServerUrl);
   }
+
+  [Fact]
+  public async Task StartProcess_SetsUtf8Encoding()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("test-key");
+    factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"serverUrl\":\"https://vault.bitwarden.com\"}\n", exitCode: 0));
+    await svc.GetVaultStatusAsync();
+    Assert.NotNull(factory.LastPsi);
+    Assert.Equal(System.Text.Encoding.UTF8, factory.LastPsi!.StandardOutputEncoding);
+    Assert.Equal(System.Text.Encoding.UTF8, factory.LastPsi!.StandardErrorEncoding);
+  }
 }
