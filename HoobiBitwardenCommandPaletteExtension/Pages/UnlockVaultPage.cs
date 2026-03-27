@@ -101,7 +101,10 @@ internal sealed partial class UnlockForm : FormContent
 
     var remember = formInput?["RememberSession"]?.GetValue<string>() == "true";
     if (_settings != null && _settings.RememberSession.Value != remember)
+    {
       _settings.RememberSession.Value = remember;
+      _settings.SaveSettings();
+    }
 
     _onSubmit?.Invoke(password);
     return CommandResult.GoBack();

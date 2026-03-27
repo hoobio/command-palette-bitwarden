@@ -111,7 +111,10 @@ internal sealed partial class LoginForm : FormContent
 
     var remember = formInput?["RememberSession"]?.GetValue<string>() == "true";
     if (_settings != null && _settings.RememberSession.Value != remember)
+    {
       _settings.RememberSession.Value = remember;
+      _settings.SaveSettings();
+    }
 
     _onSubmit?.Invoke(email, password);
     return CommandResult.GoBack();
