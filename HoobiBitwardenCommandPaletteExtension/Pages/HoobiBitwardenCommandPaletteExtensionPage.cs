@@ -49,6 +49,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
         RepromptPage.GraceStarted += OnRepromptGraceStarted;
+        RepromptPage.VerificationRequested += OnVerificationRequested;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         var v = Windows.ApplicationModel.Package.Current.Id.Version;
@@ -551,6 +552,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
         RepromptPage.GraceStarted -= OnRepromptGraceStarted;
+        RepromptPage.VerificationRequested -= OnVerificationRequested;
     }
 
     private void OnIconCached() => _iconRefreshTimer.Change(500, Timeout.Infinite);
@@ -627,6 +629,38 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
             RaiseItemsChanged();
         }
+    }
+
+    private void OnVerificationRequested(VerificationRequest request)
+    {
+        _handlingAction = true;
+        IsLoading = true;
+        ShowLoadingStatus("Verifying master password...", "bw unlock");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var verified = await request.Service.VerifyMasterPasswordAsync(request.Password);
+                if (verified)
+                {
+                    RepromptPage.RecordVerification();
+                    request.InnerAction();
+                    var status = new StatusMessage { Message = $"Copied {request.ActionLabel} to clipboard", State = MessageState.Success };
+                    ExtensionHost.ShowStatus(status, StatusContext.Page);
+                    _ = Task.Delay(3000).ContinueWith(_ => ExtensionHost.HideStatus(status), TaskScheduler.Default);
+                }
+
+                lock (_itemsLock)
+                    _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
+            }
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
+        });
     }
 
     private void OnLockRequested()

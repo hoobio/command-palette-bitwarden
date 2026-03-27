@@ -6,12 +6,15 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Pages;
 
+internal record VerificationRequest(string Password, BitwardenCliService Service, Action InnerAction, string ActionLabel);
+
 internal sealed partial class RepromptPage : ContentPage
 {
   internal static int GracePeriodSeconds { get; set; } = 60;
   private static DateTime _lastVerified = DateTime.MinValue;
 
   internal static event Action? GraceStarted;
+  internal static event Action<VerificationRequest>? VerificationRequested;
 
   internal static bool IsWithinGracePeriod() =>
     GracePeriodSeconds > 0 && (DateTime.UtcNow - _lastVerified).TotalSeconds < GracePeriodSeconds;
@@ -24,6 +27,9 @@ internal sealed partial class RepromptPage : ContentPage
 
   internal static void ClearGracePeriod() => _lastVerified = DateTime.MinValue;
 
+  internal static void RaiseVerificationRequested(VerificationRequest request) =>
+    VerificationRequested?.Invoke(request);
+
   private readonly RepromptForm _form;
 
   public RepromptPage(BitwardenCliService service, Action innerAction, string actionLabel, ICommandResult? successResult = null)
@@ -31,7 +37,7 @@ internal sealed partial class RepromptPage : ContentPage
     Name = "Verify Password";
     Title = "Master Password Required";
     Icon = new IconInfo("\uE72E");
-    _form = new RepromptForm(service, innerAction, actionLabel, this, successResult);
+    _form = new RepromptForm(service, innerAction, actionLabel);
   }
 
   public override IContent[] GetContent() => [_form];
@@ -42,55 +48,31 @@ internal sealed partial class RepromptForm : FormContent
   private readonly BitwardenCliService _service;
   private readonly Action _innerAction;
   private readonly string _actionLabel;
-  private readonly RepromptPage _page;
-  private readonly ICommandResult _successResult;
 
-  private enum FormState { Initial, Verifying, Error }
-  private FormState _state;
+  private bool _showError;
 
-  public RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel, RepromptPage page, ICommandResult? successResult = null)
+  public RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel)
   {
     _service = service;
     _innerAction = innerAction;
     _actionLabel = actionLabel;
-    _page = page;
-    _successResult = successResult ?? CommandResult.ShowToast($"Copied {actionLabel} to clipboard");
-    _state = FormState.Initial;
-    TemplateJson = BuildTemplate();
+    TemplateJson = BuildInitialTemplate();
   }
 
-  private string BuildTemplate() => _state switch
+  internal void ShowError()
   {
-    FormState.Verifying => BuildVerifyingTemplate(),
-    FormState.Error => BuildErrorTemplate(),
-    _ => BuildInitialTemplate(),
-  };
+    _showError = true;
+    TemplateJson = BuildErrorTemplate();
+  }
 
-  private static string BuildVerifyingTemplate() => """
+  internal void ResetError()
+  {
+    if (_showError)
     {
-        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-        "type": "AdaptiveCard",
-        "version": "1.6",
-        "body": [
-            {
-                "type": "TextBlock",
-                "size": "medium",
-                "weight": "bolder",
-                "text": "Verifying master password...",
-                "horizontalAlignment": "center",
-                "wrap": true,
-                "style": "heading"
-            },
-            {
-                "type": "TextBlock",
-                "text": "Running: bw unlock",
-                "wrap": true,
-                "isSubtle": true,
-                "size": "small"
-            }
-        ]
+      _showError = false;
+      TemplateJson = BuildInitialTemplate();
     }
-    """;
+  }
 
   private static string BuildInitialTemplate() => """
     {
@@ -195,27 +177,9 @@ internal sealed partial class RepromptForm : FormContent
     if (string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();
 
-    _state = FormState.Verifying;
-    TemplateJson = BuildTemplate();
-    _page.IsLoading = true;
+    RepromptPage.RaiseVerificationRequested(
+      new VerificationRequest(password, _service, _innerAction, _actionLabel));
 
-    // SubmitForm is synchronous by SDK design (IFormContent.SubmitForm returns ICommandResult).
-    // bw unlock is a fast local crypto operation with no SynchronizationContext to deadlock on.
-#pragma warning disable VSTHRD002
-    var verified = _service.VerifyMasterPasswordAsync(password).GetAwaiter().GetResult();
-#pragma warning restore VSTHRD002
-
-    _page.IsLoading = false;
-
-    if (!verified)
-    {
-      _state = FormState.Error;
-      TemplateJson = BuildTemplate();
-      return CommandResult.KeepOpen();
-    }
-
-    RepromptPage.RecordVerification();
-    _innerAction();
-    return _successResult;
+    return CommandResult.GoBack();
   }
 }

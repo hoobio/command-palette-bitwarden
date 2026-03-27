@@ -38,9 +38,11 @@ internal static partial class VaultItemHelper
         BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) =>
           () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FirstUri) { UseShellExecute = true }),
         BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
-          () => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } },
+          () => { try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } }
+        ,
         _ => () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-          $"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(item.Id)}") { UseShellExecute = true }),
+          $"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
+        { UseShellExecute = true }),
       };
       return new RepromptPage(service, defaultAction, "Open", CommandResult.Dismiss());
     }
