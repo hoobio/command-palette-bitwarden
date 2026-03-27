@@ -19,7 +19,7 @@ internal sealed class BitwardenCliService
 {
   private readonly BitwardenSettingsManager? _settings;
   private readonly CliProcessFactory _processFactory;
-  private string? _sessionKey;
+  private volatile string? _sessionKey;
   private readonly System.Collections.Concurrent.ConcurrentDictionary<int, ICliProcess> _runningProcesses = new();
   private ICliProcess? _pendingDeviceVerificationProcess;
   private CancellationTokenSource? _pendingDeviceVerificationCts;
