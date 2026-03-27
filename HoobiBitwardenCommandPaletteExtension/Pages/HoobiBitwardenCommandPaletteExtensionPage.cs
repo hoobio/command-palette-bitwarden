@@ -8,6 +8,7 @@ using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension;
@@ -34,6 +35,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private Timer? _syncTimer;
     private ListItem? _syncItem;
     private readonly Timer _iconRefreshTimer;
+    private int _repromptFailures;
+    private DateTime _repromptCooldownUntil;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -47,6 +50,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.CliConfigChanged += OnCliConfigChanged;
         AccessTracker.ItemAccessed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
+        RepromptPage.GraceStarted += OnRepromptGraceStarted;
+        RepromptPage.VerificationRequested += OnVerificationRequested;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         var v = Windows.ApplicationModel.Package.Current.Id.Version;
@@ -57,7 +62,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Title = $"Bitwarden {version}";
 #endif
         Name = "Open";
-        PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
+        PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
         CaptureContext();
     }
 
@@ -340,7 +345,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             return WithDebugLog([hint]);
         }
 
-        PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
+        PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
 
         var item = new ListItem(new Pages.LoginPage(_service, _settings, OnLoginSubmitted))
         {
@@ -458,6 +463,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var showContextTag = _settings?.ShowContextTag.Value != false;
         var totpTagStyle = _settings?.TotpTagStyle.Value ?? "off";
         var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
+        var showProtectedTag = _settings?.ShowProtectedTag.Value != false;
         var showWebsiteIcons = _settings?.ShowWebsiteIcons.Value != false;
         var totpTracked = new List<(ListItem, BitwardenItem, bool)>();
 
@@ -489,7 +495,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     allowContextTag = isContextMatch && contextTagsUsed < contextLimit;
                     if (allowContextTag) contextTagsUsed++;
                 }
-                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showWebsiteIcons);
+                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons);
                 list.Add(listItem);
                 if (totpTagStyle == "live" && item.HasTotp)
                     totpTracked.Add((listItem, item, allowContextTag));
@@ -517,17 +523,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return list.ToArray();
     }
 
-    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showWebsiteIcons = true)
+    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true)
     {
-        var listItem = new ListItem(VaultItemHelper.GetDefaultCommand(item))
+        var listItem = new ListItem(VaultItemHelper.GetDefaultCommand(item, _service))
         {
             Title = item.Name,
             Subtitle = item.Subtitle,
             Icon = VaultItemHelper.GetIcon(item, showWebsiteIcons),
-            MoreCommands = VaultItemHelper.BuildContextItems(item),
+            MoreCommands = VaultItemHelper.BuildContextItems(item, _service),
         };
 
-        var tags = VaultItemHelper.BuildTags(item, showWatchtower, _context, showContextTag, totpTagStyle, showPasskeyTag);
+        var tags = VaultItemHelper.BuildTags(item, showWatchtower, _context, showContextTag, totpTagStyle, showPasskeyTag, showProtectedTag);
         if (tags.Length > 0)
             listItem.Tags = tags;
 
@@ -547,6 +553,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.CliConfigChanged -= OnCliConfigChanged;
         AccessTracker.ItemAccessed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
+        RepromptPage.GraceStarted -= OnRepromptGraceStarted;
+        RepromptPage.VerificationRequested -= OnVerificationRequested;
     }
 
     private void OnIconCached() => _iconRefreshTimer.Change(500, Timeout.Infinite);
@@ -572,8 +580,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
         var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
+        var showProtectedTag = _settings?.ShowProtectedTag.Value != false;
         foreach (var (listItem, vaultItem, allowContextTag) in items)
-            listItem.Tags = VaultItemHelper.BuildTags(vaultItem, showWatchtower, _context, allowContextTag, "live", showPasskeyTag);
+            listItem.Tags = VaultItemHelper.BuildTags(vaultItem, showWatchtower, _context, allowContextTag, "live", showPasskeyTag, showProtectedTag);
     }
 
     private void OnAutoLocking()
@@ -612,6 +621,67 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
             RaiseItemsChanged();
         }
+    }
+
+    private void OnRepromptGraceStarted()
+    {
+        if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+        {
+            lock (_itemsLock)
+                _currentItems = BuildListItems(Search(_currentSearchText));
+            RaiseItemsChanged();
+        }
+    }
+
+    private void OnVerificationRequested(VerificationRequest request)
+    {
+        if (DateTime.UtcNow < _repromptCooldownUntil)
+        {
+            var remaining = (int)(_repromptCooldownUntil - DateTime.UtcNow).TotalSeconds + 1;
+            var status = new StatusMessage { Message = $"Too many failed attempts. Try again in {remaining}s.", State = MessageState.Error };
+            ExtensionHost.ShowStatus(status, StatusContext.Page);
+            _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(status); } catch { } }, TaskScheduler.Default);
+            return;
+        }
+
+        _handlingAction = true;
+        IsLoading = true;
+        ShowLoadingStatus("Verifying master password...", "bw unlock");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var verified = await request.Service.VerifyMasterPasswordAsync(request.Password);
+                if (verified)
+                {
+                    _repromptFailures = 0;
+                    RepromptPage.RecordVerification();
+                    request.InnerAction();
+                    var status = new StatusMessage { Message = $"Copied {request.ActionLabel} to clipboard", State = MessageState.Success };
+                    ExtensionHost.ShowStatus(status, StatusContext.Page);
+                    _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(status); } catch { } }, TaskScheduler.Default);
+                }
+                else
+                {
+                    _repromptFailures++;
+                    if (_repromptFailures >= 5)
+                        _repromptCooldownUntil = DateTime.UtcNow.AddSeconds(30);
+                    var status = new StatusMessage { Message = "Incorrect master password", State = MessageState.Error };
+                    ExtensionHost.ShowStatus(status, StatusContext.Page);
+                    _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(status); } catch { } }, TaskScheduler.Default);
+                }
+
+                lock (_itemsLock)
+                    _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
+            }
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
+        });
     }
 
     private void OnLockRequested()
@@ -869,7 +939,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _twoFactorRequired = false;
                 _pendingEmail = null;
                 _pendingPassword = null;
-                PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
+                PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
                 _currentItems = BuildListItems(Search(_currentSearchText));
@@ -910,7 +980,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _deviceVerificationRequired = false;
                 _pendingEmail = null;
                 _pendingPassword = null;
-                PlaceholderText = "Search your vault... (try is:fav, folder:Work, has:totp, has:passkey, url:github)";
+                PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
                 _currentItems = BuildListItems(Search(_currentSearchText));

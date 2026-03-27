@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
@@ -121,5 +122,27 @@ public class BitwardenSettingsManagerTests : IDisposable
         m.DebugLogging.Value = false;
         FireSettingsChanged(m);
         Assert.False(DebugLogService.Enabled);
+    }
+
+    [Fact]
+    public void RepromptGracePeriod_DefaultValue()
+    {
+        var m = CreateManager();
+        Assert.Equal("60", m.RepromptGracePeriod.Value);
+    }
+
+    [Fact]
+    public void SyncRepromptSettings_PropagatesGracePeriod()
+    {
+        var m = CreateManager();
+        m.RepromptGracePeriod.Value = "120";
+        FireSettingsChanged(m);
+        Assert.Equal(120, RepromptPage.GracePeriodSeconds);
+
+        m.RepromptGracePeriod.Value = "0";
+        FireSettingsChanged(m);
+        Assert.Equal(0, RepromptPage.GracePeriodSeconds);
+
+        RepromptPage.GracePeriodSeconds = 60;
     }
 }

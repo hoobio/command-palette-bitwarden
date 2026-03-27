@@ -123,4 +123,66 @@ public class BitwardenItemTests
     var item = new BitwardenItem { Type = BitwardenItemType.SshKey };
     Assert.Null(item.SshHost);
   }
+
+  // --- Reprompt subtitle masking ---
+
+  [Fact]
+  public void Subtitle_SecureNote_Reprompt_MasksNotes()
+  {
+    var item = new BitwardenItem
+    {
+      Type = BitwardenItemType.SecureNote,
+      Notes = "Secret content that should be hidden",
+      Reprompt = 1,
+    };
+    Assert.Equal("Protected", item.Subtitle);
+  }
+
+  [Fact]
+  public void Subtitle_SecureNote_NoReprompt_ShowsNotes()
+  {
+    var item = new BitwardenItem
+    {
+      Type = BitwardenItemType.SecureNote,
+      Notes = "Visible content",
+      Reprompt = 0,
+    };
+    Assert.Equal("Visible content", item.Subtitle);
+  }
+
+  [Fact]
+  public void Subtitle_SecureNote_Reprompt_NoNotes_ShowsMasked()
+  {
+    var item = new BitwardenItem
+    {
+      Type = BitwardenItemType.SecureNote,
+      Reprompt = 1,
+    };
+    Assert.Equal("Protected", item.Subtitle);
+  }
+
+  [Fact]
+  public void Subtitle_Login_Reprompt_StillShowsUsername()
+  {
+    var item = new BitwardenItem
+    {
+      Type = BitwardenItemType.Login,
+      Username = "user@test.com",
+      Reprompt = 1,
+    };
+    Assert.Equal("user@test.com", item.Subtitle);
+  }
+
+  [Fact]
+  public void Subtitle_Card_Reprompt_StillShowsBrandAndLast4()
+  {
+    var item = new BitwardenItem
+    {
+      Type = BitwardenItemType.Card,
+      CardBrand = "Visa",
+      CardNumber = "4111111111111234",
+      Reprompt = 1,
+    };
+    Assert.Equal("Visa \u00B7\u00B7\u00B7\u00B71234", item.Subtitle);
+  }
 }

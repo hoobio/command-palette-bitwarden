@@ -84,6 +84,7 @@ internal sealed class BitwardenItem
   public string Subtitle => Type switch
   {
     BitwardenItemType.Login => Username ?? string.Empty,
+    BitwardenItemType.SecureNote when Reprompt == 1 => "Protected",
     BitwardenItemType.SecureNote => TruncateLine(Notes, 60) ?? "Secure Note",
     BitwardenItemType.Card => CardBrand != null && CardLast4 != null
         ? $"{CardBrand} ····{CardLast4}" : CardBrand ?? "Card",

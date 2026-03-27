@@ -960,6 +960,16 @@ public class BitwardenCliServiceTests
       Id = "login-nopw", Name = "No Password", Type = BitwardenItemType.Login,
       Uris = [], RevisionDate = DateTime.UtcNow,
     },
+    new()
+    {
+      Id = "note-reprompt", Name = "Protected Note", Type = BitwardenItemType.SecureNote,
+      Reprompt = 1, RevisionDate = DateTime.UtcNow,
+    },
+    new()
+    {
+      Id = "login-reprompt", Name = "Protected Login", Type = BitwardenItemType.Login,
+      Password = "Str0ngPassw0rd!", Reprompt = 1, Uris = [], RevisionDate = DateTime.UtcNow,
+    },
   ];
 
   [Fact]
@@ -1036,7 +1046,7 @@ public class BitwardenCliServiceTests
   {
     var svc = CreateServiceWithFolders();
     var result = svc.ApplyFilter(TestItems, ("type", "login")).ToList();
-    Assert.Equal(3, result.Count);
+    Assert.Equal(4, result.Count);
   }
 
   [Fact]
@@ -1085,7 +1095,7 @@ public class BitwardenCliServiceTests
   {
     var svc = CreateServiceWithFolders();
     var result = svc.ApplyFilter(TestItems, ("has", "password")).ToList();
-    Assert.Equal(2, result.Count);
+    Assert.Equal(3, result.Count);
   }
 
   [Fact]
@@ -1240,7 +1250,7 @@ public class BitwardenCliServiceTests
   {
     var svc = CreateServiceWithFolders();
     var result = svc.ApplyFilter(TestItems, ("has", "pw")).ToList();
-    Assert.Equal(2, result.Count);
+    Assert.Equal(3, result.Count);
   }
 
   [Fact]
@@ -1282,6 +1292,43 @@ public class BitwardenCliServiceTests
     var svc = new BitwardenCliService();
     svc.SetSession("test-key");
     Assert.True(svc.IsUnlocked);
+  }
+
+  // --- is:protected / is:locked / is:reprompt ---
+
+  [Fact]
+  public void ApplyFilter_Is_Protected_ReturnsRepromptItems()
+  {
+    var svc = CreateServiceWithFolders();
+    var result = svc.ApplyFilter(TestItems, ("is", "protected")).ToList();
+    Assert.Equal(2, result.Count);
+    Assert.Contains(result, i => i.Id == "note-reprompt");
+    Assert.Contains(result, i => i.Id == "login-reprompt");
+  }
+
+  [Fact]
+  public void ApplyFilter_Is_Locked_Alias()
+  {
+    var svc = CreateServiceWithFolders();
+    var result = svc.ApplyFilter(TestItems, ("is", "locked")).ToList();
+    Assert.Equal(2, result.Count);
+  }
+
+  [Fact]
+  public void ApplyFilter_Is_Reprompt_Alias()
+  {
+    var svc = CreateServiceWithFolders();
+    var result = svc.ApplyFilter(TestItems, ("is", "reprompt")).ToList();
+    Assert.Equal(2, result.Count);
+  }
+
+  [Fact]
+  public void ApplyFilter_Is_Protected_ExcludesNonRepromptItems()
+  {
+    var svc = CreateServiceWithFolders();
+    var result = svc.ApplyFilter(TestItems, ("is", "protected")).ToList();
+    Assert.DoesNotContain(result, i => i.Id == "note-1");
+    Assert.DoesNotContain(result, i => i.Id == "login-1");
   }
 
   [Fact]

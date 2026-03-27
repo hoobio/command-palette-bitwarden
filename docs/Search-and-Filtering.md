@@ -13,6 +13,7 @@ Use prefix syntax to narrow results. Filters can be combined freely.
 | Filter | Example | Description |
 |--------|---------|-------------|
 | `is:fav` / `is:favorite` | `is:fav github` | Show only favorite items |
+| `is:protected` / `is:locked` / `is:reprompt` | `is:protected` | Items with master password re-prompt enabled |
 | `folder:<name>` | `folder:Work` | Filter by folder name (partial match) |
 | `has:totp` / `has:otp` / `has:2fa` / `has:mfa` | `has:totp` | Items with TOTP configured |
 | `has:passkey` / `has:fido2` / `has:webauthn` / `has:passwordless` | `has:passkey` | Items with a passkey configured |

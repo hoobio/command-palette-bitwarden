@@ -1,5 +1,6 @@
 using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
@@ -61,5 +62,259 @@ public class VaultItemHelperTests
   public void IsValidSshHost_ValidatesCorrectly(string? host, bool expected)
   {
     Assert.Equal(expected, VaultItemHelper.IsValidSshHost(host));
+  }
+
+  [Fact]
+  public void GetDefaultCommand_NoReprompt_ReturnsInvokable()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-1",
+      Type = BitwardenItemType.Login,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var cmd = VaultItemHelper.GetDefaultCommand(item);
+    Assert.IsNotType<RepromptPage>(cmd);
+  }
+
+  [Fact]
+  public void GetDefaultCommand_WithReprompt_ReturnsRepromptPage()
+  {
+    RepromptPage.ClearGracePeriod();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-1",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var cmd = VaultItemHelper.GetDefaultCommand(item, svc);
+    Assert.IsType<RepromptPage>(cmd);
+  }
+
+  [Fact]
+  public void GetDefaultCommand_RepromptNoService_ReturnsInvokable()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-1",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var cmd = VaultItemHelper.GetDefaultCommand(item);
+    Assert.IsNotType<RepromptPage>(cmd);
+  }
+
+  [Fact]
+  public void BuildContextItems_Login_Reprompt_AllFieldsProtected()
+  {
+    RepromptPage.ClearGracePeriod();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-login",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      Username = "user@test.com",
+      Password = "secret",
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item, svc);
+    var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
+    Assert.True(copyItems.Length >= 2);
+    foreach (var ci in copyItems)
+      Assert.IsType<RepromptPage>(ci.Command);
+  }
+
+  [Fact]
+  public void BuildContextItems_Login_NoReprompt_UsernameNotProtected()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-login",
+      Type = BitwardenItemType.Login,
+      Reprompt = 0,
+      Username = "user@test.com",
+      Password = "secret",
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    var usernameItem = contextItems.First(c => c.Title == "Copy Username");
+    Assert.IsNotType<RepromptPage>(usernameItem.Command);
+  }
+
+  [Fact]
+  public void BuildContextItems_Card_Reprompt_CardholderNameProtected()
+  {
+    RepromptPage.ClearGracePeriod();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-card",
+      Type = BitwardenItemType.Card,
+      Reprompt = 1,
+      CardholderName = "John Doe",
+      CardNumber = "4111111111111111",
+      CardCode = "123",
+      CardExpMonth = "12",
+      CardExpYear = "2025",
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item, svc);
+    var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
+    Assert.True(copyItems.Length >= 4);
+    foreach (var ci in copyItems)
+      Assert.IsType<RepromptPage>(ci.Command);
+  }
+
+  [Fact]
+  public void BuildContextItems_Card_NoReprompt_CardholderNameNotProtected()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-card",
+      Type = BitwardenItemType.Card,
+      Reprompt = 0,
+      CardholderName = "John Doe",
+      CardNumber = "4111111111111111",
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    var holderItem = contextItems.First(c => c.Title == "Copy Cardholder Name");
+    Assert.IsNotType<RepromptPage>(holderItem.Command);
+  }
+
+  [Fact]
+  public void BuildContextItems_Identity_Reprompt_AllFieldsProtected()
+  {
+    RepromptPage.ClearGracePeriod();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-id",
+      Type = BitwardenItemType.Identity,
+      Reprompt = 1,
+      IdentityEmail = "test@test.com",
+      IdentityFullName = "Test User",
+      IdentityPhone = "555-0100",
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item, svc);
+    var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
+    Assert.True(copyItems.Length >= 3);
+    foreach (var ci in copyItems)
+      Assert.IsType<RepromptPage>(ci.Command);
+  }
+
+  [Fact]
+  public void BuildContextItems_SshKey_Reprompt_AllFieldsProtected()
+  {
+    RepromptPage.ClearGracePeriod();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-ssh",
+      Type = BitwardenItemType.SshKey,
+      Reprompt = 1,
+      SshPublicKey = "ssh-ed25519 AAAA...",
+      SshFingerprint = "SHA256:abc123",
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item, svc);
+    var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
+    Assert.True(copyItems.Length >= 2);
+    foreach (var ci in copyItems)
+      Assert.IsType<RepromptPage>(ci.Command);
+  }
+
+  [Fact]
+  public void BuildContextItems_CustomField_Reprompt_AllProtected()
+  {
+    RepromptPage.ClearGracePeriod();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-custom",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      CustomFields = new Dictionary<string, CustomField>
+      {
+        ["apiKey"] = new("abc123", false),
+        ["secret"] = new("hidden", true),
+      },
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item, svc);
+    var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
+    foreach (var ci in copyItems)
+      Assert.IsType<RepromptPage>(ci.Command);
+  }
+
+  [Fact]
+  public void RepromptGracePeriod_IsWithinGracePeriod_AfterVerification()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+    Assert.False(RepromptPage.IsWithinGracePeriod());
+
+    RepromptPage.RecordVerification();
+    Assert.True(RepromptPage.IsWithinGracePeriod());
+  }
+
+  [Fact]
+  public void RepromptGracePeriod_ClearGracePeriod_ResetsState()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.RecordVerification();
+    Assert.True(RepromptPage.IsWithinGracePeriod());
+
+    RepromptPage.ClearGracePeriod();
+    Assert.False(RepromptPage.IsWithinGracePeriod());
+  }
+
+  [Fact]
+  public void RepromptGracePeriod_ZeroSeconds_AlwaysFalse()
+  {
+    RepromptPage.GracePeriodSeconds = 0;
+    RepromptPage.RecordVerification();
+    Assert.False(RepromptPage.IsWithinGracePeriod());
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+  }
+
+  [Fact]
+  public void GetDefaultCommand_WithReprompt_GracePeriod_BypassesReprompt()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.RecordVerification();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-1",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var cmd = VaultItemHelper.GetDefaultCommand(item, svc);
+    Assert.IsNotType<RepromptPage>(cmd);
+    RepromptPage.ClearGracePeriod();
+  }
+
+  [Fact]
+  public void BuildContextItems_Login_Reprompt_GracePeriod_BypassesReprompt()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.RecordVerification();
+    var svc = new BitwardenCliService();
+    var item = new BitwardenItem
+    {
+      Id = "test-login",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      Username = "user@test.com",
+      Password = "secret",
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item, svc);
+    var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
+    Assert.True(copyItems.Length >= 2);
+    foreach (var ci in copyItems)
+      Assert.IsNotType<RepromptPage>(ci.Command);
+    RepromptPage.ClearGracePeriod();
   }
 }

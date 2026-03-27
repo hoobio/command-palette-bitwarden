@@ -42,6 +42,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Display a 'Context' tag on vault items that match the foreground application",
         false);
 
+    public ToggleSetting ShowProtectedTag { get; } = new(
+        "showProtectedTag",
+        "Show Protected Tag",
+        "Display a \"\uD83D\uDD12\" tag on vault items that require master password re-prompt",
+        true);
+
     public ToggleSetting ShowPasskeyTag { get; } = new(
         "showPasskeyTag",
         "Show Passkey Tag",
@@ -131,6 +137,18 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Custom directory for Bitwarden CLI data (data.json). Overrides both the default location and the portable directory toggle. Leave empty to use the default or portable location",
         "");
 
+    public ChoiceSetSetting RepromptGracePeriod { get; } = new(
+        "repromptGracePeriod",
+        "Re-prompt Grace Period",
+        "After verifying your master password for a protected item, skip re-verification for this duration",
+        [
+            new("No grace period", "0"),
+            new("30 seconds", "30"),
+            new("1 minute", "60"),
+            new("2 minutes", "120"),
+            new("5 minutes", "300"),
+        ]);
+
     public ToggleSetting DebugLogging { get; } = new(
         "debugLogging",
         "Debug Logging",
@@ -144,12 +162,14 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         ContextItemLimit.Value = "3";
         TotpTagStyle.Value = "static";
         BackgroundRefresh.Value = "5";
+        RepromptGracePeriod.Value = "60";
         Settings.Add(RememberSession);
         Settings.Add(ShowWebsiteIcons);
         Settings.Add(AutoLockTimeout);
         Settings.Add(ShowWatchtowerTags);
         Settings.Add(ContextAwareness);
         Settings.Add(ShowContextTag);
+        Settings.Add(ShowProtectedTag);
         Settings.Add(ShowPasskeyTag);
         Settings.Add(TotpTagStyle);
         Settings.Add(ContextItemLimit);
@@ -159,11 +179,13 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         Settings.Add(CliDirectoryOverride);
         Settings.Add(UsePortableDataDirectory);
         Settings.Add(CliDataDirectoryOverride);
+        Settings.Add(RepromptGracePeriod);
         Settings.Add(DebugLogging);
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();
         SyncClipboardSettings();
+        SyncRepromptSettings();
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("startup");
     }
@@ -172,6 +194,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     {
         SaveSettings();
         SyncClipboardSettings();
+        SyncRepromptSettings();
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("settings changed");
 
@@ -184,6 +207,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         SecureClipboardService.AutoClearEnabled = AutoClearClipboard.Value;
         if (int.TryParse(ClipboardClearDelay.Value, out var delay))
             SecureClipboardService.ClearDelaySeconds = delay;
+    }
+
+    private void SyncRepromptSettings()
+    {
+        var seconds = int.TryParse(RepromptGracePeriod.Value, out var gp) ? gp : 60;
+        Pages.RepromptPage.GracePeriodSeconds = Math.Clamp(seconds, 0, 300);
     }
 
     private readonly Dictionary<string, object?> _defaults = [];
@@ -221,6 +250,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (ShowWatchtowerTags.Key, ShowWatchtowerTags.Value);
         yield return (ContextAwareness.Key, ContextAwareness.Value);
         yield return (ShowContextTag.Key, ShowContextTag.Value);
+        yield return (ShowProtectedTag.Key, (object?)ShowProtectedTag.Value);
         yield return (ShowPasskeyTag.Key, ShowPasskeyTag.Value);
         yield return (TotpTagStyle.Key, TotpTagStyle.Value);
         yield return (AutoLockTimeout.Key, AutoLockTimeout.Value);
@@ -231,6 +261,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (CliDirectoryOverride.Key, CliDirectoryOverride.Value);
         yield return (UsePortableDataDirectory.Key, (object?)UsePortableDataDirectory.Value);
         yield return (CliDataDirectoryOverride.Key, CliDataDirectoryOverride.Value);
+        yield return (RepromptGracePeriod.Key, RepromptGracePeriod.Value);
         yield return (DebugLogging.Key, (object?)DebugLogging.Value);
     }
 }

@@ -53,6 +53,14 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | Off |
 | **Description** | Display a "Context" tag on vault items that match the foreground application. Requires Context Awareness to be enabled. |
 
+### Show Protected Tag
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | On |
+| **Description** | Display a "🔒" tag on vault items that require master password re-prompt before accessing sensitive fields. |
+
 ### Show Passkey Tag
 
 | | |
@@ -136,3 +144,12 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Type** | Toggle |
 | **Default** | Off |
 | **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. Logs are kept in memory only and cleared when the extension process restarts. No sensitive data (passwords, session keys) is logged. |
+
+### Re-prompt Grace Period
+
+| | |
+|---|---|
+| **Type** | Choice (dropdown) |
+| **Default** | 1 minute |
+| **Options** | No grace period, 30 seconds, 1 minute, 2 minutes, 5 minutes |
+| **Description** | After verifying your master password for a protected item, skip re-verification for this duration. During the grace period, protected actions execute instantly without any prompt. Set to **No grace period** to always require re-entry. The grace period is cleared when the vault is locked or you log out. |
