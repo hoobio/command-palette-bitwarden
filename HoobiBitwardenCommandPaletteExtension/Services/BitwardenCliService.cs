@@ -783,7 +783,8 @@ internal sealed class BitwardenCliService
 
   public async Task LockAsync()
   {
-    DebugLogService.Log("Lock", "LockAsync called");
+    var rememberSession = _settings?.RememberSession.Value == true;
+    DebugLogService.Log("Lock", rememberSession ? "LockAsync called (soft lock, rememberSession=True)" : "LockAsync called");
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
     lock (_cacheLock)
@@ -791,12 +792,16 @@ internal sealed class BitwardenCliService
       _cache = [];
       _cacheLoaded = false;
     }
-    SessionStore.Clear();
+    if (!rememberSession)
+      SessionStore.Clear();
     Pages.RepromptPage.ClearGracePeriod();
     StatusChanged?.Invoke();
 
-    try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); }
-    catch (Exception ex) { DebugLogService.Log("Auth", $"bw lock failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
+    if (!rememberSession)
+    {
+      try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); }
+      catch (Exception ex) { DebugLogService.Log("Auth", $"bw lock failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
+    }
   }
 
   public async Task<string?> SetServerUrlAsync(ServerConfig config)
@@ -1011,6 +1016,11 @@ internal sealed class BitwardenCliService
 
   public async Task RefreshCacheAsync()
   {
+    if (!IsUnlocked)
+    {
+      DebugLogService.Log("Cache", "RefreshCacheAsync skipped: vault not unlocked");
+      return;
+    }
     if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0)
     {
       DebugLogService.Log("Cache", "RefreshCacheAsync skipped: already refreshing");
@@ -1057,6 +1067,11 @@ internal sealed class BitwardenCliService
     DebugLogService.Log("Sync", "SyncVaultAsync started");
     await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
     Interlocked.Exchange(ref _refreshing, 0);
+    if (!IsUnlocked)
+    {
+      DebugLogService.Log("Sync", "SyncVaultAsync: session lost during sync, skipping cache refresh");
+      return;
+    }
     await RefreshCacheAsync();
     DebugLogService.Log("Sync", "SyncVaultAsync completed");
   }
@@ -1294,9 +1309,13 @@ internal sealed class BitwardenCliService
 
   private void HandleInvalidSession()
   {
-    DebugLogService.Log("Session", "HandleInvalidSession: clearing session, cache, and locking vault");
+    var rememberSession = _settings?.RememberSession.Value == true;
+    DebugLogService.Log("Session", rememberSession
+      ? "HandleInvalidSession: clearing session and cache (preserving stored credential, rememberSession=True)"
+      : "HandleInvalidSession: clearing session, cache, and locking vault");
     _sessionKey = null;
-    SessionStore.Clear();
+    if (!rememberSession)
+      SessionStore.Clear();
     lock (_cacheLock)
     {
       _cache = [];
