@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.7.0...v1.7.1) (2026-03-29)
+
+
+### Bug Fixes
+
+* add Steam Guard TOTP support ([#126](https://github.com/hoobio/command-palette-bitwarden/issues/126)) ([1a7f632](https://github.com/hoobio/command-palette-bitwarden/commit/1a7f632a420bcb7923b250a05e88ad55ab096430))
+* resolve memory leaks and improve performance for large vaults ([#123](https://github.com/hoobio/command-palette-bitwarden/issues/123)) ([7d01a86](https://github.com/hoobio/command-palette-bitwarden/commit/7d01a86db7a330ca957c455e053375dae79685fd))
+
+
+### Continuous Integration
+
+* retry release-please on transient label validation failure ([#125](https://github.com/hoobio/command-palette-bitwarden/issues/125)) ([68ca1fe](https://github.com/hoobio/command-palette-bitwarden/commit/68ca1fe6d17fdcdd0642be8854334b9d4c709b2c))
+
 ## [1.7.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.3...v1.7.0) (2026-03-29)
 
 
