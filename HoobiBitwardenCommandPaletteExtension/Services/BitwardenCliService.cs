@@ -27,11 +27,8 @@ internal sealed class BitwardenCliService
   private Task<(string Content, bool Detected)>? _pendingStderrTask;
 
 #pragma warning disable CA1859 // delegate CliProcessFactory requires ICliProcess return type
-  private static ICliProcess DefaultProcessFactory(ProcessStartInfo psi)
-  {
-    var process = Process.Start(psi)!;
-    return new RealCliProcess(process);
-  }
+  private static ICliProcess DefaultProcessFactory(ProcessStartInfo psi) =>
+    new RealCliProcess(Process.Start(psi)!);
 #pragma warning restore CA1859
 
   private List<BitwardenItem> _cache = [];
@@ -136,6 +133,8 @@ internal sealed class BitwardenCliService
   private readonly Lock _configChangeLock = new();
   private string _lastCliExecutable;
   private string? _lastDataDirectory;
+  private bool _lastRememberSession;
+  private string? _cliVersion;
 
   public BitwardenCliService(BitwardenSettingsManager? settings = null, CliProcessFactory? processFactory = null)
   {
@@ -143,12 +142,14 @@ internal sealed class BitwardenCliService
     _processFactory = processFactory ?? DefaultProcessFactory;
     _lastCliExecutable = CliExecutable;
     _lastDataDirectory = DataDirectory;
+    _lastRememberSession = _settings?.RememberSession.Value ?? false;
     ApplyAutoLockSetting();
     AccessTracker.ItemAccessed += ResetAutoLockTimer;
     if (_settings != null)
     {
       _settings.Settings.SettingsChanged += (_, _) => ApplyAutoLockSetting();
       _settings.Settings.SettingsChanged += (_, _) => CheckCliConfigChanged();
+      _settings.Settings.SettingsChanged += (_, _) => CheckRememberSessionDisabled();
     }
   }
 
@@ -175,6 +176,20 @@ internal sealed class BitwardenCliService
       _lastDataDirectory = newData;
     }
     ResetForCliConfigChange();
+  }
+
+  private void CheckRememberSessionDisabled()
+  {
+    var current = _settings?.RememberSession.Value ?? false;
+    if (_lastRememberSession && !current)
+    {
+      _lastRememberSession = false;
+      _ = LockAsync();
+    }
+    else
+    {
+      _lastRememberSession = current;
+    }
   }
 
   private void ResetForCliConfigChange()
@@ -219,11 +234,14 @@ internal sealed class BitwardenCliService
       {
         AutoLocking?.Invoke();
         await LockAsync();
-        AutoLocked?.Invoke();
       }
       catch (Exception ex)
       {
         DebugLogService.Log("AutoLock", $"Auto-lock exception: {ex.GetType().Name}: {ex.Message}");
+      }
+      finally
+      {
+        AutoLocked?.Invoke();
       }
     });
   }
@@ -266,7 +284,7 @@ internal sealed class BitwardenCliService
         DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
         return SetStatus(VaultStatus.CliNotFound);
       }
-      DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable})");
+      DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable}), version: {_cliVersion ?? "unknown"}");
 
       if (_sessionKey != null)
       {
@@ -321,7 +339,10 @@ internal sealed class BitwardenCliService
   {
     _lastStatus = status;
     if (status == VaultStatus.Unlocked)
+    {
       ResetAutoLockTimer();
+      _ = Task.Run(FetchServerUrlAsync);
+    }
     else
     {
       _autoLockTimer?.Dispose();
@@ -345,11 +366,12 @@ internal sealed class BitwardenCliService
       };
       ApplyEnvironment(psi);
       psi.Environment["BW_NOINTERACTION"] = "true";
+      psi.Environment["NO_COLOR"] = "1";
       using var process = _processFactory(psi);
       var line = process.StandardOutput.ReadLine();
-      var available = line != null;
+      _cliVersion = line?.Trim();
       try { process.Kill(true); } catch { }
-      return available;
+      return line != null;
     }
     catch
     {
@@ -374,7 +396,6 @@ internal sealed class BitwardenCliService
         if (line.Contains("Syncing complete.", StringComparison.OrdinalIgnoreCase))
         {
           try { process.Kill(true); } catch { }
-          await FetchServerUrlAsync();
           DebugLogService.Log("Verify", "Session verified successfully");
           return true;
         }
@@ -409,6 +430,30 @@ internal sealed class BitwardenCliService
     {
       DebugLogService.Log("Status", $"FetchStatusAsync exception: {ex.GetType().Name}: {ex.Message}");
       return VaultStatus.Locked;
+    }
+  }
+
+  public async Task<(bool Success, string? Error)> UnlockWithBiometricsAsync(Action<string>? onStatus = null)
+  {
+    DebugLogService.Log("Unlock", "UnlockWithBiometricsAsync started");
+    try
+    {
+      var sessionKey = await DesktopIpcService.TryBiometricUnlockAsync(DataDirectory, onStatus);
+      if (string.IsNullOrEmpty(sessionKey))
+        return (false, "Biometric unlock was cancelled or unavailable");
+
+      _sessionKey = sessionKey;
+      SetStatus(VaultStatus.Unlocked);
+      DebugLogService.Log("Unlock", "Biometric unlock successful, session key obtained");
+      BitwardenSettingsManager.RecordBiometricSuccess();
+      if (_settings?.RememberSession.Value == true)
+        SessionStore.Save(sessionKey);
+      return (true, null);
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Unlock", $"UnlockWithBiometricsAsync exception: {ex.GetType().Name}: {ex.Message}");
+      return (false, ex.Message);
     }
   }
 
@@ -781,10 +826,12 @@ internal sealed class BitwardenCliService
     catch (Exception ex) { DebugLogService.Log("Auth", $"bw logout failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
   }
 
-  public async Task LockAsync()
+  public async Task LockAsync(bool userInitiated = false)
   {
-    var rememberSession = _settings?.RememberSession.Value == true;
-    DebugLogService.Log("Lock", rememberSession ? "LockAsync called (soft lock, rememberSession=True)" : "LockAsync called");
+    var rememberSession = _settings?.RememberSession.Value == true && !userInitiated;
+    DebugLogService.Log("Lock", rememberSession
+      ? "LockAsync called (soft lock, rememberSession=True)"
+      : userInitiated ? "LockAsync called (user-initiated, clearing credential)" : "LockAsync called");
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
     lock (_cacheLock)
@@ -1099,12 +1146,11 @@ internal sealed class BitwardenCliService
     // Set _warmupTask synchronously so InitializeAsync always awaits the real task,
     // but run the actual CLI work on ThreadPool to avoid blocking the COM activation thread.
     _warmupTask = Task.Run(RunWarmupAsync);
-    if (DebugLogService.Enabled)
-      _ = Task.Run(async () => { try { await LogEnvironmentInfoAsync(); } catch (Exception ex) { DebugLogService.Log("Env", $"Environment info logging failed: {ex.GetType().Name}: {ex.Message}"); } });
+    _ = Task.Run(() => { try { LogEnvironmentInfo(); } catch (Exception ex) { DebugLogService.Log("Env", $"Environment info logging failed: {ex.GetType().Name}: {ex.Message}"); } });
     return _warmupTask;
   }
 
-  private async Task LogEnvironmentInfoAsync()
+  private static void LogEnvironmentInfo()
   {
     var appVersion = Assembly.GetExecutingAssembly()
         .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
@@ -1130,21 +1176,45 @@ internal sealed class BitwardenCliService
     catch (Exception) { }
 
     DebugLogService.Log("Env", $"Extension={appVersion}, Windows={windowsVersion}, PowerToys={powerToysVersion}");
-
-    try
-    {
-      var bwVersion = (await RunCliAsync("--version", 5_000)).Trim();
-      DebugLogService.Log("Env", $"bw --version: {bwVersion}");
-    }
-    catch (Exception ex)
-    {
-      DebugLogService.Log("Env", $"bw --version failed: {ex.GetType().Name}: {ex.Message}");
-    }
   }
 
   private async Task RunWarmupAsync()
   {
     DebugLogService.Log("Warmup", "RunWarmupAsync started");
+
+    if (_settings?.RememberSession.Value == true)
+    {
+      var stored = SessionStore.Load();
+      if (!string.IsNullOrEmpty(stored))
+      {
+        DebugLogService.Log("Warmup", "Fast session restore: loading items with stored credential");
+        _sessionKey = stored;
+        _lastStatus = VaultStatus.Unlocked;
+        try
+        {
+          await RefreshCacheAsync();
+          if (IsCacheLoaded)
+          {
+            SetStatus(VaultStatus.Unlocked);
+            Pages.RepromptPage.RecordVerification();
+            _ = Task.Run(async () =>
+            {
+              try { await RunCliAsync("sync", CliTimeoutMs, "Syncing complete."); DebugLogService.Log("Sync", "Background sync completed"); }
+              catch (Exception ex) { DebugLogService.Log("Sync", $"Background sync failed: {ex.GetType().Name}: {ex.Message}"); }
+            });
+            DebugLogService.Log("Warmup", "RunWarmupAsync completed (fast path)");
+            WarmupCompleted?.Invoke();
+            return;
+          }
+        }
+        catch (InvalidOperationException)
+        {
+          DebugLogService.Log("Warmup", "Fast session restore failed (session expired), clearing credential");
+          SessionStore.Clear();
+        }
+      }
+    }
+
     var status = await GetVaultStatusAsync();
     DebugLogService.Log("Warmup", $"Vault status: {status}");
     if (status == VaultStatus.Unlocked)
@@ -1195,6 +1265,7 @@ internal sealed class BitwardenCliService
 
     ApplyEnvironment(psi);
     psi.Environment["BW_NOINTERACTION"] = "true";
+    psi.Environment["NO_COLOR"] = "1";
 
     var process = _processFactory(psi);
     process.StandardInput.Close();
@@ -1235,48 +1306,100 @@ internal sealed class BitwardenCliService
   private const int CliTimeoutMs = 30_000;
   private const int CliLogoutTimeoutMs = 3_000;
 
-  // Reads stdout line-by-line. Returns immediately on the first valid JSON line (object or array),
-  // or on the first line matching earlyExitText. Falls back to returning all accumulated stdout
+  // Reads stdout in chunks, using character-level JSON brace matching for early-exit.
+  // ReadLineAsync blocks until the bw CLI process exits (~3s) because Node.js pkg doesn't
+  // flush stdout on write. Chunk-based ReadAsync returns data as soon as the OS buffer has
+  // bytes, then brace tracking detects complete JSON immediately (~1s).
+  // Also matches earlyExitText per-chunk. Falls back to returning all accumulated stdout
   // if neither is found. Stderr is drained in the background; on empty stdout the error is checked
   // for session-invalid indicators (BW_NOINTERACTION ensures the CLI never prompts interactively).
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
   {
     DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
+    var sw = System.Diagnostics.Stopwatch.StartNew();
     using var process = StartProcess(args);
     using var cts = new CancellationTokenSource(timeoutMs);
     try
     {
       var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
-      var fallbackLines = new System.Text.StringBuilder();
-      string? line;
-      while ((line = await process.StandardOutput.ReadLineAsync(cts.Token)) != null)
+      var reader = process.StandardOutput;
+      var buffer = new char[4096];
+      var accum = new System.Text.StringBuilder();
+      int depth = 0;
+      int jsonStartIdx = -1;
+      bool inJsonString = false;
+      bool jsonEscape = false;
+
+      int n;
+      while ((n = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), cts.Token)) > 0)
       {
-        var trimmed = line.Trim();
-        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+        for (int i = 0; i < n; i++)
         {
-          _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
-          try { process.Kill(true); } catch { }
-          return trimmed;
+          char c = buffer[i];
+          if (c == '\n' || c == '\r')
+            continue;
+
+          accum.Append(c);
+
+          if (jsonStartIdx >= 0)
+          {
+            if (jsonEscape) { jsonEscape = false; continue; }
+            if (c == '\\' && inJsonString) { jsonEscape = true; continue; }
+            if (c == '"') { inJsonString = !inJsonString; continue; }
+            if (inJsonString) continue;
+
+            if (c == '{' || c == '[') depth++;
+            else if (c == '}' || c == ']')
+            {
+              depth--;
+              if (depth == 0)
+              {
+                var json = accum.ToString()[jsonStartIdx..].Trim();
+                _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+                try { process.Kill(true); } catch { }
+                DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON early-exit ({sw.ElapsedMilliseconds}ms)");
+                return json;
+              }
+            }
+          }
+          else if (c == '{' || c == '[')
+          {
+            jsonStartIdx = accum.Length - 1;
+            depth = 1;
+          }
         }
-        if (earlyExitText != null && line.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
+
+        if (earlyExitText != null)
         {
-          _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
-          try { process.Kill(true); } catch { }
-          return line;
+          var text = accum.ToString();
+          if (text.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
+          {
+            _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+            try { process.Kill(true); } catch { }
+            DebugLogService.Log("CLI", $"RunCliAsync: bw {args} text early-exit ({sw.ElapsedMilliseconds}ms)");
+            return text.Trim();
+          }
         }
-        fallbackLines.AppendLine(line);
+      }
+
+      if (jsonStartIdx >= 0)
+      {
+        DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON EOF-exit ({sw.ElapsedMilliseconds}ms)");
+        return accum.ToString()[jsonStartIdx..].Trim();
       }
 
       var stderr = (await stderrTask).Trim();
-      if (IsSessionInvalidError(stderr))
+      var fallbackStr = accum.ToString().Trim();
+      var errorText = !string.IsNullOrEmpty(stderr) ? stderr : fallbackStr;
+      if (IsSessionInvalidError(errorText))
       {
-        DebugLogService.Log("CLI", $"Session invalid detected in bw {args}: stderr='{stderr}'");
+        DebugLogService.Log("CLI", $"Session invalid detected in bw {args}: '{errorText}'");
         HandleInvalidSession();
-        throw new InvalidOperationException("Session expired — vault is locked");
+        throw new InvalidOperationException("Session expired - vault is locked");
       }
 
-      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback output, {fallbackLines.Length} chars)");
-      return fallbackLines.ToString();
+      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms): {(fallbackStr.Length > 200 ? fallbackStr[..200] + "..." : fallbackStr)}");
+      return fallbackStr;
     }
     catch (OperationCanceledException)
     {
