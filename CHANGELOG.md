@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.7.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.3...v1.7.0) (2026-03-29)
+
+
+### Features
+
+* add debug logging system for diagnosing issues (AB[#88](https://github.com/hoobio/command-palette-bitwarden/issues/88)) ([#102](https://github.com/hoobio/command-palette-bitwarden/issues/102)) ([cc991fc](https://github.com/hoobio/command-palette-bitwarden/commit/cc991fc3809820df9ac0e5d9ae4d5dc67f7720e8))
+* add fast session restore ([e6c1eae](https://github.com/hoobio/command-palette-bitwarden/commit/e6c1eae8ee477ff0ab79b4114343e2a1f4724d0f))
+* add Windows Hello biometric unlock support (closes [#120](https://github.com/hoobio/command-palette-bitwarden/issues/120)) ([e6c1eae](https://github.com/hoobio/command-palette-bitwarden/commit/e6c1eae8ee477ff0ab79b4114343e2a1f4724d0f))
+* add Windows Hello biometric unlock with CLI performance improvements ([#122](https://github.com/hoobio/command-palette-bitwarden/issues/122)) ([e6c1eae](https://github.com/hoobio/command-palette-bitwarden/commit/e6c1eae8ee477ff0ab79b4114343e2a1f4724d0f))
+* CLI path overrides, portable data directory, and card brand logos ([#92](https://github.com/hoobio/command-palette-bitwarden/issues/92)) ([628f75c](https://github.com/hoobio/command-palette-bitwarden/commit/628f75c74f0a221fc62422351e424301c197c37f))
+
+
+### Bug Fixes
+
+* add volatile to _sessionKey in BitwardenCliService ([#113](https://github.com/hoobio/command-palette-bitwarden/issues/113)) ([6539ce5](https://github.com/hoobio/command-palette-bitwarden/commit/6539ce5061db84256c206b622ed69daf1739893a)), closes [#111](https://github.com/hoobio/command-palette-bitwarden/issues/111)
+* always collect debug logs regardless of enabled setting ([e6c1eae](https://github.com/hoobio/command-palette-bitwarden/commit/e6c1eae8ee477ff0ab79b4114343e2a1f4724d0f))
+* auto-dismiss biometric warning toast and shorten error tags ([e6c1eae](https://github.com/hoobio/command-palette-bitwarden/commit/e6c1eae8ee477ff0ab79b4114343e2a1f4724d0f))
+* enforce master password re-prompt for protected vault items ([#110](https://github.com/hoobio/command-palette-bitwarden/issues/110)) ([b31a100](https://github.com/hoobio/command-palette-bitwarden/commit/b31a10051db68c031694c6d49410f1ece90b0a66))
+* **HandleInvalidSession:** preserve `SessionStore` credential when ([708ec62](https://github.com/hoobio/command-palette-bitwarden/commit/708ec62695b4bdbac87062f19ab157743ea14c66))
+* **LockAsync:** perform a soft lock — clear in-memory session/cache and ([708ec62](https://github.com/hoobio/command-palette-bitwarden/commit/708ec62695b4bdbac87062f19ab157743ea14c66))
+* persist RememberSession and reprompt grace period across restarts ([#116](https://github.com/hoobio/command-palette-bitwarden/issues/116)) ([86027fe](https://github.com/hoobio/command-palette-bitwarden/commit/86027feeb89987b8b4c054318694e84d4f0905e4))
+* preserve stored session credential when rememberSession is enabled ([#121](https://github.com/hoobio/command-palette-bitwarden/issues/121)) ([708ec62](https://github.com/hoobio/command-palette-bitwarden/commit/708ec62695b4bdbac87062f19ab157743ea14c66))
+* **RefreshCacheAsync:** skip early if vault is not unlocked, preventing ([708ec62](https://github.com/hoobio/command-palette-bitwarden/commit/708ec62695b4bdbac87062f19ab157743ea14c66))
+* remove broken Open in Bitwarden command, promote View in Web Vault to Ctrl+O ([#108](https://github.com/hoobio/command-palette-bitwarden/issues/108)) ([0f983cb](https://github.com/hoobio/command-palette-bitwarden/commit/0f983cbf007d52191b41ee754b46ade47494f251)), closes [#99](https://github.com/hoobio/command-palette-bitwarden/issues/99)
+* resolve race condition in SubmitDeviceVerificationAsync stream handling ([#106](https://github.com/hoobio/command-palette-bitwarden/issues/106)) ([b9c8aa5](https://github.com/hoobio/command-palette-bitwarden/commit/b9c8aa583ee1c05aad38572231f8adf43a82b797))
+* resolve search freeze during vault loading (closes [#119](https://github.com/hoobio/command-palette-bitwarden/issues/119)) ([e6c1eae](https://github.com/hoobio/command-palette-bitwarden/commit/e6c1eae8ee477ff0ab79b4114343e2a1f4724d0f))
+* set UTF-8 encoding on CLI process stdout/stderr streams ([#112](https://github.com/hoobio/command-palette-bitwarden/issues/112)) ([0a4984b](https://github.com/hoobio/command-palette-bitwarden/commit/0a4984bab3eeb62757599f872aee4b281ea84a33))
+* strip trailing non-JSON CLI output and harden RunCliAsync json detection ([#104](https://github.com/hoobio/command-palette-bitwarden/issues/104)) ([a645c66](https://github.com/hoobio/command-palette-bitwarden/commit/a645c66671fecc9a278e2a54e6bb7a03fe3cdeb4))
+* **SyncVaultAsync:** abort before calling `RefreshCacheAsync` if the ([708ec62](https://github.com/hoobio/command-palette-bitwarden/commit/708ec62695b4bdbac87062f19ab157743ea14c66))
+
+
+### Performance Improvements
+
+* chunk-based CLI reading for 3x speedup ([e6c1eae](https://github.com/hoobio/command-palette-bitwarden/commit/e6c1eae8ee477ff0ab79b4114343e2a1f4724d0f))
+
+
+### Documentation
+
+* add community health files (CODE_OF_CONDUCT.md, CONTRIBUTING.md, ([15aa320](https://github.com/hoobio/command-palette-bitwarden/commit/15aa3204ee2fe7bbfbc798c6bbef58bab06a20d8))
+
+
+### Code Refactoring
+
+* remove ExtractJsonArray, ExtractTopLevelObjects and dead code ([#107](https://github.com/hoobio/command-palette-bitwarden/issues/107)) ([436ceef](https://github.com/hoobio/command-palette-bitwarden/commit/436ceef2b88919a760b4dc2112dfbf46471291f4))
+
+
+### Build System
+
+* **deps:** bump actions/create-github-app-token from 2 to 3 ([#100](https://github.com/hoobio/command-palette-bitwarden/issues/100)) ([7e90a77](https://github.com/hoobio/command-palette-bitwarden/commit/7e90a772332b3161ec356b026cd0e754e910f3b3))
+* **deps:** bump dorny/paths-filter from 3 to 4 ([#101](https://github.com/hoobio/command-palette-bitwarden/issues/101)) ([96fd512](https://github.com/hoobio/command-palette-bitwarden/commit/96fd51270327611c4421abdf856de9d05956e1e7))
+
+
+### Continuous Integration
+
+* fix pre-release and release jobs skipped on push to main ([#94](https://github.com/hoobio/command-palette-bitwarden/issues/94)) ([a4d01cc](https://github.com/hoobio/command-palette-bitwarden/commit/a4d01cc044f54da524dcc11e1d282d76ac72c262))
+* fix pre-release version stamping and required checks on docs PRs ([#95](https://github.com/hoobio/command-palette-bitwarden/issues/95)) ([15aa320](https://github.com/hoobio/command-palette-bitwarden/commit/15aa3204ee2fe7bbfbc798c6bbef58bab06a20d8))
+* sign MSIX packages on all builds, not just main pushes ([#103](https://github.com/hoobio/command-palette-bitwarden/issues/103)) ([d48d6a0](https://github.com/hoobio/command-palette-bitwarden/commit/d48d6a0d368c05cf97fdb278464e7a0f4167843a))
+* use GitHub App token for release-please and run pre-release in RP PR ([#96](https://github.com/hoobio/command-palette-bitwarden/issues/96)) ([aba50d7](https://github.com/hoobio/command-palette-bitwarden/commit/aba50d7c6f25a6fbc6b5f894a902a56d56b9844f))
+
 ## [1.6.3](https://github.com/hoobio/command-palette-bitwarden/compare/v1.6.2...v1.6.3) (2026-03-19)
 
 
