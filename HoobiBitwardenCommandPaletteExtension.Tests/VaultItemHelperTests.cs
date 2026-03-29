@@ -382,4 +382,60 @@ public class VaultItemHelperTests
     Assert.False(RepromptPage.IsWithinGracePeriod());
     RepromptPage.ClearGracePeriod();
   }
+
+  [Fact]
+  public void BuildBaseTags_ExcludesTotp()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "totp-1",
+      Type = BitwardenItemType.Login,
+      Favorite = true,
+      TotpSecret = "JBSWY3DPEHPK3PXP",
+    };
+    var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false);
+    Assert.Single(baseTags);
+    Assert.Contains("\u2605", baseTags[0].Text, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public void BuildTags_IncludesTotp_WhenLive()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "totp-2",
+      Type = BitwardenItemType.Login,
+      HasTotp = true,
+      TotpSecret = "JBSWY3DPEHPK3PXP",
+    };
+    var tags = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live");
+    Assert.Single(tags);
+    Assert.Contains("s)", tags[0].Text, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public void BuildTotpTag_ReturnsLiveTag()
+  {
+    var tag = VaultItemHelper.BuildTotpTag("JBSWY3DPEHPK3PXP");
+    Assert.NotNull(tag);
+    Assert.Contains("s)", tag!.Text, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public void BuildBaseTags_AndBuildTags_ProduceSameNonTotpTags()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "combo-1",
+      Type = BitwardenItemType.Login,
+      Favorite = true,
+      HasTotp = true,
+      TotpSecret = "JBSWY3DPEHPK3PXP",
+    };
+    var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false);
+    var fullTags = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live");
+    Assert.Equal(baseTags.Length + 1, fullTags.Length);
+    for (int i = 0; i < baseTags.Length; i++)
+      Assert.Equal(baseTags[i].Text, fullTags[i].Text);
+  }
 }

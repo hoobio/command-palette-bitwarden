@@ -19,7 +19,7 @@ internal static partial class VaultItemHelper
 {
   internal static IconInfo GetIcon(BitwardenItem item, bool showWebsiteIcons = true) => item.Type switch
   {
-    BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item.FirstUri) : new IconInfo("\uE774"),
+    BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item) : new IconInfo("\uE774"),
     BitwardenItemType.SecureNote => new IconInfo("\uE70B"),
     BitwardenItemType.Card => showWebsiteIcons && item.CardBrand != null
       ? GetCardBrandIcon(item.CardBrand)
@@ -96,6 +96,20 @@ internal static partial class VaultItemHelper
 
   internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off", bool showPasskeyTag = true, bool showProtectedTag = true)
   {
+    var baseTags = BuildBaseTags(item, showWatchtowerTags, context, showContextTag, showPasskeyTag, showProtectedTag);
+
+    if (totpTagStyle != "off" && item.HasTotp)
+    {
+      var totpTag = totpTagStyle == "live" ? GetLiveTotpTag(item.TotpSecret!) : GetStaticTotpTag();
+      if (totpTag != null)
+        return [.. baseTags, totpTag];
+    }
+
+    return baseTags;
+  }
+
+  internal static Tag[] BuildBaseTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showPasskeyTag = true, bool showProtectedTag = true)
+  {
     var tags = new List<Tag>();
 
     if (AccessTracker.IsLastCopied(item.Id))
@@ -107,16 +121,11 @@ internal static partial class VaultItemHelper
     if (item.Favorite)
       tags.Add(new Tag("\u2605") { Foreground = ColorHelpers.FromRgb(0xFA, 0xCC, 0x6E) });
 
-    if (showContextTag && context != null && ContextAwarenessService.ContextScore(context, item) > 0)
+    if (showContextTag)
     {
-      tags.Add(new Tag("Context") { Foreground = ColorHelpers.FromRgb(0x40, 0x9F, 0xFF) });
-    }
-
-    if (totpTagStyle != "off" && item.HasTotp)
-    {
-      var totpTag = totpTagStyle == "live" ? GetLiveTotpTag(item.TotpSecret!) : GetStaticTotpTag();
-      if (totpTag != null)
-        tags.Add(totpTag);
+      var isContextMatch = context != null && ContextAwarenessService.ContextScore(context, item) > 0;
+      if (isContextMatch)
+        tags.Add(new Tag("Context") { Foreground = ColorHelpers.FromRgb(0x40, 0x9F, 0xFF) });
     }
 
     if (showPasskeyTag && item.HasPasskey)
@@ -127,6 +136,8 @@ internal static partial class VaultItemHelper
 
     return tags.Count > 0 ? [.. tags] : [];
   }
+
+  internal static Tag? BuildTotpTag(string totpSecret) => GetLiveTotpTag(totpSecret);
 
   private static Tag GetStaticTotpTag() =>
     new Tag("2FA") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };
@@ -377,9 +388,17 @@ internal static partial class VaultItemHelper
   }
 
   private static readonly UISettings _uiSettings = new();
+  private static bool _isDarkThemeCached = ComputeIsDarkTheme();
 
-  private static bool IsDarkTheme() =>
+  static VaultItemHelper()
+  {
+    _uiSettings.ColorValuesChanged += (_, _) => _isDarkThemeCached = ComputeIsDarkTheme();
+  }
+
+  private static bool ComputeIsDarkTheme() =>
     _uiSettings.GetColorValue(UIColorType.Background).R < 128;
+
+  private static bool IsDarkTheme() => _isDarkThemeCached;
 
   private static string GetVaultBaseUrl()
   {
@@ -412,41 +431,26 @@ internal static partial class VaultItemHelper
       new IconInfo("\uE8C7"));
   }
 
-  internal static IconInfo GetFaviconIcon(string? uri)
+  internal static IconInfo GetFaviconIcon(BitwardenItem item)
   {
-    if (string.IsNullOrEmpty(uri))
+    var host = item.FirstHost;
+    if (string.IsNullOrEmpty(host))
       return new IconInfo("\uE774");
 
-    try
-    {
-      var host = new Uri(uri).Host;
-      if (string.IsNullOrEmpty(host))
-        return new IconInfo("\uE774");
+    var serverUrl = BitwardenCliService.ServerUrl;
+    var iconsUrl = BitwardenCliService.IconsUrl;
+    string iconBase;
+    if (!string.IsNullOrEmpty(iconsUrl))
+      iconBase = iconsUrl;
+    else if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+      iconBase = "https://icons.bitwarden.net";
+    else if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+      iconBase = "https://vault.bitwarden.eu/icons";
+    else
+      iconBase = serverUrl + "/icons";
+    var iconUrl = $"{iconBase}/{host}/icon.png";
 
-      // Match Bitwarden region CDN behaviour:
-      //   - US cloud (serverUrl null):  https://icons.bitwarden.net/{domain}/icon.png
-      //   - EU cloud:                   https://icons.bitwarden.eu/{domain}/icon.png
-      //   - Self-hosted (override set): {iconsUrl}/{domain}/icon.png
-      //   - Self-hosted (no override):  {serverUrl}/icons/{domain}/icon.png
-      var serverUrl = BitwardenCliService.ServerUrl;
-      var iconsUrl = BitwardenCliService.IconsUrl;
-      string iconBase;
-      if (!string.IsNullOrEmpty(iconsUrl))
-        iconBase = iconsUrl;
-      else if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
-        iconBase = "https://icons.bitwarden.net";
-      else if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
-        iconBase = "https://vault.bitwarden.eu/icons";
-      else
-        iconBase = serverUrl + "/icons";
-      var iconUrl = $"{iconBase}/{host}/icon.png";
-
-      return FaviconService.GetOrQueue(host, iconUrl);
-    }
-    catch
-    {
-      return new IconInfo("\uE774");
-    }
+    return FaviconService.GetOrQueue(host, iconUrl);
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>

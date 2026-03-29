@@ -33,6 +33,8 @@ internal sealed class BitwardenCliService
 
   private List<BitwardenItem> _cache = [];
   private readonly Lock _cacheLock = new();
+  private string? _lastRegexQuery;
+  private Regex? _lastRegex;
   private bool _cacheLoaded;
   private DateTime _lastRefresh;
   private int _refreshing;
@@ -819,6 +821,7 @@ internal sealed class BitwardenCliService
       _cache = [];
       _cacheLoaded = false;
     }
+    FaviconService.ClearMemCache();
     SessionStore.Clear();
     StatusChanged?.Invoke();
 
@@ -839,6 +842,7 @@ internal sealed class BitwardenCliService
       _cache = [];
       _cacheLoaded = false;
     }
+    FaviconService.ClearMemCache();
     if (!rememberSession)
       SessionStore.Clear();
     Pages.RepromptPage.ClearGracePeriod();
@@ -923,12 +927,16 @@ internal sealed class BitwardenCliService
             if (recentItem != null)
               pinnedIds.Add(recentItem.Id);
 
-            var remainder = sorted
-                .Where(i => !pinnedIds.Contains(i.Id))
-                .OrderByDescending(i => i.Favorite ? 1 : 0)
-                .ThenByDescending(i => AccessTracker.GetLastAccess(i.Id))
-                .ThenByDescending(i => i.RevisionDate)
-                .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase);
+            var hasOverflowContext = sorted.Any(i => ContextBoost(i, context) > 0 && !pinnedIds.Contains(i.Id));
+            IEnumerable<BitwardenItem> remainder = sorted.Where(i => !pinnedIds.Contains(i.Id));
+            if (hasOverflowContext)
+            {
+              remainder = remainder
+                  .OrderByDescending(i => i.Favorite ? 1 : 0)
+                  .ThenByDescending(i => AccessTracker.GetLastAccess(i.Id))
+                  .ThenByDescending(i => i.RevisionDate)
+                  .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase);
+            }
 
             var contextWithoutRecent = recentItem != null
                 ? contextMatches.Where(i => i.Id != recentItem.Id)
@@ -943,7 +951,12 @@ internal sealed class BitwardenCliService
         return sorted;
       }
 
-      var wordBoundaryRegex = new Regex(@"\b" + Regex.Escape(textQuery) + @"\b", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
+      if (_lastRegexQuery != textQuery)
+      {
+        _lastRegexQuery = textQuery;
+        _lastRegex = new Regex(@"\b" + Regex.Escape(textQuery) + @"\b", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
+      }
+      var wordBoundaryRegex = _lastRegex!;
       return results
           .Where(i => Matches(i, textQuery))
           .OrderBy(i => Relevance(i, textQuery, wordBoundaryRegex))
@@ -977,6 +990,9 @@ internal sealed class BitwardenCliService
     var filters = new List<(string Key, string Value)>();
     if (string.IsNullOrWhiteSpace(query))
       return (filters, null);
+
+    if (!query.Contains(':'))
+      return (filters, query.Trim());
 
     var remaining = new System.Text.StringBuilder();
     foreach (var token in query.Split(' ', StringSplitOptions.RemoveEmptyEntries))
