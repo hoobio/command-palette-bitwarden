@@ -146,10 +146,7 @@ internal static partial class VaultItemHelper
   {
     try
     {
-      var (key, digits, period) = CopyOtpCommand.ParseTotpSecret(totpSecret);
-      var totp = new Totp(key, step: period, totpSize: digits);
-      var code = totp.ComputeTotp();
-      var remaining = totp.RemainingSeconds();
+      var (code, remaining) = CopyOtpCommand.ComputeCode(totpSecret);
 
       return new Tag($"{code} ({remaining}s)") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };
     }
