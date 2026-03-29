@@ -83,4 +83,67 @@ public class CopyOtpCommandTests
     var (_, _, period) = CopyOtpCommand.ParseTotpSecret(uri);
     Assert.Equal(30, period);
   }
+
+  [Fact]
+  public void IsSteamSecret_DetectsSteamPrefix()
+  {
+    Assert.True(CopyOtpCommand.IsSteamSecret("steam://JBSWY3DPEHPK3PXP"));
+    Assert.True(CopyOtpCommand.IsSteamSecret("STEAM://JBSWY3DPEHPK3PXP"));
+    Assert.False(CopyOtpCommand.IsSteamSecret("JBSWY3DPEHPK3PXP"));
+    Assert.False(CopyOtpCommand.IsSteamSecret("otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP"));
+  }
+
+  [Fact]
+  public void ComputeSteamCode_ProducesFiveCharacterCode()
+  {
+    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var code = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
+    Assert.Equal(5, code.Length);
+    Assert.All(code.ToCharArray(), c => Assert.Contains(c, "23456789BCDFGHJKMNPQRTVWXY"));
+  }
+
+  [Fact]
+  public void ComputeSteamCode_IsDeterministic()
+  {
+    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var code1 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
+    var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
+    Assert.Equal(code1, code2);
+  }
+
+  [Fact]
+  public void ComputeSteamCode_DifferentTimeSteps_ProduceDifferentCodes()
+  {
+    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var code1 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
+    var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000030);
+    Assert.NotEqual(code1, code2);
+  }
+
+  [Fact]
+  public void ComputeSteamCode_SameTimeStep_ProducesSameCode()
+  {
+    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var code1 = CopyOtpCommand.ComputeSteamCode(key, 999999990);
+    var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000009);
+    Assert.Equal(code1, code2);
+  }
+
+  [Fact]
+  public void ComputeCode_SteamSecret_ReturnsValidCode()
+  {
+    var (code, remaining) = CopyOtpCommand.ComputeCode("steam://JBSWY3DPEHPK3PXP");
+    Assert.Equal(5, code.Length);
+    Assert.All(code.ToCharArray(), c => Assert.Contains(c, "23456789BCDFGHJKMNPQRTVWXY"));
+    Assert.InRange(remaining, 1, 30);
+  }
+
+  [Fact]
+  public void ComputeCode_StandardSecret_ReturnsSixDigitCode()
+  {
+    var (code, remaining) = CopyOtpCommand.ComputeCode("JBSWY3DPEHPK3PXP");
+    Assert.Equal(6, code.Length);
+    Assert.All(code.ToCharArray(), c => Assert.True(char.IsDigit(c)));
+    Assert.InRange(remaining, 1, 30);
+  }
 }
