@@ -16,8 +16,6 @@ internal static class DebugLogService
 
   internal static void Log(string category, string message)
   {
-    if (!Enabled) return;
-
     var entry = new LogEntry(DateTime.UtcNow, category, message);
     lock (_lock)
     {
