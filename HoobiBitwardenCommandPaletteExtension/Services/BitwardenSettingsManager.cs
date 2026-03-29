@@ -12,11 +12,36 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "HoobiBitwardenCommandPalette");
 
+    private static readonly string BiometricSuccessMarker = Path.Combine(SettingsDir, ".biometric_success");
+
+    public static bool HasBiometricSuccess => File.Exists(BiometricSuccessMarker);
+
+    public static void RecordBiometricSuccess()
+    {
+        if (!File.Exists(BiometricSuccessMarker))
+        {
+            try { File.WriteAllText(BiometricSuccessMarker, string.Empty); }
+            catch { }
+        }
+    }
+
     public ToggleSetting RememberSession { get; } = new(
         "rememberSession",
         "Remember Session",
         "Securely store your session key using Windows Credential Manager so you don't need to unlock each launch",
         false);
+
+    public ToggleSetting UseDesktopIntegration { get; } = new(
+        "useDesktopIntegration",
+        "Integrate with Bitwarden Desktop App",
+        "Enable Windows Hello / biometric unlock by communicating with the Bitwarden Desktop app over IPC. Requires the Desktop app to be running with 'Allow browser integration' enabled",
+        true);
+
+    public ToggleSetting AutoBiometricUnlock { get; } = new(
+        "autoBiometricUnlock",
+        "Automatically Prompt for Biometrics",
+        "Automatically attempt Windows Hello unlock when the vault is locked, without requiring you to click 'Unlock Vault' first. Falls back to the password form if biometrics are unavailable",
+        true);
 
     public ToggleSetting ShowWebsiteIcons { get; } = new(
         "showWebsiteIcons",
@@ -152,7 +177,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting DebugLogging { get; } = new(
         "debugLogging",
         "Debug Logging",
-        "Enable debug logging to help diagnose issues. When enabled, a 'Copy Debug Log' command appears in the vault browser. Logs are kept in memory only and cleared when the extension restarts",
+        "Show a 'Copy Debug Log' button on the vault browser to help diagnose issues. Logs are always collected in memory and cleared when the extension restarts",
         false);
 
     public BitwardenSettingsManager(string? settingsFilePath = null)
@@ -164,6 +189,8 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         BackgroundRefresh.Value = "5";
         RepromptGracePeriod.Value = "60";
         Settings.Add(RememberSession);
+        Settings.Add(UseDesktopIntegration);
+        Settings.Add(AutoBiometricUnlock);
         Settings.Add(ShowWebsiteIcons);
         Settings.Add(AutoLockTimeout);
         Settings.Add(ShowWatchtowerTags);
@@ -197,9 +224,6 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         SyncRepromptSettings();
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("settings changed");
-
-        if (!RememberSession.Value)
-            SessionStore.Clear();
     }
 
     private void SyncClipboardSettings()
@@ -246,6 +270,8 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     private IEnumerable<(string Key, object? Value)> AllSettings()
     {
         yield return (RememberSession.Key, (object?)RememberSession.Value);
+        yield return (UseDesktopIntegration.Key, (object?)UseDesktopIntegration.Value);
+        yield return (AutoBiometricUnlock.Key, (object?)AutoBiometricUnlock.Value);
         yield return (ShowWebsiteIcons.Key, ShowWebsiteIcons.Value);
         yield return (ShowWatchtowerTags.Key, ShowWatchtowerTags.Value);
         yield return (ContextAwareness.Key, ContextAwareness.Value);

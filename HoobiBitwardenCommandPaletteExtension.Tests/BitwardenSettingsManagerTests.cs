@@ -56,7 +56,7 @@ public class BitwardenSettingsManagerTests : IDisposable
     }
 
     [Fact]
-    public void OnSettingsChanged_ClearsSession_WhenRememberSessionDisabled()
+    public void OnSettingsChanged_DoesNotClearSession_DirectlyInSettingsManager()
     {
         var m = CreateManager();
         SessionStore.Save("test-key");
@@ -65,7 +65,8 @@ public class BitwardenSettingsManagerTests : IDisposable
         m.RememberSession.Value = false;
         FireSettingsChanged(m);
 
-        Assert.Null(SessionStore.Load());
+        Assert.NotNull(SessionStore.Load());
+        SessionStore.Clear();
     }
 
     [Fact]
