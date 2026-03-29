@@ -1,5 +1,6 @@
 using System;
-using System.Collections.Generic;
+using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.IO;
 using System.IO.Pipes;
 using System.Security.Cryptography;
@@ -10,9 +11,6 @@ using System.Threading.Tasks;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
-/// <summary>
-/// Biometrics status enum matching the Bitwarden Desktop app.
-/// </summary>
 internal enum BiometricsStatus
 {
   Available = 0,
@@ -27,26 +25,10 @@ internal enum BiometricsStatus
   NativeMessagingPermissionMissing = 9,
 }
 
-/// <summary>
-/// Implements the Bitwarden Desktop IPC protocol for biometric unlock (Windows Hello).
-/// Uses the same protocol as the browser extension / bwbio.
-///
-/// Protocol overview:
-///   1. Connect to Desktop app via Windows named pipe.
-///   2. RSA-2048 key exchange ("setupEncryption" handshake).
-///   3. All subsequent messages are AES-256-CBC + HMAC-SHA256 encrypted.
-///   4. Commands: getBiometricsStatusForUser → unlockWithBiometricsForUser.
-///   5. userKeyB64 is stored in CLI data.json (encrypted with a freshly generated session key),
-///      making that session key valid for "bw list items --session KEY" etc.
-/// </summary>
 internal static partial class DesktopIpcService
 {
   private const int ConnectTimeoutMs = 5_000;
 
-  /// <summary>
-  /// Attempt Windows Hello biometric unlock via the Bitwarden Desktop app.
-  /// Returns the BW_SESSION key if successful, null if unavailable or cancelled.
-  /// </summary>
   public static async Task<string?> TryBiometricUnlockAsync(string? dataDirectory, Action<string>? onStatus = null)
   {
     var userId = GetActiveUserId(dataDirectory);
@@ -71,7 +53,7 @@ internal static partial class DesktopIpcService
         DebugLogService.Log("Biometric", $"Biometrics not available: {status}");
         var reason = status switch
         {
-          BiometricsStatus.UnlockNeeded => "Bitwarden Desktop app is locked — unlock it first",
+          BiometricsStatus.UnlockNeeded => "Bitwarden Desktop app is locked - unlock it first",
           BiometricsStatus.HardwareUnavailable => "Windows Hello hardware not available",
           BiometricsStatus.AutoSetupNeeded or BiometricsStatus.ManualSetupNeeded => "Biometrics not set up in Bitwarden Desktop app",
           BiometricsStatus.NotEnabledLocally or BiometricsStatus.NotEnabledInConnectedDesktopApp => "Enable 'Unlock with biometrics' in Bitwarden Desktop settings",
@@ -111,9 +93,6 @@ internal static partial class DesktopIpcService
     }
   }
 
-  /// <summary>
-  /// Check whether biometric unlock is available without prompting the user.
-  /// </summary>
   public static async Task<bool> IsBiometricsAvailableAsync(string? dataDirectory)
   {
     var userId = GetActiveUserId(dataDirectory);
@@ -159,10 +138,6 @@ internal static partial class DesktopIpcService
     File.WriteAllText(dataPath, data.ToJsonString(), Encoding.UTF8);
   }
 
-  /// <summary>
-  /// Encrypt data using AES-256-CBC + HMAC-SHA256 in Bitwarden's binary type-2 format.
-  /// Layout: [2 (1 byte) | IV (16 bytes) | MAC (32 bytes) | ciphertext] → base64
-  /// </summary>
   internal static string EncryptWithSessionKey(byte[] data, string sessionKey)
   {
     var keyBytes = Convert.FromBase64String(sessionKey);
@@ -220,10 +195,6 @@ internal static partial class DesktopIpcService
     return Path.Combine(dir, "data.json");
   }
 
-  /// <summary>
-  /// Compute the Windows named pipe name for the Bitwarden Desktop app.
-  /// Algorithm: SHA-256(UTF-8 bytes of home directory) → URL-safe base64 without padding → append ".s.bw"
-  /// </summary>
   internal static string GetWindowsPipeName()
   {
     var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -235,15 +206,13 @@ internal static partial class DesktopIpcService
     return $"{hashB64}.s.bw";
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // IpcClient — handles connection, encryption handshake, and command dispatch
-  // ───────────────────────────────────────────────────────────────────────────
+  // IpcClient: connection, encryption handshake, and command dispatch
 
   private sealed partial class IpcClient : IDisposable
   {
     private const int ProtocolTimeoutMs = 10_000;
     private const int BiometricTimeoutMs = 60_000;
-    // Stable app ID — Desktop whitelists this once; a random ID would force approval on every run
+    // Stable app ID: Desktop whitelists this once; a random ID would force approval on every run
     private const string AppId = "hoobi-bitwarden-cmdpal";
 
     private static readonly string KeyFilePath = Path.Combine(
@@ -254,12 +223,13 @@ internal static partial class DesktopIpcService
     private NamedPipeClientStream? _pipe;
     private RSA? _rsa;
     private byte[]? _publicKeyDer;
-    private byte[]? _sharedSecret; // 64 bytes once key exchange completes
+    private byte[]? _sharedSecret;
     private int _nextMessageId;
     private Action<string>? _onStatus;
     private string? _userId;
+    private readonly Lock _sendLock = new();
 
-    private readonly Dictionary<int, TaskCompletionSource<JsonObject>> _pending = [];
+    private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonObject>> _pending = new();
     private TaskCompletionSource<bool>? _encryptionReady;
 
     private CancellationTokenSource? _readCts;
@@ -300,7 +270,7 @@ internal static partial class DesktopIpcService
 
       _encryptionReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-      var msgId = _nextMessageId++;
+      var msgId = Interlocked.Increment(ref _nextMessageId);
       var setupMsg = new JsonObject
       {
         ["appId"] = AppId,
@@ -316,15 +286,15 @@ internal static partial class DesktopIpcService
 
       SendRaw(setupMsg);
 
-      // Proactively prompt user — Desktop may show a fingerprint dialog without notifying us
+      // Proactively prompt user: Desktop may show a fingerprint dialog without notifying us
       _ = Task.Delay(2000).ContinueWith(_ =>
       {
         if (_encryptionReady is { Task.IsCompleted: false })
-          _onStatus?.Invoke("Check Bitwarden Desktop app — you may need to approve the connection");
+          _onStatus?.Invoke("Check Bitwarden Desktop app - you may need to approve the connection");
       }, TaskScheduler.Default);
 
       using var cts = new CancellationTokenSource(ProtocolTimeoutMs * 6); // allow for fingerprint acceptance
-      cts.Token.Register(() => _encryptionReady.TrySetException(new TimeoutException("IPC key exchange timed out — check Bitwarden Desktop app is running with 'Allow browser integration' enabled")));
+      cts.Token.Register(() => _encryptionReady.TrySetException(new TimeoutException("IPC key exchange timed out - check Bitwarden Desktop app is running with 'Allow browser integration' enabled")));
 #pragma warning disable VSTHRD003 // _encryptionReady is a ThreadPool-based TCS; awaiter is on Task.Run thread
       await _encryptionReady.Task.ConfigureAwait(false);
 #pragma warning restore VSTHRD003
@@ -361,7 +331,7 @@ internal static partial class DesktopIpcService
       if (_sharedSecret == null)
         throw new InvalidOperationException("Encrypted channel not established");
 
-      var msgId = _nextMessageId++;
+      var msgId = Interlocked.Increment(ref _nextMessageId);
       message["messageId"] = msgId;
       message["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -370,7 +340,7 @@ internal static partial class DesktopIpcService
       using var cts = new CancellationTokenSource(timeoutMs);
       cts.Token.Register(() =>
       {
-        if (_pending.Remove(msgId, out _))
+        if (_pending.TryRemove(msgId, out _))
           tcs.TrySetException(new TimeoutException($"IPC command '{message["command"]}' timed out"));
       });
 
@@ -471,13 +441,13 @@ internal static partial class DesktopIpcService
       var json = message.ToJsonString();
       var payload = Encoding.UTF8.GetBytes(json);
       var buffer = new byte[4 + payload.Length];
-      buffer[0] = (byte)(payload.Length & 0xFF);
-      buffer[1] = (byte)((payload.Length >> 8) & 0xFF);
-      buffer[2] = (byte)((payload.Length >> 16) & 0xFF);
-      buffer[3] = (byte)((payload.Length >> 24) & 0xFF);
+      BinaryPrimitives.WriteInt32LittleEndian(buffer, payload.Length);
       Buffer.BlockCopy(payload, 0, buffer, 4, payload.Length);
-      _pipe.Write(buffer, 0, buffer.Length);
-      _pipe.Flush();
+      lock (_sendLock)
+      {
+        _pipe.Write(buffer, 0, buffer.Length);
+        _pipe.Flush();
+      }
       DebugLogService.Log("Biometric", $"IPC sent: {SummarizeIpcMessage(message)} ({payload.Length} bytes)");
     }
 
@@ -512,11 +482,11 @@ internal static partial class DesktopIpcService
         DebugLogService.Log("Biometric", $"IPC read loop error: {ex.GetType().Name}: {ex.Message}");
       }
 
-      // Connection lost — reject all pending
-      foreach (var tcs in _pending.Values)
-        tcs.TrySetException(new IOException("Disconnected from Bitwarden Desktop app"));
-      _pending.Clear();
-      _encryptionReady?.TrySetException(new IOException("Disconnected from Bitwarden Desktop app"));
+      // Connection lost: reject all pending
+      var disconnectErr = new IOException("Disconnected from Bitwarden Desktop app");
+      foreach (var key in _pending.Keys)
+        if (_pending.TryRemove(key, out var tcs)) tcs.TrySetException(disconnectErr);
+      _encryptionReady?.TrySetException(disconnectErr);
     }
 
     private static string SummarizeIpcMessage(JsonObject msg)
@@ -562,7 +532,7 @@ internal static partial class DesktopIpcService
       var appId = msg["appId"]?.GetValue<string>();
 
       // During setupEncryption handshake, also check if this message carries sharedSecret
-      // regardless of command — Desktop may respond with a different structure
+      // regardless of command: Desktop may respond with a different structure
       if (_encryptionReady is { Task.IsCompleted: false } && msg["sharedSecret"] != null)
       {
         DebugLogService.Log("Biometric", "Received sharedSecret, completing key exchange");
@@ -578,18 +548,18 @@ internal static partial class DesktopIpcService
 
         case "invalidateEncryption":
           if (appId != AppId) return;
-var invalidErr = new InvalidOperationException("IPC encryption invalidated by Desktop app");
+          var invalidErr = new InvalidOperationException("IPC encryption invalidated by Desktop app");
           _encryptionReady?.TrySetException(invalidErr);
-          foreach (var tcs in _pending.Values) tcs.TrySetException(invalidErr);
-          _pending.Clear();
+          foreach (var key in _pending.Keys)
+            if (_pending.TryRemove(key, out var tcs)) tcs.TrySetException(invalidErr);
           break;
 
         case "wrongUserId":
           if (appId != AppId) return;
           var wrongUserErr = new InvalidOperationException("Account mismatch: CLI and Desktop app are logged into different accounts");
           _encryptionReady?.TrySetException(wrongUserErr);
-          foreach (var tcs in _pending.Values) tcs.TrySetException(wrongUserErr);
-          _pending.Clear();
+          foreach (var key in _pending.Keys)
+            if (_pending.TryRemove(key, out var tcs)) tcs.TrySetException(wrongUserErr);
           break;
 
         case "verifyDesktopIPCFingerprint":
@@ -652,7 +622,7 @@ var invalidErr = new InvalidOperationException("IPC encryption invalidated by De
       }
 
       var msgId = decrypted["messageId"]?.GetValue<int>() ?? -1;
-      if (_pending.Remove(msgId, out var tcs))
+      if (_pending.TryRemove(msgId, out var tcs))
         tcs.TrySetResult(decrypted);
     }
 
@@ -693,6 +663,7 @@ var invalidErr = new InvalidOperationException("IPC encryption invalidated by De
     public void Dispose()
     {
       _readCts?.Cancel();
+      try { _readLoop?.Wait(TimeSpan.FromSeconds(2)); } catch { }
       _readCts?.Dispose();
       _pipe?.Dispose();
       _rsa?.Dispose();

@@ -648,15 +648,15 @@ internal sealed class BitwardenCliService
           _pendingDeviceVerificationCts = cts;
           _pendingStdoutTask = stdoutTask;
           _pendingStderrTask = stderrTask;
-          return (false, "New device verification required — enter OTP sent to your email", false, true);
+          return (false, "New device verification required - enter OTP sent to your email", false, true);
         }
         try { process.Kill(); } catch { }
         process.Dispose();
         cts.Dispose();
-        return (false, "Two-factor authentication required — enter your 2FA code", true, false);
+        return (false, "Two-factor authentication required - enter your 2FA code", true, false);
       }
 
-      // Neither prompt detected during streaming — check the other stream too
+      // Neither prompt detected during streaming: check the other stream too
       var otherTask = completed == stdoutTask ? stderrTask : stdoutTask;
       var other = await otherTask;
       if (other.Detected)
@@ -667,12 +667,12 @@ internal sealed class BitwardenCliService
           _pendingDeviceVerificationCts = cts;
           _pendingStdoutTask = stdoutTask;
           _pendingStderrTask = stderrTask;
-          return (false, "New device verification required — enter OTP sent to your email", false, true);
+          return (false, "New device verification required - enter OTP sent to your email", false, true);
         }
         try { process.Kill(); } catch { }
         process.Dispose();
         cts.Dispose();
-        return (false, "Two-factor authentication required — enter your 2FA code", true, false);
+        return (false, "Two-factor authentication required - enter your 2FA code", true, false);
       }
 
       try { process.StandardInput.Close(); } catch { }
@@ -719,7 +719,7 @@ internal sealed class BitwardenCliService
     _pendingStderrTask = null;
 
     if (process == null)
-      return (false, "No pending device verification — please log in again");
+      return (false, "No pending device verification - please log in again");
 
     oldCts?.Dispose();
     using var cts = new CancellationTokenSource(CliTimeoutMs);
@@ -732,8 +732,8 @@ internal sealed class BitwardenCliService
       // For each stream: if its reader already returned having detected a prompt,
       // create a new ReadToEndAsync to capture post-OTP output (e.g. session key).
       // If its reader completed without detecting a prompt, use its result directly
-      // (the stream was fully consumed — a new read would return empty).
-      // If its reader is still running (blocked waiting for data), await it —
+      // (the stream was fully consumed - a new read would return empty).
+      // If its reader is still running (blocked waiting for data), await it -
       // it will complete once the process exits after processing the OTP.
       Task<string> stdoutRead;
       if (existingStdoutTask != null && existingStdoutTask.IsCompleted)

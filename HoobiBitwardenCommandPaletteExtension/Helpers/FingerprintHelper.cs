@@ -11,7 +11,7 @@ internal static class FingerprintHelper
     {
         var keyHash = SHA256.HashData(publicKeyDer);
 
-        // HKDF-Expand(keyHash, appId, 32) — single iteration since output == hash length
+        // HKDF-Expand(keyHash, appId, 32): single iteration since output == hash length
         using var hmac = new HMACSHA256(keyHash);
         var infoBytes = Encoding.UTF8.GetBytes(appId);
         var input = new byte[infoBytes.Length + 1];

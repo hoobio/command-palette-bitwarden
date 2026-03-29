@@ -38,8 +38,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private int _repromptFailures;
     private DateTime _repromptCooldownUntil;
     private StatusMessage? _lastBiometricStatus;
-    private bool _biometricClickFailed;
-    private bool _autoBiometricTriggered;
+    private volatile bool _biometricClickFailed;
+    private volatile bool _autoBiometricTriggered;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -259,9 +259,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         RaiseItemsChanged();
 
-        // Belt-and-suspenders: if the first RaiseItemsChanged fired before the SDK had
-        // subscribed to ItemsChanged (i.e. before the palette was first opened), it lands
-        // in the void. Re-raise after a short delay so the palette picks it up.
+        // Re-raise after a short delay in case the first event fired before the SDK 
+        // subscribed to ItemsChanged (before the palette was first opened).
         _ = Task.Delay(300).ContinueWith(_ => RaiseItemsChanged(), TaskScheduler.Default);
     }
 
@@ -1025,7 +1024,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 if (!success)
                 {
                     _errorMessage = error?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true
-                        ? "Invalid 2FA code — try again"
+                        ? "Invalid 2FA code - try again"
                         : error ?? "Verification failed";
                     _currentItems = BuildUnauthenticatedItems();
                     RaiseItemsChanged();
@@ -1067,7 +1066,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 var (success, error) = await _service.SubmitDeviceVerificationAsync(otpCode);
                 if (!success)
                 {
-                    _errorMessage = error ?? "Verification failed — try again";
+                    _errorMessage = error ?? "Verification failed - try again";
                     _currentItems = BuildUnauthenticatedItems();
                     RaiseItemsChanged();
                     return;
