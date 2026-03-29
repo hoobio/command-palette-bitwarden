@@ -73,9 +73,31 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - uses: googleapis/release-please-action@v4
-        id: release
+        id: release-attempt-1
+        continue-on-error: true
         with:
           token: ${{ steps.app-token.outputs.token }}
+
+      - name: Wait and retry on failure
+        if: steps.release-attempt-1.outcome == 'failure'
+        run: sleep 15
+
+      - uses: googleapis/release-please-action@v4
+        id: release-attempt-2
+        if: steps.release-attempt-1.outcome == 'failure'
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set release outputs
+        id: release
+        run: |
+          if [ "${{ steps.release-attempt-1.outcome }}" = "success" ]; then
+            echo "release_created=${{ steps.release-attempt-1.outputs.release_created }}" >> $GITHUB_OUTPUT
+            echo "tag_name=${{ steps.release-attempt-1.outputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "release_created=${{ steps.release-attempt-2.outputs.release_created }}" >> $GITHUB_OUTPUT
+            echo "tag_name=${{ steps.release-attempt-2.outputs.tag_name }}" >> $GITHUB_OUTPUT
+          fi
 
   lint-and-test:
     needs: [detect-changes]
