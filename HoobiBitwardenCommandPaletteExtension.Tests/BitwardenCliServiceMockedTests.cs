@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json.Nodes;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -56,8 +57,6 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
     // VerifySessionAsync → sync → "Syncing complete."
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    // FetchServerUrlAsync → RunCliAsync("status")
-    factory.Enqueue(new FakeCliProcess(stdout: "{\"serverUrl\":\"https://vault.bitwarden.com\"}\n", exitCode: 0));
     var result = await svc.GetVaultStatusAsync();
     Assert.Equal(VaultStatus.Unlocked, result);
   }
@@ -573,6 +572,46 @@ public class BitwardenCliServiceMockedTests
     Assert.Equal("https://custom.vault.com", BitwardenCliService.ServerUrl);
   }
 
+  // --- RememberSession toggle-off locks vault ---
+
+  [Fact]
+  public async Task DisablingRememberSession_ClearsSessionAndLocksVault()
+  {
+    var tempPath = Path.Combine(Path.GetTempPath(), $"bw_test_{Guid.NewGuid():N}.json");
+    try
+    {
+      var settings = new BitwardenSettingsManager(tempPath);
+      settings.RememberSession.Value = true;
+      var factory = new FakeProcessFactory();
+      var svc = new BitwardenCliService(settings, factory.Create);
+
+      svc.SetSession("some-session-key");
+      SessionStore.Save("some-session-key");
+      Assert.True(svc.IsUnlocked);
+
+      // LockAsync will call RunCliAsync("lock") — provide a fake process for it
+      factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0));
+
+      settings.RememberSession.Value = false;
+      // Raise the Settings.SettingsChanged event (internal method in the SDK)
+      var raiseMethod = settings.Settings.GetType().GetMethod(
+          "RaiseSettingsChanged",
+          System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+      raiseMethod.Invoke(settings.Settings, null);
+
+      // Allow the fire-and-forget LockAsync to complete
+      await Task.Delay(200);
+
+      Assert.False(svc.IsUnlocked);
+      Assert.Equal(VaultStatus.Locked, svc.LastStatus);
+      Assert.Null(SessionStore.Load());
+    }
+    finally
+    {
+      File.Delete(tempPath);
+    }
+  }
+
   [Fact]
   public async Task StartProcess_SetsUtf8Encoding()
   {
@@ -580,7 +619,6 @@ public class BitwardenCliServiceMockedTests
     svc.SetSession("test-key");
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    factory.Enqueue(new FakeCliProcess(stdout: "{\"serverUrl\":\"https://vault.bitwarden.com\"}\n", exitCode: 0));
     await svc.GetVaultStatusAsync();
     Assert.NotNull(factory.LastPsi);
     Assert.Equal(System.Text.Encoding.UTF8, factory.LastPsi!.StandardOutputEncoding);

@@ -19,11 +19,11 @@ public class DebugLogServiceTests : IDisposable
   }
 
   [Fact]
-  public void Log_WhenDisabled_DoesNotRecord()
+  public void Log_WhenDisabled_StillRecordsEntry()
   {
     DebugLogService.Enabled = false;
-    DebugLogService.Log("Test", "should not appear");
-    Assert.Equal(0, DebugLogService.Count);
+    DebugLogService.Log("Test", "should still appear");
+    Assert.Equal(1, DebugLogService.Count);
   }
 
   [Fact]

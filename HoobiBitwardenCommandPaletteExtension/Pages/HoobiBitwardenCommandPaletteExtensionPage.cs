@@ -37,6 +37,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private readonly Timer _iconRefreshTimer;
     private int _repromptFailures;
     private DateTime _repromptCooldownUntil;
+    private StatusMessage? _lastBiometricStatus;
+    private volatile bool _biometricClickFailed;
+    private volatile bool _autoBiometricTriggered;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -115,6 +118,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                         case VaultStatus.Locked:
                             _currentItems = BuildLockedItems();
                             IsLoading = false;
+                            _ = Task.Run(TryAutoTriggerBiometric);
                             break;
                         case VaultStatus.CliNotFound:
                             _currentItems = BuildCliNotFoundItems();
@@ -142,6 +146,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
             if (_initComplete && !_handlingAction)
                 IsLoading = false;
+
+            if (_service.LastStatus == VaultStatus.Locked && !_handlingAction)
+                _ = Task.Run(TryAutoTriggerBiometric);
+
             return _currentItems;
         }
     }
@@ -153,6 +161,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_service.IsUnlocked)
             _service.ResetAutoLockTimer();
+
+        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked)
+        {
+            DebugLogService.Log("Page", $"UpdateSearchText skipped: handlingAction={_handlingAction}, status={_service.LastStatus}, search='{newSearch}'");
+        }
 
         if ((_twoFactorRequired || _deviceVerificationRequired) && !_handlingAction)
         {
@@ -197,8 +210,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var results = Search(_currentSearchText);
         DebugLogService.Log("Page", $"OnCacheUpdated: {results.Count} items");
         _currentItems = BuildListItems(results);
-        RaiseItemsChanged();
+        _initComplete = true;
         IsLoading = false;
+        RaiseItemsChanged();
     }
 
     private void OnStatusChanged()
@@ -220,13 +234,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         switch (_service.LastStatus)
         {
             case VaultStatus.Unlocked when _service.IsCacheLoaded:
+                _biometricClickFailed = false;
+                _autoBiometricTriggered = false;
+                HideBiometricStatus();
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 break;
             case VaultStatus.Unauthenticated:
+                _biometricClickFailed = false;
+                _autoBiometricTriggered = false;
+                HideBiometricStatus();
                 _currentItems = BuildUnauthenticatedItems();
                 break;
             case VaultStatus.Locked:
                 _currentItems = BuildLockedItems();
+                TryAutoTriggerBiometric();
                 break;
             case VaultStatus.CliNotFound:
                 _currentItems = BuildCliNotFoundItems();
@@ -238,9 +259,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         RaiseItemsChanged();
 
-        // Belt-and-suspenders: if the first RaiseItemsChanged fired before the SDK had
-        // subscribed to ItemsChanged (i.e. before the palette was first opened), it lands
-        // in the void. Re-raise after a short delay so the palette picks it up.
+        // Re-raise after a short delay in case the first event fired before the SDK 
+        // subscribed to ItemsChanged (before the palette was first opened).
         _ = Task.Delay(300).ContinueWith(_ => RaiseItemsChanged(), TaskScheduler.Default);
     }
 
@@ -270,6 +290,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     break;
                 case VaultStatus.Locked:
                     _currentItems = BuildLockedItems();
+                    TryAutoTriggerBiometric();
                     break;
                 case VaultStatus.Unlocked:
                     if (!_service.IsCacheLoaded)
@@ -327,7 +348,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
-                hint.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
+                hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
             return WithDebugLog([hint]);
         }
 
@@ -341,7 +362,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
-                hint.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
+                hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
             return WithDebugLog([hint]);
         }
 
@@ -355,7 +376,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         };
 
         if (_errorMessage != null)
-            item.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
+            item.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
 
         return WithDebugLog([item, BuildSetServerItem()]);
     }
@@ -369,7 +390,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private ListItem BuildUnlockItem()
     {
-        var item = new ListItem(new Pages.UnlockVaultPage(_service, _settings, OnUnlockSubmitted))
+        var biometricEnabled = _settings?.UseDesktopIntegration.Value == true && _settings?.AutoBiometricUnlock.Value == true;
+        ICommand command = biometricEnabled && !_biometricClickFailed
+            ? new AnonymousCommand(OnBiometricUnlockRequested) { Name = "Unlock with Windows Hello", Result = CommandResult.KeepOpen() }
+            : new Pages.UnlockVaultPage(_service, _settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
+
+        var item = new ListItem(command)
         {
             Title = "Unlock Vault",
             Subtitle = _errorMessage ?? "Vault is locked, select to unlock your Bitwarden vault",
@@ -377,7 +403,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         };
 
         if (_errorMessage != null)
-            item.Tags = [new Tag(_errorMessage) { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
+            item.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
 
         return item;
     }
@@ -405,7 +431,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     { Name = "Copy Debug Log", Result = CommandResult.ShowToast("Copied debug log to clipboard") })
     {
         Title = "Copy Debug Log",
-        Subtitle = $"Debug logging is ON | {DebugLogService.Count} entries captured",
+        Subtitle = $"{DebugLogService.Count} entries captured",
         Icon = new IconInfo("\uE9D9"),
     };
 
@@ -696,7 +722,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         {
             try
             {
-                await _service.LockAsync();
+                await _service.LockAsync(userInitiated: true);
                 _currentItems = BuildLockedItems();
                 RaiseItemsChanged();
             }
@@ -792,6 +818,75 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 }
 
                 RebuildForCurrentStatus();
+            }
+            finally
+            {
+                _handlingAction = false;
+                IsLoading = false;
+            }
+        });
+    }
+
+    private void TryAutoTriggerBiometric()
+    {
+        if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
+            return;
+        if (_settings?.UseDesktopIntegration.Value != true || _settings?.AutoBiometricUnlock.Value != true)
+            return;
+        _autoBiometricTriggered = true;
+        DebugLogService.Log("Page", "Auto-triggering biometric unlock");
+        OnBiometricUnlockRequested();
+    }
+
+    private void HideBiometricStatus()
+    {
+        if (_lastBiometricStatus != null)
+        {
+            try { ExtensionHost.HideStatus(_lastBiometricStatus); } catch { }
+            _lastBiometricStatus = null;
+        }
+    }
+
+    private void OnBiometricUnlockRequested()
+    {
+        DebugLogService.Log("Action", "Windows Hello unlock requested by user");
+        _handlingAction = true;
+        ClearSearchText();
+        _errorMessage = null;
+        _currentItems = [];
+        IsLoading = true;
+        RaiseItemsChanged();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                ShowLoadingStatus("Connecting to Bitwarden Desktop...", "Windows Hello");
+                var (success, error) = await _service.UnlockWithBiometricsAsync(
+                    onStatus: msg => ShowLoadingStatus(msg, "Windows Hello"));
+                if (!success)
+                {
+                    _biometricClickFailed = true;
+                    _errorMessage = error ?? "Windows Hello unlock failed";
+                    _currentItems = BuildLockedItems();
+                    RaiseItemsChanged();
+
+                    if (BitwardenSettingsManager.HasBiometricSuccess)
+                    {
+                        HideBiometricStatus();
+                        _lastBiometricStatus = new StatusMessage { Message = _errorMessage, State = MessageState.Warning };
+                        ExtensionHost.ShowStatus(_lastBiometricStatus, StatusContext.Page);
+                        _ = Task.Delay(5000).ContinueWith(_ => HideBiometricStatus(), TaskScheduler.Default);
+                    }
+                    return;
+                }
+
+                _biometricClickFailed = false;
+                HideBiometricStatus();
+                ShowLoadingStatus("Retrieving items from vault...", "bw list items");
+                await _service.RefreshCacheAsync();
+                _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
             }
             finally
             {
@@ -929,7 +1024,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 if (!success)
                 {
                     _errorMessage = error?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true
-                        ? "Invalid 2FA code — try again"
+                        ? "Invalid 2FA code - try again"
                         : error ?? "Verification failed";
                     _currentItems = BuildUnauthenticatedItems();
                     RaiseItemsChanged();
@@ -971,7 +1066,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 var (success, error) = await _service.SubmitDeviceVerificationAsync(otpCode);
                 if (!success)
                 {
-                    _errorMessage = error ?? "Verification failed — try again";
+                    _errorMessage = error ?? "Verification failed - try again";
                     _currentItems = BuildUnauthenticatedItems();
                     RaiseItemsChanged();
                     return;
@@ -1009,7 +1104,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         OnPropertyChanged(nameof(SearchText));
     }
 
-    private static IListItem[] BuildLoadingPlaceholder(string title, string command) =>
+    private static IListItem[] BuildLoadingPlaceholder(string title, string command) => WithDebugLog(
     [
         new ListItem(new NoOpCommand())
         {
@@ -1017,5 +1112,5 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             Subtitle = $"Running: {command}",
             Icon = new IconInfo("\uE895"),
         },
-    ];
+    ]);
 }
