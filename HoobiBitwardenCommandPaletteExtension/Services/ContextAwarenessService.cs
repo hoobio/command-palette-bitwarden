@@ -148,7 +148,7 @@ internal static partial class ContextAwarenessService
 
   internal static bool UriMatchesBrowserContext(Models.ItemUri entry, string? browserUrl, string? browserHost)
   {
-    var itemHost = ExtractHost(entry.Uri);
+    var itemHost = entry.Host;
 
     return entry.Match switch
     {
@@ -224,7 +224,7 @@ internal static partial class ContextAwarenessService
         if (entry.Match == Models.UriMatchType.Never)
           continue;
 
-        var host = ExtractHost(entry.Uri);
+        var host = entry.Host;
         if (host != null)
         {
           var domainBase = host.Split('.')[0];

@@ -24,7 +24,21 @@ internal enum UriMatchType
   Never = 5,
 }
 
-internal sealed record ItemUri(string Uri, UriMatchType Match);
+internal sealed record ItemUri(string Uri, UriMatchType Match)
+{
+  public string? Host { get; } = ExtractHost(Uri);
+
+  private static string? ExtractHost(string uri)
+  {
+    try
+    {
+      var raw = uri.Contains("://") ? uri : "https://" + uri;
+      var host = new System.Uri(raw).Host;
+      return host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;
+    }
+    catch { return null; }
+  }
+}
 
 internal sealed record CustomField(string Value, bool IsHidden);
 
@@ -48,6 +62,7 @@ internal sealed class BitwardenItem
   public bool HasPasskey { get; init; }
   public List<ItemUri> Uris { get; init; } = [];
   public string? FirstUri => Uris.Count > 0 ? Uris[0].Uri : null;
+  public string? FirstHost => Uris.Count > 0 ? Uris[0].Host : null;
   public DateTime? PasswordRevisionDate { get; init; }
 
   // Card

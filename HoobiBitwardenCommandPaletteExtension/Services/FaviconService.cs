@@ -26,6 +26,7 @@ internal static partial class FaviconService
 
     // Cached icon: raster bytes streamed via COM. null = negative cache (host has no icon); missing key = not yet tried
     private static readonly ConcurrentDictionary<string, byte[]?> _memCache = new();
+    private static readonly ConcurrentDictionary<string, IconInfo> _iconInfoCache = new();
     private static readonly HashSet<string> _pending = [];
     private static readonly Lock _pendingLock = new();
 
@@ -47,8 +48,10 @@ internal static partial class FaviconService
     public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null)
     {
         fallback ??= new IconInfo("\uE774");
+        if (_iconInfoCache.TryGetValue(host, out var cachedIcon))
+            return cachedIcon;
         if (_memCache.TryGetValue(host, out var cachedBytes))
-            return cachedBytes is not null ? MakeIconInfo(cachedBytes) : fallback;
+            return cachedBytes is not null ? CacheAndReturnIcon(host, cachedBytes) : fallback;
 
         var posPath = GetPositivePath(host);
         var negPath = GetNegativePath(host);
@@ -57,7 +60,7 @@ internal static partial class FaviconService
         {
             var bytes = File.ReadAllBytes(posPath);
             _memCache[host] = bytes;
-            return MakeIconInfo(bytes);
+            return CacheAndReturnIcon(host, bytes);
         }
 
         if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
@@ -118,6 +121,7 @@ internal static partial class FaviconService
 
             await File.WriteAllBytesAsync(GetPositivePath(host), pngBytes);
             _memCache[host] = pngBytes;
+            CacheAndReturnIcon(host, pngBytes);
 
             try { File.Delete(negPath); } catch { }
             IconCached?.Invoke();
@@ -151,6 +155,17 @@ internal static partial class FaviconService
 
     private static string Sanitize(string host) =>
         InvalidFilenameChars().Replace(host, "_");
+
+    public static void ClearMemCache()
+    {
+        _iconInfoCache.Clear();
+        _memCache.Clear();
+    }
+
+    private static IconInfo CacheAndReturnIcon(string host, byte[] bytes)
+    {
+        return _iconInfoCache.GetOrAdd(host, _ => MakeIconInfo(bytes));
+    }
 
     // Serve icon bytes via IRandomAccessStreamReference so the data is streamed
     // back through the extension process — works correctly across the COM process boundary.
