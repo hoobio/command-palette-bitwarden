@@ -326,11 +326,12 @@ jobs:
           name: msix-${{ matrix.platform }}
           path: msix
 
-      # TEMP pin to the merge commit of hoobio/pipeline-tools#14 to validate the
-      # new pr-comment + deferred-fail flow before v1.4.0 is cut. Flip back to a
-      # `@v1.4.0` tag after release-please merges.
+      # TEMP pin to the merge commit of hoobio/pipeline-tools#16 (which includes
+      # #14's pr-comment work plus the description-template fix) to validate the
+      # new flow before v1.4.0 is cut. Flip back to `@v1.4.0` after release-please
+      # merges.
       - name: Run WACK
-        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@2464e5a999d28a115ad22d99178b46a6eb8f364a
+        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@39bc3369b013280d31b7efb380b77b4fb715beff
         with:
           msix-path: msix
           report-path: wack-report-${{ matrix.platform }}.xml
