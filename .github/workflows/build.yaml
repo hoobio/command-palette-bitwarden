@@ -253,6 +253,7 @@ jobs:
     with:
       platform: x64
       skip: ${{ needs.detect-changes.result == 'success' && needs.detect-changes.outputs.code_changed != 'true' }}
+      sign: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     secrets: inherit
 
   build_arm64:
@@ -263,6 +264,7 @@ jobs:
     with:
       platform: ARM64
       skip: ${{ needs.detect-changes.result == 'success' && needs.detect-changes.outputs.code_changed != 'true' }}
+      sign: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     secrets: inherit
 
   wack_x64:
