@@ -197,7 +197,7 @@ jobs:
             $urlPath = $f.File -replace '\\', '/'
             $fileLink = "[$displayName]($repoUrl/blob/$headSha/$urlPath)"
             if ($f.Excluded) {
-              $body += "| :warning: Excluded | $($f.Covered)/$($f.Total) | $fileLink: *$($f.Reason)* |`n"
+              $body += "| :warning: Excluded | $($f.Covered)/$($f.Total) | ${fileLink}: *$($f.Reason)* |`n"
             } else {
               $bar = if ($f.Pct -ge 80) { ':green_circle:' } elseif ($f.Pct -ge 50) { ':yellow_circle:' } else { ':red_circle:' }
               $body += "| $bar $($f.Pct)% | $($f.Covered)/$($f.Total) | $fileLink |`n"
