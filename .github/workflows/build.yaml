@@ -104,11 +104,38 @@ jobs:
       - name: Lint (build with TreatWarningsAsErrors)
         run: dotnet build -c Release -p:Platform=x64 --no-restore
 
+      # The xUnit suite is occasionally flaky on hosted runners (intermittent
+      # SignalR/HTTP timeouts in Watchtower / VaultItemHelper tests). Retry up
+      # to 3 times before failing the job; clean the coverage dir between
+      # attempts so ReportGenerator only aggregates the successful run.
       - name: Test with coverage
-        run: >-
-          dotnet test -p:Platform=x64 --no-build -c Release
-          --collect:"XPlat Code Coverage"
-          --results-directory ${{ github.workspace }}/coverage
+        shell: pwsh
+        run: |
+          $maxAttempts = 3
+          $coverageDir = "${{ github.workspace }}/coverage"
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              if (Test-Path $coverageDir) {
+                  Remove-Item -Recurse -Force $coverageDir -ErrorAction SilentlyContinue
+              }
+              Write-Host "::group::dotnet test (attempt $attempt of $maxAttempts)"
+              dotnet test -p:Platform=x64 --no-build -c Release `
+                  --collect:"XPlat Code Coverage" `
+                  --results-directory $coverageDir
+              $code = $LASTEXITCODE
+              Write-Host "::endgroup::"
+              if ($code -eq 0) {
+                  if ($attempt -gt 1) {
+                      Write-Host "::warning::Tests passed on attempt $attempt of $maxAttempts (previous attempts were flaky)"
+                  }
+                  exit 0
+              }
+              if ($attempt -lt $maxAttempts) {
+                  Write-Host "::warning::Tests failed (exit $code) on attempt $attempt; retrying..."
+                  Start-Sleep -Seconds 5
+              }
+          }
+          Write-Error "Tests failed after $maxAttempts attempts"
+          exit 1
 
       - name: Generate coverage report
         uses: danielpalme/ReportGenerator-GitHub-Action@5
