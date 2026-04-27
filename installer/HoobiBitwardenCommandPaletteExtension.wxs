@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Bitwarden Command Palette Extension MSI installer (WiX 5).
+
+  Per-user install: no UAC prompt, no Program Files writes. The extension is a
+  COM server that lives in the user session and is consumed by the Microsoft
+  Command Palette (shipped via PowerToys), so requiring elevation just to drop
+  the self-contained payload into LocalAppData adds friction without security
+  value.
+
+  UI flow uses WixUI_InstallDir (Welcome -> License -> InstallDir -> Verify ->
+  Progress -> Finish) so the user gets visible feedback during install, can
+  customise the install location, and can opt to launch Microsoft Command
+  Palette when the installer finishes.
+
+  Preprocessor variables supplied by the build pipeline:
+    Version    - four-part version (X.Y.Z.W). Sourced from version.txt.
+    Platform   - "x64" or "ARM64". Used to namespace the per-arch UpgradeCode and
+                 Component GUIDs. The wix `-arch` flag drives the actual MSI
+                 Template summary attribute.
+    PayloadDir - root of the published self-contained build to wrap.
+
+  UpgradeCode is stable per-architecture so a newer x64 MSI correctly upgrades
+  an installed x64 build. ARM64 ships under a separate UpgradeCode because
+  Windows blocks cross-arch upgrades on per-user MSIs. ProductCode is
+  regenerated per build (default `*`).
+
+  PowerToys / PowerToys Preview detection runs in the UI sequence: if neither
+  is found, a warning dialog explains that the extension needs the Microsoft
+  Command Palette host but lets the user proceed (the install is still
+  perfectly valid; the extension just won't be discoverable until PowerToys
+  arrives).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <?if $(var.Platform) = "ARM64" ?>
+    <?define UpgradeCodeGuid = "4B4EA90D-A8EA-4DE8-B668-642922C4077F" ?>
+    <?define ShortcutGuid = "6AA9A3DB-9E23-48CB-AF5C-DA7BB75AC949" ?>
+    <?define PlatformLabel = "ARM64" ?>
+  <?else?>
+    <?define UpgradeCodeGuid = "49FA3F3A-8822-4353-90E2-B2F74483D038" ?>
+    <?define ShortcutGuid = "869FBAB3-5758-47F0-BDB1-70F8A3FDC9C3" ?>
+    <?define PlatformLabel = "x64" ?>
+  <?endif?>
+
+  <Package
+      Name="Bitwarden Command Palette Extension"
+      Manufacturer="Hoobi"
+      Version="$(var.Version)"
+      UpgradeCode="$(var.UpgradeCodeGuid)"
+      Scope="perUser"
+      Compressed="yes"
+      InstallerVersion="500">
+
+    <SummaryInformation Description="Bitwarden Command Palette Extension $(var.PlatformLabel) installer" />
+
+    <MajorUpgrade
+        DowngradeErrorMessage="A newer version of the Bitwarden Command Palette Extension is already installed."
+        Schedule="afterInstallInitialize" />
+
+    <Media Id="1" Cabinet="BitwardenCmdPal.cab" EmbedCab="yes" CompressionLevel="high" />
+
+    <!--
+      Resolved relative to this .wxs file (installer\), so the icon comes from
+      the source tree rather than the published payload. The unpackaged WinUI
+      publish output doesn't ship a standalone .ico, but the icon is only
+      needed at install time for the ARP entry and shortcut, not at runtime,
+      so referencing the source path is correct. The .ico is generated from
+      Square150x150Logo.scale-200.png at build time and checked in alongside
+      the .wxs.
+    -->
+    <Icon Id="BitwardenCmdPalIcon" SourceFile="$(sys.SOURCEFILEDIR)HoobiBitwardenCommandPaletteExtension.ico" />
+    <Property Id="ARPPRODUCTICON" Value="BitwardenCmdPalIcon" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/hoobio/command-palette-bitwarden" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/hoobio/command-palette-bitwarden" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <!--
+      ARPNOMODIFY is set automatically by the WixUI_InstallDir dialog set, so
+      declaring it here would be a duplicate-symbol error.
+    -->
+
+    <!--
+      PowerToys / PowerToys Preview detection. Each search sets its own property
+      to the matched file path; the SetProperty below ORs them together into a
+      single boolean POWERTOYS_FOUND used by the warning custom action.
+
+      The Microsoft Store version of PowerToys installs as an MSIX package and
+      doesn't drop a discoverable PowerToys.exe under Program Files / LocalAppData,
+      so this detection is a heuristic - it covers the standard installer flows
+      but the warning is intentionally non-blocking either way.
+    -->
+    <Property Id="POWERTOYS_MACHINE_X64">
+      <DirectorySearch Id="PtMachineDirX64" Path="[ProgramFiles64Folder]PowerToys" Depth="0">
+        <FileSearch Id="PtMachineExeX64" Name="PowerToys.exe" />
+      </DirectorySearch>
+    </Property>
+
+    <Property Id="POWERTOYS_MACHINE_X86">
+      <DirectorySearch Id="PtMachineDirX86" Path="[ProgramFilesFolder]PowerToys" Depth="0">
+        <FileSearch Id="PtMachineExeX86" Name="PowerToys.exe" />
+      </DirectorySearch>
+    </Property>
+
+    <Property Id="POWERTOYS_USER">
+      <DirectorySearch Id="PtUserDir" Path="[LocalAppDataFolder]PowerToys" Depth="0">
+        <FileSearch Id="PtUserExe" Name="PowerToys.exe" />
+      </DirectorySearch>
+    </Property>
+
+    <Property Id="POWERTOYS_PREVIEW">
+      <DirectorySearch Id="PtPreviewDir" Path="[ProgramFiles64Folder]PowerToys (Preview)" Depth="0">
+        <FileSearch Id="PtPreviewExe" Name="PowerToys.exe" />
+      </DirectorySearch>
+    </Property>
+
+    <!--
+      Single-button warning dialog via Session.Message INSTALLMESSAGE_WARNING.
+      The user reads it and clicks OK; the install proceeds either way. In
+      quiet-mode installs the message is logged rather than shown, which is
+      the desired behaviour for unattended deployments.
+    -->
+    <CustomAction Id="WarnNoPowerToys" Script="jscript" Execute="immediate" Return="check">
+<![CDATA[
+var INSTALLMESSAGE_WARNING = 0x03000000;
+var MB_OK = 0;
+var MB_ICONWARNING = 0x30;
+var rec = Session.Installer.CreateRecord(0);
+rec.StringData(0) = "PowerToys was not detected on this system.\n\nThe Bitwarden Command Palette extension runs inside the Microsoft Command Palette, which ships with PowerToys (or PowerToys Preview).\n\nInstallation will continue, but the extension will not be discoverable until PowerToys is installed. See https://aka.ms/installpowertoys.";
+Session.Message(INSTALLMESSAGE_WARNING + MB_ICONWARNING + MB_OK, rec);
+]]>
+    </CustomAction>
+
+    <!--
+      SetProperty must fire after AppSearch (which populates the four PT_*
+      properties) and before WarnNoPowerToys (which reads POWERTOYS_FOUND).
+      Anchoring it explicitly to the warning CA guarantees the ordering rather
+      than leaving WiX to resolve two `After="AppSearch"` siblings.
+    -->
+    <SetProperty Id="POWERTOYS_FOUND"
+                 Value="1"
+                 Sequence="ui"
+                 Before="WarnNoPowerToys"
+                 Condition="POWERTOYS_MACHINE_X64 OR POWERTOYS_MACHINE_X86 OR POWERTOYS_USER OR POWERTOYS_PREVIEW" />
+
+    <InstallUISequence>
+      <Custom Action="WarnNoPowerToys" After="AppSearch" Condition="NOT POWERTOYS_FOUND AND NOT Installed" />
+    </InstallUISequence>
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="HoobiBitwardenCommandPaletteExtension" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="$(var.ShortcutGuid)">
+        <Shortcut Id="BitwardenCmdPalShortcut"
+                  Name="Bitwarden Command Palette"
+                  Description="Bitwarden vault inside Microsoft Command Palette"
+                  Target="[INSTALLFOLDER]HoobiBitwardenCommandPaletteExtension.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="BitwardenCmdPalIcon"
+                  IconIndex="0" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\Hoobi\BitwardenCommandPaletteExtension"
+                       Name="StartMenuShortcut"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Bitwarden Command Palette" Level="1" AllowAdvertise="no" Display="expand" ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentGroupRef Id="ExtensionPayload" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!--
+      WixUI_InstallDir provides the configurable install path dialog. The Finish
+      dialog gets a "Launch Microsoft Command Palette" optional checkbox bound
+      to a WixShellExec custom action so the user can jump straight into
+      Command Palette after install.
+
+      The launch target is the Microsoft Command Palette MSIX AUMID via the
+      `shell:AppsFolder\` namespace, which ShellExecute resolves to the
+      installed packaged app. If Command Palette isn't installed, ShellExecute
+      fails silently - the install itself has already succeeded.
+    -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Microsoft Command Palette" />
+    <Property Id="WixShellExecTarget" Value="shell:AppsFolder\Microsoft.CommandPalette_8wekyb3d8bbwe!App" />
+
+    <CustomAction Id="LaunchApplication"
+                  BinaryRef="Wix4UtilCA_X86"
+                  DllEntry="WixShellExec"
+                  Impersonate="yes" />
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)License.rtf" />
+
+    <UI>
+      <Publish Dialog="ExitDialog"
+               Control="Finish"
+               Event="DoAction"
+               Value="LaunchApplication"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+
+  </Package>
+
+  <!--
+    Payload harvest. The extension's primary executable gets an explicit File
+    Id so anything that wants to target it (custom actions, shortcuts) can do
+    so via [#ExtensionAppExe]; everything else is auto-harvested by <Files>.
+  -->
+  <Fragment>
+    <ComponentGroup Id="ExtensionPayload" Directory="INSTALLFOLDER">
+      <Component Id="ExtensionAppExeComponent" Guid="C81B503E-387C-4B3D-935C-C0F748C49738">
+        <File Id="ExtensionAppExe"
+              Source="$(var.PayloadDir)\HoobiBitwardenCommandPaletteExtension.exe"
+              KeyPath="yes" />
+      </Component>
+      <Files Include="$(var.PayloadDir)\**">
+        <Exclude Files="$(var.PayloadDir)\HoobiBitwardenCommandPaletteExtension.exe" />
+      </Files>
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>
