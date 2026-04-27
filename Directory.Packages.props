@@ -4,28 +4,28 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.CommandPalette.Extensions" Version="0.9.260303001" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0-preview.24508.2" />
-    <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
-    <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.183" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.203" />
+    <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.3912.50" />
+    <PackageVersion Include="Microsoft.Windows.CsWin32" Version="0.3.275" />
     <PackageVersion Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
-    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4188" />
-    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools.MSIX" Version="1.7.20250829.1" />
-    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.250907003" />
-    <PackageVersion Include="Otp.NET" Version="1.4.0" />
+    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
+    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools.MSIX" Version="1.7.260316102" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.260416003" />
+    <PackageVersion Include="Otp.NET" Version="1.4.1" />
     <PackageVersion Include="System.Security.Permissions" Version="8.0.0" />
-    <PackageVersion Include="Shmuelie.WinRTServer" Version="2.1.1" />
-    <PackageVersion Include="Svg.Skia" Version="3.6.0" />
+    <PackageVersion Include="Shmuelie.WinRTServer" Version="2.2.1" />
+    <PackageVersion Include="Svg.Skia" Version="4.5.0" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
-    <PackageVersion Include="System.Text.Json" Version="9.0.8" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.7" />
 
     <!-- AI sloppiness + security analyzers -->
-    <PackageVersion Include="Meziantou.Analyzer" Version="2.0.187" />
-    <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.12.19" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="2.0.220" />
+    <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.14.15" />
 
     <!-- Test packages -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.0.2" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.0" />
   </ItemGroup>
 </Project>
