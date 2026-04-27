@@ -72,7 +72,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release-attempt-1
         continue-on-error: true
         with:
@@ -82,7 +82,7 @@ jobs:
         if: steps.release-attempt-1.outcome == 'failure'
         run: sleep 15
 
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release-attempt-2
         if: steps.release-attempt-1.outcome == 'failure'
         with:
