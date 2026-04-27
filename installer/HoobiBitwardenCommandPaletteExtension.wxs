@@ -2,23 +2,43 @@
 <!--
   Bitwarden Command Palette Extension MSI installer (WiX 5).
 
-  Per-user install: no UAC prompt, no Program Files writes. The extension is a
-  COM server that lives in the user session and is consumed by the Microsoft
-  Command Palette (shipped via PowerToys), so requiring elevation just to drop
-  the self-contained payload into LocalAppData adds friction without security
-  value.
+  This MSI is a thin wrapper around the signed MSIX. Microsoft Command Palette
+  only discovers extensions via the AppX `windows.appExtension` contract, so
+  loose binaries on disk are invisible to it; the MSI therefore needs to do a
+  proper MSIX install rather than just dropping files.
+
+  Per-user install (Scope="perUser") so no UAC prompt and everything lands in
+  the user session: the cert is imported into the per-user TrustedPeople store
+  and the MSIX is installed via the user's AppX deployment service.
+
+  On install:
+    1. Lay down the bundled .msix and .cer under LocalAppData (so repair has
+       something to operate on).
+    2. Import-Certificate into Cert:\CurrentUser\TrustedPeople so the MSIX's
+       publisher signature chains to a trusted root for this user.
+    3. Add-AppxPackage on the bundled .msix - this is what actually registers
+       the extension with Microsoft Command Palette.
+
+  On uninstall (but not on major upgrade): Remove-AppxPackage by package name.
+  We deliberately leave the cert in TrustedPeople; it may be shared with other
+  installs and removing it from a deferred CA crosses a user-experience line.
 
   UI flow uses WixUI_InstallDir (Welcome -> License -> InstallDir -> Verify ->
-  Progress -> Finish) so the user gets visible feedback during install, can
-  customise the install location, and can opt to launch Microsoft Command
-  Palette when the installer finishes.
+  Progress -> Finish) so the user gets the standard install ceremony, can
+  pick a custom path for the staged .msix/.cer, and can opt to launch
+  Microsoft Command Palette from the Finish dialog.
 
   Preprocessor variables supplied by the build pipeline:
     Version    - four-part version (X.Y.Z.W). Sourced from version.txt.
-    Platform   - "x64" or "ARM64". Used to namespace the per-arch UpgradeCode and
-                 Component GUIDs. The wix `-arch` flag drives the actual MSI
-                 Template summary attribute.
-    PayloadDir - root of the published self-contained build to wrap.
+    Platform   - "x64" or "ARM64". Used to namespace the per-arch UpgradeCode
+                 and Component GUIDs. The wix `-arch` flag drives the actual
+                 MSI Template summary attribute.
+    PayloadDir - directory holding both the per-arch
+                 `HoobiBitwardenCommandPaletteExtension.msix` (renamed from
+                 the build-msix output) and the publisher cert
+                 `HoobiBitwardenCommandPaletteExtension.cer` (copied from the
+                 repo root). The CI workflow stages both files into this dir
+                 before invoking `wix build`.
 
   UpgradeCode is stable per-architecture so a newer x64 MSI correctly upgrades
   an installed x64 build. ARM64 ships under a separate UpgradeCode because
@@ -27,9 +47,8 @@
 
   PowerToys / PowerToys Preview detection runs in the UI sequence: if neither
   is found, a warning dialog explains that the extension needs the Microsoft
-  Command Palette host but lets the user proceed (the install is still
-  perfectly valid; the extension just won't be discoverable until PowerToys
-  arrives).
+  Command Palette host but lets the user proceed (the AppX install still
+  succeeds; the extension just won't be discoverable until PowerToys arrives).
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
@@ -37,11 +56,9 @@
 
   <?if $(var.Platform) = "ARM64" ?>
     <?define UpgradeCodeGuid = "4B4EA90D-A8EA-4DE8-B668-642922C4077F" ?>
-    <?define ShortcutGuid = "6AA9A3DB-9E23-48CB-AF5C-DA7BB75AC949" ?>
     <?define PlatformLabel = "ARM64" ?>
   <?else?>
     <?define UpgradeCodeGuid = "49FA3F3A-8822-4353-90E2-B2F74483D038" ?>
-    <?define ShortcutGuid = "869FBAB3-5758-47F0-BDB1-70F8A3FDC9C3" ?>
     <?define PlatformLabel = "x64" ?>
   <?endif?>
 
@@ -63,18 +80,13 @@
     <Media Id="1" Cabinet="BitwardenCmdPal.cab" EmbedCab="yes" CompressionLevel="high" />
 
     <!--
-      Resolved relative to this .wxs file (installer\), so the icon comes from
-      the source tree rather than the published payload. The unpackaged WinUI
-      publish output doesn't ship a standalone .ico, but the icon is only
-      needed at install time for the ARP entry and shortcut, not at runtime,
-      so referencing the source path is correct. The .ico is generated from
-      Square150x150Logo.scale-200.png and checked in alongside the .wxs.
+      Resolved relative to this .wxs file (installer\). The .ico is generated
+      from Square150x150Logo.scale-200.png and checked in alongside the .wxs.
 
       WiX 5 dropped the Icon/@Name attribute, so the Id is used verbatim as
       the Icon table key (and as the on-disk filename when extracted to
       %LOCALAPPDATA%\Microsoft\Installer\<ProductCode>\). The .ico extension
-      is required for ARP and the Shell shortcut renderer to recognise the
-      stream as an icon resource.
+      is required for ARP to recognise the stream as an icon resource.
     -->
     <Icon Id="BitwardenCmdPalIcon.ico" SourceFile="$(sys.SOURCEFILEDIR)HoobiBitwardenCommandPaletteExtension.ico" />
     <Property Id="ARPPRODUCTICON" Value="BitwardenCmdPalIcon.ico" />
@@ -87,14 +99,14 @@
     -->
 
     <!--
-      PowerToys / PowerToys Preview detection. Each search sets its own property
-      to the matched file path; the SetProperty below ORs them together into a
-      single boolean POWERTOYS_FOUND used by the warning custom action.
+      PowerToys / PowerToys Preview detection. Each search sets its own
+      property to the matched file path; the SetProperty below ORs them into
+      a single boolean POWERTOYS_FOUND used by the warning custom action.
 
       The Microsoft Store version of PowerToys installs as an MSIX package and
-      doesn't drop a discoverable PowerToys.exe under Program Files / LocalAppData,
-      so this detection is a heuristic - it covers the standard installer flows
-      but the warning is intentionally non-blocking either way.
+      doesn't drop a discoverable PowerToys.exe under Program Files /
+      LocalAppData, so this detection is a heuristic - it covers the standard
+      installer flows but the warning is intentionally non-blocking either way.
     -->
     <Property Id="POWERTOYS_MACHINE_X64">
       <DirectorySearch Id="PtMachineDirX64" Path="[ProgramFiles64Folder]PowerToys" Depth="0">
@@ -120,27 +132,12 @@
       </DirectorySearch>
     </Property>
 
-    <!--
-      Single-button warning dialog via Session.Message INSTALLMESSAGE_WARNING.
-      The user reads it and clicks OK; the install proceeds either way. In
-      quiet-mode installs the message is logged rather than shown, which is
-      the desired behaviour for unattended deployments.
-
-      WiX 5 dropped inline <![CDATA[...]]> script bodies; the script lives in
-      WarnNoPowerToys.js next to this .wxs and is referenced by name.
-    -->
     <CustomAction Id="WarnNoPowerToys"
                   Script="jscript"
                   ScriptSourceFile="$(sys.SOURCEFILEDIR)WarnNoPowerToys.js"
                   Execute="immediate"
                   Return="check" />
 
-    <!--
-      SetProperty must fire after AppSearch (which populates the four PT_*
-      properties) and before WarnNoPowerToys (which reads POWERTOYS_FOUND).
-      Anchoring it explicitly to the warning CA guarantees the ordering rather
-      than leaving WiX to resolve two `After="AppSearch"` siblings.
-    -->
     <SetProperty Id="POWERTOYS_FOUND"
                  Value="1"
                  Sequence="ui"
@@ -155,34 +152,87 @@
       <Directory Id="INSTALLFOLDER" Name="HoobiBitwardenCommandPaletteExtension" />
     </StandardDirectory>
 
-    <StandardDirectory Id="ProgramMenuFolder">
-      <Component Id="StartMenuShortcut" Guid="$(var.ShortcutGuid)">
-        <Shortcut Id="BitwardenCmdPalShortcut"
-                  Name="Bitwarden Command Palette"
-                  Description="Bitwarden vault inside Microsoft Command Palette"
-                  Target="[INSTALLFOLDER]HoobiBitwardenCommandPaletteExtension.exe"
-                  WorkingDirectory="INSTALLFOLDER"
-                  Icon="BitwardenCmdPalIcon.ico"
-                  IconIndex="0" />
-        <RegistryValue Root="HKCU"
-                       Key="Software\Hoobi\BitwardenCommandPaletteExtension"
-                       Name="StartMenuShortcut"
-                       Type="integer"
-                       Value="1"
-                       KeyPath="yes" />
-      </Component>
-    </StandardDirectory>
-
     <Feature Id="Main" Title="Bitwarden Command Palette" Level="1" AllowAdvertise="no" Display="expand" ConfigurableDirectory="INSTALLFOLDER">
-      <ComponentGroupRef Id="ExtensionPayload" />
-      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentGroupRef Id="WrappedPayload" />
     </Feature>
 
     <!--
-      WixUI_InstallDir provides the configurable install path dialog. The Finish
-      dialog gets a "Launch Microsoft Command Palette" optional checkbox bound
-      to a WixShellExec custom action so the user can jump straight into
-      Command Palette after install.
+      Cert + AppX wiring. Each operation is split into two CAs:
+        - "<Name>_Cmd" (immediate): builds the powershell.exe command line into
+          a property whose name matches the deferred CA. [#FileId] tokens
+          resolve at this point because CostFinalize has run.
+        - "<Name>"     (deferred):  WixQuietExec reads the property of the same
+          name and invokes powershell.
+
+      Deferred CAs run after InstallFiles so [#PublisherCer] and [#MsixPackage]
+      both point at on-disk paths. We Impersonate="yes" so PowerShell runs as
+      the installing user (per-user MSI; cert goes to CurrentUser, AppX goes
+      to the user's AppX deployment service).
+
+      ImportCert outputs to Out-Null but Add-AppxPackage's verbose progress
+      lands in the MSI log when /l*v is supplied to msiexec. Failures bubble
+      up via Return="check" and the MSI rolls back.
+    -->
+    <CustomAction Id="ImportCert_Cmd"
+                  Property="ImportCert"
+                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Import-Certificate -FilePath '[#PublisherCer]' -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null&quot;" />
+    <CustomAction Id="ImportCert"
+                  BinaryRef="Wix4UtilCA_X86"
+                  DllEntry="WixQuietExec"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="check" />
+
+    <CustomAction Id="AddAppxPackage_Cmd"
+                  Property="AddAppxPackage"
+                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Add-AppxPackage -Path '[#MsixPackage]' -ForceUpdateFromAnyVersion&quot;" />
+    <CustomAction Id="AddAppxPackage"
+                  BinaryRef="Wix4UtilCA_X86"
+                  DllEntry="WixQuietExec"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="check" />
+
+    <!--
+      Uninstall: match by package name (the Identity Name in Package.appxmanifest)
+      so we don't have to plumb the exact PackageFullName through CustomActionData.
+      Return="ignore" so a missing package (e.g. user already uninstalled the
+      AppX manually) doesn't block MSI removal.
+    -->
+    <CustomAction Id="RemoveAppxPackage_Cmd"
+                  Property="RemoveAppxPackage"
+                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension' | Remove-AppxPackage&quot;" />
+    <CustomAction Id="RemoveAppxPackage"
+                  BinaryRef="Wix4UtilCA_X86"
+                  DllEntry="WixQuietExec"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <!-- Install / repair / upgrade-new-product: stage files, import cert,
+           register AppX. The `NOT REMOVE` guard skips these on uninstall AND
+           on the old product's RemoveExistingProducts pass during a major
+           upgrade. -->
+      <Custom Action="ImportCert_Cmd"      After="InstallFiles"   Condition="NOT REMOVE" />
+      <Custom Action="ImportCert"          After="ImportCert_Cmd" Condition="NOT REMOVE" />
+      <Custom Action="AddAppxPackage_Cmd"  After="ImportCert"     Condition="NOT REMOVE" />
+      <Custom Action="AddAppxPackage"      After="AddAppxPackage_Cmd" Condition="NOT REMOVE" />
+
+      <!-- Uninstall: tear down the AppX before MSI's RemoveFiles wipes the
+           staged .msix. Skipped during major upgrade (UPGRADINGPRODUCTCODE
+           is set on the old product's uninstall pass) so we don't briefly
+           leave the user without the extension between RemoveAppxPackage and
+           the new product's AddAppxPackage. -->
+      <Custom Action="RemoveAppxPackage_Cmd" Before="RemoveAppxPackage" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="RemoveAppxPackage"     Before="RemoveFiles"        Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+
+    <!--
+      WixUI_InstallDir provides the configurable install path dialog. The
+      Finish dialog gets a "Launch Microsoft Command Palette" optional
+      checkbox bound to a WixShellExec custom action so the user can jump
+      straight into Command Palette after install.
 
       The launch target is the Microsoft Command Palette MSIX AUMID via the
       `shell:AppsFolder\` namespace, which ShellExecute resolves to the
@@ -201,14 +251,9 @@
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)License.rtf" />
     <!--
-      Override the default WiX UI chrome with our own branding:
-      - WixUIBannerBmp (493x58): horizontal banner shown on License / InstallDir /
-        Verify / Progress dialogs.
-      - WixUIDialogBmp  (493x312): full background for the Welcome and Exit
-        dialogs; only the left ~164 px strip is visible (the right side is
-        covered by the dialog's text panel).
-      Both are generated from Square150x150Logo.scale-200.png and checked in
-      alongside this .wxs.
+      Brand the WiX UI chrome: WixUIBannerBmp (493x58) is the horizontal
+      banner on inner dialogs; WixUIDialogBmp (493x312) is the Welcome / Exit
+      backdrop with the visible left ~164 px showing a #1d1d1d panel + logo.
     -->
     <WixVariable Id="WixUIBannerBmp" Value="$(sys.SOURCEFILEDIR)WixUIBannerBmp.bmp" />
     <WixVariable Id="WixUIDialogBmp" Value="$(sys.SOURCEFILEDIR)WixUIDialogBmp.bmp" />
@@ -224,20 +269,23 @@
   </Package>
 
   <!--
-    Payload harvest. The extension's primary executable gets an explicit File
-    Id so anything that wants to target it (custom actions, shortcuts) can do
-    so via [#ExtensionAppExe]; everything else is auto-harvested by <Files>.
+    Wrapped payload: just the signed MSIX + the publisher cert that needs to
+    sit in TrustedPeople for the AppX deployment service to trust it. The
+    explicit File Ids let custom actions reference these via [#PublisherCer]
+    / [#MsixPackage] tokens without depending on full paths.
   -->
   <Fragment>
-    <ComponentGroup Id="ExtensionPayload" Directory="INSTALLFOLDER">
-      <Component Id="ExtensionAppExeComponent" Guid="C81B503E-387C-4B3D-935C-C0F748C49738">
-        <File Id="ExtensionAppExe"
-              Source="$(var.PayloadDir)\HoobiBitwardenCommandPaletteExtension.exe"
+    <ComponentGroup Id="WrappedPayload" Directory="INSTALLFOLDER">
+      <Component Id="MsixPackageComponent" Guid="1D27B6DE-D44E-4581-8C24-686BAD9B7968">
+        <File Id="MsixPackage"
+              Source="$(var.PayloadDir)\HoobiBitwardenCommandPaletteExtension.msix"
               KeyPath="yes" />
       </Component>
-      <Files Include="$(var.PayloadDir)\**">
-        <Exclude Files="$(var.PayloadDir)\HoobiBitwardenCommandPaletteExtension.exe" />
-      </Files>
+      <Component Id="PublisherCerComponent" Guid="3BB4037A-6706-4BEA-BEB0-59096B31AC6B">
+        <File Id="PublisherCer"
+              Source="$(var.PayloadDir)\HoobiBitwardenCommandPaletteExtension.cer"
+              KeyPath="yes" />
+      </Component>
     </ComponentGroup>
   </Fragment>
 

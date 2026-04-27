@@ -310,8 +310,11 @@ jobs:
 
   build-msi:
     name: Build MSI (${{ matrix.platform }})
-    needs: [detect-changes]
-    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    # MSI is a thin wrapper around the signed MSIX (it ships only the .msix
+    # plus the publisher .cer and registers them via custom actions), so it
+    # has to wait for build-msix to produce the artifact for the same platform.
+    needs: [detect-changes, build-msix]
+    if: always() && needs.build-msix.result == 'success' && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -324,10 +327,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
-
       - name: Read version
         id: version
         shell: pwsh
@@ -336,35 +335,40 @@ jobs:
           "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
           "APP_VERSION=$ver" | Out-File -Append $env:GITHUB_ENV
 
-      - name: Resolve runtime identifier
-        id: rid
-        shell: pwsh
-        env:
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          $rid = if ($env:PLATFORM -eq 'ARM64') { 'win-arm64' } else { 'win-x64' }
-          "rid=$rid" | Out-File -Append $env:GITHUB_OUTPUT
+      - name: Download MSIX (${{ matrix.platform }})
+        uses: actions/download-artifact@v8
+        with:
+          name: msix-${{ matrix.platform }}
+          path: ${{ github.workspace }}\staging\msix-download-${{ matrix.platform }}
 
-      - name: Publish unpackaged self-contained build
+      - name: Stage MSI payload (msix + cert)
         shell: pwsh
         env:
           PLATFORM: ${{ matrix.platform }}
-          RID: ${{ steps.rid.outputs.rid }}
-          PUBLISH_DIR: ${{ github.workspace }}\publish\${{ matrix.platform }}
+          VERSION: ${{ steps.version.outputs.version }}
+          MSIX_DOWNLOAD: ${{ github.workspace }}\staging\msix-download-${{ matrix.platform }}
+          PAYLOAD_DIR: ${{ github.workspace }}\staging\msi-payload-${{ matrix.platform }}
         run: |
-          New-Item -ItemType Directory -Path $env:PUBLISH_DIR -Force | Out-Null
-          dotnet publish $env:PROJECT_PATH `
-            -c Release `
-            -p:Platform=$env:PLATFORM `
-            -p:RuntimeIdentifier=$env:RID `
-            -p:WindowsPackageType=None `
-            -p:WindowsAppSDKSelfContained=true `
-            -p:SelfContained=true `
-            -o $env:PUBLISH_DIR
-          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
-          if (-not (Test-Path "$env:PUBLISH_DIR\HoobiBitwardenCommandPaletteExtension.exe")) {
-            throw "Expected HoobiBitwardenCommandPaletteExtension.exe in publish output"
-          }
+          New-Item -ItemType Directory -Path $env:PAYLOAD_DIR -Force | Out-Null
+
+          # The build-msix job uploads `${ASSET_BASE_NAME}-<ver>-<plat>.msix`.
+          # WiX expects a fixed filename so it can reference the File Id without
+          # baking the version into the .wxs. Rename on stage.
+          $msix = Get-ChildItem -LiteralPath $env:MSIX_DOWNLOAD -Filter *.msix -ErrorAction Stop | Select-Object -First 1
+          if (-not $msix) { throw "No .msix in $env:MSIX_DOWNLOAD" }
+          Copy-Item -LiteralPath $msix.FullName `
+                    -Destination "$env:PAYLOAD_DIR\HoobiBitwardenCommandPaletteExtension.msix" `
+                    -Force
+
+          # Publisher cert from the repo root - the same .cer the README tells
+          # users to import manually for raw .msix sideloads. The MSI's
+          # ImportCert custom action drops it into Cert:\CurrentUser\TrustedPeople
+          # so the bundled .msix's signature chains to a trusted root.
+          Copy-Item -LiteralPath "${{ github.workspace }}\HoobiBitwardenCommandPaletteExtension.cer" `
+                    -Destination "$env:PAYLOAD_DIR\HoobiBitwardenCommandPaletteExtension.cer" `
+                    -Force
+
+          Get-ChildItem $env:PAYLOAD_DIR | Format-Table Name, Length
 
       # The build-msi-wix action emits `<wxs-base-name>-<version>-<platform>.msi`,
       # which (because the .wxs filename matches ASSET_BASE_NAME) is already the
@@ -375,7 +379,7 @@ jobs:
           wix-source-path: ${{ env.WIX_SOURCE_PATH }}
           version: ${{ steps.version.outputs.version }}
           platform: ${{ matrix.platform }}
-          payload-dir: ${{ github.workspace }}\publish\${{ matrix.platform }}
+          payload-dir: ${{ github.workspace }}\staging\msi-payload-${{ matrix.platform }}
           output-dir: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}
           # Pin extensions to 5.x; the unversioned form pulls the latest (currently
           # 7.0.0), which fails with "Could not find expected package root folder
