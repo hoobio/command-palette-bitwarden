@@ -313,15 +313,31 @@ jobs:
     # MSI is a thin wrapper around the signed MSIX (it ships only the .msix
     # plus the publisher .cer and registers them via custom actions), so it
     # has to wait for build-msix to produce the artifact for the same platform.
+    #
+    # Only build the MSI when the MSIX would be signed: an unsigned wrapped
+    # .msix can't be Add-AppxPackage'd on a normal user machine, so producing
+    # a contributor-PR MSI artifact would just be misleading. The condition
+    # here mirrors SHOULD_SIGN below (release-please PRs + main pushes).
     needs: [detect-changes, build-msix]
-    if: always() && needs.build-msix.result == 'success' && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    if: >-
+      always()
+      && needs.build-msix.result == 'success'
+      && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+      && (
+        (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main')
+        || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      )
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
         platform: [x64, ARM64]
     env:
-      # Sign on release-please PRs and on main pushes; PRs from contributors stay unsigned.
+      # The job-level `if:` already gates on the same conditions as SHOULD_SIGN,
+      # so by the time we reach this env block SHOULD_SIGN is always true. We
+      # keep the variable for symmetry with build-msix and so a future
+      # relaxation of the gate (e.g. allow unsigned MSI builds for testing)
+      # only needs to touch the `if:`.
       SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
     steps:
