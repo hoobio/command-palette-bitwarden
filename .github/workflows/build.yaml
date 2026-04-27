@@ -325,7 +325,7 @@ jobs:
           subject-path: "release/**/*.msix"
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
@@ -399,7 +399,7 @@ jobs:
           path: release/ARM64
 
       - name: Create pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.version }}-pre.${{ github.run_number }}
           name: v${{ steps.version.outputs.version }}-pre.${{ github.run_number }}
