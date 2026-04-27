@@ -68,11 +68,16 @@
       publish output doesn't ship a standalone .ico, but the icon is only
       needed at install time for the ARP entry and shortcut, not at runtime,
       so referencing the source path is correct. The .ico is generated from
-      Square150x150Logo.scale-200.png at build time and checked in alongside
-      the .wxs.
+      Square150x150Logo.scale-200.png and checked in alongside the .wxs.
+
+      WiX 5 dropped the Icon/@Name attribute, so the Id is used verbatim as
+      the Icon table key (and as the on-disk filename when extracted to
+      %LOCALAPPDATA%\Microsoft\Installer\<ProductCode>\). The .ico extension
+      is required for ARP and the Shell shortcut renderer to recognise the
+      stream as an icon resource.
     -->
-    <Icon Id="BitwardenCmdPalIcon" SourceFile="$(sys.SOURCEFILEDIR)HoobiBitwardenCommandPaletteExtension.ico" />
-    <Property Id="ARPPRODUCTICON" Value="BitwardenCmdPalIcon" />
+    <Icon Id="BitwardenCmdPalIcon.ico" SourceFile="$(sys.SOURCEFILEDIR)HoobiBitwardenCommandPaletteExtension.ico" />
+    <Property Id="ARPPRODUCTICON" Value="BitwardenCmdPalIcon.ico" />
     <Property Id="ARPHELPLINK" Value="https://github.com/hoobio/command-palette-bitwarden" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/hoobio/command-palette-bitwarden" />
     <Property Id="ARPNOREPAIR" Value="1" />
@@ -120,17 +125,15 @@
       The user reads it and clicks OK; the install proceeds either way. In
       quiet-mode installs the message is logged rather than shown, which is
       the desired behaviour for unattended deployments.
+
+      WiX 5 dropped inline <![CDATA[...]]> script bodies; the script lives in
+      WarnNoPowerToys.js next to this .wxs and is referenced by name.
     -->
-    <CustomAction Id="WarnNoPowerToys" Script="jscript" Execute="immediate" Return="check">
-<![CDATA[
-var INSTALLMESSAGE_WARNING = 0x03000000;
-var MB_OK = 0;
-var MB_ICONWARNING = 0x30;
-var rec = Session.Installer.CreateRecord(0);
-rec.StringData(0) = "PowerToys was not detected on this system.\n\nThe Bitwarden Command Palette extension runs inside the Microsoft Command Palette, which ships with PowerToys (or PowerToys Preview).\n\nInstallation will continue, but the extension will not be discoverable until PowerToys is installed. See https://aka.ms/installpowertoys.";
-Session.Message(INSTALLMESSAGE_WARNING + MB_ICONWARNING + MB_OK, rec);
-]]>
-    </CustomAction>
+    <CustomAction Id="WarnNoPowerToys"
+                  Script="jscript"
+                  ScriptSourceFile="$(sys.SOURCEFILEDIR)WarnNoPowerToys.js"
+                  Execute="immediate"
+                  Return="check" />
 
     <!--
       SetProperty must fire after AppSearch (which populates the four PT_*
@@ -159,7 +162,7 @@ Session.Message(INSTALLMESSAGE_WARNING + MB_ICONWARNING + MB_OK, rec);
                   Description="Bitwarden vault inside Microsoft Command Palette"
                   Target="[INSTALLFOLDER]HoobiBitwardenCommandPaletteExtension.exe"
                   WorkingDirectory="INSTALLFOLDER"
-                  Icon="BitwardenCmdPalIcon"
+                  Icon="BitwardenCmdPalIcon.ico"
                   IconIndex="0" />
         <RegistryValue Root="HKCU"
                        Key="Software\Hoobi\BitwardenCommandPaletteExtension"
@@ -197,6 +200,18 @@ Session.Message(INSTALLMESSAGE_WARNING + MB_ICONWARNING + MB_OK, rec);
 
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)License.rtf" />
+    <!--
+      Override the default WiX UI chrome with our own branding:
+      - WixUIBannerBmp (493x58): horizontal banner shown on License / InstallDir /
+        Verify / Progress dialogs.
+      - WixUIDialogBmp  (493x312): full background for the Welcome and Exit
+        dialogs; only the left ~164 px strip is visible (the right side is
+        covered by the dialog's text panel).
+      Both are generated from Square150x150Logo.scale-200.png and checked in
+      alongside this .wxs.
+    -->
+    <WixVariable Id="WixUIBannerBmp" Value="$(sys.SOURCEFILEDIR)WixUIBannerBmp.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(sys.SOURCEFILEDIR)WixUIDialogBmp.bmp" />
 
     <UI>
       <Publish Dialog="ExitDialog"
