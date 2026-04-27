@@ -16,11 +16,24 @@ on:
       - ".release-please-manifest.json"
   pull_request:
     branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
   contents: write
   pull-requests: write
+
+env:
+  DOTNET_SDK_VERSION: "10.0.x"
+  SOLUTION_PATH: HoobiBitwardenCommandPaletteExtension.slnx
+  PROJECT_PATH: HoobiBitwardenCommandPaletteExtension/HoobiBitwardenCommandPaletteExtension.csproj
+  APPXMANIFEST_PATH: HoobiBitwardenCommandPaletteExtension/Package.appxmanifest
+  ASSET_BASE_NAME: HoobiBitwardenCommandPaletteExtension
+  BOM_FILE: sbom.cdx.json
+  # NOTE: GitHub Actions does not allow expressions in `uses:` refs, so the
+  # pipeline-tools pin is repeated in each `uses:` line below. Bump in lockstep.
+  # Current pin: hoobio/pipeline-tools @ v1.4.0 (adds optional WACK PR comments).
 
 jobs:
   detect-changes:
@@ -45,59 +58,29 @@ jobs:
               - "**/Package.appxmanifest"
               - "version.txt"
               - ".github/workflows/build.yaml"
-              - ".github/workflows/_build.yaml"
-              - ".github/workflows/_wack.yaml"
               - "release-please-config.json"
               - ".release-please-manifest.json"
 
       - name: Summarize skip
         if: steps.filter.outputs.code_changed == 'false'
         run: |
-          echo "::notice::No code changes detected — build, lint-and-test, and WACK will be skipped"
+          echo "::notice::No code changes detected; build, lint-and-test, and WACK will be skipped"
           echo "### 💭 No code changes detected" >> "$GITHUB_STEP_SUMMARY"
           echo "Build, lint-and-test, and WACK checks were skipped because this PR only contains non-code changes." >> "$GITHUB_STEP_SUMMARY"
 
   release-please:
+    name: Release Please
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
-      - name: Generate release-please app token
-        id: app-token
-        uses: actions/create-github-app-token@v3
+      - id: rp
+        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v1.4.0
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
-      - uses: googleapis/release-please-action@v5
-        id: release-attempt-1
-        continue-on-error: true
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Wait and retry on failure
-        if: steps.release-attempt-1.outcome == 'failure'
-        run: sleep 15
-
-      - uses: googleapis/release-please-action@v5
-        id: release-attempt-2
-        if: steps.release-attempt-1.outcome == 'failure'
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Set release outputs
-        id: release
-        run: |
-          if [ "${{ steps.release-attempt-1.outcome }}" = "success" ]; then
-            echo "release_created=${{ steps.release-attempt-1.outputs.release_created }}" >> $GITHUB_OUTPUT
-            echo "tag_name=${{ steps.release-attempt-1.outputs.tag_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "release_created=${{ steps.release-attempt-2.outputs.release_created }}" >> $GITHUB_OUTPUT
-            echo "tag_name=${{ steps.release-attempt-2.outputs.tag_name }}" >> $GITHUB_OUTPUT
-          fi
+          app-private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
 
   lint-and-test:
     needs: [detect-changes]
@@ -110,7 +93,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
       - name: Restore
         run: dotnet restore -p:Platform=x64
@@ -150,7 +133,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Patterns excluded from threshold — defined in .github/coverage-exclusions.json
+          # Patterns excluded from threshold; defined in .github/coverage-exclusions.json
           $exclusions = Get-Content "${{ github.workspace }}/.github/coverage-exclusions.json" | ConvertFrom-Json
           $excludeFromThreshold = $exclusions | Select-Object -ExpandProperty pattern
 
@@ -185,7 +168,6 @@ jobs:
             exit 0
           }
 
-          # Build per-file stats — capture $fileKey before nesting to avoid $_ rebinding
           $fileStats = $fileMap.GetEnumerator() | ForEach-Object {
             $pct = if ($_.Value.Total -gt 0) { [math]::Round(($_.Value.Covered / $_.Value.Total) * 100, 1) } else { 0 }
             $fileKey = $_.Key
@@ -193,7 +175,6 @@ jobs:
             [pscustomobject]@{ File=$_.Key; Covered=$_.Value.Covered; Total=$_.Value.Total; Pct=$pct; Excluded=($null -ne $matchedExclusion); Reason=$matchedExclusion.reason }
           }
 
-          # Calculate threshold only on non-excluded files
           $thresholdFiles = $fileStats | Where-Object { -not $_.Excluded }
           $thresholdTotal = ($thresholdFiles | Measure-Object -Property Total -Sum).Sum
           $thresholdCovered = ($thresholdFiles | Measure-Object -Property Covered -Sum).Sum
@@ -207,18 +188,16 @@ jobs:
           $repoUrl = "https://github.com/${{ github.repository }}"
           $headSha = "${{ github.event.pull_request.head.sha }}"
 
-          # Build PR comment
           $icon = if ($thresholdPct -ge $threshold) { ':white_check_mark:' } else { ':x:' }
-          $body = "## $icon Code Coverage — Changed Files`n`n"
+          $body = "## $icon Code Coverage: Changed Files`n`n"
           $body += "| Coverage | Lines | File |`n|---|---|---|`n"
           foreach ($f in $fileStats | Sort-Object { if ($_.Excluded) { -1 } else { $_.Pct } } -Descending) {
-            # Display last 2 path segments: SubDir\File.cs
             $parts = $f.File -split '[/\\]'
             $displayName = ($parts | Select-Object -Last 2) -join '\'
             $urlPath = $f.File -replace '\\', '/'
             $fileLink = "[$displayName]($repoUrl/blob/$headSha/$urlPath)"
             if ($f.Excluded) {
-              $body += "| :warning: Excluded | $($f.Covered)/$($f.Total) | $fileLink — *$($f.Reason)* |`n"
+              $body += "| :warning: Excluded | $($f.Covered)/$($f.Total) | ${fileLink}: *$($f.Reason)* |`n"
             } else {
               $bar = if ($f.Pct -ge 80) { ':green_circle:' } elseif ($f.Pct -ge 50) { ':yellow_circle:' } else { ':red_circle:' }
               $body += "| $bar $($f.Pct)% | $($f.Covered)/$($f.Total) | $fileLink |`n"
@@ -228,7 +207,6 @@ jobs:
           if ($thresholdTotal -ne $allTotal) { $body += " | Overall: $allPct% ($allCovered/$allTotal)" }
           $body += "`n<!-- coverage-bot -->"
 
-          # Upsert comment: find existing bot comment or create new
           $prNumber = "${{ github.event.pull_request.number }}"
           $existing = gh api "repos/${{ github.repository }}/issues/$prNumber/comments" --paginate --jq '.[] | select(.body | contains("<!-- coverage-bot -->")) | .id' 2>$null | Select-Object -First 1
           if ($existing) {
@@ -245,93 +223,244 @@ jobs:
             exit 1
           }
 
-  build_x64:
-    name: build (x64)
+  build-msix:
+    name: Build MSIX (${{ matrix.platform }})
     needs: [detect-changes]
-    if: always()
-    uses: ./.github/workflows/_build.yaml
-    with:
-      platform: x64
-      skip: ${{ needs.detect-changes.result == 'success' && needs.detect-changes.outputs.code_changed != 'true' }}
-      sign: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-    secrets: inherit
+    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+    env:
+      # Sign on release-please PRs and on main pushes; PRs from contributors stay unsigned.
+      SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+      HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
+    steps:
+      - uses: actions/checkout@v6
 
-  build_arm64:
-    name: build (ARM64)
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content version.txt -Raw).Trim()
+          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+          "APP_VERSION=$ver" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Stamp Package.appxmanifest version
+        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v1.4.0
+        with:
+          manifest-path: ${{ env.APPXMANIFEST_PATH }}
+          version: ${{ steps.version.outputs.version }}
+
+      - name: Build MSIX
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.4.0
+        with:
+          project-path: ${{ env.PROJECT_PATH }}
+          platform: ${{ matrix.platform }}
+          output-dir: ${{ github.workspace }}\AppPackages
+
+      # `dotnet publish` lands the MSIX nested under
+      # AppPackages\<pkg>_<v>.<rev>_<plat>_Test\<pkg>_<v>.<rev>_<plat>.msix.
+      # Stage it to a flat directory under a consistent name so the signing step,
+      # artifact upload, and release attachment all see a clean path.
+      - name: Stage MSIX
+        shell: pwsh
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ steps.version.outputs.version }}
+          STAGE_DIR: ${{ github.workspace }}\staging\msix-${{ matrix.platform }}
+        run: |
+          $msix = Get-ChildItem -Path "${{ github.workspace }}\AppPackages" -Recurse -Filter *.msix -ErrorAction Stop |
+            Where-Object { $_.FullName -notmatch '\\Dependencies\\' } |
+            Select-Object -First 1
+          if (-not $msix) { throw "No MSIX produced by dotnet publish" }
+          New-Item -ItemType Directory -Path $env:STAGE_DIR -Force | Out-Null
+          $dest = Join-Path $env:STAGE_DIR ("${{ env.ASSET_BASE_NAME }}-{0}-{1}.msix" -f $env:VERSION, $env:PLATFORM)
+          Copy-Item -LiteralPath $msix.FullName -Destination $dest -Force
+          Write-Host "Staged MSIX: $dest"
+
+      - name: Sign MSIX
+        if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v1.4.0
+        with:
+          pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
+          pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          thumbprint: ${{ vars.SIGNING_CERT_THUMBPRINT }}
+          packages-path: ${{ github.workspace }}\staging\msix-${{ matrix.platform }}
+
+      - name: Skip-sign notice
+        if: env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true'
+        shell: bash
+        run: echo "::warning::MSIX produced unsigned (SHOULD_SIGN=$SHOULD_SIGN, HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: msix-${{ matrix.platform }}
+          path: ${{ github.workspace }}\staging\msix-${{ matrix.platform }}\${{ env.ASSET_BASE_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform }}.msix
+          if-no-files-found: error
+
+  wack:
+    name: WACK (${{ matrix.platform }})
+    needs: [build-msix, detect-changes]
+    if: always() && needs.build-msix.result == 'success' && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github/wack-exclusions.json
+          sparse-checkout-cone-mode: false
+
+      - name: Download MSIX
+        uses: actions/download-artifact@v8
+        with:
+          name: msix-${{ matrix.platform }}
+          path: msix
+
+      - name: Run WACK
+        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v1.4.0
+        with:
+          msix-path: msix
+          report-path: wack-report-${{ matrix.platform }}.xml
+          exclusions-path: .github/wack-exclusions.json
+          platform: ${{ matrix.platform }}
+          fail-on-error: 'true'
+          github-token: ${{ github.token }}
+
+      - name: Upload WACK report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wack-report-${{ matrix.platform }}
+          path: wack-report-${{ matrix.platform }}.xml
+          if-no-files-found: warn
+
+  sbom:
+    name: SBOM
     needs: [detect-changes]
-    if: always()
-    uses: ./.github/workflows/_build.yaml
-    with:
-      platform: ARM64
-      skip: ${{ needs.detect-changes.result == 'success' && needs.detect-changes.outputs.code_changed != 'true' }}
-      sign: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-    secrets: inherit
+    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+    runs-on: windows-latest
+    env:
+      DT_HOST: ${{ secrets.DT_HOST }}
+      DT_API_KEY: ${{ secrets.DT_API_KEY }}
+      IS_RELEASE: ${{ github.event_name == 'release' }}
+      REF_TAG_PREFIX: ${{ github.event_name == 'release' && 'tag' || 'branch' }}
+      PROJECT_VERSION: ${{ github.event_name == 'release' && github.ref_name || github.sha }}
+      PARENT_VERSION: ${{ github.event_name == 'release' && 'release' || 'main' }}
+    steps:
+      - uses: actions/checkout@v6
 
-  wack_x64:
-    name: wack (x64)
-    needs: [build_x64, detect-changes]
-    if: always() && needs.build_x64.result == 'success' && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
-    uses: ./.github/workflows/_wack.yaml
-    with:
-      platform: x64
-    secrets: inherit
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
-  wack_arm64:
-    name: wack (ARM64)
-    needs: [build_arm64, detect-changes]
-    if: always() && needs.build_arm64.result == 'success' && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
-    uses: ./.github/workflows/_wack.yaml
-    with:
-      platform: ARM64
-    secrets: inherit
+      - name: Generate CycloneDX SBOM
+        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@v1.4.0
+        with:
+          solution-path: ${{ env.SOLUTION_PATH }}
+          output-path: ${{ env.BOM_FILE }}
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: ${{ env.BOM_FILE }}
+          if-no-files-found: error
+
+      - name: Upload SBOM to Dependency-Track
+        if: env.DT_HOST != '' && env.DT_API_KEY != ''
+        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v1.4.0
+        with:
+          bom-path: ${{ env.BOM_FILE }}
+          upload-artifact: 'false'
+          server-url: https://${{ env.DT_HOST }}
+          api-key: ${{ env.DT_API_KEY }}
+          project-name: ${{ github.event.repository.name }}
+          project-version: ${{ env.PROJECT_VERSION }}
+          project-tags: ${{ env.REF_TAG_PREFIX }}=${{ github.ref_name }},repo=${{ github.repository }},commit=${{ github.sha }},run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          parent-name: ${{ github.event.repository.name }}
+          parent-version: ${{ env.PARENT_VERSION }}
+          mark-latest: ${{ env.IS_RELEASE }}
+          prune-stale-children: ${{ env.IS_RELEASE != 'true' }}
+          keep: ${{ github.event_name == 'workflow_dispatch' && '1' || '10' }}
+
+      - name: Skip notice if Dependency-Track secrets not configured
+        if: env.DT_HOST == '' || env.DT_API_KEY == ''
+        shell: bash
+        run: echo "::warning::DT_HOST or DT_API_KEY secret not set; skipping Dependency-Track upload."
 
   release:
-    needs:
-      [
-        release-please,
-        build_x64,
-        build_arm64,
-        lint-and-test,
-        wack_x64,
-        wack_arm64,
-      ]
+    name: Publish Release
+    needs: [release-please, lint-and-test, build-msix, wack, sbom]
     if: >-
       always()
       && needs.release-please.outputs.release_created == 'true'
-      && needs.build_x64.result == 'success'
-      && needs.build_arm64.result == 'success'
       && needs.lint-and-test.result == 'success'
-      && needs.wack_x64.result == 'success'
-      && needs.wack_arm64.result == 'success'
+      && needs.build-msix.result == 'success'
+      && needs.wack.result == 'success'
+      && needs.sbom.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       attestations: write
       contents: write
     steps:
-      - name: Download x64 artifacts
+      - name: Download MSIX (x64)
         uses: actions/download-artifact@v8
         with:
           name: msix-x64
-          path: release/x64
-
-      - name: Download ARM64 artifacts
+          path: release/msix-x64
+      - name: Download MSIX (ARM64)
         uses: actions/download-artifact@v8
         with:
           name: msix-ARM64
-          path: release/ARM64
+          path: release/msix-ARM64
+      - name: Download SBOM
+        uses: actions/download-artifact@v8
+        with:
+          name: sbom
+          path: release/sbom
+      - name: Download WACK report (x64)
+        uses: actions/download-artifact@v8
+        with:
+          name: wack-report-x64
+          path: release/wack-x64
+      - name: Download WACK report (ARM64)
+        uses: actions/download-artifact@v8
+        with:
+          name: wack-report-ARM64
+          path: release/wack-ARM64
 
-      - name: Attest MSIX packages
+      - name: Attest installer provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: "release/**/*.msix"
+          subject-path: "release/msix-*/*.msix"
 
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
-          files: |
-            release/**/*.msix
+      - name: Attach all artefacts to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          mapfile -t RELEASE_FILES < <(find release -type f \( \
+            -name '*.msix' -o \
+            -name '*.cdx.json' -o \
+            -name 'wack-report-*.xml' \))
+          if [ "${#RELEASE_FILES[@]}" -eq 0 ]; then
+            echo "::error::No release files found to attach"
+            exit 1
+          fi
+          printf 'Attaching: %s\n' "${RELEASE_FILES[@]}"
+          gh release upload "$TAG" "${RELEASE_FILES[@]}" --clobber --repo "${{ github.repository }}"
 
       - name: Append trust signal to release notes
         env:
@@ -340,18 +469,24 @@ jobs:
           TAG="${{ needs.release-please.outputs.tag_name }}"
           ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
           BODY=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.body // ""')
-          TRUST=$'\n\n---\n> \u2705 WACK certified (x64) \u00b7 \U0001F512 [CodeQL scanned](https://github.com/${{ github.repository }}/actions/workflows/codeql.yml)'
+          TRUST=$'\n\n---\n> ✅ WACK certified (x64, ARM64) · \U0001F512 [CodeQL scanned](https://github.com/${{ github.repository }}/actions/workflows/codeql.yml)'
           jq -n --arg body "${BODY}${TRUST}" '{body: $body}' \
             | gh api --method PATCH "repos/${{ github.repository }}/releases/$ID" --input -
 
+      - name: Publish draft release
+        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v1.4.0
+        with:
+          tag: ${{ needs.release-please.outputs.tag_name }}
+          github-token: ${{ github.token }}
+
   pre-release:
-    needs: [build_x64, build_arm64, lint-and-test]
+    name: Pre-Release
+    needs: [build-msix, lint-and-test]
     if: >-
       always()
       && github.event_name == 'pull_request'
       && github.head_ref == 'release-please--branches--main'
-      && needs.build_x64.result == 'success'
-      && needs.build_arm64.result == 'success'
+      && needs.build-msix.result == 'success'
       && needs.lint-and-test.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -384,17 +519,16 @@ jobs:
           else
             NOTES=$(git log --pretty=format:"- %s" --no-merges -20)
           fi
-          # Write to file to safely handle multi-line output
           echo "$NOTES" > /tmp/release_notes.txt
           echo "prev_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Download x64 artifacts
+      - name: Download MSIX (x64)
         uses: actions/download-artifact@v8
         with:
           name: msix-x64
           path: release/x64
 
-      - name: Download ARM64 artifacts
+      - name: Download MSIX (ARM64)
         uses: actions/download-artifact@v8
         with:
           name: msix-ARM64
@@ -417,7 +551,6 @@ jobs:
           KEEP: 3
         run: |
           VERSION_PREFIX="v${{ steps.version.outputs.version }}-pre."
-          # List all pre-releases matching current version prefix, sorted newest first
           RELEASES=$(gh release list \
             --repo ${{ github.repository }} \
             --limit 100 \

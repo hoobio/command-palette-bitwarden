@@ -12,14 +12,14 @@
     <PackageVersion Include="Microsoft.Windows.SDK.BuildTools.MSIX" Version="1.7.260316102" />
     <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.260416003" />
     <PackageVersion Include="Otp.NET" Version="1.4.1" />
-    <PackageVersion Include="System.Security.Permissions" Version="8.0.0" />
+    <PackageVersion Include="System.Security.Permissions" Version="10.0.7" />
     <PackageVersion Include="Shmuelie.WinRTServer" Version="2.2.1" />
     <PackageVersion Include="Svg.Skia" Version="4.5.0" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.2.0-beta.556" />
     <PackageVersion Include="System.Text.Json" Version="10.0.7" />
 
     <!-- AI sloppiness + security analyzers -->
-    <PackageVersion Include="Meziantou.Analyzer" Version="2.0.220" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.54" />
     <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.14.15" />
 
     <!-- Test packages -->
