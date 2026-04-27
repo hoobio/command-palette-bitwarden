@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using SkiaSharp;
 using Svg.Skia;
@@ -7,6 +8,7 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal static class SvgRasterizer
 {
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "SVG rasterization is a best-effort favicon enhancement. SKSvg.Load uses trim-unsafe paths internally, but failures are caught below and the caller falls back to the raw bytes.")]
     internal static byte[]? TryRasterize(byte[] svgBytes, int size = 64)
     {
         try

@@ -21,7 +21,7 @@
           Condition="'$(MSBuildRuntimeType)' == 'Core'">
     <PropertyGroup>
       <_SSPSource>$(NuGetPackageRoot)system.security.permissions\8.0.0\lib\net6.0\System.Security.Permissions.dll</_SSPSource>
-      <_MsixToolsDir>$(NuGetPackageRoot)microsoft.windows.sdk.buildtools.msix\1.7.20250829.1\tools\net6.0\</_MsixToolsDir>
+      <_MsixToolsDir>$(NuGetPackageRoot)microsoft.windows.sdk.buildtools.msix\1.7.260316102\tools\net6.0\</_MsixToolsDir>
     </PropertyGroup>
     <Copy SourceFiles="$(_SSPSource)"
           DestinationFolder="$(_MsixToolsDir)"

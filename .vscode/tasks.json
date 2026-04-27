@@ -25,7 +25,7 @@
     {
       "label": "Kill PowerToys",
       "type": "shell",
-      "command": "$pt = Get-Process PowerToys -ErrorAction SilentlyContinue; if ($pt) { $pt.CloseMainWindow() | Out-Null; if (!$pt.WaitForExit(5000)) { $pt | Stop-Process -Force }; Write-Host 'Stopped PowerToys' } else { Write-Host 'PowerToys was not running' }",
+      "command": "$pt = Get-Process PowerToys -ErrorAction SilentlyContinue; if ($pt) { $pt.CloseMainWindow() | Out-Null; if (!$pt.WaitForExit(5000)) { $pt | Stop-Process -Force }; Write-Host 'Stopped PowerToys' } else { Write-Host 'PowerToys was not running' }; $ext = Get-Process HoobiBitwardenCommandPaletteExtension -ErrorAction SilentlyContinue; if ($ext) { $ext | Stop-Process -Force; Write-Host 'Stopped extension host' }",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -35,7 +35,7 @@
     {
       "label": "Deploy (Debug x64)",
       "type": "shell",
-      "command": "Add-AppxPackage -Register -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net9.0-windows10.0.26100.0\\win-x64\\AppX\\AppxManifest.xml' -ForceUpdateFromAnyVersion; Write-Host 'Deployed.'",
+      "command": "Add-AppxPackage -Register -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\AppxManifest.xml' -ForceUpdateFromAnyVersion; Write-Host 'Deployed.'",
       "options": {
         "shell": {
           "executable": "powershell.exe",

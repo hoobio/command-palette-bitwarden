@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         if: ${{ !inputs.skip }}
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Read version
         if: ${{ !inputs.skip }}

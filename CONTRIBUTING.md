@@ -13,7 +13,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 - **Windows 10 (19041+)** or later
 - [PowerToys](https://github.com/microsoft/PowerToys/releases) with Command Palette enabled
 - [Bitwarden CLI](https://bitwarden.com/help/cli/) (`bw`) on your `PATH`
-- [.NET 9 SDK](https://dot.net) (or later)
+- [.NET 10 SDK](https://dot.net) (or later)
 - [Visual Studio 2022](https://visualstudio.microsoft.com/) or [VS Code](https://code.visualstudio.com/) with the C# Dev Kit
 
 ### Building
@@ -35,7 +35,7 @@ dotnet test -p:Platform=x64
 Register the debug build as a Command Palette extension:
 
 ```powershell
-Add-AppxPackage -Register -Path .\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug\net9.0-windows10.0.26100.0\win-x64\AppX\AppxManifest.xml -ForceUpdateFromAnyVersion
+Add-AppxPackage -Register -Path .\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppX\AppxManifest.xml -ForceUpdateFromAnyVersion
 ```
 
 Then restart PowerToys to pick up the extension.

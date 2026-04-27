@@ -2,7 +2,7 @@
 
 ## Technology Stack
 
-- **.NET 9** / C# targeting `net9.0-windows10.0.26100.0`
+- **.NET 10** / C# targeting `net10.0-windows10.0.26100.0`
 - **Microsoft.CommandPalette.Extensions SDK** - WinRT-based extension API for PowerToys Command Palette
 - **Win32 P/Invoke** via `LibraryImport` - clipboard APIs, window management
 - **UI Automation COM Interop** - browser address bar URL extraction
