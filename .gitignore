@@ -41,6 +41,10 @@ bld/
 [Ll]og/
 [Ll]ogs/
 coverage/
+publish/
+staging/
+*.msi
+*.wixpdb
 
 ## OS
 Thumbs.db

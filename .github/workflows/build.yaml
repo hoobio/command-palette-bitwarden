@@ -10,6 +10,7 @@ on:
       - "*.targets"
       - ".editorconfig"
       - "**/Package.appxmanifest"
+      - "installer/**"
       - "version.txt"
       - ".github/workflows/build.yaml"
       - "release-please-config.json"
@@ -29,6 +30,7 @@ env:
   SOLUTION_PATH: HoobiBitwardenCommandPaletteExtension.slnx
   PROJECT_PATH: HoobiBitwardenCommandPaletteExtension/HoobiBitwardenCommandPaletteExtension.csproj
   APPXMANIFEST_PATH: HoobiBitwardenCommandPaletteExtension/Package.appxmanifest
+  WIX_SOURCE_PATH: installer/HoobiBitwardenCommandPaletteExtension.wxs
   ASSET_BASE_NAME: HoobiBitwardenCommandPaletteExtension
   BOM_FILE: sbom.cdx.json
   # NOTE: GitHub Actions does not allow expressions in `uses:` refs, so the
@@ -56,6 +58,7 @@ jobs:
               - "*.targets"
               - ".editorconfig"
               - "**/Package.appxmanifest"
+              - "installer/**"
               - "version.txt"
               - ".github/workflows/build.yaml"
               - "release-please-config.json"
@@ -305,6 +308,121 @@ jobs:
           path: ${{ github.workspace }}\staging\msix-${{ matrix.platform }}\${{ env.ASSET_BASE_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform }}.msix
           if-no-files-found: error
 
+  build-msi:
+    name: Build MSI (${{ matrix.platform }})
+    # MSI is a thin wrapper around the signed MSIX (it ships only the .msix
+    # plus the publisher .cer and registers them via custom actions), so it
+    # has to wait for build-msix to produce the artifact for the same platform.
+    #
+    # Only build the MSI when the MSIX would be signed: an unsigned wrapped
+    # .msix can't be Add-AppxPackage'd on a normal user machine, so producing
+    # a contributor-PR MSI artifact would just be misleading. The condition
+    # here mirrors SHOULD_SIGN below (release-please PRs + main pushes).
+    needs: [detect-changes, build-msix]
+    if: >-
+      always()
+      && needs.build-msix.result == 'success'
+      && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+      && (
+        (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main')
+        || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      )
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [x64, ARM64]
+    env:
+      # The job-level `if:` already gates on the same conditions as SHOULD_SIGN,
+      # so by the time we reach this env block SHOULD_SIGN is always true. We
+      # keep the variable for symmetry with build-msix and so a future
+      # relaxation of the gate (e.g. allow unsigned MSI builds for testing)
+      # only needs to touch the `if:`.
+      SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+      HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content version.txt -Raw).Trim()
+          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+          "APP_VERSION=$ver" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Download MSIX (${{ matrix.platform }})
+        uses: actions/download-artifact@v8
+        with:
+          name: msix-${{ matrix.platform }}
+          path: ${{ github.workspace }}\staging\msix-download-${{ matrix.platform }}
+
+      - name: Stage MSI payload (msix + cert)
+        shell: pwsh
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ steps.version.outputs.version }}
+          MSIX_DOWNLOAD: ${{ github.workspace }}\staging\msix-download-${{ matrix.platform }}
+          PAYLOAD_DIR: ${{ github.workspace }}\staging\msi-payload-${{ matrix.platform }}
+        run: |
+          New-Item -ItemType Directory -Path $env:PAYLOAD_DIR -Force | Out-Null
+
+          # The build-msix job uploads `${ASSET_BASE_NAME}-<ver>-<plat>.msix`.
+          # WiX expects a fixed filename so it can reference the File Id without
+          # baking the version into the .wxs. Rename on stage.
+          $msix = Get-ChildItem -LiteralPath $env:MSIX_DOWNLOAD -Filter *.msix -ErrorAction Stop | Select-Object -First 1
+          if (-not $msix) { throw "No .msix in $env:MSIX_DOWNLOAD" }
+          Copy-Item -LiteralPath $msix.FullName `
+                    -Destination "$env:PAYLOAD_DIR\HoobiBitwardenCommandPaletteExtension.msix" `
+                    -Force
+
+          # Publisher cert from the repo root - the same .cer the README tells
+          # users to import manually for raw .msix sideloads. The MSI's
+          # ImportCert custom action drops it into Cert:\CurrentUser\TrustedPeople
+          # so the bundled .msix's signature chains to a trusted root.
+          Copy-Item -LiteralPath "${{ github.workspace }}\HoobiBitwardenCommandPaletteExtension.cer" `
+                    -Destination "$env:PAYLOAD_DIR\HoobiBitwardenCommandPaletteExtension.cer" `
+                    -Force
+
+          Get-ChildItem $env:PAYLOAD_DIR | Format-Table Name, Length
+
+      # The build-msi-wix action emits `<wxs-base-name>-<version>-<platform>.msi`,
+      # which (because the .wxs filename matches ASSET_BASE_NAME) is already the
+      # final asset name we want for upload + release.
+      - name: Build MSI
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v1.4.0
+        with:
+          wix-source-path: ${{ env.WIX_SOURCE_PATH }}
+          version: ${{ steps.version.outputs.version }}
+          platform: ${{ matrix.platform }}
+          payload-dir: ${{ github.workspace }}\staging\msi-payload-${{ matrix.platform }}
+          output-dir: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}
+          # Pin extensions to 5.x; the unversioned form pulls the latest (currently
+          # 7.0.0), which fails with "Could not find expected package root folder
+          # wixext5. Ensure WixToolset.UI.wixext/7.0.0 is compatible with WiX v5."
+          extensions: "WixToolset.UI.wixext/5.0.2,WixToolset.Util.wixext/5.0.2"
+
+      - name: Sign MSI
+        if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v1.4.0
+        with:
+          pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
+          pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          thumbprint: ${{ vars.SIGNING_CERT_THUMBPRINT }}
+          packages-path: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}
+
+      - name: Skip-sign notice
+        if: env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true'
+        shell: bash
+        run: echo "::warning::MSI produced unsigned (SHOULD_SIGN=$SHOULD_SIGN, HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: msi-${{ matrix.platform }}
+          path: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}\${{ env.ASSET_BASE_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform }}.msi
+          if-no-files-found: error
+
   wack:
     name: WACK (${{ matrix.platform }})
     needs: [build-msix, detect-changes]
@@ -400,12 +518,13 @@ jobs:
 
   release:
     name: Publish Release
-    needs: [release-please, lint-and-test, build-msix, wack, sbom]
+    needs: [release-please, lint-and-test, build-msix, build-msi, wack, sbom]
     if: >-
       always()
       && needs.release-please.outputs.release_created == 'true'
       && needs.lint-and-test.result == 'success'
       && needs.build-msix.result == 'success'
+      && needs.build-msi.result == 'success'
       && needs.wack.result == 'success'
       && needs.sbom.result == 'success'
     runs-on: ubuntu-latest
@@ -424,6 +543,16 @@ jobs:
         with:
           name: msix-ARM64
           path: release/msix-ARM64
+      - name: Download MSI (x64)
+        uses: actions/download-artifact@v8
+        with:
+          name: msi-x64
+          path: release/msi-x64
+      - name: Download MSI (ARM64)
+        uses: actions/download-artifact@v8
+        with:
+          name: msi-ARM64
+          path: release/msi-ARM64
       - name: Download SBOM
         uses: actions/download-artifact@v8
         with:
@@ -443,7 +572,7 @@ jobs:
       - name: Attest installer provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: "release/msix-*/*.msix"
+          subject-path: "release/msix-*/*.msix,release/msi-*/*.msi"
 
       - name: Attach all artefacts to draft release
         env:
@@ -453,6 +582,7 @@ jobs:
           set -euo pipefail
           mapfile -t RELEASE_FILES < <(find release -type f \( \
             -name '*.msix' -o \
+            -name '*.msi'  -o \
             -name '*.cdx.json' -o \
             -name 'wack-report-*.xml' \))
           if [ "${#RELEASE_FILES[@]}" -eq 0 ]; then
@@ -481,12 +611,13 @@ jobs:
 
   pre-release:
     name: Pre-Release
-    needs: [build-msix, lint-and-test]
+    needs: [build-msix, build-msi, lint-and-test]
     if: >-
       always()
       && github.event_name == 'pull_request'
       && github.head_ref == 'release-please--branches--main'
       && needs.build-msix.result == 'success'
+      && needs.build-msi.result == 'success'
       && needs.lint-and-test.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -526,13 +657,25 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: msix-x64
-          path: release/x64
+          path: release/msix-x64
 
       - name: Download MSIX (ARM64)
         uses: actions/download-artifact@v8
         with:
           name: msix-ARM64
-          path: release/ARM64
+          path: release/msix-ARM64
+
+      - name: Download MSI (x64)
+        uses: actions/download-artifact@v8
+        with:
+          name: msi-x64
+          path: release/msi-x64
+
+      - name: Download MSI (ARM64)
+        uses: actions/download-artifact@v8
+        with:
+          name: msi-ARM64
+          path: release/msi-ARM64
 
       - name: Create pre-release
         uses: softprops/action-gh-release@v3
@@ -544,6 +687,7 @@ jobs:
           body_path: /tmp/release_notes.txt
           files: |
             release/**/*.msix
+            release/**/*.msi
 
       - name: Prune old pre-releases
         env:
