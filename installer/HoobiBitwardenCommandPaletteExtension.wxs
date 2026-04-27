@@ -7,17 +7,25 @@
   loose binaries on disk are invisible to it; the MSI therefore needs to do a
   proper MSIX install rather than just dropping files.
 
-  Per-user install (Scope="perUser") so no UAC prompt and everything lands in
-  the user session: the cert is imported into the per-user TrustedPeople store
-  and the MSIX is installed via the user's AppX deployment service.
+  Per-machine install (Scope="perMachine") so the cert can land in
+  Cert:\LocalMachine\TrustedPeople, which is the only TrustedPeople store
+  Add-AppxPackage actually consults when validating sideloaded MSIX
+  signatures from a self-signed publisher. The user-scoped variant looks
+  trustworthy on paper but Add-AppxPackage ignores it for sideload trust,
+  which is why the README's manual flow also imports to LocalMachine. Cost:
+  one UAC prompt at install time. There's no per-user-with-no-UAC path that
+  actually works for self-signed sideload; that's a Windows constraint, not
+  an MSI choice.
 
   On install:
-    1. Lay down the bundled .msix and .cer under LocalAppData (so repair has
-       something to operate on).
-    2. Import-Certificate into Cert:\CurrentUser\TrustedPeople so the MSIX's
-       publisher signature chains to a trusted root for this user.
-    3. Add-AppxPackage on the bundled .msix - this is what actually registers
-       the extension with Microsoft Command Palette.
+    1. Lay down the bundled .msix and .cer under Program Files (so repair
+       has something to operate on).
+    2. Import-Certificate into Cert:\LocalMachine\TrustedPeople (deferred CA,
+       NOT impersonated - runs as SYSTEM with the elevation granted by UAC,
+       which is required to write to LocalMachine cert stores).
+    3. Add-AppxPackage on the bundled .msix (deferred CA, IMPERSONATED so
+       it runs as the installing user and registers the MSIX in that user's
+       AppX deployment service - per-user MSIX install, machine-wide cert).
 
   On uninstall (but not on major upgrade): Remove-AppxPackage by package name.
   We deliberately leave the cert in TrustedPeople; it may be shared with other
@@ -42,8 +50,8 @@
 
   UpgradeCode is stable per-architecture so a newer x64 MSI correctly upgrades
   an installed x64 build. ARM64 ships under a separate UpgradeCode because
-  Windows blocks cross-arch upgrades on per-user MSIs. ProductCode is
-  regenerated per build (default `*`).
+  Windows blocks cross-arch upgrades. ProductCode is regenerated per build
+  (default `*`).
 
   PowerToys / PowerToys Preview detection runs in the UI sequence: if neither
   is found, a warning dialog explains that the extension needs the Microsoft
@@ -67,7 +75,7 @@
       Manufacturer="Hoobi"
       Version="$(var.Version)"
       UpgradeCode="$(var.UpgradeCodeGuid)"
-      Scope="perUser"
+      Scope="perMachine"
       Compressed="yes"
       InstallerVersion="500">
 
@@ -148,7 +156,7 @@
       <Custom Action="WarnNoPowerToys" After="AppSearch" Condition="NOT POWERTOYS_FOUND AND NOT Installed" />
     </InstallUISequence>
 
-    <StandardDirectory Id="LocalAppDataFolder">
+    <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="HoobiBitwardenCommandPaletteExtension" />
     </StandardDirectory>
 
@@ -164,23 +172,35 @@
         - "<Name>"     (deferred):  WixQuietExec reads the property of the same
           name and invokes powershell.
 
-      Deferred CAs run after InstallFiles so [#PublisherCer] and [#MsixPackage]
-      both point at on-disk paths. We Impersonate="yes" so PowerShell runs as
-      the installing user (per-user MSI; cert goes to CurrentUser, AppX goes
-      to the user's AppX deployment service).
+      The cert and AppX actions run in *different* contexts:
+        - ImportCert is NOT impersonated, so it runs as SYSTEM with the
+          elevation UAC granted us. Required because Cert:\LocalMachine\*
+          stores can only be modified by an admin / SYSTEM, and the
+          LocalMachine TrustedPeople store is the only one Add-AppxPackage
+          consults when validating sideloaded MSIX from a self-signed
+          publisher (the user-scoped variant looks ignored for sideload
+          trust in practice).
+        - AddAppxPackage IS impersonated so PowerShell runs as the
+          installing user. Add-AppxPackage without -AllUsers is a per-user
+          operation and needs to land in that user's deployment store, not
+          SYSTEM's.
+        - RemoveAppxPackage matches AddAppxPackage's impersonation so it
+          tears down the same user's installation.
 
-      ImportCert outputs to Out-Null but Add-AppxPackage's verbose progress
-      lands in the MSI log when /l*v is supplied to msiexec. Failures bubble
-      up via Return="check" and the MSI rolls back.
+      Deferred CAs run after InstallFiles so [#PublisherCer] and [#MsixPackage]
+      both point at on-disk paths. ImportCert outputs to Out-Null but
+      Add-AppxPackage's verbose progress lands in the MSI log when /l*v is
+      supplied to msiexec. Failures bubble up via Return="check" and the MSI
+      rolls back.
     -->
     <CustomAction Id="ImportCert_Cmd"
                   Property="ImportCert"
-                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Import-Certificate -FilePath '[#PublisherCer]' -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null&quot;" />
+                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Import-Certificate -FilePath '[#PublisherCer]' -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null&quot;" />
     <CustomAction Id="ImportCert"
                   BinaryRef="Wix4UtilCA_X86"
                   DllEntry="WixQuietExec"
                   Execute="deferred"
-                  Impersonate="yes"
+                  Impersonate="no"
                   Return="check" />
 
     <CustomAction Id="AddAppxPackage_Cmd"
