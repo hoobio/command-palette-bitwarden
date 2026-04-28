@@ -195,7 +195,7 @@
     -->
     <CustomAction Id="ImportCert_Cmd"
                   Property="ImportCert"
-                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Import-Certificate -FilePath '[#PublisherCer]' -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null&quot;" />
+                  Value="&quot;powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Import-Certificate -FilePath '[#PublisherCer]' -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null&quot;" />
     <CustomAction Id="ImportCert"
                   BinaryRef="Wix4UtilCA_X86"
                   DllEntry="WixQuietExec"
@@ -205,7 +205,7 @@
 
     <CustomAction Id="AddAppxPackage_Cmd"
                   Property="AddAppxPackage"
-                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Add-AppxPackage -Path '[#MsixPackage]' -ForceUpdateFromAnyVersion&quot;" />
+                  Value="&quot;powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Add-AppxPackage -Path '[#MsixPackage]' -ForceUpdateFromAnyVersion&quot;" />
     <CustomAction Id="AddAppxPackage"
                   BinaryRef="Wix4UtilCA_X86"
                   DllEntry="WixQuietExec"
@@ -221,7 +221,7 @@
     -->
     <CustomAction Id="RemoveAppxPackage_Cmd"
                   Property="RemoveAppxPackage"
-                  Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension' | Remove-AppxPackage&quot;" />
+                  Value="&quot;powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension' | Remove-AppxPackage&quot;" />
     <CustomAction Id="RemoveAppxPackage"
                   BinaryRef="Wix4UtilCA_X86"
                   DllEntry="WixQuietExec"
