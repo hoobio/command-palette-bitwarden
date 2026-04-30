@@ -35,7 +35,8 @@ env:
   BOM_FILE: sbom.cdx.json
   # NOTE: GitHub Actions does not allow expressions in `uses:` refs, so the
   # pipeline-tools pin is repeated in each `uses:` line below. Bump in lockstep.
-  # Current pin: hoobio/pipeline-tools @ v1.4.0 (adds optional WACK PR comments).
+  # Current pin: hoobio/pipeline-tools @ v1.5.0 (adds Backstage hierarchy bootstrap
+  # and channel routing for Dependency-Track SBOM uploads).
 
 jobs:
   detect-changes:
@@ -80,7 +81,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - id: rp
-        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v1.5.0
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
           app-private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
@@ -282,13 +283,13 @@ jobs:
           "APP_VERSION=$ver" | Out-File -Append $env:GITHUB_ENV
 
       - name: Stamp Package.appxmanifest version
-        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v1.5.0
         with:
           manifest-path: ${{ env.APPXMANIFEST_PATH }}
           version: ${{ steps.version.outputs.version }}
 
       - name: Build MSIX
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.5.0
         with:
           project-path: ${{ env.PROJECT_PATH }}
           platform: ${{ matrix.platform }}
@@ -316,7 +317,7 @@ jobs:
 
       - name: Sign MSIX
         if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v1.5.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -417,7 +418,7 @@ jobs:
       # which (because the .wxs filename matches ASSET_BASE_NAME) is already the
       # final asset name we want for upload + release.
       - name: Build MSI
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v1.5.0
         with:
           wix-source-path: ${{ env.WIX_SOURCE_PATH }}
           version: ${{ steps.version.outputs.version }}
@@ -431,7 +432,7 @@ jobs:
 
       - name: Sign MSI
         if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v1.5.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -472,7 +473,7 @@ jobs:
           path: msix
 
       - name: Run WACK
-        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v1.5.0
         with:
           msix-path: msix
           report-path: wack-report-${{ matrix.platform }}.xml
@@ -497,10 +498,9 @@ jobs:
     env:
       DT_HOST: ${{ secrets.DT_HOST }}
       DT_API_KEY: ${{ secrets.DT_API_KEY }}
-      IS_RELEASE: ${{ github.event_name == 'release' }}
-      REF_TAG_PREFIX: ${{ github.event_name == 'release' && 'tag' || 'branch' }}
-      PROJECT_VERSION: ${{ github.event_name == 'release' && github.ref_name || github.sha }}
-      PARENT_VERSION: ${{ github.event_name == 'release' && 'release' || 'main' }}
+      DT_DOMAIN: productivity
+      DT_SYSTEM: command-palette
+      DT_COMPONENT: bitwarden-extension
     steps:
       - uses: actions/checkout@v6
 
@@ -508,8 +508,64 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
+      # Channel routing for the Backstage hierarchy in Dependency-Track:
+      #   release event              -> channel=release,    mark-latest=true,  no prune
+      #   release-please PR (prerelease tag is cut by pre-release job)
+      #                              -> channel=prerelease, mark-latest=false, prune
+      #   push / dispatch / other PR -> channel=ci/<branch>,mark-latest=false, prune
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content version.txt -Raw).Trim()
+          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+
+      - name: Resolve DT channel
+        id: dt
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          SHA: ${{ github.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          $isRelease = $env:EVENT_NAME -eq 'release'
+          $isPrerelease = $env:EVENT_NAME -eq 'pull_request' -and $env:HEAD_REF -eq 'release-please--branches--main'
+
+          if ($isRelease) {
+            $channel = 'release'
+            $projectVersion = $env:REF_NAME
+            $markLatest = 'true'
+            $prune = 'false'
+          }
+          elseif ($isPrerelease) {
+            $channel = 'prerelease'
+            $projectVersion = "v$($env:VERSION)-pre.$($env:RUN_NUMBER)"
+            $markLatest = 'false'
+            $prune = 'true'
+          }
+          else {
+            $branchSource = if ($env:EVENT_NAME -eq 'pull_request') { $env:HEAD_REF } else { $env:REF_NAME }
+            $sanitized = ($branchSource -replace '[^A-Za-z0-9._/-]', '-')
+            $channel = "ci/$sanitized"
+            $projectVersion = $env:SHA
+            $markLatest = 'false'
+            $prune = 'true'
+          }
+
+          "channel=$channel"               | Out-File -Append $env:GITHUB_OUTPUT
+          "project_version=$projectVersion"| Out-File -Append $env:GITHUB_OUTPUT
+          "mark_latest=$markLatest"        | Out-File -Append $env:GITHUB_OUTPUT
+          "prune=$prune"                   | Out-File -Append $env:GITHUB_OUTPUT
+          Write-Host "Channel:        $channel"
+          Write-Host "ProjectVersion: $projectVersion"
+          Write-Host "MarkLatest:     $markLatest"
+          Write-Host "Prune:          $prune"
+
       - name: Generate CycloneDX SBOM
-        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@v1.5.0
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
           output-path: ${{ env.BOM_FILE }}
@@ -523,19 +579,20 @@ jobs:
 
       - name: Upload SBOM to Dependency-Track
         if: env.DT_HOST != '' && env.DT_API_KEY != ''
-        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v1.5.0
         with:
           bom-path: ${{ env.BOM_FILE }}
           upload-artifact: 'false'
           server-url: https://${{ env.DT_HOST }}
           api-key: ${{ env.DT_API_KEY }}
-          project-name: ${{ github.event.repository.name }}
-          project-version: ${{ env.PROJECT_VERSION }}
-          project-tags: ${{ env.REF_TAG_PREFIX }}=${{ github.ref_name }},repo=${{ github.repository }},commit=${{ github.sha }},run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          parent-name: ${{ github.event.repository.name }}
-          parent-version: ${{ env.PARENT_VERSION }}
-          mark-latest: ${{ env.IS_RELEASE }}
-          prune-stale-children: ${{ env.IS_RELEASE != 'true' }}
+          domain: ${{ env.DT_DOMAIN }}
+          system: ${{ env.DT_SYSTEM }}
+          component: ${{ env.DT_COMPONENT }}
+          channel: ${{ steps.dt.outputs.channel }}
+          project-version: ${{ steps.dt.outputs.project_version }}
+          project-tags: channel=${{ steps.dt.outputs.channel }},repo=${{ github.repository }},commit=${{ github.sha }},run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          mark-latest: ${{ steps.dt.outputs.mark_latest }}
+          prune-stale-children: ${{ steps.dt.outputs.prune }}
           keep: ${{ github.event_name == 'workflow_dispatch' && '1' || '10' }}
 
       - name: Skip notice if Dependency-Track secrets not configured
@@ -631,7 +688,7 @@ jobs:
             | gh api --method PATCH "repos/${{ github.repository }}/releases/$ID" --input -
 
       - name: Publish draft release
-        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v1.5.0
         with:
           tag: ${{ needs.release-please.outputs.tag_name }}
           github-token: ${{ github.token }}
