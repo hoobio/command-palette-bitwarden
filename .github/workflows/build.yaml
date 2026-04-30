@@ -497,10 +497,9 @@ jobs:
     env:
       DT_HOST: ${{ secrets.DT_HOST }}
       DT_API_KEY: ${{ secrets.DT_API_KEY }}
-      IS_RELEASE: ${{ github.event_name == 'release' }}
-      REF_TAG_PREFIX: ${{ github.event_name == 'release' && 'tag' || 'branch' }}
-      PROJECT_VERSION: ${{ github.event_name == 'release' && github.ref_name || github.sha }}
-      PARENT_VERSION: ${{ github.event_name == 'release' && 'release' || 'main' }}
+      DT_DOMAIN: productivity
+      DT_SYSTEM: command-palette
+      DT_COMPONENT: bitwarden-extension
     steps:
       - uses: actions/checkout@v6
 
@@ -508,8 +507,64 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
+      # Channel routing for the Backstage hierarchy in Dependency-Track:
+      #   release event              -> channel=release,    mark-latest=true,  no prune
+      #   release-please PR (prerelease tag is cut by pre-release job)
+      #                              -> channel=prerelease, mark-latest=false, prune
+      #   push / dispatch / other PR -> channel=ci/<branch>,mark-latest=false, prune
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content version.txt -Raw).Trim()
+          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+
+      - name: Resolve DT channel
+        id: dt
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          SHA: ${{ github.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          $isRelease = $env:EVENT_NAME -eq 'release'
+          $isPrerelease = $env:EVENT_NAME -eq 'pull_request' -and $env:HEAD_REF -eq 'release-please--branches--main'
+
+          if ($isRelease) {
+            $channel = 'release'
+            $projectVersion = $env:REF_NAME
+            $markLatest = 'true'
+            $prune = 'false'
+          }
+          elseif ($isPrerelease) {
+            $channel = 'prerelease'
+            $projectVersion = "v$($env:VERSION)-pre.$($env:RUN_NUMBER)"
+            $markLatest = 'false'
+            $prune = 'true'
+          }
+          else {
+            $branchSource = if ($env:EVENT_NAME -eq 'pull_request') { $env:HEAD_REF } else { $env:REF_NAME }
+            $sanitized = ($branchSource -replace '[^A-Za-z0-9._/-]', '-')
+            $channel = "ci/$sanitized"
+            $projectVersion = $env:SHA
+            $markLatest = 'false'
+            $prune = 'true'
+          }
+
+          "channel=$channel"               | Out-File -Append $env:GITHUB_OUTPUT
+          "project_version=$projectVersion"| Out-File -Append $env:GITHUB_OUTPUT
+          "mark_latest=$markLatest"        | Out-File -Append $env:GITHUB_OUTPUT
+          "prune=$prune"                   | Out-File -Append $env:GITHUB_OUTPUT
+          Write-Host "Channel:        $channel"
+          Write-Host "ProjectVersion: $projectVersion"
+          Write-Host "MarkLatest:     $markLatest"
+          Write-Host "Prune:          $prune"
+
       - name: Generate CycloneDX SBOM
-        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@feat/dt-hierarchy
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
           output-path: ${{ env.BOM_FILE }}
@@ -523,19 +578,20 @@ jobs:
 
       - name: Upload SBOM to Dependency-Track
         if: env.DT_HOST != '' && env.DT_API_KEY != ''
-        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v1.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@feat/dt-hierarchy
         with:
           bom-path: ${{ env.BOM_FILE }}
           upload-artifact: 'false'
           server-url: https://${{ env.DT_HOST }}
           api-key: ${{ env.DT_API_KEY }}
-          project-name: ${{ github.event.repository.name }}
-          project-version: ${{ env.PROJECT_VERSION }}
-          project-tags: ${{ env.REF_TAG_PREFIX }}=${{ github.ref_name }},repo=${{ github.repository }},commit=${{ github.sha }},run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          parent-name: ${{ github.event.repository.name }}
-          parent-version: ${{ env.PARENT_VERSION }}
-          mark-latest: ${{ env.IS_RELEASE }}
-          prune-stale-children: ${{ env.IS_RELEASE != 'true' }}
+          domain: ${{ env.DT_DOMAIN }}
+          system: ${{ env.DT_SYSTEM }}
+          component: ${{ env.DT_COMPONENT }}
+          channel: ${{ steps.dt.outputs.channel }}
+          project-version: ${{ steps.dt.outputs.project_version }}
+          project-tags: channel=${{ steps.dt.outputs.channel }},repo=${{ github.repository }},commit=${{ github.sha }},run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          mark-latest: ${{ steps.dt.outputs.mark_latest }}
+          prune-stale-children: ${{ steps.dt.outputs.prune }}
           keep: ${{ github.event_name == 'workflow_dispatch' && '1' || '10' }}
 
       - name: Skip notice if Dependency-Track secrets not configured
