@@ -25,7 +25,7 @@
     {
       "label": "Kill PowerToys",
       "type": "shell",
-      "command": "$pt = Get-Process PowerToys -ErrorAction SilentlyContinue; if ($pt) { $pt.CloseMainWindow() | Out-Null; if (!$pt.WaitForExit(5000)) { $pt | Stop-Process -Force }; Write-Host 'Stopped PowerToys' } else { Write-Host 'PowerToys was not running' }; $ext = Get-Process HoobiBitwardenCommandPaletteExtension -ErrorAction SilentlyContinue; if ($ext) { $ext | Stop-Process -Force; Write-Host 'Stopped extension host' }",
+      "command": "$names = @('PowerToys','Microsoft.CmdPal.UI','HoobiBitwardenCommandPaletteExtension') + ((Get-Process -ErrorAction SilentlyContinue | Where-Object ProcessName -like 'Microsoft.CmdPal.Ext.*' | Select-Object -ExpandProperty ProcessName -Unique)); foreach ($n in ($names | Select-Object -Unique)) { $procs = Get-Process $n -ErrorAction SilentlyContinue; if ($procs) { foreach ($p in $procs) { try { $p.CloseMainWindow() | Out-Null } catch {} }; Start-Sleep -Milliseconds 500; $procs | Where-Object { -not $_.HasExited } | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host \"Stopped: $n\" } }",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -35,7 +35,7 @@
     {
       "label": "Deploy (Debug x64)",
       "type": "shell",
-      "command": "Add-AppxPackage -Register -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\AppxManifest.xml' -ForceUpdateFromAnyVersion; Write-Host 'Deployed.'",
+      "command": "Copy-Item -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\Assets' -Destination '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\Assets' -Recurse -Force; Add-AppxPackage -Register -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\AppxManifest.xml' -ForceUpdateFromAnyVersion; Write-Host 'Deployed.'",
       "options": {
         "shell": {
           "executable": "powershell.exe",
@@ -64,8 +64,8 @@
     {
       "label": "Build, Kill & Deploy (Debug x64)",
       "dependsOn": [
-        "Build (Debug x64)",
         "Kill PowerToys",
+        "Build (Debug x64)",
         "Deploy (Debug x64)",
         "Start PowerToys"
       ],
