@@ -532,6 +532,9 @@ internal static partial class VaultItemHelper
     }
 
     private void OnInnerPropChanged(object sender, IPropChangedEventArgs args)
-        => OnPropertyChanged(args.PropertyName);
+    {
+      if (args?.PropertyName is { } name)
+        OnPropertyChanged(name);
+    }
   }
 }
