@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.8.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.7.1...v1.8.0) (2026-05-01)
+
+
+### Features
+
+* add MSI installer alongside MSIX with PowerToys check ([#136](https://github.com/hoobio/command-palette-bitwarden/issues/136)) ([b2c6d80](https://github.com/hoobio/command-palette-bitwarden/commit/b2c6d80869a1f085ffbd05d35a77d4df0fb41242))
+* **ci:** adopt Backstage hierarchy in DT SBOM upload ([#141](https://github.com/hoobio/command-palette-bitwarden/issues/141)) ([14da0b3](https://github.com/hoobio/command-palette-bitwarden/commit/14da0b38445b9a32965653c45ae8a7320bacd842))
+
+
+### Bug Fixes
+
+* null-guard TrackedInvokable PropChanged handler and SKSurface allocation ([#145](https://github.com/hoobio/command-palette-bitwarden/issues/145)) ([b735156](https://github.com/hoobio/command-palette-bitwarden/commit/b735156bea46bf3a74a2712d4d847f9c0b25bd4e))
+* quote powershell.exe in WixQuietExec command lines ([#138](https://github.com/hoobio/command-palette-bitwarden/issues/138)) ([390992b](https://github.com/hoobio/command-palette-bitwarden/commit/390992b49c7d1ffb149e8414a198fa6b47ce816c))
+* restore right-click context menu under PowerToys 0.99 ([#142](https://github.com/hoobio/command-palette-bitwarden/issues/142)) ([c6fe464](https://github.com/hoobio/command-palette-bitwarden/commit/c6fe464dfaafdbf36b40261fb77db25339550835)), closes [#140](https://github.com/hoobio/command-palette-bitwarden/issues/140)
+* switch MSI to perMachine so cert lands in LocalMachine TrustedPeople ([#137](https://github.com/hoobio/command-palette-bitwarden/issues/137)) ([e1aaebe](https://github.com/hoobio/command-palette-bitwarden/commit/e1aaebe6dbf919af7f0853f5e7a35c458148a495))
+* **vscode:** make deploy task idempotent and tolerate empty kill list ([#144](https://github.com/hoobio/command-palette-bitwarden/issues/144)) ([8341f54](https://github.com/hoobio/command-palette-bitwarden/commit/8341f549083b69a6f7f4440f14806075f59ad0f1))
+
+
+### Miscellaneous Chores
+
+* upgrade to .NET 10 and bump all dependencies ([#134](https://github.com/hoobio/command-palette-bitwarden/issues/134)) ([c12c987](https://github.com/hoobio/command-palette-bitwarden/commit/c12c9874b551cf20aeeb393b2b60cde26295dbaf))
+
+
+### Code Refactoring
+
+* make TrackedInvokable a real decorator ([#143](https://github.com/hoobio/command-palette-bitwarden/issues/143)) ([f5973c0](https://github.com/hoobio/command-palette-bitwarden/commit/f5973c07a40e8eb68ef0a58cef8949ba70f8e2c5))
+
+
+### Build System
+
+* **deps:** bump actions/github-script from 8 to 9 ([#128](https://github.com/hoobio/command-palette-bitwarden/issues/128)) ([aba01e5](https://github.com/hoobio/command-palette-bitwarden/commit/aba01e5b51d18526d819c4e4c0814241af89b7d2))
+* **deps:** bump googleapis/release-please-action from 4 to 5 ([#130](https://github.com/hoobio/command-palette-bitwarden/issues/130)) ([5c5a5cc](https://github.com/hoobio/command-palette-bitwarden/commit/5c5a5cc414deb3f9155918a97cbf7f41960c3a10))
+* **deps:** bump softprops/action-gh-release from 2 to 3 ([#129](https://github.com/hoobio/command-palette-bitwarden/issues/129)) ([e950e81](https://github.com/hoobio/command-palette-bitwarden/commit/e950e81752059bb69590d60251aee0dac7faf373))
+
+
+### Continuous Integration
+
+* adopt pipeline-tools composites, immutable releases, and Dependency-Track SBOM ([#135](https://github.com/hoobio/command-palette-bitwarden/issues/135)) ([b5cfc80](https://github.com/hoobio/command-palette-bitwarden/commit/b5cfc80e9894faf7fc1bdb73a6261e1f14573799))
+* only sign MSIX on releases and pre-releases ([#132](https://github.com/hoobio/command-palette-bitwarden/issues/132)) ([fb17caf](https://github.com/hoobio/command-palette-bitwarden/commit/fb17cafa6424059fb94d50db80968ad87ac26575))
+
 ## [1.7.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.7.0...v1.7.1) (2026-03-29)
 
 
