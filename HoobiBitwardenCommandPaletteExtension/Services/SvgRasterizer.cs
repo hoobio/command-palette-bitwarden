@@ -29,6 +29,9 @@ internal static class SvgRasterizer
 
             var imageInfo = new SKImageInfo(size, size, SKColorType.Rgba8888, SKAlphaType.Premul);
             using var surface = SKSurface.Create(imageInfo);
+            if (surface is null)
+                return null;
+
             var canvas = surface.Canvas;
             canvas.Clear(SKColors.Transparent);
             canvas.Scale(scale);
