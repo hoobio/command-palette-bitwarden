@@ -259,9 +259,10 @@ jobs:
     needs: [detect-changes]
     # Always run so the required check posts a status even on non-code PRs.
     # Heavy steps gate on env.SHOULD_BUILD; the no-op path posts a notice and
-    # exits 0.
+    # exits 0. Use Linux for the skip path (sub-10s spin-up) and Windows only
+    # when there's an actual MSIX to produce.
     if: always() && needs.detect-changes.result != 'cancelled' && needs.detect-changes.result != 'failure'
-    runs-on: windows-latest
+    runs-on: ${{ (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true') && 'windows-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
