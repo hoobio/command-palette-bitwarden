@@ -107,6 +107,59 @@ public class VaultItemHelperTests
     Assert.IsNotType<RepromptPage>(cmd);
   }
 
+  // Regression test: PowerToys 0.99 gates right-click context menus on
+  // Command.Name being non-empty. The TrackedInvokable wrapper used to drop
+  // the inner command's Name, which silently disabled right-click on every
+  // vault item. See https://github.com/hoobio/command-palette-bitwarden/issues/140.
+  [Fact]
+  public void GetDefaultCommand_NoReprompt_ForwardsInnerCommandName()
+  {
+    var login = new BitwardenItem
+    {
+      Id = "test-login",
+      Type = BitwardenItemType.Login,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var note = new BitwardenItem { Id = "test-note", Type = BitwardenItemType.SecureNote };
+    var ssh = new BitwardenItem
+    {
+      Id = "test-ssh",
+      Type = BitwardenItemType.SshKey,
+      CustomFields = new Dictionary<string, CustomField>
+      {
+        ["host"] = new CustomField("git@github.com", IsHidden: false),
+      },
+    };
+
+    foreach (var cmd in new[]
+    {
+      VaultItemHelper.GetDefaultCommand(login),
+      VaultItemHelper.GetDefaultCommand(note),
+      VaultItemHelper.GetDefaultCommand(ssh),
+    })
+    {
+      Assert.False(string.IsNullOrEmpty(cmd.Name), $"Default command Name was empty for {cmd.GetType().Name}");
+    }
+  }
+
+  [Fact]
+  public void BuildContextItems_NoReprompt_ForwardInnerCommandName()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-login",
+      Type = BitwardenItemType.Login,
+      Reprompt = 0,
+      Username = "user@test.com",
+      Password = "secret",
+      TotpSecret = "JBSWY3DPEHPK3PXP",
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    foreach (var ci in contextItems)
+      Assert.False(string.IsNullOrEmpty(ci.Command?.Name), $"Context item '{ci.Title}' had empty Command.Name");
+  }
+
   [Fact]
   public void BuildContextItems_Login_Reprompt_AllFieldsProtected()
   {
