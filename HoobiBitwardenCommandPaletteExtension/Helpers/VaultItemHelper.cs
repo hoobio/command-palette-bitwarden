@@ -507,12 +507,27 @@ internal static partial class VaultItemHelper
 
   private static TrackedInvokable Track(string itemId, InvokableCommand inner) => new(inner, itemId);
 
-  private sealed partial class TrackedInvokable(InvokableCommand inner, string itemId) : InvokableCommand
+  private sealed partial class TrackedInvokable : InvokableCommand
   {
+    private readonly InvokableCommand _inner;
+    private readonly string _itemId;
+
+    public TrackedInvokable(InvokableCommand inner, string itemId)
+    {
+      _inner = inner;
+      _itemId = itemId;
+
+      // PowerToys 0.99 gates right-click context menus on Command.Name being
+      // non-empty. Forward identity from the wrapped command so the gate passes.
+      Name = inner.Name;
+      Icon = inner.Icon;
+      Id = inner.Id;
+    }
+
     public override ICommandResult Invoke()
     {
-      AccessTracker.Record(itemId);
-      return inner.Invoke();
+      AccessTracker.Record(_itemId);
+      return _inner.Invoke();
     }
   }
 }
