@@ -257,25 +257,42 @@ jobs:
   build-msix:
     name: Build MSIX (${{ matrix.platform }})
     needs: [detect-changes]
-    if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
-    runs-on: windows-latest
+    # Always run so the required check posts a status even on non-code PRs.
+    # Heavy steps gate on env.SHOULD_BUILD; the no-op path posts a notice and
+    # exits 0. Use Linux for the skip path (sub-10s spin-up) and Windows only
+    # when there's an actual MSIX to produce.
+    if: always() && needs.detect-changes.result != 'cancelled' && needs.detect-changes.result != 'failure'
+    runs-on: ${{ (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true') && 'windows-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         platform: [x64, ARM64]
     env:
+      # True for code-bearing PRs and for non-pull_request events (push/workflow_dispatch/release).
+      SHOULD_BUILD: ${{ needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true' }}
       # Sign on release-please PRs and on main pushes; PRs from contributors stay unsigned.
       SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
     steps:
+      - name: Skip notice (no code changes)
+        if: env.SHOULD_BUILD != 'true'
+        shell: bash
+        run: |
+          echo "::notice::No code changes; MSIX build skipped for ${{ matrix.platform }}"
+          echo "### 💭 No MSIX build needed (${{ matrix.platform }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build was skipped because this PR has no code changes. Reporting success so the required check passes." >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v6
+        if: env.SHOULD_BUILD == 'true'
 
       - uses: actions/setup-dotnet@v5
+        if: env.SHOULD_BUILD == 'true'
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
       - name: Read version
         id: version
+        if: env.SHOULD_BUILD == 'true'
         shell: pwsh
         run: |
           $ver = (Get-Content version.txt -Raw).Trim()
@@ -283,12 +300,14 @@ jobs:
           "APP_VERSION=$ver" | Out-File -Append $env:GITHUB_ENV
 
       - name: Stamp Package.appxmanifest version
+        if: env.SHOULD_BUILD == 'true'
         uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v1.5.0
         with:
           manifest-path: ${{ env.APPXMANIFEST_PATH }}
           version: ${{ steps.version.outputs.version }}
 
       - name: Build MSIX
+        if: env.SHOULD_BUILD == 'true'
         uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.5.0
         with:
           project-path: ${{ env.PROJECT_PATH }}
@@ -300,6 +319,7 @@ jobs:
       # Stage it to a flat directory under a consistent name so the signing step,
       # artifact upload, and release attachment all see a clean path.
       - name: Stage MSIX
+        if: env.SHOULD_BUILD == 'true'
         shell: pwsh
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -316,7 +336,7 @@ jobs:
           Write-Host "Staged MSIX: $dest"
 
       - name: Sign MSIX
-        if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
+        if: env.SHOULD_BUILD == 'true' && env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
         uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v1.5.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
@@ -325,11 +345,12 @@ jobs:
           packages-path: ${{ github.workspace }}\staging\msix-${{ matrix.platform }}
 
       - name: Skip-sign notice
-        if: env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true'
+        if: env.SHOULD_BUILD == 'true' && (env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true')
         shell: bash
         run: echo "::warning::MSIX produced unsigned (SHOULD_SIGN=$SHOULD_SIGN, HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
 
       - name: Upload MSIX artifact
+        if: env.SHOULD_BUILD == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: msix-${{ matrix.platform }}
