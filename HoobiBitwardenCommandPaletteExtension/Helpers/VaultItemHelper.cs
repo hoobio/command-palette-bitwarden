@@ -516,18 +516,22 @@ internal static partial class VaultItemHelper
     {
       _inner = inner;
       _itemId = itemId;
-
-      // PowerToys 0.99 gates right-click context menus on Command.Name being
-      // non-empty. Forward identity from the wrapped command so the gate passes.
-      Name = inner.Name;
-      Icon = inner.Icon;
-      Id = inner.Id;
+      _inner.PropChanged += OnInnerPropChanged;
     }
+
+    public override string Name { get => _inner.Name; set => _inner.Name = value; }
+
+    public override string Id { get => _inner.Id; set => _inner.Id = value; }
+
+    public override IconInfo Icon { get => _inner.Icon; set => _inner.Icon = value; }
 
     public override ICommandResult Invoke()
     {
       AccessTracker.Record(_itemId);
       return _inner.Invoke();
     }
+
+    private void OnInnerPropChanged(object sender, IPropChangedEventArgs args)
+        => OnPropertyChanged(args.PropertyName);
   }
 }
