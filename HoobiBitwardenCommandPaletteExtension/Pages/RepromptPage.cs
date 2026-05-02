@@ -19,7 +19,7 @@ internal sealed partial class RepromptPage : ContentPage
   // grace for that specific item, not for the vault as a whole.
   private static readonly ConcurrentDictionary<string, long> _verifiedItems = new();
   private static int _failureCount;
-  private static DateTime _cooldownUntil;
+  private static long _cooldownUntilTicks;
   private const int MaxFailuresBeforeCooldown = 5;
   private const int CooldownSeconds = 30;
 
@@ -40,20 +40,22 @@ internal sealed partial class RepromptPage : ContentPage
   {
     if (string.IsNullOrEmpty(itemId)) return;
     _verifiedItems[itemId] = Stopwatch.GetTimestamp();
-    _failureCount = 0;
+    Interlocked.Exchange(ref _failureCount, 0);
     GraceStarted?.Invoke();
   }
 
   internal static void ClearGracePeriod()
   {
     _verifiedItems.Clear();
-    _failureCount = 0;
-    _cooldownUntil = default;
+    Interlocked.Exchange(ref _failureCount, 0);
+    Interlocked.Exchange(ref _cooldownUntilTicks, 0);
   }
 
   internal static int GetCooldownSecondsRemaining()
   {
-    var remaining = (_cooldownUntil - DateTime.UtcNow).TotalSeconds;
+    var ticks = Interlocked.Read(ref _cooldownUntilTicks);
+    if (ticks == 0) return 0;
+    var remaining = (new DateTime(ticks, DateTimeKind.Utc) - DateTime.UtcNow).TotalSeconds;
     return remaining > 0 ? (int)Math.Ceiling(remaining) : 0;
   }
 
@@ -61,7 +63,7 @@ internal sealed partial class RepromptPage : ContentPage
   {
     var failures = Interlocked.Increment(ref _failureCount);
     if (failures >= MaxFailuresBeforeCooldown)
-      _cooldownUntil = DateTime.UtcNow.AddSeconds(CooldownSeconds);
+      Interlocked.Exchange(ref _cooldownUntilTicks, DateTime.UtcNow.AddSeconds(CooldownSeconds).Ticks);
   }
 
   private readonly RepromptForm _form;
@@ -70,7 +72,7 @@ internal sealed partial class RepromptPage : ContentPage
   {
     Name = "Verify Password";
     Title = "Master Password Required";
-    Icon = new IconInfo("");
+    Icon = new IconInfo("");
     _form = new RepromptForm(service, itemId, innerAction, actionLabel);
   }
 
