@@ -107,9 +107,20 @@ internal sealed partial class RepromptPage : ContentPage
   public override IContent[] GetContent() => [_form];
 }
 
-internal sealed partial class RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel) : FormContent
+internal sealed partial class RepromptForm : FormContent
 {
+  private readonly BitwardenCliService _service;
+  private readonly Action _innerAction;
+  private readonly string _actionLabel;
   private string? _errorText;
+
+  public RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel)
+  {
+    _service = service;
+    _innerAction = innerAction;
+    _actionLabel = actionLabel;
+    TemplateJson = BuildTemplate(null);
+  }
 
   private void SetError(string? text)
   {
@@ -219,7 +230,7 @@ internal sealed partial class RepromptForm(BitwardenCliService service, Action i
       // of the SDK caller's sync context. The CLI call is short and the user
       // expects a brief pause after submitting their master password.
 #pragma warning disable VSTHRD002
-      verified = Task.Run(() => service.VerifyMasterPasswordAsync(password)).GetAwaiter().GetResult();
+      verified = Task.Run(() => _service.VerifyMasterPasswordAsync(password)).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
     }
     catch (Exception ex)
@@ -240,7 +251,7 @@ internal sealed partial class RepromptForm(BitwardenCliService service, Action i
     }
 
     RepromptPage.RecordVerification();
-    try { innerAction(); }
+    try { _innerAction(); }
     catch (Exception ex)
     {
       DebugLogService.Log("Reprompt", $"Inner action exception: {ex.GetType().Name}: {ex.Message}");
@@ -248,6 +259,6 @@ internal sealed partial class RepromptForm(BitwardenCliService service, Action i
       return CommandResult.KeepOpen();
     }
 
-    return CommandResult.ShowToast($"Copied {actionLabel} to clipboard");
+    return CommandResult.ShowToast($"Copied {_actionLabel} to clipboard");
   }
 }
