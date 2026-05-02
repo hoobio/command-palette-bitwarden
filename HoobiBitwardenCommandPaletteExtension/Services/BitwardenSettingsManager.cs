@@ -188,25 +188,36 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         TotpTagStyle.Value = "static";
         BackgroundRefresh.Value = "5";
         RepromptGracePeriod.Value = "60";
+        Settings.Add(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
         Settings.Add(RememberSession);
         Settings.Add(UseDesktopIntegration);
         Settings.Add(AutoBiometricUnlock);
-        Settings.Add(ShowWebsiteIcons);
         Settings.Add(AutoLockTimeout);
+        Settings.Add(RepromptGracePeriod);
+
+        Settings.Add(new SectionHeaderSetting("_section_display", "Vault Display"));
+        Settings.Add(ShowWebsiteIcons);
         Settings.Add(ShowWatchtowerTags);
-        Settings.Add(ContextAwareness);
-        Settings.Add(ShowContextTag);
         Settings.Add(ShowProtectedTag);
         Settings.Add(ShowPasskeyTag);
         Settings.Add(TotpTagStyle);
-        Settings.Add(ContextItemLimit);
         Settings.Add(BackgroundRefresh);
+
+        Settings.Add(new SectionHeaderSetting("_section_context", "Context Awareness"));
+        Settings.Add(ContextAwareness);
+        Settings.Add(ShowContextTag);
+        Settings.Add(ContextItemLimit);
+
+        Settings.Add(new SectionHeaderSetting("_section_clipboard", "Clipboard"));
         Settings.Add(AutoClearClipboard);
         Settings.Add(ClipboardClearDelay);
+
+        Settings.Add(new SectionHeaderSetting("_section_cli", "Bitwarden CLI"));
         Settings.Add(CliDirectoryOverride);
         Settings.Add(UsePortableDataDirectory);
         Settings.Add(CliDataDirectoryOverride);
-        Settings.Add(RepromptGracePeriod);
+
+        Settings.Add(new SectionHeaderSetting("_section_advanced", "Advanced"));
         Settings.Add(DebugLogging);
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
@@ -272,22 +283,22 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (RememberSession.Key, (object?)RememberSession.Value);
         yield return (UseDesktopIntegration.Key, (object?)UseDesktopIntegration.Value);
         yield return (AutoBiometricUnlock.Key, (object?)AutoBiometricUnlock.Value);
+        yield return (AutoLockTimeout.Key, AutoLockTimeout.Value);
+        yield return (RepromptGracePeriod.Key, RepromptGracePeriod.Value);
         yield return (ShowWebsiteIcons.Key, ShowWebsiteIcons.Value);
         yield return (ShowWatchtowerTags.Key, ShowWatchtowerTags.Value);
-        yield return (ContextAwareness.Key, ContextAwareness.Value);
-        yield return (ShowContextTag.Key, ShowContextTag.Value);
         yield return (ShowProtectedTag.Key, (object?)ShowProtectedTag.Value);
         yield return (ShowPasskeyTag.Key, ShowPasskeyTag.Value);
         yield return (TotpTagStyle.Key, TotpTagStyle.Value);
-        yield return (AutoLockTimeout.Key, AutoLockTimeout.Value);
+        yield return (BackgroundRefresh.Key, BackgroundRefresh.Value);
+        yield return (ContextAwareness.Key, ContextAwareness.Value);
+        yield return (ShowContextTag.Key, ShowContextTag.Value);
+        yield return (ContextItemLimit.Key, ContextItemLimit.Value);
         yield return (AutoClearClipboard.Key, AutoClearClipboard.Value);
         yield return (ClipboardClearDelay.Key, ClipboardClearDelay.Value);
-        yield return (ContextItemLimit.Key, ContextItemLimit.Value);
-        yield return (BackgroundRefresh.Key, BackgroundRefresh.Value);
         yield return (CliDirectoryOverride.Key, CliDirectoryOverride.Value);
         yield return (UsePortableDataDirectory.Key, (object?)UsePortableDataDirectory.Value);
         yield return (CliDataDirectoryOverride.Key, CliDataDirectoryOverride.Value);
-        yield return (RepromptGracePeriod.Key, RepromptGracePeriod.Value);
         yield return (DebugLogging.Key, (object?)DebugLogging.Value);
     }
 }
