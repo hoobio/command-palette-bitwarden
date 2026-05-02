@@ -436,6 +436,35 @@ internal sealed class BitwardenCliService
     }
   }
 
+  // Reload the saved session credential and verify it still works, transitioning
+  // the vault to Unlocked + refreshing the cache. Used by the page to bypass the
+  // biometric/password prompt after a soft auto-lock when RememberSession is on
+  // — the stored credential is still valid, so re-prompting the user provides
+  // no security benefit and is just friction.
+  public async Task<bool> TryRestoreSessionAsync()
+  {
+    if (_settings?.RememberSession.Value != true) return false;
+    if (_lastStatus == VaultStatus.Unlocked && _sessionKey != null) return true;
+
+    var stored = SessionStore.Load();
+    if (string.IsNullOrEmpty(stored)) return false;
+
+    DebugLogService.Log("Restore", "Attempting silent session restore from Credential Manager");
+    _sessionKey = stored;
+    if (!await VerifySessionAsync())
+    {
+      DebugLogService.Log("Restore", "Stored session verification failed; clearing credential");
+      SessionStore.Clear();
+      return false;
+    }
+
+    SetStatus(VaultStatus.Unlocked);
+    StatusChanged?.Invoke();
+    try { await RefreshCacheAsync(); }
+    catch (Exception ex) { DebugLogService.Log("Restore", $"RefreshCacheAsync after restore failed: {ex.GetType().Name}: {ex.Message}"); }
+    return true;
+  }
+
   public async Task<(bool Success, string? Error)> UnlockWithBiometricsAsync(Action<string>? onStatus = null)
   {
     DebugLogService.Log("Unlock", "UnlockWithBiometricsAsync started");

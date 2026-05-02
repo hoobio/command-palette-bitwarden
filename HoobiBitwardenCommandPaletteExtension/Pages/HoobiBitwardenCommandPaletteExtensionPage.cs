@@ -793,11 +793,38 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
             return;
-        if (_settings?.UseDesktopIntegration.Value != true || _settings?.AutoBiometricUnlock.Value != true)
+
+        var biometricEnabled = _settings?.UseDesktopIntegration.Value == true
+                            && _settings?.AutoBiometricUnlock.Value == true;
+        var rememberSession = _settings?.RememberSession.Value == true;
+
+        if (!biometricEnabled && !rememberSession)
             return;
+
         _autoBiometricTriggered = true;
-        DebugLogService.Log("Page", "Auto-triggering biometric unlock");
-        OnBiometricUnlockRequested();
+
+        _ = Task.Run(async () =>
+        {
+            // Prefer silent restore from the saved credential so RememberSession
+            // actually saves the user a prompt after a soft auto-lock.
+            if (rememberSession && await _service.TryRestoreSessionAsync())
+            {
+                DebugLogService.Log("Page", "Restored session silently; biometric not needed");
+                return;
+            }
+
+            if (biometricEnabled)
+            {
+                DebugLogService.Log("Page", "Auto-triggering biometric unlock");
+                OnBiometricUnlockRequested();
+            }
+            else
+            {
+                // RememberSession was on but the stored credential was gone or
+                // invalid; reset so the manual unlock paths work.
+                _autoBiometricTriggered = false;
+            }
+        });
     }
 
     private void HideBiometricStatus()
