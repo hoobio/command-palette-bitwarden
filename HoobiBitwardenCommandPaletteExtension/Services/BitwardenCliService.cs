@@ -319,8 +319,14 @@ internal sealed class BitwardenCliService
             // be earned per-item via RepromptForm.
             return SetStatus(VaultStatus.Unlocked);
           }
-          DebugLogService.Log("Status", "Stored session verification failed, clearing");
-          SessionStore.Clear();
+          // Don't clear the credential here — a single sync failure can be a
+          // transient network blip or slow CLI startup right after a deploy,
+          // and clearing means the user is forced to biometric/password on
+          // the next launch even though the credential is still valid. Leave
+          // it in place; HandleInvalidSession (called from real CLI errors
+          // with stderr that confirms the session is gone) will clear it
+          // when the credential is genuinely bad.
+          DebugLogService.Log("Status", "Stored session verification failed (preserving credential for retry)");
         }
         else
         {
@@ -437,10 +443,12 @@ internal sealed class BitwardenCliService
   }
 
   // Reload the saved session credential and verify it still works, transitioning
-  // the vault to Unlocked + refreshing the cache. Used by the page to bypass the
-  // biometric/password prompt after a soft auto-lock when RememberSession is on
-  // — the stored credential is still valid, so re-prompting the user provides
-  // no security benefit and is just friction.
+  // the vault to Unlocked + refreshing the cache. Used by the page as a backup
+  // path: after a transient warmup failure, after HandleInvalidSession fires on
+  // a real CLI error that turns out to have been transient, etc. Auto-lock and
+  // user-initiated locks now hard-lock (clearing the credential), so this only
+  // succeeds in genuine "the credential is fine, we just lost the in-memory
+  // session" scenarios — exactly the cases where re-prompting would be friction.
   public async Task<bool> TryRestoreSessionAsync()
   {
     if (_settings?.RememberSession.Value != true) return false;
@@ -861,10 +869,12 @@ internal sealed class BitwardenCliService
 
   public async Task LockAsync(bool userInitiated = false)
   {
-    var rememberSession = _settings?.RememberSession.Value == true && !userInitiated;
-    DebugLogService.Log("Lock", rememberSession
-      ? "LockAsync called (soft lock, rememberSession=True)"
-      : userInitiated ? "LockAsync called (user-initiated, clearing credential)" : "LockAsync called");
+    // Both auto-lock and user-initiated lock perform a hard lock: clear the
+    // in-memory session, the saved credential, and run `bw lock` against the
+    // CLI. RememberSession only controls whether the credential is restored
+    // on process restart (warmup); once a lock event has fired the user has
+    // explicitly asked us to forget the unlocked state.
+    DebugLogService.Log("Lock", userInitiated ? "LockAsync (user-initiated)" : "LockAsync (auto-lock)");
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
     lock (_cacheLock)
@@ -873,16 +883,12 @@ internal sealed class BitwardenCliService
       _cacheLoaded = false;
     }
     FaviconService.ClearMemCache();
-    if (!rememberSession)
-      SessionStore.Clear();
+    SessionStore.Clear();
     Pages.RepromptPage.ClearGracePeriod();
     StatusChanged?.Invoke();
 
-    if (!rememberSession)
-    {
-      try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); }
-      catch (Exception ex) { DebugLogService.Log("Auth", $"bw lock failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
-    }
+    try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); }
+    catch (Exception ex) { DebugLogService.Log("Auth", $"bw lock failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
   }
 
   public async Task<string?> SetServerUrlAsync(ServerConfig config)
