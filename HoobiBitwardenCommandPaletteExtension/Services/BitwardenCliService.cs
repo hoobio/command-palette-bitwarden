@@ -188,6 +188,20 @@ internal sealed class BitwardenCliService
       _lastRememberSession = false;
       _ = LockAsync();
     }
+    else if (!_lastRememberSession && current)
+    {
+      _lastRememberSession = true;
+      // Toggling RememberSession on while the vault is unlocked means the user
+      // wants the active session to survive the next process restart. Persist
+      // the in-memory key now — UnlockWithBiometricsAsync / UnlockAsync only
+      // saves when RememberSession was already on at unlock time.
+      var key = _sessionKey;
+      if (!string.IsNullOrEmpty(key))
+      {
+        SessionStore.Save(key);
+        DebugLogService.Log("Session", "RememberSession enabled with active session; persisted credential");
+      }
+    }
     else
     {
       _lastRememberSession = current;
