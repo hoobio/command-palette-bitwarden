@@ -223,6 +223,11 @@ internal sealed partial class RepromptForm : FormContent
       return CommandResult.KeepOpen();
     }
 
+    // Show a status while the synchronous CLI verify blocks SubmitForm so
+    // the user has feedback that the click registered.
+    var verifyingStatus = new StatusMessage { Message = "Verifying master password...", State = MessageState.Info };
+    ExtensionHost.ShowStatus(verifyingStatus, StatusContext.Page);
+
     bool verified;
     try
     {
@@ -238,6 +243,10 @@ internal sealed partial class RepromptForm : FormContent
       DebugLogService.Log("Reprompt", $"Verify exception: {ex.GetType().Name}: {ex.Message}");
       SetError("Verification failed. Please try again.");
       return CommandResult.KeepOpen();
+    }
+    finally
+    {
+      try { ExtensionHost.HideStatus(verifyingStatus); } catch { }
     }
 
     if (!verified)
