@@ -173,16 +173,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if ((_twoFactorRequired || _deviceVerificationRequired) && !_handlingAction)
         {
-            var code = newSearch.Trim();
-            if (code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _))
-            {
-                if (_deviceVerificationRequired)
-                    OnDeviceVerificationSubmitted(code);
-                else
-                    OnTwoFactorSubmitted(code);
-                return;
-            }
-
             _currentItems = BuildUnauthenticatedItems();
             RaiseItemsChanged();
             return;
@@ -345,10 +335,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_twoFactorRequired && _pendingEmail != null && _pendingPassword != null)
         {
             PlaceholderText = "Enter your 2FA code...";
-            var hint = new ListItem(new NoOpCommand())
+            var code = _currentSearchText.Trim();
+            var canSubmit = code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _);
+            ICommand command = canSubmit
+                ? new AnonymousCommand(() => OnTwoFactorSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
+                : new NoOpCommand();
+            var hint = new ListItem(command)
             {
-                Title = "Two-Factor Authentication Required",
-                Subtitle = _errorMessage ?? "Type your 6-digit code above and press Enter",
+                Title = canSubmit ? "Submit 2FA code" : "Two-Factor Authentication Required",
+                Subtitle = _errorMessage ?? (canSubmit
+                    ? "Press Enter to submit"
+                    : "Type your 6-8 digit code above and press Enter"),
                 Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
@@ -359,10 +356,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_deviceVerificationRequired && _pendingEmail != null && _pendingPassword != null)
         {
             PlaceholderText = "Enter device verification code...";
-            var hint = new ListItem(new NoOpCommand())
+            var code = _currentSearchText.Trim();
+            var canSubmit = code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _);
+            ICommand command = canSubmit
+                ? new AnonymousCommand(() => OnDeviceVerificationSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
+                : new NoOpCommand();
+            var hint = new ListItem(command)
             {
-                Title = "New Device Verification Required",
-                Subtitle = _errorMessage ?? "Enter the OTP code sent to your login email",
+                Title = canSubmit ? "Submit verification code" : "New Device Verification Required",
+                Subtitle = _errorMessage ?? (canSubmit
+                    ? "Press Enter to submit"
+                    : "Enter the OTP code sent to your login email"),
                 Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
