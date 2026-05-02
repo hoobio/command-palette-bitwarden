@@ -35,6 +35,15 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private Timer? _syncTimer;
     private ListItem? _syncItem;
     private readonly Timer _iconRefreshTimer;
+    private readonly Timer _searchDebounceTimer;
+    // Debounce window for the unlocked-vault search rebuild. Each keystroke
+    // resets the timer; the rebuild only runs after the user pauses for this
+    // long. BuildListItems allocates 5-15 commands per result, so doing it
+    // per keystroke (with no debounce) makes typing feel laggy on larger
+    // vaults. 100ms is the sweet spot used by most palette UIs (VS Code,
+    // Spotlight): below the threshold of perceived input delay, but enough
+    // to collapse a typed word into a single rebuild.
+    private const int SearchDebounceMs = 100;
     private StatusMessage? _lastBiometricStatus;
     private volatile bool _biometricClickFailed;
     private volatile bool _autoBiometricTriggered;
@@ -54,6 +63,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RepromptPage.GraceStarted += OnRepromptGraceStarted;
         RepromptPage.BiometricRequested += OnRepromptBiometricRequested;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
+        _searchDebounceTimer = new Timer(OnSearchDebounceTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         var v = Windows.ApplicationModel.Package.Current.Id.Version;
         var version = $"{v.Major}.{v.Minor}.{v.Build}";
@@ -184,8 +194,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_service.IsCacheLoaded)
         {
-            _currentItems = BuildListItems(Search(newSearch));
-            RaiseItemsChanged();
+            // Debounce: each keystroke just (re)arms the timer. The actual
+            // rebuild + RaiseItemsChanged runs once the user pauses typing.
+            _searchDebounceTimer.Change(SearchDebounceMs, Timeout.Infinite);
             _service.TriggerBackgroundRefreshIfStale();
         }
         else
@@ -196,6 +207,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 await _service.RefreshCacheAsync();
             });
         }
+    }
+
+    private void OnSearchDebounceTick(object? _)
+    {
+        // Re-check state at fire time: the vault may have locked, an action
+        // may be in flight, or the cache may have been invalidated since the
+        // keystroke that armed the timer.
+        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
+            return;
+        _currentItems = BuildListItems(Search(_currentSearchText));
+        RaiseItemsChanged();
     }
 
     private void OnCacheUpdated()
@@ -586,6 +608,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _totpTimer?.Dispose();
         _syncTimer?.Dispose();
         _iconRefreshTimer.Dispose();
+        _searchDebounceTimer.Dispose();
         _service.CacheUpdated -= OnCacheUpdated;
         _service.StatusChanged -= OnStatusChanged;
         _service.WarmupCompleted -= OnWarmupCompleted;
