@@ -475,8 +475,11 @@ internal sealed class BitwardenCliService
     _sessionKey = stored;
     if (!await VerifySessionAsync())
     {
-      DebugLogService.Log("Restore", "Stored session verification failed; clearing credential");
-      SessionStore.Clear();
+      // Same policy as GetVaultStatusCoreAsync: a single bw sync failure can
+      // be transient (network blip, slow CLI startup), so don't burn the
+      // saved credential here. HandleInvalidSession clears it on real CLI
+      // errors that confirm the session is gone.
+      DebugLogService.Log("Restore", "Stored session verification failed (preserving credential for retry)");
       return false;
     }
 
