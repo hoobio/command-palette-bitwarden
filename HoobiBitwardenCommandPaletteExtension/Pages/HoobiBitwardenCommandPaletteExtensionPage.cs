@@ -857,6 +857,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 {
                     _biometricClickFailed = true;
                     _errorMessage = error ?? "Windows Hello unlock failed";
+                    // Settle flags before notifying the host (see comment on
+                    // the success path below).
+                    _handlingAction = false;
+                    IsLoading = false;
                     _currentItems = BuildLockedItems();
                     RaiseItemsChanged();
 
@@ -874,11 +878,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 HideBiometricStatus();
                 ShowLoadingStatus("Retrieving items from vault...", "bw list items");
                 await _service.RefreshCacheAsync();
+                // Clear handling/loading flags BEFORE raising ItemsChanged so
+                // the host's GetItems callback sees the fully-settled state.
+                // If we raise first and clear in `finally`, the host fetches
+                // items while _handlingAction/IsLoading are still true and
+                // keeps showing the loading placeholder until the next
+                // hide/show cycle forces a fresh GetItems.
+                _handlingAction = false;
+                IsLoading = false;
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }
             finally
             {
+                // Defensive: ensure flags are cleared on any exit path.
                 _handlingAction = false;
                 IsLoading = false;
             }
