@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.9.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.8.0...v1.9.0) (2026-05-02)
+
+
+### Features
+
+* **reprompt:** allow biometric verification with password fallback ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **settings:** group settings page into labeled sections ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+
+
+### Bug Fixes
+
+* **2fa:** wait for Enter to submit, supporting 7-8 digit TOTP codes ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* post-v1.7.1 unlock, reprompt, and performance fixes ([#146](https://github.com/hoobio/command-palette-bitwarden/issues/146)) ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **reprompt:** delegate biometric verify to parent page so WinHello ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **reprompt:** initialize TemplateJson so the form renders on first show ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **reprompt:** restore lock icon and atomic cooldown state ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **reprompt:** scope grace period per-item and drop disk persistence ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **reprompt:** show toast and dismiss palette after master password ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **reprompt:** show verifying status while master password check blocks ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **session:** use a Debug-suffixed credential target for Dev builds ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **unlock:** hard-lock on auto-lock and don't clear credential on ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **unlock:** keep saved session on transient verify failure during ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **unlock:** navigate back after Windows Hello biometric unlock ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **unlock:** save active session credential when RememberSession is ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **unlock:** settle handling/loading flags before raising items changed ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **unlock:** silently restore session after auto-lock when ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+
+
+### Performance Improvements
+
+* **copy:** defer access tracking off the clipboard hot path ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+* **search:** stop recapturing window context on every keystroke ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+
+
+### Miscellaneous Chores
+
+* bump appxmanifest ([60e48c7](https://github.com/hoobio/command-palette-bitwarden/commit/60e48c7d8d7dc433bbbe58389b0cec18353f3879))
+
 ## [1.8.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.7.1...v1.8.0) (2026-05-01)
 
 
