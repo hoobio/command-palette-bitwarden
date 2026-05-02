@@ -52,6 +52,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
         RepromptPage.GraceStarted += OnRepromptGraceStarted;
+        RepromptPage.BiometricRequested += OnRepromptBiometricRequested;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         var v = Windows.ApplicationModel.Package.Current.Id.Version;
@@ -594,6 +595,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
         RepromptPage.GraceStarted -= OnRepromptGraceStarted;
+        RepromptPage.BiometricRequested -= OnRepromptBiometricRequested;
     }
 
     private void OnIconCached() => _iconRefreshTimer.Change(500, Timeout.Infinite);
@@ -670,6 +672,73 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
             RaiseItemsChanged();
         }
+    }
+
+    // Biometric reprompt is handled here (not in RepromptForm) so the WinHello
+    // prompt can come to the foreground. With the form returned via GoBack
+    // first, the items list is showing -- the same UI state where the unlock
+    // biometric path already prompts visibly.
+    private void OnRepromptBiometricRequested(BiometricVerificationRequest request)
+    {
+        DebugLogService.Log("Reprompt", $"Biometric verification requested for item {request.ItemId}");
+
+        _ = Task.Run(async () =>
+        {
+            var connectingStatus = new StatusMessage { Message = "Connecting to Bitwarden Desktop...", State = MessageState.Info };
+            ExtensionHost.ShowStatus(connectingStatus, StatusContext.Page);
+
+            (bool success, string? error) result;
+            try
+            {
+                result = await request.Service.VerifyWithBiometricsAsync(
+                    onStatus: msg => connectingStatus.Message = msg);
+            }
+            catch (Exception ex)
+            {
+                DebugLogService.Log("Reprompt", $"Biometric verify exception: {ex.GetType().Name}: {ex.Message}");
+                result = (false, ex.Message);
+            }
+            finally
+            {
+                try { ExtensionHost.HideStatus(connectingStatus); } catch { }
+            }
+
+            if (!result.success)
+            {
+                RepromptPage.RecordFailure();
+                var cooldown = RepromptPage.GetCooldownSecondsRemaining();
+                var msg = cooldown > 0
+                    ? $"Too many failed attempts. Try again in {cooldown}s."
+                    : result.error ?? "Biometric verification failed";
+                var failStatus = new StatusMessage { Message = msg, State = MessageState.Error };
+                ExtensionHost.ShowStatus(failStatus, StatusContext.Page);
+                _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(failStatus); } catch { } }, TaskScheduler.Default);
+                return;
+            }
+
+            RepromptPage.RecordVerification(request.ItemId);
+            try { request.InnerAction(); }
+            catch (Exception ex)
+            {
+                DebugLogService.Log("Reprompt", $"Inner action exception: {ex.GetType().Name}: {ex.Message}");
+                var errStatus = new StatusMessage { Message = "Action failed after verification.", State = MessageState.Error };
+                ExtensionHost.ShowStatus(errStatus, StatusContext.Page);
+                _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(errStatus); } catch { } }, TaskScheduler.Default);
+                return;
+            }
+
+            var successStatus = new StatusMessage { Message = $"Copied {request.ActionLabel} to clipboard", State = MessageState.Success };
+            ExtensionHost.ShowStatus(successStatus, StatusContext.Page);
+            _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(successStatus); } catch { } }, TaskScheduler.Default);
+
+            // Refresh items so any per-item grace tag updates immediately.
+            if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            {
+                lock (_itemsLock)
+                    _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
+            }
+        });
     }
 
     private void OnLockRequested()
