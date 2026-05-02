@@ -93,6 +93,46 @@ internal static partial class DesktopIpcService
     }
   }
 
+  public static async Task<bool> TryBiometricVerifyAsync(string? dataDirectory, Action<string>? onStatus = null)
+  {
+    var userId = GetActiveUserId(dataDirectory);
+    if (userId == null)
+    {
+      DebugLogService.Log("Biometric", "No active user ID found in CLI data.json");
+      return false;
+    }
+
+    DebugLogService.Log("Biometric", $"Attempting biometric verify for user {userId[..Math.Min(8, userId.Length)]}...");
+
+    using var client = new IpcClient();
+    onStatus?.Invoke("Connecting to Bitwarden Desktop app...");
+    await client.ConnectAsync(userId, onStatus);
+
+    onStatus?.Invoke("Checking biometrics availability...");
+    var status = await client.GetBiometricsStatusForUserAsync(userId);
+    if (status != BiometricsStatus.Available)
+    {
+      DebugLogService.Log("Biometric", $"Biometrics not available: {status}");
+      var reason = status switch
+      {
+        BiometricsStatus.UnlockNeeded => "Bitwarden Desktop app is locked - unlock it first",
+        BiometricsStatus.HardwareUnavailable => "Windows Hello hardware not available",
+        BiometricsStatus.AutoSetupNeeded or BiometricsStatus.ManualSetupNeeded => "Biometrics not set up in Bitwarden Desktop app",
+        BiometricsStatus.NotEnabledLocally or BiometricsStatus.NotEnabledInConnectedDesktopApp => "Enable 'Unlock with biometrics' in Bitwarden Desktop settings",
+        BiometricsStatus.DesktopDisconnected => "Bitwarden Desktop app disconnected",
+        _ => $"Biometrics unavailable (status: {status})",
+      };
+      throw new InvalidOperationException(reason);
+    }
+
+    DebugLogService.Log("Biometric", "Requesting Windows Hello prompt for verify...");
+    onStatus?.Invoke("Waiting for Windows Hello...");
+    var userKeyB64 = await client.UnlockWithBiometricsForUserAsync(userId);
+    var success = !string.IsNullOrEmpty(userKeyB64);
+    DebugLogService.Log("Biometric", success ? "Biometric verify successful" : "Biometric verify denied or failed");
+    return success;
+  }
+
   public static async Task<bool> IsBiometricsAvailableAsync(string? dataDirectory)
   {
     var userId = GetActiveUserId(dataDirectory);

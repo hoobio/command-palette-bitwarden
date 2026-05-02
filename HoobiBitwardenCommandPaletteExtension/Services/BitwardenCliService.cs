@@ -555,6 +555,25 @@ internal sealed class BitwardenCliService
     }
   }
 
+  internal BitwardenSettingsManager? Settings => _settings;
+
+  public async Task<(bool Success, string? Error)> VerifyWithBiometricsAsync(Action<string>? onStatus = null)
+  {
+    DebugLogService.Log("Reprompt", "Verifying via biometrics");
+    try
+    {
+      var success = await DesktopIpcService.TryBiometricVerifyAsync(DataDirectory, onStatus);
+      return success
+        ? (true, null)
+        : (false, "Biometric verification was cancelled or denied");
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Reprompt", $"Biometric verify exception: {ex.GetType().Name}: {ex.Message}");
+      return (false, ex.Message);
+    }
+  }
+
   public async Task<bool> VerifyMasterPasswordAsync(string password)
   {
     DebugLogService.Log("Reprompt", "Verifying master password for re-prompt");

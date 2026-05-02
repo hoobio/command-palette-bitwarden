@@ -70,20 +70,29 @@ internal sealed partial class RepromptPage : ContentPage
   {
     Name = "Verify Password";
     Title = "Master Password Required";
-    Icon = new IconInfo("");
+    Icon = new IconInfo("");
     _form = new RepromptForm(service, itemId, innerAction, actionLabel);
   }
 
-  public override IContent[] GetContent() => [_form];
+  public override IContent[] GetContent()
+  {
+    _form.OnPageShown();
+    return [_form];
+  }
 }
 
 internal sealed partial class RepromptForm : FormContent
 {
+  private enum AuthState { Initial, Authenticating, Verified, Failed }
+
   private readonly BitwardenCliService _service;
   private readonly string _itemId;
   private readonly Action _innerAction;
   private readonly string _actionLabel;
+  private AuthState _state = AuthState.Initial;
   private string? _errorText;
+  private string? _statusText;
+  private int _autoTriggered;
 
   public RepromptForm(BitwardenCliService service, string itemId, Action innerAction, string actionLabel)
   {
@@ -91,14 +100,54 @@ internal sealed partial class RepromptForm : FormContent
     _itemId = itemId;
     _innerAction = innerAction;
     _actionLabel = actionLabel;
-    TemplateJson = BuildTemplate(null);
+    TemplateJson = BuildTemplate();
   }
 
-  private void SetError(string? text)
+  internal void OnPageShown()
   {
-    if (_errorText == text) return;
-    _errorText = text;
-    TemplateJson = BuildTemplate(text);
+    if (Interlocked.CompareExchange(ref _autoTriggered, 1, 0) != 0) return;
+    if (!ShouldAutoTriggerBiometric()) return;
+
+    _state = AuthState.Authenticating;
+    _statusText = "Connecting to Bitwarden Desktop...";
+    TemplateJson = BuildTemplate();
+    _ = Task.Run(RunAutoBiometricAsync);
+  }
+
+  private bool ShouldAutoTriggerBiometric()
+  {
+    var settings = _service.Settings;
+    if (settings?.UseDesktopIntegration.Value != true) return false;
+    if (settings?.AutoBiometricUnlock.Value != true) return false;
+    if (RepromptPage.GetCooldownSecondsRemaining() > 0) return false;
+    return true;
+  }
+
+  private async Task RunAutoBiometricAsync()
+  {
+    var (success, error) = await _service.VerifyWithBiometricsAsync(
+      onStatus: msg =>
+      {
+        _statusText = msg;
+        TemplateJson = BuildTemplate();
+      });
+
+    _statusText = null;
+    if (success)
+    {
+      _state = AuthState.Verified;
+      _errorText = null;
+    }
+    else
+    {
+      RepromptPage.RecordFailure();
+      _state = AuthState.Failed;
+      var cooldown = RepromptPage.GetCooldownSecondsRemaining();
+      _errorText = cooldown > 0
+        ? $"Too many failed attempts. Try again in {cooldown}s."
+        : error ?? "Biometric verification failed";
+    }
+    TemplateJson = BuildTemplate();
   }
 
   private static string EscapeJsonString(string value)
@@ -126,8 +175,94 @@ internal sealed partial class RepromptForm : FormContent
     return sb.ToString();
   }
 
-  private static string BuildTemplate(string? errorText) =>
-    """
+  private string BuildTemplate() => _state switch
+  {
+    AuthState.Authenticating => BuildAuthenticatingTemplate(_statusText),
+    AuthState.Verified => BuildVerifiedTemplate(),
+    _ => BuildStandardTemplate(_errorText),
+  };
+
+  private static string BuildAuthenticatingTemplate(string? statusText) =>
+    $$"""
+    {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.6",
+        "body": [
+            {
+                "type": "TextBlock",
+                "size": "medium",
+                "weight": "bolder",
+                "text": "Waiting for Windows Hello...",
+                "horizontalAlignment": "center",
+                "wrap": true,
+                "style": "heading"
+            },
+            {
+                "type": "TextBlock",
+                "text": "{{EscapeJsonString(statusText ?? "Authenticating with Bitwarden Desktop app")}}",
+                "wrap": true,
+                "isSubtle": true,
+                "size": "small",
+                "horizontalAlignment": "center"
+            }
+        ]
+    }
+    """;
+
+  private string BuildVerifiedTemplate() =>
+    $$"""
+    {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.6",
+        "body": [
+            {
+                "type": "TextBlock",
+                "size": "medium",
+                "weight": "bolder",
+                "text": "Verified with Windows Hello",
+                "horizontalAlignment": "center",
+                "wrap": true,
+                "style": "heading",
+                "color": "Good"
+            },
+            {
+                "type": "TextBlock",
+                "text": "Press Enter to {{EscapeJsonString(string.Equals(_actionLabel, "open", StringComparison.OrdinalIgnoreCase) ? "open this item" : $"copy {_actionLabel.ToLowerInvariant()}")}}.",
+                "wrap": true,
+                "isSubtle": true,
+                "size": "small",
+                "horizontalAlignment": "center"
+            },
+            {
+                "type": "ActionSet",
+                "actions": [
+                    {
+                        "type": "Action.Submit",
+                        "title": "Continue",
+                        "style": "positive",
+                        "data": { "action": "continue" }
+                    }
+                ]
+            }
+        ]
+    }
+    """;
+
+  private string BuildStandardTemplate(string? errorText)
+  {
+    var biometricEnabled = _service.Settings?.UseDesktopIntegration.Value == true;
+    var biometricAction = biometricEnabled ? """
+                    ,
+                    {
+                        "type": "Action.Submit",
+                        "title": "Use Windows Hello",
+                        "data": { "action": "biometric" }
+                    }
+""" : "";
+
+    return """
     {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type": "AdaptiveCard",
@@ -154,8 +289,6 @@ internal sealed partial class RepromptForm : FormContent
                 "label": "Master Password",
                 "style": "Password",
                 "id": "MasterPassword",
-                "isRequired": true,
-                "errorMessage": "Master password is required",
                 "placeholder": "Enter your master password"
             },
             {
@@ -163,11 +296,13 @@ internal sealed partial class RepromptForm : FormContent
                 "actions": [
                     {
                         "type": "Action.Submit",
-                        "title": "Verify & Continue"
+                        "title": "Verify & Continue",
+                        "data": { "action": "password" }
                     }
+""" + biometricAction + """
                 ]
             }
-    """ + (errorText != null ? $$"""
+""" + (errorText != null ? $$"""
             ,{
                 "type": "TextBlock",
                 "text": "{{EscapeJsonString(errorText)}}",
@@ -175,12 +310,100 @@ internal sealed partial class RepromptForm : FormContent
                 "wrap": true,
                 "size": "small"
             }
-    """ : "") + """
+""" : "") + """
         ]
     }
     """;
+  }
 
   public override ICommandResult SubmitForm(string inputs, string data)
+  {
+    var actionData = JsonNode.Parse(data)?.AsObject();
+    var action = actionData?["action"]?.GetValue<string>() ?? "password";
+
+    var cooldown = RepromptPage.GetCooldownSecondsRemaining();
+    if (cooldown > 0)
+    {
+      _state = AuthState.Failed;
+      _errorText = $"Too many failed attempts. Try again in {cooldown}s.";
+      TemplateJson = BuildTemplate();
+      return CommandResult.KeepOpen();
+    }
+
+    return action switch
+    {
+      "biometric" => HandleBiometric(),
+      "continue" => HandleContinueAfterAuth(),
+      _ => HandlePassword(inputs),
+    };
+  }
+
+  private CommandResult HandleBiometric()
+  {
+    var status = new StatusMessage { Message = "Connecting to Bitwarden Desktop...", State = MessageState.Info };
+    ExtensionHost.ShowStatus(status, StatusContext.Page);
+
+    bool success;
+    string? error;
+    try
+    {
+#pragma warning disable VSTHRD002
+      var result = Task.Run(() => _service.VerifyWithBiometricsAsync(
+        onStatus: msg => status.Message = msg)).GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
+      success = result.Success;
+      error = result.Error;
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Reprompt", $"Biometric exception: {ex.GetType().Name}: {ex.Message}");
+      success = false;
+      error = ex.Message;
+    }
+    finally
+    {
+      try { ExtensionHost.HideStatus(status); } catch { }
+    }
+
+    if (!success)
+    {
+      RepromptPage.RecordFailure();
+      var nextCooldown = RepromptPage.GetCooldownSecondsRemaining();
+      _state = AuthState.Failed;
+      _errorText = nextCooldown > 0
+        ? $"Too many failed attempts. Try again in {nextCooldown}s."
+        : error ?? "Biometric verification failed";
+      TemplateJson = BuildTemplate();
+      return CommandResult.KeepOpen();
+    }
+
+    return RunInnerAction();
+  }
+
+  private CommandResult HandleContinueAfterAuth()
+  {
+    if (_state != AuthState.Verified)
+      return CommandResult.KeepOpen();
+    return RunInnerAction();
+  }
+
+  private CommandResult RunInnerAction()
+  {
+    RepromptPage.RecordVerification(_itemId);
+    try { _innerAction(); }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Reprompt", $"Inner action exception: {ex.GetType().Name}: {ex.Message}");
+      _state = AuthState.Failed;
+      _errorText = "Action failed after verification.";
+      TemplateJson = BuildTemplate();
+      return CommandResult.KeepOpen();
+    }
+
+    return CommandResult.ShowToast($"Copied {_actionLabel} to clipboard");
+  }
+
+  private CommandResult HandlePassword(string inputs)
   {
     var formInput = JsonNode.Parse(inputs)?.AsObject();
     var password = formInput?["MasterPassword"]?.GetValue<string>();
@@ -188,24 +411,12 @@ internal sealed partial class RepromptForm : FormContent
     if (string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();
 
-    var cooldown = RepromptPage.GetCooldownSecondsRemaining();
-    if (cooldown > 0)
-    {
-      SetError($"Too many failed attempts. Try again in {cooldown}s.");
-      return CommandResult.KeepOpen();
-    }
-
-    // Show a status while the synchronous CLI verify blocks SubmitForm so
-    // the user has feedback that the click registered.
     var verifyingStatus = new StatusMessage { Message = "Verifying master password...", State = MessageState.Info };
     ExtensionHost.ShowStatus(verifyingStatus, StatusContext.Page);
 
     bool verified;
     try
     {
-      // Run on the thread pool to keep GetResult() deadlock-safe regardless
-      // of the SDK caller's sync context. The CLI call is short and the user
-      // expects a brief pause after submitting their master password.
 #pragma warning disable VSTHRD002
       verified = Task.Run(() => _service.VerifyMasterPasswordAsync(password)).GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
@@ -213,7 +424,9 @@ internal sealed partial class RepromptForm : FormContent
     catch (Exception ex)
     {
       DebugLogService.Log("Reprompt", $"Verify exception: {ex.GetType().Name}: {ex.Message}");
-      SetError("Verification failed. Please try again.");
+      _state = AuthState.Failed;
+      _errorText = "Verification failed. Please try again.";
+      TemplateJson = BuildTemplate();
       return CommandResult.KeepOpen();
     }
     finally
@@ -225,21 +438,14 @@ internal sealed partial class RepromptForm : FormContent
     {
       RepromptPage.RecordFailure();
       var nextCooldown = RepromptPage.GetCooldownSecondsRemaining();
-      SetError(nextCooldown > 0
+      _state = AuthState.Failed;
+      _errorText = nextCooldown > 0
         ? $"Too many failed attempts. Try again in {nextCooldown}s."
-        : "Incorrect master password. Please try again.");
+        : "Incorrect master password. Please try again.";
+      TemplateJson = BuildTemplate();
       return CommandResult.KeepOpen();
     }
 
-    RepromptPage.RecordVerification(_itemId);
-    try { _innerAction(); }
-    catch (Exception ex)
-    {
-      DebugLogService.Log("Reprompt", $"Inner action exception: {ex.GetType().Name}: {ex.Message}");
-      SetError("Action failed after verification.");
-      return CommandResult.KeepOpen();
-    }
-
-    return CommandResult.ShowToast($"Copied {_actionLabel} to clipboard");
+    return RunInnerAction();
   }
 }
