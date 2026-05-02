@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.9.0...v1.9.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* search debounce and release pipeline immutable-release fixes ([#149](https://github.com/hoobio/command-palette-bitwarden/issues/149)) ([90f2bff](https://github.com/hoobio/command-palette-bitwarden/commit/90f2bff7170d645521306279fee0c4adc5f6b994))
+
 ## [1.9.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.8.0...v1.9.0) (2026-05-02)
 
 
