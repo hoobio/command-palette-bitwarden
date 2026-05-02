@@ -136,7 +136,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 return _currentItems;
             }
 
-            if (CaptureContext(force: true) && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            // Use the throttled capture (default 500ms) so repeated GetItems
+            // calls from the host don't trigger a fresh window enumeration
+            // every time. The first GetItems above already forces a refresh.
+            if (CaptureContext() && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
                 _currentItems = BuildListItems(Search(_currentSearchText));
             }
@@ -153,7 +156,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
     {
-        CaptureContext(force: true);
+        // Don't recapture foreground context here. The user is focused on the
+        // palette while typing, so the context can't have changed since the
+        // last GetItems call. CaptureContext does Win32 window enumeration and
+        // a UIA/COM round-trip per browser window, which adds visible lag to
+        // every keystroke.
         _currentSearchText = newSearch;
 
         if (_service.IsUnlocked)
