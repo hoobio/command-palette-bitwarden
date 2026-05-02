@@ -701,12 +701,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # release-please leaves the release as a draft; the REST endpoint
+          # /releases/tags/{tag} returns 404 for drafts (the tag isn't created
+          # until publish). `gh release view` lists drafts and matches by name,
+          # so we use it to read the current body and `gh release edit` to
+          # rewrite it. The draft flip-to-published happens in the next step.
           TAG="${{ needs.release-please.outputs.tag_name }}"
-          ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
-          BODY=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.body // ""')
+          BODY=$(gh release view "$TAG" --repo "${{ github.repository }}" --json body --jq '.body // ""')
           TRUST=$'\n\n---\n> ✅ WACK certified (x64, ARM64) · \U0001F512 [CodeQL scanned](https://github.com/${{ github.repository }}/actions/workflows/codeql.yml)'
-          jq -n --arg body "${BODY}${TRUST}" '{body: $body}' \
-            | gh api --method PATCH "repos/${{ github.repository }}/releases/$ID" --input -
+          gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${TRUST}"
 
       - name: Publish draft release
         uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v1.5.0
@@ -782,17 +785,31 @@ jobs:
           name: msi-ARM64
           path: release/msi-ARM64
 
-      - name: Create pre-release
+      # Create as a draft so action-gh-release can attach assets. On repos
+      # with "immutable releases" enabled, publishing a release locks its
+      # asset list, and softprops/action-gh-release publishes before
+      # uploading - so non-draft prereleases fail with "Cannot upload asset
+      # ... to an immutable release". Keeping it as a draft lets the upload
+      # complete; the next step flips it to a published prerelease.
+      - name: Create pre-release (draft)
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.version }}-pre.${{ github.run_number }}
           name: v${{ steps.version.outputs.version }}-pre.${{ github.run_number }}
           prerelease: true
+          draft: true
           make_latest: false
           body_path: /tmp/release_notes.txt
           files: |
             release/**/*.msix
             release/**/*.msi
+
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}-pre.${{ github.run_number }}
+        run: |
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --prerelease
 
       - name: Prune old pre-releases
         env:
