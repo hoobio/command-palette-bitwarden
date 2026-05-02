@@ -315,7 +315,8 @@ internal sealed class BitwardenCliService
           _sessionKey = stored;
           if (await VerifySessionAsync())
           {
-            Pages.RepromptPage.RecordVerification();
+            // Vault unlock no longer grants protected-item grace; that has to
+            // be earned per-item via RepromptForm.
             return SetStatus(VaultStatus.Unlocked);
           }
           DebugLogService.Log("Status", "Stored session verification failed, clearing");
@@ -1212,7 +1213,6 @@ internal sealed class BitwardenCliService
           if (IsCacheLoaded)
           {
             SetStatus(VaultStatus.Unlocked);
-            Pages.RepromptPage.RecordVerification();
             _ = Task.Run(async () =>
             {
               try { await RunCliAsync("sync", CliTimeoutMs, "Syncing complete."); DebugLogService.Log("Sync", "Background sync completed"); }

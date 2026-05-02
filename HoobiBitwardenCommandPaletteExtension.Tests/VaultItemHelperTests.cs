@@ -304,29 +304,42 @@ public class VaultItemHelperTests
   {
     RepromptPage.GracePeriodSeconds = 60;
     RepromptPage.ClearGracePeriod();
-    Assert.False(RepromptPage.IsWithinGracePeriod());
+    Assert.False(RepromptPage.IsWithinGracePeriod("item-a"));
 
-    RepromptPage.RecordVerification();
-    Assert.True(RepromptPage.IsWithinGracePeriod());
+    RepromptPage.RecordVerification("item-a");
+    Assert.True(RepromptPage.IsWithinGracePeriod("item-a"));
+  }
+
+  [Fact]
+  public void RepromptGracePeriod_IsScopedToVerifiedItem()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+
+    RepromptPage.RecordVerification("item-a");
+
+    Assert.True(RepromptPage.IsWithinGracePeriod("item-a"));
+    Assert.False(RepromptPage.IsWithinGracePeriod("item-b"));
+    RepromptPage.ClearGracePeriod();
   }
 
   [Fact]
   public void RepromptGracePeriod_ClearGracePeriod_ResetsState()
   {
     RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.RecordVerification();
-    Assert.True(RepromptPage.IsWithinGracePeriod());
+    RepromptPage.RecordVerification("item-a");
+    Assert.True(RepromptPage.IsWithinGracePeriod("item-a"));
 
     RepromptPage.ClearGracePeriod();
-    Assert.False(RepromptPage.IsWithinGracePeriod());
+    Assert.False(RepromptPage.IsWithinGracePeriod("item-a"));
   }
 
   [Fact]
   public void RepromptGracePeriod_ZeroSeconds_AlwaysFalse()
   {
     RepromptPage.GracePeriodSeconds = 0;
-    RepromptPage.RecordVerification();
-    Assert.False(RepromptPage.IsWithinGracePeriod());
+    RepromptPage.RecordVerification("item-a");
+    Assert.False(RepromptPage.IsWithinGracePeriod("item-a"));
     RepromptPage.GracePeriodSeconds = 60;
     RepromptPage.ClearGracePeriod();
   }
@@ -335,7 +348,7 @@ public class VaultItemHelperTests
   public void GetDefaultCommand_WithReprompt_GracePeriod_BypassesReprompt()
   {
     RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.RecordVerification();
+    RepromptPage.RecordVerification("test-1");
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -350,10 +363,30 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void GetDefaultCommand_GracePeriod_ScopedToItem_OtherItemStillProtected()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+    RepromptPage.RecordVerification("verified-item");
+
+    var svc = new BitwardenCliService();
+    var otherItem = new BitwardenItem
+    {
+      Id = "other-item",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var cmd = VaultItemHelper.GetDefaultCommand(otherItem, svc);
+    Assert.IsType<RepromptPage>(cmd);
+    RepromptPage.ClearGracePeriod();
+  }
+
+  [Fact]
   public void BuildContextItems_Login_Reprompt_GracePeriod_BypassesReprompt()
   {
     RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.RecordVerification();
+    RepromptPage.RecordVerification("test-login");
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -372,67 +405,17 @@ public class VaultItemHelperTests
   }
 
   [Fact]
-  public void RecordVerification_PersistsGraceFile()
+  public void RecordVerification_DoesNotPersistAcrossProcesses()
   {
     RepromptPage.GracePeriodSeconds = 60;
     RepromptPage.ClearGracePeriod();
 
-    RepromptPage.RecordVerification();
-
-    var graceFile = Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-      "HoobiBitwardenCommandPalette", "grace.json");
-    Assert.True(File.Exists(graceFile));
-    RepromptPage.ClearGracePeriod();
-  }
-
-  [Fact]
-  public void ClearGracePeriod_DeletesGraceFile()
-  {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.RecordVerification();
-
-    RepromptPage.ClearGracePeriod();
+    RepromptPage.RecordVerification("item-a");
 
     var graceFile = Path.Combine(
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
       "HoobiBitwardenCommandPalette", "grace.json");
     Assert.False(File.Exists(graceFile));
-  }
-
-  [Fact]
-  public void IsWithinGracePeriod_ReadsFromDisk_WhenInProcessCacheEmpty()
-  {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
-
-    // Write a fresh grace file directly (simulating a previous process)
-    var graceDir = Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-      "HoobiBitwardenCommandPalette");
-    Directory.CreateDirectory(graceDir);
-    File.WriteAllText(Path.Combine(graceDir, "grace.json"),
-      $"{{\"verified\":{DateTime.UtcNow.Ticks}}}");
-
-    Assert.True(RepromptPage.IsWithinGracePeriod());
-    RepromptPage.ClearGracePeriod();
-  }
-
-  [Fact]
-  public void IsWithinGracePeriod_ExpiredGraceFile_ReturnsFalse()
-  {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
-
-    // Write an expired grace file (2 minutes ago)
-    var graceDir = Path.Combine(
-      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-      "HoobiBitwardenCommandPalette");
-    Directory.CreateDirectory(graceDir);
-    File.WriteAllText(Path.Combine(graceDir, "grace.json"),
-      $"{{\"verified\":{DateTime.UtcNow.AddMinutes(-2).Ticks}}}");
-
-    Assert.False(RepromptPage.IsWithinGracePeriod());
     RepromptPage.ClearGracePeriod();
   }
 

@@ -32,8 +32,8 @@ internal static partial class VaultItemHelper
 
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null)
   {
-    if (item.Reprompt == 1 && service != null && !RepromptPage.IsWithinGracePeriod())
-      return new RepromptPage(service, BuildDefaultAction(item), "Open");
+    if (item.Reprompt == 1 && service != null && !RepromptPage.IsWithinGracePeriod(item.Id))
+      return new RepromptPage(service, item.Id, BuildDefaultAction(item), "Open");
 
     return Track(item.Id, item.Type switch
     {
@@ -492,8 +492,8 @@ internal static partial class VaultItemHelper
 
   private static ICommand CopyFieldCommand(string itemId, string text, string label, BitwardenCliService? reprompt, bool isSensitive = false)
   {
-    if (reprompt != null && !RepromptPage.IsWithinGracePeriod())
-      return new RepromptPage(reprompt, () => SecureClipboardService.CopySensitive(text), label);
+    if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
+      return new RepromptPage(reprompt, itemId, () => SecureClipboardService.CopySensitive(text), label);
     return Track(itemId, isSensitive
       ? CopySensitive(text, label)
       : CopyNonSensitive(text, label));
@@ -501,8 +501,8 @@ internal static partial class VaultItemHelper
 
   private static ICommand SensitiveCommand(string itemId, Action action, string label, BitwardenCliService? reprompt)
   {
-    if (reprompt != null && !RepromptPage.IsWithinGracePeriod())
-      return new RepromptPage(reprompt, action, label);
+    if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
+      return new RepromptPage(reprompt, itemId, action, label);
     return Track(itemId, new AnonymousCommand(action) { Name = $"Copy {label}", Result = CommandResult.ShowToast($"Copied {label} to clipboard") });
   }
 

@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
@@ -14,11 +14,10 @@ internal sealed partial class RepromptPage : ContentPage
 {
   internal static int GracePeriodSeconds { get; set; } = 60;
 
-  private static readonly string GraceFile = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "HoobiBitwardenCommandPalette", "grace.json");
-
-  private static long _lastVerifiedTs;
+  // Per-item grace timestamps (Stopwatch ticks). In-memory only — verification
+  // never persists across process restarts, and a verified item only grants
+  // grace for that specific item, not for the vault as a whole.
+  private static readonly ConcurrentDictionary<string, long> _verifiedItems = new();
   private static int _failureCount;
   private static DateTime _cooldownUntil;
   private const int MaxFailuresBeforeCooldown = 5;
@@ -26,49 +25,30 @@ internal sealed partial class RepromptPage : ContentPage
 
   internal static event Action? GraceStarted;
 
-  internal static bool IsWithinGracePeriod()
+  internal static bool IsWithinGracePeriod(string itemId)
   {
-    if (GracePeriodSeconds <= 0) return false;
-
-    var ts = Interlocked.Read(ref _lastVerifiedTs);
-    if (ts != 0 && Stopwatch.GetElapsedTime(ts).TotalSeconds < GracePeriodSeconds)
+    if (GracePeriodSeconds <= 0 || string.IsNullOrEmpty(itemId)) return false;
+    if (!_verifiedItems.TryGetValue(itemId, out var ts)) return false;
+    if (Stopwatch.GetElapsedTime(ts).TotalSeconds < GracePeriodSeconds)
       return true;
 
-    try
-    {
-      if (!File.Exists(GraceFile)) return false;
-      var json = File.ReadAllText(GraceFile);
-      if (JsonNode.Parse(json)?["verified"]?.GetValue<long>() is long utcTicks)
-      {
-        var elapsed = DateTime.UtcNow - new DateTime(utcTicks, DateTimeKind.Utc);
-        if (elapsed.TotalSeconds < GracePeriodSeconds)
-        {
-          Interlocked.CompareExchange(ref _lastVerifiedTs,
-            Stopwatch.GetTimestamp() - (long)(elapsed.TotalSeconds * Stopwatch.Frequency),
-            0);
-          return true;
-        }
-      }
-    }
-    catch { }
-
+    _verifiedItems.TryRemove(itemId, out _);
     return false;
   }
 
-  internal static void RecordVerification()
+  internal static void RecordVerification(string itemId)
   {
-    Interlocked.Exchange(ref _lastVerifiedTs, Stopwatch.GetTimestamp());
+    if (string.IsNullOrEmpty(itemId)) return;
+    _verifiedItems[itemId] = Stopwatch.GetTimestamp();
     _failureCount = 0;
-    PersistGrace();
     GraceStarted?.Invoke();
   }
 
   internal static void ClearGracePeriod()
   {
-    Interlocked.Exchange(ref _lastVerifiedTs, 0);
+    _verifiedItems.Clear();
     _failureCount = 0;
     _cooldownUntil = default;
-    try { File.Delete(GraceFile); } catch { }
   }
 
   internal static int GetCooldownSecondsRemaining()
@@ -84,24 +64,14 @@ internal sealed partial class RepromptPage : ContentPage
       _cooldownUntil = DateTime.UtcNow.AddSeconds(CooldownSeconds);
   }
 
-  private static void PersistGrace()
-  {
-    try
-    {
-      Directory.CreateDirectory(Path.GetDirectoryName(GraceFile)!);
-      File.WriteAllText(GraceFile, $"{{\"verified\":{DateTime.UtcNow.Ticks}}}");
-    }
-    catch { }
-  }
-
   private readonly RepromptForm _form;
 
-  public RepromptPage(BitwardenCliService service, Action innerAction, string actionLabel)
+  public RepromptPage(BitwardenCliService service, string itemId, Action innerAction, string actionLabel)
   {
     Name = "Verify Password";
     Title = "Master Password Required";
     Icon = new IconInfo("");
-    _form = new RepromptForm(service, innerAction, actionLabel);
+    _form = new RepromptForm(service, itemId, innerAction, actionLabel);
   }
 
   public override IContent[] GetContent() => [_form];
@@ -110,13 +80,15 @@ internal sealed partial class RepromptPage : ContentPage
 internal sealed partial class RepromptForm : FormContent
 {
   private readonly BitwardenCliService _service;
+  private readonly string _itemId;
   private readonly Action _innerAction;
   private readonly string _actionLabel;
   private string? _errorText;
 
-  public RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel)
+  public RepromptForm(BitwardenCliService service, string itemId, Action innerAction, string actionLabel)
   {
     _service = service;
+    _itemId = itemId;
     _innerAction = innerAction;
     _actionLabel = actionLabel;
     TemplateJson = BuildTemplate(null);
@@ -259,7 +231,7 @@ internal sealed partial class RepromptForm : FormContent
       return CommandResult.KeepOpen();
     }
 
-    RepromptPage.RecordVerification();
+    RepromptPage.RecordVerification(_itemId);
     try { _innerAction(); }
     catch (Exception ex)
     {
