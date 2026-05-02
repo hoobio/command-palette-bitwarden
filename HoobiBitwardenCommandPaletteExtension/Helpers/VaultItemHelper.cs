@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using Windows.System;
@@ -527,8 +528,14 @@ internal static partial class VaultItemHelper
 
     public override ICommandResult Invoke()
     {
-      AccessTracker.Record(_itemId);
-      return _inner.Invoke();
+      // Run the inner action first so the clipboard write and toast result
+      // are returned to the host before the (relatively slow) access-tracker
+      // file write + UI rebuild fires. Tracking is fire-and-forget on a
+      // worker thread to keep the keyboard-shortcut/context-menu path snappy.
+      var result = _inner.Invoke();
+      var id = _itemId;
+      _ = Task.Run(() => AccessTracker.Record(id));
+      return result;
     }
 
     private void OnInnerPropChanged(object sender, IPropChangedEventArgs args)
