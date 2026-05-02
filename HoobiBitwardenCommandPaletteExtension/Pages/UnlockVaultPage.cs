@@ -119,7 +119,9 @@ internal sealed partial class UnlockForm : FormContent
     if (action == "biometric")
     {
       _onBiometricUnlock?.Invoke();
-      return CommandResult.KeepOpen();
+      // Same behavior as the password path: the unlock runs asynchronously
+      // on the parent page (status + items refresh), so the form is done.
+      return CommandResult.GoBack();
     }
 
     var password = formInput?["MasterPassword"]?.GetValue<string>();

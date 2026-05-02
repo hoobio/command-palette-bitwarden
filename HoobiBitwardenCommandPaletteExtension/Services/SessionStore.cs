@@ -6,7 +6,17 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal static class SessionStore
 {
+  // MSIX scopes Win32 CredWrite/CredRead per package family name. Dev and
+  // Release builds have different identities (.Debug suffix vs not) so they
+  // can't see each other's credentials — and the saved credential from one
+  // looks like a stale orphan to the other. Use a different target name per
+  // build configuration so each owns its own slot, with no surprising
+  // cross-build behavior when switching between them.
+#if DEBUG
+  private const string TargetName = "BitwardenCommandPaletteExtension.Debug/default_sessionToken";
+#else
   private const string TargetName = "BitwardenCommandPaletteExtension/default_sessionToken";
+#endif
   private const int CredTypeGeneric = 1;
   private const int CredPersistLocalMachine = 2;
 

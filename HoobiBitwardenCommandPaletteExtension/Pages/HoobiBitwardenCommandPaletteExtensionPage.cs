@@ -35,8 +35,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private Timer? _syncTimer;
     private ListItem? _syncItem;
     private readonly Timer _iconRefreshTimer;
-    private int _repromptFailures;
-    private DateTime _repromptCooldownUntil;
     private StatusMessage? _lastBiometricStatus;
     private volatile bool _biometricClickFailed;
     private volatile bool _autoBiometricTriggered;
@@ -54,7 +52,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
         RepromptPage.GraceStarted += OnRepromptGraceStarted;
-        RepromptPage.VerificationRequested += OnVerificationRequested;
+        RepromptPage.BiometricRequested += OnRepromptBiometricRequested;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         var v = Windows.ApplicationModel.Package.Current.Id.Version;
@@ -139,7 +137,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 return _currentItems;
             }
 
-            if (CaptureContext(force: true) && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            // Use the throttled capture (default 500ms) so repeated GetItems
+            // calls from the host don't trigger a fresh window enumeration
+            // every time. The first GetItems above already forces a refresh.
+            if (CaptureContext() && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
                 _currentItems = BuildListItems(Search(_currentSearchText));
             }
@@ -156,7 +157,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
     {
-        CaptureContext(force: true);
+        // Don't recapture foreground context here. The user is focused on the
+        // palette while typing, so the context can't have changed since the
+        // last GetItems call. CaptureContext does Win32 window enumeration and
+        // a UIA/COM round-trip per browser window, which adds visible lag to
+        // every keystroke.
         _currentSearchText = newSearch;
 
         if (_service.IsUnlocked)
@@ -169,16 +174,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if ((_twoFactorRequired || _deviceVerificationRequired) && !_handlingAction)
         {
-            var code = newSearch.Trim();
-            if (code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _))
-            {
-                if (_deviceVerificationRequired)
-                    OnDeviceVerificationSubmitted(code);
-                else
-                    OnTwoFactorSubmitted(code);
-                return;
-            }
-
             _currentItems = BuildUnauthenticatedItems();
             RaiseItemsChanged();
             return;
@@ -341,10 +336,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_twoFactorRequired && _pendingEmail != null && _pendingPassword != null)
         {
             PlaceholderText = "Enter your 2FA code...";
-            var hint = new ListItem(new NoOpCommand())
+            var code = _currentSearchText.Trim();
+            var canSubmit = code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _);
+            ICommand command = canSubmit
+                ? new AnonymousCommand(() => OnTwoFactorSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
+                : new NoOpCommand();
+            var hint = new ListItem(command)
             {
-                Title = "Two-Factor Authentication Required",
-                Subtitle = _errorMessage ?? "Type your 6-digit code above and press Enter",
+                Title = canSubmit ? "Submit 2FA code" : "Two-Factor Authentication Required",
+                Subtitle = _errorMessage ?? (canSubmit
+                    ? "Press Enter to submit"
+                    : "Type your 6-8 digit code above and press Enter"),
                 Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
@@ -355,10 +357,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_deviceVerificationRequired && _pendingEmail != null && _pendingPassword != null)
         {
             PlaceholderText = "Enter device verification code...";
-            var hint = new ListItem(new NoOpCommand())
+            var code = _currentSearchText.Trim();
+            var canSubmit = code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _);
+            ICommand command = canSubmit
+                ? new AnonymousCommand(() => OnDeviceVerificationSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
+                : new NoOpCommand();
+            var hint = new ListItem(command)
             {
-                Title = "New Device Verification Required",
-                Subtitle = _errorMessage ?? "Enter the OTP code sent to your login email",
+                Title = canSubmit ? "Submit verification code" : "New Device Verification Required",
+                Subtitle = _errorMessage ?? (canSubmit
+                    ? "Press Enter to submit"
+                    : "Enter the OTP code sent to your login email"),
                 Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
@@ -586,7 +595,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
         RepromptPage.GraceStarted -= OnRepromptGraceStarted;
-        RepromptPage.VerificationRequested -= OnVerificationRequested;
+        RepromptPage.BiometricRequested -= OnRepromptBiometricRequested;
     }
 
     private void OnIconCached() => _iconRefreshTimer.Change(500, Timeout.Infinite);
@@ -665,53 +674,69 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
     }
 
-    private void OnVerificationRequested(VerificationRequest request)
+    // Biometric reprompt is handled here (not in RepromptForm) so the WinHello
+    // prompt can come to the foreground. With the form returned via GoBack
+    // first, the items list is showing -- the same UI state where the unlock
+    // biometric path already prompts visibly.
+    private void OnRepromptBiometricRequested(BiometricVerificationRequest request)
     {
-        if (DateTime.UtcNow < _repromptCooldownUntil)
-        {
-            var remaining = (int)(_repromptCooldownUntil - DateTime.UtcNow).TotalSeconds + 1;
-            var status = new StatusMessage { Message = $"Too many failed attempts. Try again in {remaining}s.", State = MessageState.Error };
-            ExtensionHost.ShowStatus(status, StatusContext.Page);
-            _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(status); } catch { } }, TaskScheduler.Default);
-            return;
-        }
-
-        _handlingAction = true;
-        IsLoading = true;
-        ShowLoadingStatus("Verifying master password...", "bw unlock");
+        DebugLogService.Log("Reprompt", $"Biometric verification requested for item {request.ItemId}");
 
         _ = Task.Run(async () =>
         {
+            var connectingStatus = new StatusMessage { Message = "Connecting to Bitwarden Desktop...", State = MessageState.Info };
+            ExtensionHost.ShowStatus(connectingStatus, StatusContext.Page);
+
+            (bool success, string? error) result;
             try
             {
-                var verified = await request.Service.VerifyMasterPasswordAsync(request.Password);
-                if (verified)
-                {
-                    _repromptFailures = 0;
-                    RepromptPage.RecordVerification();
-                    request.InnerAction();
-                    var status = new StatusMessage { Message = $"Copied {request.ActionLabel} to clipboard", State = MessageState.Success };
-                    ExtensionHost.ShowStatus(status, StatusContext.Page);
-                    _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(status); } catch { } }, TaskScheduler.Default);
-                }
-                else
-                {
-                    _repromptFailures++;
-                    if (_repromptFailures >= 5)
-                        _repromptCooldownUntil = DateTime.UtcNow.AddSeconds(30);
-                    var status = new StatusMessage { Message = "Incorrect master password", State = MessageState.Error };
-                    ExtensionHost.ShowStatus(status, StatusContext.Page);
-                    _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(status); } catch { } }, TaskScheduler.Default);
-                }
-
-                lock (_itemsLock)
-                    _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                result = await request.Service.VerifyWithBiometricsAsync(
+                    onStatus: msg => connectingStatus.Message = msg);
+            }
+            catch (Exception ex)
+            {
+                DebugLogService.Log("Reprompt", $"Biometric verify exception: {ex.GetType().Name}: {ex.Message}");
+                result = (false, ex.Message);
             }
             finally
             {
-                _handlingAction = false;
-                IsLoading = false;
+                try { ExtensionHost.HideStatus(connectingStatus); } catch { }
+            }
+
+            if (!result.success)
+            {
+                RepromptPage.RecordFailure();
+                var cooldown = RepromptPage.GetCooldownSecondsRemaining();
+                var msg = cooldown > 0
+                    ? $"Too many failed attempts. Try again in {cooldown}s."
+                    : result.error ?? "Biometric verification failed";
+                var failStatus = new StatusMessage { Message = msg, State = MessageState.Error };
+                ExtensionHost.ShowStatus(failStatus, StatusContext.Page);
+                _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(failStatus); } catch { } }, TaskScheduler.Default);
+                return;
+            }
+
+            RepromptPage.RecordVerification(request.ItemId);
+            try { request.InnerAction(); }
+            catch (Exception ex)
+            {
+                DebugLogService.Log("Reprompt", $"Inner action exception: {ex.GetType().Name}: {ex.Message}");
+                var errStatus = new StatusMessage { Message = "Action failed after verification.", State = MessageState.Error };
+                ExtensionHost.ShowStatus(errStatus, StatusContext.Page);
+                _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(errStatus); } catch { } }, TaskScheduler.Default);
+                return;
+            }
+
+            var successStatus = new StatusMessage { Message = $"Copied {request.ActionLabel} to clipboard", State = MessageState.Success };
+            ExtensionHost.ShowStatus(successStatus, StatusContext.Page);
+            _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(successStatus); } catch { } }, TaskScheduler.Default);
+
+            // Refresh items so any per-item grace tag updates immediately.
+            if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            {
+                lock (_itemsLock)
+                    _currentItems = BuildListItems(Search(_currentSearchText));
+                RaiseItemsChanged();
             }
         });
     }
@@ -837,11 +862,38 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
             return;
-        if (_settings?.UseDesktopIntegration.Value != true || _settings?.AutoBiometricUnlock.Value != true)
+
+        var biometricEnabled = _settings?.UseDesktopIntegration.Value == true
+                            && _settings?.AutoBiometricUnlock.Value == true;
+        var rememberSession = _settings?.RememberSession.Value == true;
+
+        if (!biometricEnabled && !rememberSession)
             return;
+
         _autoBiometricTriggered = true;
-        DebugLogService.Log("Page", "Auto-triggering biometric unlock");
-        OnBiometricUnlockRequested();
+
+        _ = Task.Run(async () =>
+        {
+            // Prefer silent restore from the saved credential so RememberSession
+            // actually saves the user a prompt after a soft auto-lock.
+            if (rememberSession && await _service.TryRestoreSessionAsync())
+            {
+                DebugLogService.Log("Page", "Restored session silently; biometric not needed");
+                return;
+            }
+
+            if (biometricEnabled)
+            {
+                DebugLogService.Log("Page", "Auto-triggering biometric unlock");
+                OnBiometricUnlockRequested();
+            }
+            else
+            {
+                // RememberSession was on but the stored credential was gone or
+                // invalid; reset so the manual unlock paths work.
+                _autoBiometricTriggered = false;
+            }
+        });
     }
 
     private void HideBiometricStatus()
@@ -874,6 +926,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 {
                     _biometricClickFailed = true;
                     _errorMessage = error ?? "Windows Hello unlock failed";
+                    // Settle flags before notifying the host (see comment on
+                    // the success path below).
+                    _handlingAction = false;
+                    IsLoading = false;
                     _currentItems = BuildLockedItems();
                     RaiseItemsChanged();
 
@@ -891,11 +947,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 HideBiometricStatus();
                 ShowLoadingStatus("Retrieving items from vault...", "bw list items");
                 await _service.RefreshCacheAsync();
+                // Clear handling/loading flags BEFORE raising ItemsChanged so
+                // the host's GetItems callback sees the fully-settled state.
+                // If we raise first and clear in `finally`, the host fetches
+                // items while _handlingAction/IsLoading are still true and
+                // keeps showing the loading placeholder until the next
+                // hide/show cycle forces a fresh GetItems.
+                _handlingAction = false;
+                IsLoading = false;
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }
             finally
             {
+                // Defensive: ensure flags are cleared on any exit path.
                 _handlingAction = false;
                 IsLoading = false;
             }

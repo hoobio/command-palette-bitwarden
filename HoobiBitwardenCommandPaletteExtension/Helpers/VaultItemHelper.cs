@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using Windows.System;
@@ -31,8 +32,8 @@ internal static partial class VaultItemHelper
 
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null)
   {
-    if (item.Reprompt == 1 && service != null && !RepromptPage.IsWithinGracePeriod())
-      return new RepromptPage(service, BuildDefaultAction(item), "Open");
+    if (item.Reprompt == 1 && service != null && !RepromptPage.IsWithinGracePeriod(item.Id))
+      return new RepromptPage(service, item.Id, BuildDefaultAction(item), "Open");
 
     return Track(item.Id, item.Type switch
     {
@@ -491,8 +492,8 @@ internal static partial class VaultItemHelper
 
   private static ICommand CopyFieldCommand(string itemId, string text, string label, BitwardenCliService? reprompt, bool isSensitive = false)
   {
-    if (reprompt != null && !RepromptPage.IsWithinGracePeriod())
-      return new RepromptPage(reprompt, () => SecureClipboardService.CopySensitive(text), label);
+    if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
+      return new RepromptPage(reprompt, itemId, () => SecureClipboardService.CopySensitive(text), label);
     return Track(itemId, isSensitive
       ? CopySensitive(text, label)
       : CopyNonSensitive(text, label));
@@ -500,8 +501,8 @@ internal static partial class VaultItemHelper
 
   private static ICommand SensitiveCommand(string itemId, Action action, string label, BitwardenCliService? reprompt)
   {
-    if (reprompt != null && !RepromptPage.IsWithinGracePeriod())
-      return new RepromptPage(reprompt, action, label);
+    if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
+      return new RepromptPage(reprompt, itemId, action, label);
     return Track(itemId, new AnonymousCommand(action) { Name = $"Copy {label}", Result = CommandResult.ShowToast($"Copied {label} to clipboard") });
   }
 
@@ -527,8 +528,14 @@ internal static partial class VaultItemHelper
 
     public override ICommandResult Invoke()
     {
-      AccessTracker.Record(_itemId);
-      return _inner.Invoke();
+      // Run the inner action first so the clipboard write and toast result
+      // are returned to the host before the (relatively slow) access-tracker
+      // file write + UI rebuild fires. Tracking is fire-and-forget on a
+      // worker thread to keep the keyboard-shortcut/context-menu path snappy.
+      var result = _inner.Invoke();
+      var id = _itemId;
+      _ = Task.Run(() => AccessTracker.Record(id));
+      return result;
     }
 
     private void OnInnerPropChanged(object sender, IPropChangedEventArgs args)

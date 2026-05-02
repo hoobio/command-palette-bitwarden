@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using System.Text.Json.Nodes;
@@ -9,110 +10,136 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Pages;
 
-internal record VerificationRequest(string Password, BitwardenCliService Service, Action InnerAction, string ActionLabel);
+internal record BiometricVerificationRequest(string ItemId, BitwardenCliService Service, Action InnerAction, string ActionLabel);
 
 internal sealed partial class RepromptPage : ContentPage
 {
   internal static int GracePeriodSeconds { get; set; } = 60;
 
-  private static readonly string GraceFile = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "HoobiBitwardenCommandPalette", "grace.json");
-
-  private static long _lastVerifiedTs;
+  // Per-item grace timestamps (Stopwatch ticks). In-memory only: verification
+  // never persists across process restarts, and a verified item only grants
+  // grace for that specific item, not for the vault as a whole.
+  private static readonly ConcurrentDictionary<string, long> _verifiedItems = new();
+  private static int _failureCount;
+  private static long _cooldownUntilTicks;
+  private const int MaxFailuresBeforeCooldown = 5;
+  private const int CooldownSeconds = 30;
 
   internal static event Action? GraceStarted;
-  internal static event Action<VerificationRequest>? VerificationRequested;
+  internal static event Action<BiometricVerificationRequest>? BiometricRequested;
 
-  internal static bool IsWithinGracePeriod()
+  internal static bool IsWithinGracePeriod(string itemId)
   {
-    if (GracePeriodSeconds <= 0) return false;
-
-    var ts = Interlocked.Read(ref _lastVerifiedTs);
-    if (ts != 0 && Stopwatch.GetElapsedTime(ts).TotalSeconds < GracePeriodSeconds)
+    if (GracePeriodSeconds <= 0 || string.IsNullOrEmpty(itemId)) return false;
+    if (!_verifiedItems.TryGetValue(itemId, out var ts)) return false;
+    if (Stopwatch.GetElapsedTime(ts).TotalSeconds < GracePeriodSeconds)
       return true;
 
-    try
-    {
-      if (!File.Exists(GraceFile)) return false;
-      var json = File.ReadAllText(GraceFile);
-      if (JsonNode.Parse(json)?["verified"]?.GetValue<long>() is long utcTicks)
-      {
-        var elapsed = DateTime.UtcNow - new DateTime(utcTicks, DateTimeKind.Utc);
-        if (elapsed.TotalSeconds < GracePeriodSeconds)
-        {
-          Interlocked.CompareExchange(ref _lastVerifiedTs,
-            Stopwatch.GetTimestamp() - (long)(elapsed.TotalSeconds * Stopwatch.Frequency),
-            0);
-          return true;
-        }
-      }
-    }
-    catch { }
-
+    _verifiedItems.TryRemove(itemId, out _);
     return false;
   }
 
-  internal static void RecordVerification()
+  internal static void RecordVerification(string itemId)
   {
-    Interlocked.Exchange(ref _lastVerifiedTs, Stopwatch.GetTimestamp());
-    PersistGrace();
+    if (string.IsNullOrEmpty(itemId)) return;
+    _verifiedItems[itemId] = Stopwatch.GetTimestamp();
+    Interlocked.Exchange(ref _failureCount, 0);
     GraceStarted?.Invoke();
   }
 
   internal static void ClearGracePeriod()
   {
-    Interlocked.Exchange(ref _lastVerifiedTs, 0);
-    try { File.Delete(GraceFile); } catch { }
+    _verifiedItems.Clear();
+    Interlocked.Exchange(ref _failureCount, 0);
+    Interlocked.Exchange(ref _cooldownUntilTicks, 0);
   }
 
-  private static void PersistGrace()
+  internal static int GetCooldownSecondsRemaining()
   {
-    try
-    {
-      Directory.CreateDirectory(Path.GetDirectoryName(GraceFile)!);
-      File.WriteAllText(GraceFile, $"{{\"verified\":{DateTime.UtcNow.Ticks}}}");
-    }
-    catch { }
+    var ticks = Interlocked.Read(ref _cooldownUntilTicks);
+    if (ticks == 0) return 0;
+    var remaining = (new DateTime(ticks, DateTimeKind.Utc) - DateTime.UtcNow).TotalSeconds;
+    return remaining > 0 ? (int)Math.Ceiling(remaining) : 0;
   }
 
-  internal static void RaiseVerificationRequested(VerificationRequest request) =>
-    VerificationRequested?.Invoke(request);
+  internal static void RecordFailure()
+  {
+    var failures = Interlocked.Increment(ref _failureCount);
+    if (failures >= MaxFailuresBeforeCooldown)
+      Interlocked.Exchange(ref _cooldownUntilTicks, DateTime.UtcNow.AddSeconds(CooldownSeconds).Ticks);
+  }
+
+  internal static void RaiseBiometricRequested(BiometricVerificationRequest request) =>
+    BiometricRequested?.Invoke(request);
 
   private readonly RepromptForm _form;
 
-  public RepromptPage(BitwardenCliService service, Action innerAction, string actionLabel)
+  public RepromptPage(BitwardenCliService service, string itemId, Action innerAction, string actionLabel)
   {
     Name = "Verify Password";
     Title = "Master Password Required";
-    Icon = new IconInfo("\uE72E");
-    _form = new RepromptForm(service, innerAction, actionLabel);
+    Icon = new IconInfo("");
+    _form = new RepromptForm(service, itemId, innerAction, actionLabel);
   }
 
   public override IContent[] GetContent() => [_form];
 }
 
-internal sealed partial class RepromptForm(BitwardenCliService service, Action innerAction, string actionLabel) : FormContent
+internal sealed partial class RepromptForm : FormContent
 {
-  private bool _showError;
+  private readonly BitwardenCliService _service;
+  private readonly string _itemId;
+  private readonly Action _innerAction;
+  private readonly string _actionLabel;
+  private string? _errorText;
 
-  internal void ShowError()
+  public RepromptForm(BitwardenCliService service, string itemId, Action innerAction, string actionLabel)
   {
-    _showError = true;
-    TemplateJson = BuildTemplate(showError: true);
+    _service = service;
+    _itemId = itemId;
+    _innerAction = innerAction;
+    _actionLabel = actionLabel;
+    TemplateJson = BuildTemplate();
   }
 
-  internal void ResetError()
+  private static string EscapeJsonString(string value)
   {
-    if (_showError)
+    var sb = new System.Text.StringBuilder(value.Length);
+    foreach (var c in value)
     {
-      _showError = false;
-      TemplateJson = BuildTemplate(showError: false);
+      switch (c)
+      {
+        case '"': sb.Append("\\\""); break;
+        case '\\': sb.Append("\\\\"); break;
+        case '\b': sb.Append("\\b"); break;
+        case '\f': sb.Append("\\f"); break;
+        case '\n': sb.Append("\\n"); break;
+        case '\r': sb.Append("\\r"); break;
+        case '\t': sb.Append("\\t"); break;
+        default:
+          if (c < 0x20)
+            sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"\\u{(int)c:x4}");
+          else
+            sb.Append(c);
+          break;
+      }
     }
+    return sb.ToString();
   }
 
-  private static string BuildTemplate(bool showError) =>
-    """
+  private string BuildTemplate()
+  {
+    var biometricEnabled = _service.Settings?.UseDesktopIntegration.Value == true;
+    var biometricAction = biometricEnabled ? """
+                    ,
+                    {
+                        "type": "Action.Submit",
+                        "title": "Use Windows Hello",
+                        "data": { "action": "biometric" }
+                    }
+""" : "";
+
+    return """
     {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type": "AdaptiveCard",
@@ -139,8 +166,6 @@ internal sealed partial class RepromptForm(BitwardenCliService service, Action i
                 "label": "Master Password",
                 "style": "Password",
                 "id": "MasterPassword",
-                "isRequired": true,
-                "errorMessage": "Master password is required",
                 "placeholder": "Enter your master password"
             },
             {
@@ -148,24 +173,59 @@ internal sealed partial class RepromptForm(BitwardenCliService service, Action i
                 "actions": [
                     {
                         "type": "Action.Submit",
-                        "title": "Verify & Continue"
+                        "title": "Verify & Continue",
+                        "data": { "action": "password" }
                     }
+""" + biometricAction + """
                 ]
             }
-    """ + (showError ? """
+""" + (_errorText != null ? $$"""
             ,{
                 "type": "TextBlock",
-                "text": "Incorrect master password. Please try again.",
+                "text": "{{EscapeJsonString(_errorText)}}",
                 "color": "Attention",
                 "wrap": true,
                 "size": "small"
             }
-    """ : "") + """
+""" : "") + """
         ]
     }
     """;
+  }
 
   public override ICommandResult SubmitForm(string inputs, string data)
+  {
+    var actionData = JsonNode.Parse(data)?.AsObject();
+    var action = actionData?["action"]?.GetValue<string>() ?? "password";
+
+    var cooldown = RepromptPage.GetCooldownSecondsRemaining();
+    if (cooldown > 0)
+    {
+      _errorText = $"Too many failed attempts. Try again in {cooldown}s.";
+      TemplateJson = BuildTemplate();
+      return CommandResult.KeepOpen();
+    }
+
+    return action switch
+    {
+      "biometric" => HandleBiometric(),
+      _ => HandlePassword(inputs),
+    };
+  }
+
+  // Biometric verify is handled by the parent page so the WinHello prompt
+  // can come to the foreground. Doing it inline on the form leaves the
+  // adaptive-card UI mounted, and the WinHello prompt z-orders behind it
+  // (the prompt only becomes visible after the palette closes, by which
+  // time it has already been treated as cancelled).
+  private CommandResult HandleBiometric()
+  {
+    RepromptPage.RaiseBiometricRequested(
+      new BiometricVerificationRequest(_itemId, _service, _innerAction, _actionLabel));
+    return CommandResult.GoBack();
+  }
+
+  private CommandResult HandlePassword(string inputs)
   {
     var formInput = JsonNode.Parse(inputs)?.AsObject();
     var password = formInput?["MasterPassword"]?.GetValue<string>();
@@ -173,9 +233,49 @@ internal sealed partial class RepromptForm(BitwardenCliService service, Action i
     if (string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();
 
-    RepromptPage.RaiseVerificationRequested(
-      new VerificationRequest(password, service, innerAction, actionLabel));
+    var verifyingStatus = new StatusMessage { Message = "Verifying master password...", State = MessageState.Info };
+    ExtensionHost.ShowStatus(verifyingStatus, StatusContext.Page);
 
-    return CommandResult.GoBack();
+    bool verified;
+    try
+    {
+#pragma warning disable VSTHRD002
+      verified = Task.Run(() => _service.VerifyMasterPasswordAsync(password)).GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Reprompt", $"Verify exception: {ex.GetType().Name}: {ex.Message}");
+      _errorText = "Verification failed. Please try again.";
+      TemplateJson = BuildTemplate();
+      return CommandResult.KeepOpen();
+    }
+    finally
+    {
+      try { ExtensionHost.HideStatus(verifyingStatus); } catch { }
+    }
+
+    if (!verified)
+    {
+      RepromptPage.RecordFailure();
+      var nextCooldown = RepromptPage.GetCooldownSecondsRemaining();
+      _errorText = nextCooldown > 0
+        ? $"Too many failed attempts. Try again in {nextCooldown}s."
+        : "Incorrect master password. Please try again.";
+      TemplateJson = BuildTemplate();
+      return CommandResult.KeepOpen();
+    }
+
+    RepromptPage.RecordVerification(_itemId);
+    try { _innerAction(); }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Reprompt", $"Inner action exception: {ex.GetType().Name}: {ex.Message}");
+      _errorText = "Action failed after verification.";
+      TemplateJson = BuildTemplate();
+      return CommandResult.KeepOpen();
+    }
+
+    return CommandResult.ShowToast($"Copied {_actionLabel} to clipboard");
   }
 }
