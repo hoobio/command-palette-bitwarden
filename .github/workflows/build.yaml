@@ -35,8 +35,8 @@ env:
   BOM_FILE: sbom.cdx.json
   # NOTE: GitHub Actions does not allow expressions in `uses:` refs, so the
   # pipeline-tools pin is repeated in each `uses:` line below. Bump in lockstep.
-  # Current pin: hoobio/pipeline-tools @ v1.5.0 (adds Backstage hierarchy bootstrap
-  # and channel routing for Dependency-Track SBOM uploads).
+  # Current pin: hoobio/pipeline-tools @ v1.6.0 (adds App-token auth to
+  # publish-github-release so `release: published` fires downstream workflows).
 
 jobs:
   detect-changes:
@@ -81,7 +81,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - id: rp
-        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v1.6.0
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
           app-private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
@@ -301,14 +301,14 @@ jobs:
 
       - name: Stamp Package.appxmanifest version
         if: env.SHOULD_BUILD == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v1.6.0
         with:
           manifest-path: ${{ env.APPXMANIFEST_PATH }}
           version: ${{ steps.version.outputs.version }}
 
       - name: Build MSIX
         if: env.SHOULD_BUILD == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.6.0
         with:
           project-path: ${{ env.PROJECT_PATH }}
           platform: ${{ matrix.platform }}
@@ -337,7 +337,7 @@ jobs:
 
       - name: Sign MSIX
         if: env.SHOULD_BUILD == 'true' && env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v1.6.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -439,7 +439,7 @@ jobs:
       # which (because the .wxs filename matches ASSET_BASE_NAME) is already the
       # final asset name we want for upload + release.
       - name: Build MSI
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v1.6.0
         with:
           wix-source-path: ${{ env.WIX_SOURCE_PATH }}
           version: ${{ steps.version.outputs.version }}
@@ -453,7 +453,7 @@ jobs:
 
       - name: Sign MSI
         if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v1.6.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -494,7 +494,7 @@ jobs:
           path: msix
 
       - name: Run WACK
-        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v1.6.0
         with:
           msix-path: msix
           report-path: wack-report-${{ matrix.platform }}.xml
@@ -586,7 +586,7 @@ jobs:
           Write-Host "Prune:          $prune"
 
       - name: Generate CycloneDX SBOM
-        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@v1.6.0
         with:
           solution-path: ${{ env.SOLUTION_PATH }}
           output-path: ${{ env.BOM_FILE }}
@@ -600,7 +600,7 @@ jobs:
 
       - name: Upload SBOM to Dependency-Track
         if: env.DT_HOST != '' && env.DT_API_KEY != ''
-        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v1.6.0
         with:
           bom-path: ${{ env.BOM_FILE }}
           upload-artifact: 'false'
@@ -711,11 +711,17 @@ jobs:
           TRUST=$'\n\n---\n> ✅ WACK certified (x64, ARM64) · \U0001F512 [CodeQL scanned](https://github.com/${{ github.repository }}/actions/workflows/codeql.yml)'
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${TRUST}"
 
+      # Publish via the release-please App (not GITHUB_TOKEN) so the resulting
+      # `release: published` event triggers the SBOM job again with
+      # channel=release. GITHUB_TOKEN-driven publishes are silently dropped
+      # from follow-up workflow triggers, which is why v1.9.1 only uploaded to
+      # Dependency-Track under channel=ci/main.
       - name: Publish draft release
-        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v1.5.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v1.6.0
         with:
           tag: ${{ needs.release-please.outputs.tag_name }}
-          github-token: ${{ github.token }}
+          app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
+          app-private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
 
   pre-release:
     name: Pre-Release
