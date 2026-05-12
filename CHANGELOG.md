@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.9.1...v1.9.2) (2026-05-12)
+
+
+### Bug Fixes
+
+* 🐛 re-assert session key after silent restore verify to unstick cache ([#153](https://github.com/hoobio/command-palette-bitwarden/issues/153)) ([68d69ef](https://github.com/hoobio/command-palette-bitwarden/commit/68d69ef42bb948826261b5f2daca97a497711dd5))
+* **ci:** publish release with App token to trigger downstream workflows ([#151](https://github.com/hoobio/command-palette-bitwarden/issues/151)) ([def7cc0](https://github.com/hoobio/command-palette-bitwarden/commit/def7cc07e5af75ed8337b98f1ac79f0451e20bce))
+
 ## [1.9.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.9.0...v1.9.1) (2026-05-02)
 
 
