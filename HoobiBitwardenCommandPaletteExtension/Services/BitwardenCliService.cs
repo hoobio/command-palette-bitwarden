@@ -483,6 +483,13 @@ internal sealed class BitwardenCliService
       return false;
     }
 
+    // bw sync can take seconds. A concurrent HandleInvalidSession (e.g. an
+    // in-flight warmup `bw list` returning "Vault is locked") may have nulled
+    // _sessionKey while we were verifying. The verify just proved the stored
+    // credential is valid, so re-assert it before SetStatus/RefreshCacheAsync,
+    // otherwise IsUnlocked stays false and the cache refresh silently skips,
+    // leaving the page stuck on "Retrieving items from vault...".
+    _sessionKey = stored;
     SetStatus(VaultStatus.Unlocked);
     StatusChanged?.Invoke();
     try { await RefreshCacheAsync(); }
@@ -1296,8 +1303,14 @@ internal sealed class BitwardenCliService
         }
         catch (InvalidOperationException)
         {
-          DebugLogService.Log("Warmup", "Fast session restore failed (session expired), clearing credential");
-          SessionStore.Clear();
+          // HandleInvalidSession already cleared in-memory state with the
+          // correct RememberSession policy (preserves the stored credential
+          // when RememberSession=True). Don't override that here: a single
+          // "Vault is locked" from the CLI can be transient, and clearing the
+          // credential races with TryRestoreSessionAsync (triggered by the
+          // status change) which has likely already loaded the same credential
+          // and is verifying it in parallel.
+          DebugLogService.Log("Warmup", "Fast session restore failed (session expired), falling back to status check");
         }
       }
     }
