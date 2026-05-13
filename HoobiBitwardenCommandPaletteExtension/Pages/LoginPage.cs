@@ -35,6 +35,13 @@ internal sealed partial class LoginForm : FormContent
   private string BuildTemplate()
   {
     var rememberChecked = _settings?.RememberSession.Value == true;
+    var customDataDir = BitwardenCliService.ResolveDataDirectory(
+        _settings?.CliDirectoryOverride.Value,
+        _settings?.UsePortableDataDirectory.Value ?? false,
+        _settings?.CliDataDirectoryOverride.Value);
+    var dataDirWarningBlock = customDataDir != null
+        ? BuildCustomDataDirWarningBlock(customDataDir)
+        : string.Empty;
     return $$"""
     {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -50,6 +57,7 @@ internal sealed partial class LoginForm : FormContent
                 "wrap": true,
                 "style": "heading"
             },
+            {{dataDirWarningBlock}}
             {
                 "type": "Input.Text",
                 "label": "Email",
@@ -152,5 +160,19 @@ internal sealed partial class LoginForm : FormContent
     if (string.IsNullOrEmpty(raw) || string.Equals(raw, NoMethodValue, StringComparison.OrdinalIgnoreCase))
       return null;
     return int.TryParse(raw, out var method) ? method : 0;
+  }
+
+  internal static string BuildCustomDataDirWarningBlock(string dataDir)
+  {
+    var escaped = System.Text.Json.JsonEncodedText.Encode(dataDir).ToString();
+    return $$"""
+            {
+                "type": "TextBlock",
+                "text": "⚠ Custom CLI data directory: {{escaped}}\n\nFor an interactive `bw login` (Duo Push, WebAuthn) to share session with this extension, set `BITWARDENCLI_APPDATA_DIR` in your terminal to that path before running `bw login`. Otherwise the CLI will write auth state to a different location and the extension won't see it.",
+                "wrap": true,
+                "color": "attention",
+                "size": "small"
+            },
+            """;
   }
 }
