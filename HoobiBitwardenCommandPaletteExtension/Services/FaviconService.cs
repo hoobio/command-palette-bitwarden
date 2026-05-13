@@ -22,13 +22,30 @@ internal static partial class FaviconService
     private static readonly TimeSpan PositiveTtl = TimeSpan.FromDays(7);
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromMinutes(5);
 
+    // Bounded concurrency: 8 in-flight downloads saturates a typical home/office
+    // connection without overwhelming the icons host or HttpClient's default per-host
+    // connection limit. Higher values get head-of-line-blocked by the server anyway
+    // and increase the chance of timeouts on a cold-vault load.
+    private const int MaxConcurrentDownloads = 8;
+
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
     // Cached icon: raster bytes streamed via COM. null = negative cache (host has no icon); missing key = not yet tried
     private static readonly ConcurrentDictionary<string, byte[]?> _memCache = new();
     private static readonly ConcurrentDictionary<string, IconInfo> _iconInfoCache = new();
-    private static readonly HashSet<string> _pending = [];
-    private static readonly Lock _pendingLock = new();
+
+    // Priority queue gated by a worker pool of size MaxConcurrentDownloads.
+    // Lower Priority value = downloaded sooner. Callers pass the item's index in the
+    // visible list so head-of-list icons load before tail. When a host is re-enqueued
+    // with a better priority (e.g. it now appears earlier in a new search result),
+    // the old heap entry stays put as a tombstone and is dropped at dequeue time
+    // because its priority no longer matches the current value in _queuedHosts.
+    private static readonly Lock _queueLock = new();
+    private static readonly PriorityQueue<string, int> _queue = new();
+    private static readonly Dictionary<string, (string IconUrl, int Priority)> _queuedHosts = [];
+    private static readonly HashSet<string> _inFlight = [];
+    private static readonly SemaphoreSlim _signal = new(0);
+    private static int _workersInitialized;
 
     /// <summary>Fired on the thread-pool when any new icon is successfully cached.</summary>
     public static event Action? IconCached;
@@ -41,13 +58,14 @@ internal static partial class FaviconService
     }
 
     /// <summary>
-    /// Returns an <see cref="IconInfo"/> for the given host.
-    /// Uses the disk cache when available; otherwise returns the fallback icon and
-    /// schedules a background download.
+    /// Returns an <see cref="IconInfo"/> for the given host. Uses the disk cache when
+    /// available; otherwise returns the fallback icon and schedules a bounded-concurrency
+    /// background download. <paramref name="priority"/> orders pending downloads
+    /// (lower = sooner). Default <see cref="int.MaxValue"/> sends the host to the tail.
     /// </summary>
-    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null)
+    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null, int priority = int.MaxValue)
     {
-        fallback ??= new IconInfo("\uE774");
+        fallback ??= new IconInfo("");
         if (_iconInfoCache.TryGetValue(host, out var cachedIcon))
             return cachedIcon;
         if (_memCache.TryGetValue(host, out var cachedBytes))
@@ -69,14 +87,70 @@ internal static partial class FaviconService
             return fallback;
         }
 
-        bool shouldFetch;
-        lock (_pendingLock)
-            shouldFetch = _pending.Add(host);
-
-        if (shouldFetch)
-            _ = Task.Run(() => DownloadAsync(host, iconUrl));
-
+        Enqueue(host, iconUrl, priority);
         return fallback;
+    }
+
+    private static void Enqueue(string host, string iconUrl, int priority)
+    {
+        bool needsSignal;
+        lock (_queueLock)
+        {
+            if (_inFlight.Contains(host)) return;
+
+            if (_queuedHosts.TryGetValue(host, out var existing) && priority >= existing.Priority)
+                return;
+
+            _queuedHosts[host] = (iconUrl, priority);
+            _queue.Enqueue(host, priority);
+            needsSignal = true;
+        }
+        if (needsSignal)
+        {
+            EnsureWorkersStarted();
+            _signal.Release();
+        }
+    }
+
+    private static void EnsureWorkersStarted()
+    {
+        if (Interlocked.Exchange(ref _workersInitialized, 1) != 0) return;
+        for (var i = 0; i < MaxConcurrentDownloads; i++)
+            _ = Task.Run(WorkerLoopAsync);
+    }
+
+    private static async Task WorkerLoopAsync()
+    {
+        while (true)
+        {
+            await _signal.WaitAsync().ConfigureAwait(false);
+            var job = TryDequeueJob();
+            if (job is null) continue;
+            var (host, iconUrl) = job.Value;
+            try { await DownloadAsync(host, iconUrl).ConfigureAwait(false); }
+            finally
+            {
+                lock (_queueLock) _inFlight.Remove(host);
+            }
+        }
+    }
+
+    private static (string Host, string IconUrl)? TryDequeueJob()
+    {
+        lock (_queueLock)
+        {
+            while (_queue.TryDequeue(out var host, out var priority))
+            {
+                if (_queuedHosts.TryGetValue(host, out var entry) && entry.Priority == priority)
+                {
+                    _queuedHosts.Remove(host);
+                    _inFlight.Add(host);
+                    return (host, entry.IconUrl);
+                }
+                // Stale entry from a priority bump; skip and try the next.
+            }
+            return null;
+        }
     }
 
     private static async Task DownloadAsync(string host, string iconUrl)
@@ -130,11 +204,6 @@ internal static partial class FaviconService
         {
             try { await NegCacheAsync(negPath, $"{iconUrl}\nException: {ex.GetType().Name}: {ex.Message}"); } catch { }
             _memCache[host] = null;
-        }
-        finally
-        {
-            lock (_pendingLock)
-                _pending.Remove(host);
         }
     }
 

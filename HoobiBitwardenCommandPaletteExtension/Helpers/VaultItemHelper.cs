@@ -18,12 +18,12 @@ namespace HoobiBitwardenCommandPaletteExtension.Helpers;
 
 internal static partial class VaultItemHelper
 {
-  internal static IconInfo GetIcon(BitwardenItem item, bool showWebsiteIcons = true) => item.Type switch
+  internal static IconInfo GetIcon(BitwardenItem item, bool showWebsiteIcons = true, int priority = int.MaxValue) => item.Type switch
   {
-    BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item) : new IconInfo("\uE774"),
+    BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item, priority) : new IconInfo("\uE774"),
     BitwardenItemType.SecureNote => new IconInfo("\uE70B"),
     BitwardenItemType.Card => showWebsiteIcons && item.CardBrand != null
-      ? GetCardBrandIcon(item.CardBrand)
+      ? GetCardBrandIcon(item.CardBrand, priority)
       : new IconInfo("\uE8C7"),
     BitwardenItemType.Identity => new IconInfo("\uE77B"),
     BitwardenItemType.SshKey => new IconInfo("\uE8D7"),
@@ -418,7 +418,7 @@ internal static partial class VaultItemHelper
     return $"{GetVaultBaseUrl()}/images/{slug}-{theme}.png";
   }
 
-  internal static IconInfo GetCardBrandIcon(string brand)
+  internal static IconInfo GetCardBrandIcon(string brand, int priority = int.MaxValue)
   {
     var isDark = IsDarkTheme();
     var slug = SanitizeBrandSlug(brand);
@@ -426,10 +426,11 @@ internal static partial class VaultItemHelper
     return FaviconService.GetOrQueue(
       $"card-brand:{slug}:{theme}",
       GetCardBrandImageUrl(brand, isDark),
-      new IconInfo("\uE8C7"));
+      new IconInfo("\uE8C7"),
+      priority);
   }
 
-  internal static IconInfo GetFaviconIcon(BitwardenItem item)
+  internal static IconInfo GetFaviconIcon(BitwardenItem item, int priority = int.MaxValue)
   {
     var host = item.FirstHost;
     if (string.IsNullOrEmpty(host))
@@ -448,7 +449,7 @@ internal static partial class VaultItemHelper
       iconBase = serverUrl + "/icons";
     var iconUrl = $"{iconBase}/{host}/icon.png";
 
-    return FaviconService.GetOrQueue(host, iconUrl);
+    return FaviconService.GetOrQueue(host, iconUrl, priority: priority);
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>

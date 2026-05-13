@@ -45,6 +45,16 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     // Spotlight): below the threshold of perceived input delay, but enough
     // to collapse a typed word into a single rebuild.
     private const int SearchDebounceMs = 100;
+    // IconCached can fire many times per second during a cold vault load (each of
+    // ~580 logins resolves to its own callback). A pure trailing-edge debounce
+    // would defer the rebuild until the entire load finishes, hiding progress for
+    // ~10-30s on a slow connection. Instead, coalesce within IconRefreshDebounceMs,
+    // but force a rebuild every IconRefreshMaxWaitMs so the user sees icons appear
+    // incrementally during a long fetch run.
+    private const int IconRefreshDebounceMs = 500;
+    private const int IconRefreshMaxWaitMs = 2000;
+    private DateTime _iconRefreshFirstQueuedAt;
+    private readonly Lock _iconRefreshLock = new();
     private StatusMessage? _lastBiometricStatus;
     private volatile bool _biometricClickFailed;
     private volatile bool _autoBiometricTriggered;
@@ -582,6 +592,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
         else
         {
+            // Item index is passed to FaviconService as the download priority so the
+            // first items in the visible list fetch their icons before the tail. The
+            // command palette host renders results in this exact order.
+            var iconPriority = 0;
             foreach (var item in items)
             {
                 var allowContextTag = showContextTag;
@@ -594,7 +608,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 // When capContextTags is true, ContextScore was already evaluated above — pass context: null
                 // and showContextTag: allowContextTag to avoid a redundant ContextScore call in BuildTags/BuildBaseTags.
                 var contextForTags = capContextTags ? null : _context;
-                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags);
+                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, iconPriority++);
                 list.Add(listItem);
                 if (totpTagStyle == "live" && item.HasTotp)
                 {
@@ -625,13 +639,13 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return list.ToArray();
     }
 
-    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null)
+    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null, int iconPriority = int.MaxValue)
     {
         var listItem = new ListItem(VaultItemHelper.GetDefaultCommand(item, _service))
         {
             Title = item.Name,
             Subtitle = item.Subtitle,
-            Icon = VaultItemHelper.GetIcon(item, showWebsiteIcons),
+            Icon = VaultItemHelper.GetIcon(item, showWebsiteIcons, iconPriority),
             MoreCommands = VaultItemHelper.BuildContextItems(item, _service),
         };
 
@@ -660,10 +674,23 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RepromptPage.BiometricRequested -= OnRepromptBiometricRequested;
     }
 
-    private void OnIconCached() => _iconRefreshTimer.Change(500, Timeout.Infinite);
+    private void OnIconCached()
+    {
+        lock (_iconRefreshLock)
+        {
+            if (_iconRefreshFirstQueuedAt == default)
+                _iconRefreshFirstQueuedAt = DateTime.UtcNow;
+            var elapsedMs = (int)(DateTime.UtcNow - _iconRefreshFirstQueuedAt).TotalMilliseconds;
+            var dueIn = Math.Max(0, Math.Min(IconRefreshDebounceMs, IconRefreshMaxWaitMs - elapsedMs));
+            _iconRefreshTimer.Change(dueIn, Timeout.Infinite);
+        }
+    }
 
     private void OnIconRefreshTick(object? _)
     {
+        lock (_iconRefreshLock)
+            _iconRefreshFirstQueuedAt = default;
+
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
         _currentItems = BuildListItems(Search(_currentSearchText));
