@@ -571,6 +571,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
         var showProtectedTag = _settings?.ShowProtectedTag.Value != false;
         var showWebsiteIcons = _settings?.ShowWebsiteIcons.Value != false;
+        var organizationTagStyle = _settings?.OrganizationTagStyle.Value ?? "name";
         var totpTracked = new List<(ListItem, BitwardenItem, Tag[])>();
 
         var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
@@ -608,11 +609,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 // When capContextTags is true, ContextScore was already evaluated above — pass context: null
                 // and showContextTag: allowContextTag to avoid a redundant ContextScore call in BuildTags/BuildBaseTags.
                 var contextForTags = capContextTags ? null : _context;
-                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, iconPriority++);
+                var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
+                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, iconPriority++, organizationName, organizationTagStyle);
                 list.Add(listItem);
                 if (totpTagStyle == "live" && item.HasTotp)
                 {
-                    var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag);
+                    var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
                     totpTracked.Add((listItem, item, baseTags));
                 }
             }
@@ -639,7 +641,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return list.ToArray();
     }
 
-    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null, int iconPriority = int.MaxValue)
+    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null, int iconPriority = int.MaxValue, string? organizationName = null, string organizationTagStyle = "off")
     {
         var listItem = new ListItem(VaultItemHelper.GetDefaultCommand(item, _service))
         {
@@ -649,7 +651,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             MoreCommands = VaultItemHelper.BuildContextItems(item, _service),
         };
 
-        var tags = VaultItemHelper.BuildTags(item, showWatchtower, context, showContextTag, totpTagStyle, showPasskeyTag, showProtectedTag);
+        var tags = VaultItemHelper.BuildTags(item, showWatchtower, context, showContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
         if (tags.Length > 0)
             listItem.Tags = tags;
 

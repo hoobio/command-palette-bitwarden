@@ -474,4 +474,114 @@ public class VaultItemHelperTests
     for (int i = 0; i < baseTags.Length; i++)
       Assert.Equal(baseTags[i].Text, fullTags[i].Text);
   }
+
+  [Fact]
+  public void BuildOrganizationTag_OffMode_ReturnsNull()
+  {
+    var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login, OrganizationId = "org-1" };
+    Assert.Null(VaultItemHelper.BuildOrganizationTag(item, "Acme Corp", "off"));
+  }
+
+  [Fact]
+  public void BuildOrganizationTag_NoOrgId_ReturnsNull()
+  {
+    var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login };
+    Assert.Null(VaultItemHelper.BuildOrganizationTag(item, "Acme Corp", "icon"));
+  }
+
+  [Fact]
+  public void BuildOrganizationTag_NoName_ReturnsNull()
+  {
+    var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login, OrganizationId = "org-1" };
+    Assert.Null(VaultItemHelper.BuildOrganizationTag(item, null, "icon"));
+    Assert.Null(VaultItemHelper.BuildOrganizationTag(item, "", "icon"));
+  }
+
+  [Theory]
+  [InlineData("Nintex", "N")]
+  [InlineData("Acme", "A")]
+  [InlineData("test", "T")]
+  [InlineData("Test Organization", "TO")]
+  [InlineData("Bitwarden Engineering Team", "BET")]
+  [InlineData("A B C D E", "ABC")]
+  [InlineData("  Spaced  Out  ", "SO")]
+  public void GetOrganizationInitials_Cases(string name, string expected)
+  {
+    Assert.Equal(expected, VaultItemHelper.GetOrganizationInitials(name));
+  }
+
+  [Fact]
+  public void BuildOrganizationTag_InitialsMode_SingleWord_FirstLetter()
+  {
+    var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login, OrganizationId = "org-1" };
+    var tag = VaultItemHelper.BuildOrganizationTag(item, "Nintex", "initials");
+    Assert.NotNull(tag);
+    Assert.Equal("N", tag!.Text);
+    Assert.Equal("Nintex", tag.ToolTip);
+  }
+
+  [Fact]
+  public void BuildOrganizationTag_InitialsMode_MultiWord_Initials()
+  {
+    var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login, OrganizationId = "org-1" };
+    var tag = VaultItemHelper.BuildOrganizationTag(item, "Test Organization", "initials");
+    Assert.NotNull(tag);
+    Assert.Equal("TO", tag!.Text);
+    Assert.Equal("Test Organization", tag.ToolTip);
+  }
+
+  [Fact]
+  public void BuildOrganizationTag_NameMode_ShortName_NotTruncated()
+  {
+    var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login, OrganizationId = "org-1" };
+    var tag = VaultItemHelper.BuildOrganizationTag(item, "Acme Corp", "name");
+    Assert.NotNull(tag);
+    Assert.Equal("Acme Corp", tag!.Text);
+    Assert.Equal("Acme Corp", tag.ToolTip);
+  }
+
+  [Fact]
+  public void BuildOrganizationTag_NameMode_LongName_TruncatedWithTooltip()
+  {
+    var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login, OrganizationId = "org-1" };
+    var full = "Some Very Long Organisation Name Indeed";
+    var tag = VaultItemHelper.BuildOrganizationTag(item, full, "name");
+    Assert.NotNull(tag);
+    Assert.Equal(21, tag!.Text.Length);
+    Assert.EndsWith("…", tag.Text, StringComparison.Ordinal);
+    Assert.Equal(full, tag.ToolTip);
+  }
+
+  [Fact]
+  public void GetOrganizationColor_SameId_SameColor()
+  {
+    var a = VaultItemHelper.GetOrganizationColor("d3aaa1f4-1234-4abc-9876-fedcba987654");
+    var b = VaultItemHelper.GetOrganizationColor("d3aaa1f4-1234-4abc-9876-fedcba987654");
+    Assert.Equal(a.Color.R, b.Color.R);
+    Assert.Equal(a.Color.G, b.Color.G);
+    Assert.Equal(a.Color.B, b.Color.B);
+  }
+
+  [Fact]
+  public void GetOrganizationColor_DifferentIds_SpreadAcrossPalette()
+  {
+    var ids = new[]
+    {
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002",
+      "00000000-0000-0000-0000-000000000003",
+      "00000000-0000-0000-0000-000000000004",
+      "00000000-0000-0000-0000-000000000005",
+      "00000000-0000-0000-0000-000000000006",
+      "00000000-0000-0000-0000-000000000007",
+      "00000000-0000-0000-0000-000000000008",
+    };
+    var distinctColors = ids
+      .Select(VaultItemHelper.GetOrganizationColor)
+      .Select(c => (c.Color.R, c.Color.G, c.Color.B))
+      .Distinct()
+      .Count();
+    // 8 distinct GUIDs should hit at least 3 distinct palette entries (loose lower bound).
+    Assert.True(distinctColors >= 3, $"Expected colour spread, got {distinctColors} distinct colours");
+  }
 }

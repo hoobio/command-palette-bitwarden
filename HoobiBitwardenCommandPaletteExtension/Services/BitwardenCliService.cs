@@ -53,6 +53,7 @@ internal sealed class BitwardenCliService
 
   private VaultStatus? _lastStatus;
   private Dictionary<string, string> _folders = [];
+  private Dictionary<string, string> _organizations = [];
 
   private Timer? _autoLockTimer;
   private TimeSpan _autoLockTimeout;
@@ -126,6 +127,11 @@ internal sealed class BitwardenCliService
     get { lock (_cacheLock) return _folders; }
   }
 
+  internal IReadOnlyDictionary<string, string> Organizations
+  {
+    get { lock (_cacheLock) return _organizations; }
+  }
+
   public event Action? CacheUpdated;
   public event Action? StatusChanged;
   public event Action? WarmupCompleted;
@@ -155,9 +161,9 @@ internal sealed class BitwardenCliService
     }
   }
 
-  internal void LoadTestData(List<BitwardenItem> items, Dictionary<string, string> folders)
+  internal void LoadTestData(List<BitwardenItem> items, Dictionary<string, string> folders, Dictionary<string, string>? organizations = null)
   {
-    lock (_cacheLock) { _cache = items; _folders = folders; _cacheLoaded = true; }
+    lock (_cacheLock) { _cache = items; _folders = folders; _organizations = organizations ?? []; _cacheLoaded = true; }
   }
 
   private void ApplyAutoLockSetting()
@@ -1068,6 +1074,13 @@ internal sealed class BitwardenCliService
       return _folders.GetValueOrDefault(folderId);
   }
 
+  internal string? GetOrganizationName(string? organizationId)
+  {
+    if (organizationId == null) return null;
+    lock (_cacheLock)
+      return _organizations.GetValueOrDefault(organizationId);
+  }
+
   private static int ContextBoost(BitwardenItem item, ForegroundContext? context)
   {
     if (context == null)
@@ -1086,24 +1099,23 @@ internal sealed class BitwardenCliService
       return (filters, query.Trim());
 
     var remaining = new System.Text.StringBuilder();
-    foreach (var token in query.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+    foreach (var token in TokenizeRespectingQuotes(query))
     {
       var colonIdx = token.IndexOf(':');
-      if (colonIdx > 0 && colonIdx < token.Length - 1)
+      if (colonIdx > 0)
       {
         var key = token[..colonIdx].ToLowerInvariant();
-        var value = token[(colonIdx + 1)..];
+        var value = colonIdx < token.Length - 1 ? token[(colonIdx + 1)..] : "";
         if (IsKnownFilter(key))
         {
           filters.Add((key, value));
           continue;
         }
-      }
-
-      if (token.StartsWith("has:", StringComparison.OrdinalIgnoreCase) && token.Length > 4)
-      {
-        filters.Add(("has", token[4..].ToLowerInvariant()));
-        continue;
+        if (key == "has")
+        {
+          filters.Add(("has", value.ToLowerInvariant()));
+          continue;
+        }
       }
 
       if (remaining.Length > 0) remaining.Append(' ');
@@ -1114,7 +1126,58 @@ internal sealed class BitwardenCliService
     return (filters, text);
   }
 
+  internal static IEnumerable<string> TokenizeRespectingQuotes(string query)
+  {
+    var buffer = new System.Text.StringBuilder();
+    var quoteChar = '\0';
+    foreach (var c in query)
+    {
+      if (quoteChar != '\0')
+      {
+        if (c == quoteChar) quoteChar = '\0';
+        else buffer.Append(c);
+      }
+      else if (c == '"' || c == '\'')
+      {
+        quoteChar = c;
+      }
+      else if (c == ' ')
+      {
+        if (buffer.Length > 0)
+        {
+          yield return buffer.ToString();
+          buffer.Clear();
+        }
+      }
+      else
+      {
+        buffer.Append(c);
+      }
+    }
+    if (buffer.Length > 0)
+      yield return buffer.ToString();
+  }
+
   internal static bool IsKnownFilter(string key) => key is "folder" or "url" or "host" or "type" or "org" or "is";
+
+  internal IEnumerable<BitwardenItem> ApplyOrgFilter(IEnumerable<BitwardenItem> items, string value)
+  {
+    DebugLogService.Log("Filter", $"ApplyOrgFilter: value='{value}', orgs cached={Organizations.Count}");
+    var matches = 0;
+    foreach (var i in items)
+    {
+      if (i.OrganizationId == null) continue;
+      var name = GetOrganizationName(i.OrganizationId);
+      var matched = (name != null && name.Contains(value, StringComparison.OrdinalIgnoreCase))
+        || i.OrganizationId.Contains(value, StringComparison.OrdinalIgnoreCase);
+      if (matched)
+      {
+        matches++;
+        yield return i;
+      }
+    }
+    DebugLogService.Log("Filter", $"ApplyOrgFilter: returned {matches} items for value='{value}'");
+  }
 
   internal IEnumerable<BitwardenItem> ApplyFilter(IEnumerable<BitwardenItem> items, (string Key, string Value) filter) => filter.Key switch
   {
@@ -1127,7 +1190,7 @@ internal sealed class BitwardenCliService
         i.Type == BitwardenItemType.Login && i.Uris.Any(u => u.Uri.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))),
     "type" => items.Where(i => i.Type.ToString().Equals(filter.Value, StringComparison.OrdinalIgnoreCase)
         || ((int)i.Type).ToString(System.Globalization.CultureInfo.InvariantCulture) == filter.Value),
-    "org" => items.Where(i => i.OrganizationId != null && i.OrganizationId.Contains(filter.Value, StringComparison.OrdinalIgnoreCase)),
+    "org" => ApplyOrgFilter(items, filter.Value),
     "has" => filter.Value switch
     {
       "totp" or "otp" or "2fa" or "mfa" => items.Where(i => i.HasTotp),
@@ -1186,14 +1249,17 @@ internal sealed class BitwardenCliService
     {
       var foldersTask = RunCliAsync("list folders");
       var itemsTask = RunCliAsync("list items");
-      await Task.WhenAll(foldersTask, itemsTask);
+      var organizationsTask = RunCliAsync("list organizations");
+      await Task.WhenAll(foldersTask, itemsTask, organizationsTask);
 
       var folders = ParseFolders(await foldersTask);
       var items = ParseItems(await itemsTask);
-      DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders");
+      var organizations = ParseOrganizations(await organizationsTask);
+      DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations");
       lock (_cacheLock)
       {
         _folders = folders;
+        _organizations = organizations;
         _cache = items;
         _cacheLoaded = true;
         _lastRefresh = DateTime.UtcNow;
@@ -1767,6 +1833,29 @@ internal sealed class BitwardenCliService
     catch (Exception ex)
     {
       DebugLogService.Log("Cache", $"ParseFolders failed: {ex.GetType().Name}: {ex.Message}");
+    }
+    return result;
+  }
+
+  internal static Dictionary<string, string> ParseOrganizations(string json)
+  {
+    var result = new Dictionary<string, string>(StringComparer.Ordinal);
+    try
+    {
+      var array = JsonNode.Parse(json)?.AsArray();
+      if (array == null) return result;
+
+      foreach (var node in array)
+      {
+        var id = node?["id"]?.GetValue<string>();
+        var name = node?["name"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name))
+          result[id] = name;
+      }
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Cache", $"ParseOrganizations failed: {ex.GetType().Name}: {ex.Message}");
     }
     return result;
   }

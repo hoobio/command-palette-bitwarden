@@ -78,6 +78,15 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Options** | Off, Static (show 2FA badge only), Live (show live code + countdown) |
 | **Description** | Controls how TOTP-enabled vault items are tagged. **Off** hides the tag entirely, **Static** shows a "2FA" badge, and **Live** displays the current code with a countdown timer that updates every second. |
 
+### Organization Tag Style
+
+| | |
+|---|---|
+| **Type** | Choice (dropdown) |
+| **Default** | Name |
+| **Options** | Initials (compact 1-3 char badge), Name (full organization name), Off |
+| **Description** | Controls how items belonging to a Bitwarden organization are tagged. **Initials** shows a compact avatar-style badge (single-word orgs get one letter, e.g. `Nintex` → `N`; multi-word orgs get up to three initials, e.g. `Test Organization` → `TO`). **Name** shows the organization name on the tag (truncated to 20 characters). **Off** hides the tag entirely. Each organization gets a stable, deterministic colour from a pastel palette, so two items from the same organization always render in the same colour. |
+
 ### Context Items Limit
 
 | | |

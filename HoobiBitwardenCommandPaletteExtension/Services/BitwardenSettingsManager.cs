@@ -89,6 +89,16 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             new("Live (show live code + countdown)", "live"),
         ]);
 
+    public ChoiceSetSetting OrganizationTagStyle { get; } = new(
+        "organizationTagStyle",
+        "Organization Tag Style",
+        "Display an organization tag on vault items owned by a Bitwarden organization. Each organization gets a stable colour, deterministic from the organization ID",
+        [
+            new("Initials (compact 1-3 char badge)", "initials"),
+            new("Name (full organization name)", "name"),
+            new("Off", "off"),
+        ]);
+
     public ChoiceSetSetting AutoLockTimeout { get; } = new(
         "autoLockTimeout",
         "Auto-Lock Timeout",
@@ -186,6 +196,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         FilePath = settingsFilePath ?? Path.Combine(SettingsDir, "settings.json");
         ContextItemLimit.Value = "3";
         TotpTagStyle.Value = "static";
+        OrganizationTagStyle.Value = "name";
         BackgroundRefresh.Value = "5";
         RepromptGracePeriod.Value = "60";
         Settings.Add(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
@@ -201,6 +212,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         Settings.Add(ShowProtectedTag);
         Settings.Add(ShowPasskeyTag);
         Settings.Add(TotpTagStyle);
+        Settings.Add(OrganizationTagStyle);
         Settings.Add(BackgroundRefresh);
 
         Settings.Add(new SectionHeaderSetting("_section_context", "Context Awareness"));
@@ -290,6 +302,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (ShowProtectedTag.Key, (object?)ShowProtectedTag.Value);
         yield return (ShowPasskeyTag.Key, ShowPasskeyTag.Value);
         yield return (TotpTagStyle.Key, TotpTagStyle.Value);
+        yield return (OrganizationTagStyle.Key, OrganizationTagStyle.Value);
         yield return (BackgroundRefresh.Key, BackgroundRefresh.Value);
         yield return (ContextAwareness.Key, ContextAwareness.Value);
         yield return (ShowContextTag.Key, ShowContextTag.Value);
