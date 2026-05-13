@@ -358,23 +358,22 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         if (_twoFactorRequired && _pendingEmail != null && _pendingPassword != null)
         {
-            PlaceholderText = "Enter your 2FA code...";
+            var (placeholder, typedNoun, emptyHint, validator) = DescribeTwoFactorMethod(_pendingTwoFactorMethod);
+            PlaceholderText = placeholder;
             var code = _currentSearchText.Trim();
-            var canSubmit = code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _);
+            var canSubmit = validator(code);
             ICommand command = canSubmit
                 ? new AnonymousCommand(() => OnTwoFactorSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
                 : new NoOpCommand();
             var hint = new ListItem(command)
             {
-                Title = canSubmit ? "Submit 2FA code" : "Two-Factor Authentication Required",
-                Subtitle = _errorMessage ?? (canSubmit
-                    ? "Press Enter to submit"
-                    : "Type your 6-8 digit code above and press Enter"),
+                Title = canSubmit ? $"Submit {typedNoun}" : "Two-Factor Authentication Required",
+                Subtitle = _errorMessage ?? (canSubmit ? "Press Enter to submit" : emptyHint),
                 Icon = new IconInfo("\uE8D7"),
             };
             if (_errorMessage != null)
                 hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return WithDebugLog([hint]);
+            return WithDebugLog([hint, BuildBackToLoginItem()]);
         }
 
         if (_deviceVerificationRequired && _pendingEmail != null && _pendingPassword != null)
@@ -395,7 +394,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             };
             if (_errorMessage != null)
                 hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return WithDebugLog([hint]);
+            return WithDebugLog([hint, BuildBackToLoginItem()]);
         }
 
         PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
@@ -419,6 +418,45 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         BuildSetServerItem(),
         BuildLogoutItem(),
     ]);
+
+    internal static (string Placeholder, string TypedNoun, string EmptyHint, Func<string, bool> Validator) DescribeTwoFactorMethod(int? method) => method switch
+    {
+        0 => ("Enter your authenticator code...", "authenticator code", "Type the 6-digit code from your authenticator app", IsNumericCode),
+        1 => ("Enter the code sent to your email...", "email code", "Check your inbox for the code Bitwarden just sent", IsNumericCode),
+        3 => ("Touch your YubiKey...", "YubiKey OTP", "Touch your YubiKey to insert its one-time code", IsYubiKeyOtp),
+        _ => ("Enter your 2FA code...", "2FA code", "Type your 6-8 digit code above and press Enter", IsNumericCode),
+    };
+
+    private static bool IsNumericCode(string code) =>
+        code.Length >= 6 && code.Length <= 8 && long.TryParse(code, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _);
+
+    private static bool IsYubiKeyOtp(string code) =>
+        code.Length >= 32 && code.Length <= 64 && code.All(c => char.IsLetterOrDigit(c));
+
+    private ListItem BuildBackToLoginItem() => new(new AnonymousCommand(OnBackToLoginRequested)
+    {
+        Name = "Back",
+        Result = CommandResult.KeepOpen(),
+    })
+    {
+        Title = "Back to login",
+        Subtitle = "Pick a different 2FA method or re-enter your credentials",
+        Icon = new IconInfo(""),
+    };
+
+    private void OnBackToLoginRequested()
+    {
+        DebugLogService.Log("Action", "User returned to login screen from 2FA prompt");
+        ClearSearchText();
+        _twoFactorRequired = false;
+        _deviceVerificationRequired = false;
+        _pendingEmail = null;
+        _pendingPassword = null;
+        _pendingTwoFactorMethod = null;
+        _errorMessage = null;
+        _currentItems = BuildUnauthenticatedItems();
+        RaiseItemsChanged();
+    }
 
     private ListItem BuildUnlockItem()
     {
