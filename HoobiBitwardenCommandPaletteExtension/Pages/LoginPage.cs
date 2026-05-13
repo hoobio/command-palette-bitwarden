@@ -83,15 +83,14 @@ internal sealed partial class LoginForm : FormContent
                 "value": "0",
                 "style": "compact",
                 "choices": [
-                    { "title": "Authenticator app (TOTP)", "value": "0" },
-                    { "title": "Email", "value": "1" },
+                    { "title": "Authenticator app", "value": "0" },
                     { "title": "YubiKey OTP", "value": "3" },
-                    { "title": "None (let CLI decide)", "value": "{{NoMethodValue}}" }
+                    { "title": "Auto-detect", "value": "{{NoMethodValue}}" }
                 ]
             },
             {
                 "type": "TextBlock",
-                "text": "Using Duo Push or WebAuthn / FIDO2? Run `bw login <email>` in a terminal first, then return here and unlock with your master password.",
+                "text": "Email 2FA isn't supported ([#157](https://github.com/hoobio/command-palette-bitwarden/issues/157)). For Duo Push or WebAuthn, run `bw login` in a terminal first, then unlock here with your master password.",
                 "wrap": true,
                 "isSubtle": true,
                 "size": "small"
