@@ -13,6 +13,7 @@ internal interface ICliProcess : IDisposable
   StreamWriter StandardInput { get; }
   int ExitCode { get; }
   int Id { get; }
+  bool HasExited { get; }
   bool EnableRaisingEvents { get; set; }
   event EventHandler? Exited;
   Task WaitForExitAsync(CancellationToken cancellationToken = default);
@@ -26,6 +27,7 @@ internal sealed partial class RealCliProcess(Process process) : ICliProcess
   public StreamWriter StandardInput => process.StandardInput;
   public int ExitCode => process.ExitCode;
   public int Id => process.Id;
+  public bool HasExited => process.HasExited;
   public bool EnableRaisingEvents
   {
     get => process.EnableRaisingEvents;
