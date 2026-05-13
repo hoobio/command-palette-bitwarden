@@ -1067,6 +1067,99 @@ public class BitwardenCliServiceTests
   }
 
   [Fact]
+  public void ApplyFilter_Org_PartialNameMatch_CaseInsensitive()
+  {
+    var svc = new BitwardenCliService();
+    svc.LoadTestData([], [], new Dictionary<string, string> { ["org-1"] = "Test Organization" });
+    var result = svc.ApplyFilter(TestItems, ("org", "test")).ToList();
+    Assert.Single(result);
+    Assert.Equal("login-1", result[0].Id);
+  }
+
+  [Fact]
+  public void ApplyFilter_Org_FullNameMatch()
+  {
+    var svc = new BitwardenCliService();
+    svc.LoadTestData([], [], new Dictionary<string, string> { ["org-1"] = "Acme Corp" });
+    var result = svc.ApplyFilter(TestItems, ("org", "Acme Corp")).ToList();
+    Assert.Single(result);
+  }
+
+  [Theory]
+  [InlineData("org:\"Test Organization\"", "org", "Test Organization")]
+  [InlineData("org:'Test Organization'", "org", "Test Organization")]
+  [InlineData("folder:\"My Stuff\"", "folder", "My Stuff")]
+  [InlineData("url:\"github.com/foo\"", "url", "github.com/foo")]
+  public void ParseSearchFilters_QuotedValue_PreservesSpacesAndSlashes(string query, string expectedKey, string expectedValue)
+  {
+    var (filters, _) = BitwardenCliService.ParseSearchFilters(query);
+    Assert.Single(filters);
+    Assert.Equal(expectedKey, filters[0].Key);
+    Assert.Equal(expectedValue, filters[0].Value);
+  }
+
+  [Fact]
+  public void ParseSearchFilters_QuotedValue_WithTrailingFreeText()
+  {
+    var (filters, text) = BitwardenCliService.ParseSearchFilters("org:\"Test Organization\" github");
+    Assert.Single(filters);
+    Assert.Equal("Test Organization", filters[0].Value);
+    Assert.Equal("github", text);
+  }
+
+  [Fact]
+  public void ParseSearchFilters_BareKeyColon_ParsesAsEmptyValue()
+  {
+    var (filters, text) = BitwardenCliService.ParseSearchFilters("org:");
+    Assert.Single(filters);
+    Assert.Equal("org", filters[0].Key);
+    Assert.Equal("", filters[0].Value);
+    Assert.Null(text);
+  }
+
+  [Fact]
+  public void ApplyFilter_Org_EmptyValue_MatchesAllOrgItems()
+  {
+    var svc = new BitwardenCliService();
+    svc.LoadTestData([], [], new Dictionary<string, string> { ["org-1"] = "Acme Corp" });
+    var result = svc.ApplyFilter(TestItems, ("org", "")).ToList();
+    Assert.Single(result);
+    Assert.Equal("login-1", result[0].Id);
+  }
+
+  [Fact]
+  public void GetOrganizationName_Maps_Id_To_Name()
+  {
+    var svc = new BitwardenCliService();
+    svc.LoadTestData([], [], new Dictionary<string, string> { ["org-1"] = "Acme Corp" });
+    Assert.Equal("Acme Corp", svc.GetOrganizationName("org-1"));
+    Assert.Null(svc.GetOrganizationName("missing"));
+    Assert.Null(svc.GetOrganizationName(null));
+  }
+
+  [Fact]
+  public void ParseOrganizations_ValidJson_ReturnsIdToNameMap()
+  {
+    var json = "[{\"id\":\"org-1\",\"name\":\"Acme Corp\"},{\"id\":\"org-2\",\"name\":\"Globex\"}]";
+    var result = BitwardenCliService.ParseOrganizations(json);
+    Assert.Equal(2, result.Count);
+    Assert.Equal("Acme Corp", result["org-1"]);
+    Assert.Equal("Globex", result["org-2"]);
+  }
+
+  [Fact]
+  public void ParseOrganizations_EmptyArray_ReturnsEmptyMap()
+  {
+    Assert.Empty(BitwardenCliService.ParseOrganizations("[]"));
+  }
+
+  [Fact]
+  public void ParseOrganizations_InvalidJson_ReturnsEmptyMap()
+  {
+    Assert.Empty(BitwardenCliService.ParseOrganizations("not json"));
+  }
+
+  [Fact]
   public void ApplyFilter_Has_Totp()
   {
     var svc = CreateServiceWithFolders();

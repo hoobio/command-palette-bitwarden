@@ -22,7 +22,7 @@ Use prefix syntax to narrow results. Filters can be combined freely.
 | `has:notes` | `has:notes` | Items with notes |
 | `url:<partial>` / `host:<partial>` | `url:github.com` | Login items matching a URL |
 | `type:<type>` | `type:login` | Filter by item type |
-| `org:<id>` | `org:myorg` | Filter by organization |
+| `org:<name>` | `org:nintex` | Filter by organization name (partial, case-insensitive) or organization ID |
 | `is:weak` | `is:weak` | Logins with a password shorter than 8 characters |
 | `is:old` / `is:stale` | `is:old` | Logins whose password hasn't changed in over a year |
 | `is:insecure` / `is:http` | `is:insecure` | Logins with an `http://` URI |
@@ -39,6 +39,18 @@ is:fav has:totp folder:Personal
 ```
 
 This shows only favorite items with TOTP that are in a folder containing "Personal".
+
+### Quoted Values
+
+Wrap a filter value in single or double quotes to include spaces:
+
+```
+org:"Test Organization"
+folder:'My Personal Stuff'
+url:"github.com/foo"
+```
+
+Quotes apply to every filter, not just `org:`.
 
 ## Sort Order
 

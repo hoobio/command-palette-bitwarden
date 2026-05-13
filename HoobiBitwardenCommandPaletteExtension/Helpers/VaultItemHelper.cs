@@ -95,9 +95,9 @@ internal static partial class VaultItemHelper
     return items.ToArray();
   }
 
-  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off", bool showPasskeyTag = true, bool showProtectedTag = true)
+  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off", bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off")
   {
-    var baseTags = BuildBaseTags(item, showWatchtowerTags, context, showContextTag, showPasskeyTag, showProtectedTag);
+    var baseTags = BuildBaseTags(item, showWatchtowerTags, context, showContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
 
     if (totpTagStyle != "off" && item.HasTotp)
     {
@@ -109,7 +109,7 @@ internal static partial class VaultItemHelper
     return baseTags;
   }
 
-  internal static Tag[] BuildBaseTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showPasskeyTag = true, bool showProtectedTag = true)
+  internal static Tag[] BuildBaseTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off")
   {
     var tags = new List<Tag>();
 
@@ -132,10 +132,72 @@ internal static partial class VaultItemHelper
     if (showPasskeyTag && item.HasPasskey)
       tags.Add(new Tag("Passkey") { Foreground = ColorHelpers.FromRgb(0xA0, 0xC4, 0xFF) });
 
+    var orgTag = BuildOrganizationTag(item, organizationName, organizationTagStyle);
+    if (orgTag != null)
+      tags.Add(orgTag);
+
     if (showWatchtowerTags)
       AddWatchtowerTags(tags, item);
 
     return tags.Count > 0 ? [.. tags] : [];
+  }
+
+  private static readonly OptionalColor[] OrganizationColors =
+  [
+    ColorHelpers.FromRgb(0xB7, 0x9C, 0xE6),
+    ColorHelpers.FromRgb(0xE2, 0xA8, 0xE3),
+    ColorHelpers.FromRgb(0xF0, 0xA0, 0xB8),
+    ColorHelpers.FromRgb(0xFF, 0xC0, 0x9E),
+    ColorHelpers.FromRgb(0xD0, 0xE0, 0x7A),
+    ColorHelpers.FromRgb(0x87, 0xE0, 0xB5),
+    ColorHelpers.FromRgb(0x7B, 0xD0, 0xE5),
+    ColorHelpers.FromRgb(0xA0, 0xA8, 0xE8),
+  ];
+
+  internal static OptionalColor GetOrganizationColor(string organizationId)
+  {
+    unchecked
+    {
+      uint hash = 2166136261;
+      foreach (var c in organizationId)
+        hash = (hash ^ c) * 16777619;
+      return OrganizationColors[hash % (uint)OrganizationColors.Length];
+    }
+  }
+
+  internal static Tag? BuildOrganizationTag(BitwardenItem item, string? organizationName, string organizationTagStyle)
+  {
+    if (organizationTagStyle == "off") return null;
+    if (string.IsNullOrEmpty(item.OrganizationId)) return null;
+    if (string.IsNullOrEmpty(organizationName))
+    {
+      DebugLogService.Log("OrgTag", $"Skipped org tag for item {item.Id}: orgId={item.OrganizationId} has no resolved name");
+      return null;
+    }
+
+    var color = GetOrganizationColor(item.OrganizationId);
+    var text = organizationTagStyle == "initials"
+      ? GetOrganizationInitials(organizationName)
+      : (organizationName.Length > 20 ? organizationName[..20] + "\u2026" : organizationName);
+    return new Tag(text)
+    {
+      ToolTip = organizationName,
+      Foreground = color,
+    };
+  }
+
+  internal static string GetOrganizationInitials(string name)
+  {
+    var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length <= 1)
+      return char.ToUpperInvariant(name.Trim()[0]).ToString();
+    var sb = new System.Text.StringBuilder(3);
+    foreach (var part in parts)
+    {
+      if (sb.Length >= 3) break;
+      sb.Append(char.ToUpperInvariant(part[0]));
+    }
+    return sb.ToString();
   }
 
   internal static Tag? BuildTotpTag(string totpSecret) => GetLiveTotpTag(totpSecret);

@@ -441,6 +441,7 @@ public class BitwardenCliServiceMockedTests
     var folders = new JsonArray { new JsonObject { ["id"] = "f1", ["name"] = "Work" } };
     factory.Enqueue(new FakeCliProcess(stdout: folders.ToJsonString() + "\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: items.ToJsonString() + "\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
 
     var cacheUpdated = false;
     svc.CacheUpdated += () => cacheUpdated = true;
@@ -475,9 +476,9 @@ public class BitwardenCliServiceMockedTests
     svc.SetSession("key");
     // sync
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    // RefreshCacheAsync → items
+    // RefreshCacheAsync → folders, items, organizations (parallel, dequeued in invocation order)
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
-    // RefreshCacheAsync → folders
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
 
     await svc.SyncVaultAsync();
@@ -509,6 +510,8 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     // items query
     factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Item\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0));
+    // organizations query
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
 
     await svc.RefreshCacheAsync();
     var results = svc.SearchCached();

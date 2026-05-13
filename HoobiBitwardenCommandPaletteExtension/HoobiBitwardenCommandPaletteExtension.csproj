@@ -117,12 +117,25 @@
   <Target Name="StampPackageIdentityName" BeforeTargets="Build;_ConvertItems">
     <PropertyGroup>
       <AppxManifestPath>$(MSBuildProjectDirectory)\Package.appxmanifest</AppxManifestPath>
+      <VersionTxtPath>$(MSBuildProjectDirectory)\..\version.txt</VersionTxtPath>
       <BasePackageName>Hoobi.BitwardenCommandPaletteExtension</BasePackageName>
       <FullPackageName>$(BasePackageName)$(PackageNameSuffix)</FullPackageName>
       <BaseDisplayName>Command Palette Extension for Bitwarden</BaseDisplayName>
       <FullDisplayName>$(BaseDisplayName)$(DisplayNameSuffix)</FullDisplayName>
     </PropertyGroup>
-    <Message Text="Stamping package identity: $(FullPackageName) with display name: $(FullDisplayName)" Importance="high" />
+    <ReadLinesFromFile File="$(VersionTxtPath)" Condition="Exists('$(VersionTxtPath)')">
+      <Output TaskParameter="Lines" ItemName="VersionTxtLines" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <SemVerFromFile>@(VersionTxtLines)</SemVerFromFile>
+      <FourPartVersion Condition="'$(SemVerFromFile)' != ''">$(SemVerFromFile).0</FourPartVersion>
+    </PropertyGroup>
+    <Message Text="Stamping package identity: $(FullPackageName) with display name: $(FullDisplayName) at version: $(FourPartVersion)" Importance="high" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Condition="'$(FourPartVersion)' != ''"
+             Query="/ns:Package/ns:Identity/@Version"
+             Value="$(FourPartVersion)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
     <XmlPoke XmlInputPath="$(AppxManifestPath)"
              Query="/ns:Package/ns:Identity/@Name"
              Value="$(FullPackageName)"
