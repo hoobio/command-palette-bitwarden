@@ -48,12 +48,17 @@ internal sealed class FakeCliProcess : ICliProcess
   public event EventHandler? Exited;
   public bool Killed { get; private set; }
   public bool Disposed { get; private set; }
+  public bool HasExited { get; set; }
 
-  public Task WaitForExitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-  public void Kill(bool entireProcessTree = false) => Killed = true;
+  public Task WaitForExitAsync(CancellationToken cancellationToken = default)
+  {
+    HasExited = true;
+    return Task.CompletedTask;
+  }
+  public void Kill(bool entireProcessTree = false) { Killed = true; HasExited = true; }
   public void Dispose() => Disposed = true;
 
-  public void RaiseExited() => Exited?.Invoke(this, EventArgs.Empty);
+  public void RaiseExited() { HasExited = true; Exited?.Invoke(this, EventArgs.Empty); }
 
   public string GetStdinContent()
   {

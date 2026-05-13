@@ -15,7 +15,7 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 internal enum VaultStatus { Unlocked, Locked, Unauthenticated, CliNotFound }
 
 #pragma warning disable CA1001 // singleton-lifetime; timer disposed when lock fires
-internal sealed class BitwardenCliService
+internal sealed partial class BitwardenCliService
 {
   private readonly BitwardenSettingsManager? _settings;
   private readonly CliProcessFactory _processFactory;
@@ -410,22 +410,20 @@ internal sealed class BitwardenCliService
 
   private async Task<bool> VerifySessionAsync()
   {
+    using var lease = NewCliLease("sync", CliTimeoutMs);
     try
     {
       DebugLogService.Log("Verify", "Running bw sync to verify session");
-      using var process = StartProcess("sync");
-      using var cts = new CancellationTokenSource(CliTimeoutMs);
-      // Drain stderr in the background to prevent pipe buffer deadlock.
-      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
-      _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
       string? line;
-      while ((line = await process.StandardOutput.ReadLineAsync(cts.Token)) != null)
+      while ((line = await lease.Process.StandardOutput.ReadLineAsync(lease.Token)) != null)
       {
         DebugLogService.Log("Verify", $"sync stdout: {line}");
         if (line.Contains("Syncing complete.", StringComparison.OrdinalIgnoreCase))
         {
-          try { process.Kill(true); } catch { }
-          DebugLogService.Log("Verify", "Session verified successfully");
+          // Detach instead of kill: a force-killed `bw sync` leaves data.json in a half-written
+          // state, which makes the very next `bw list` fail validateUserKey → "Vault is locked.".
+          DebugLogService.Log("Verify", "Session verified successfully, detaching for graceful drain");
+          lease.Detach();
           return true;
         }
       }
@@ -1491,16 +1489,21 @@ internal sealed class BitwardenCliService
   // Also matches earlyExitText per-chunk. Falls back to returning all accumulated stdout
   // if neither is found. Stderr is drained in the background; on empty stdout the error is checked
   // for session-invalid indicators (BW_NOINTERACTION ensures the CLI never prompts interactively).
+  //
+  // On early-exit (JSON-complete or earlyExitText match) we DETACH the process to a background
+  // drain task instead of killing it. Force-killing `bw sync` mid-flush leaves the CLI's
+  // state-provider writes only partially applied to data.json, which then causes subsequent
+  // `bw list` calls to fail validateUserKey and emit "Vault is locked." even though the session
+  // is fine. Letting the child drain to natural exit (with a backstop kill after 10s) costs us
+  // ~100-500ms of background CPU but eliminates that whole class of post-sync flap.
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
   {
     DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
     var sw = System.Diagnostics.Stopwatch.StartNew();
-    using var process = StartProcess(args);
-    using var cts = new CancellationTokenSource(timeoutMs);
+    using var lease = NewCliLease(args, timeoutMs);
     try
     {
-      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
-      var reader = process.StandardOutput;
+      var reader = lease.Process.StandardOutput;
       var buffer = new char[4096];
       var accum = new System.Text.StringBuilder();
       int depth = 0;
@@ -1509,7 +1512,7 @@ internal sealed class BitwardenCliService
       bool jsonEscape = false;
 
       int n;
-      while ((n = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), cts.Token)) > 0)
+      while ((n = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), lease.Token)) > 0)
       {
         for (int i = 0; i < n; i++)
         {
@@ -1533,9 +1536,8 @@ internal sealed class BitwardenCliService
               if (depth == 0)
               {
                 var json = accum.ToString()[jsonStartIdx..].Trim();
-                _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
-                try { process.Kill(true); } catch { }
-                DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON early-exit ({sw.ElapsedMilliseconds}ms)");
+                DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
+                lease.Detach();
                 return json;
               }
             }
@@ -1552,9 +1554,8 @@ internal sealed class BitwardenCliService
           var text = accum.ToString();
           if (text.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
           {
-            _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
-            try { process.Kill(true); } catch { }
-            DebugLogService.Log("CLI", $"RunCliAsync: bw {args} text early-exit ({sw.ElapsedMilliseconds}ms)");
+            DebugLogService.Log("CLI", $"RunCliAsync: bw {args} text early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
+            lease.Detach();
             return text.Trim();
           }
         }
@@ -1566,7 +1567,7 @@ internal sealed class BitwardenCliService
         return accum.ToString()[jsonStartIdx..].Trim();
       }
 
-      var stderr = (await stderrTask).Trim();
+      var stderr = (await lease.StderrTask).Trim();
       var fallbackStr = accum.ToString().Trim();
       var errorText = !string.IsNullOrEmpty(stderr) ? stderr : fallbackStr;
       if (IsSessionInvalidError(errorText))
@@ -1582,9 +1583,76 @@ internal sealed class BitwardenCliService
     catch (OperationCanceledException)
     {
       DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {args} after {timeoutMs / 1000}s");
-      try { process.Kill(); } catch { }
+      try { lease.Process.Kill(); } catch { }
       throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}");
     }
+  }
+
+  private CliProcessLease NewCliLease(string args, int timeoutMs) =>
+      new(args, StartProcess(args), new CancellationTokenSource(timeoutMs));
+
+  // Bundles the lifecycle of a single bw child process. `using` disposes the process and cts
+  // immediately on the synchronous return path. Calling `Detach()` instead hands ownership to
+  // a background drain+wait task (see DetachForBackgroundExit) and turns Dispose into a no-op,
+  // which is what we use for early-exit success paths so `bw sync` gets time to flush data.json
+  // before exiting. Without that, killing mid-flush makes the next `bw list` emit "Vault is
+  // locked." because validateUserKey reads a half-written user-private-key from disk.
+  private sealed partial class CliProcessLease(string args, ICliProcess process, CancellationTokenSource cts) : IDisposable
+  {
+    private bool _detached;
+    public ICliProcess Process => process;
+    public CancellationToken Token => cts.Token;
+    public Task<string> StderrTask { get; } = process.StandardError.ReadToEndAsync(cts.Token);
+
+    public void Detach()
+    {
+      _detached = true;
+      DetachForBackgroundExit(args, process, StderrTask, cts);
+    }
+
+    public void Dispose()
+    {
+      if (_detached) return;
+      try { process.Dispose(); } catch { }
+      cts.Dispose();
+    }
+  }
+
+  // Hand a CLI process off to a background task that drains both pipes, awaits natural exit,
+  // then disposes. If the child hasn't exited within 10s of detachment (the child's stdout has
+  // closed, so this would be a stuck Node process), force-kill as a zombie backstop. Logging
+  // is best-effort and intentionally not awaited from the caller's hot path.
+  private const int DetachExitGraceMs = 10_000;
+  private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts)
+  {
+    _ = Task.Run(async () =>
+    {
+      var sw = System.Diagnostics.Stopwatch.StartNew();
+      try
+      {
+        // Keep draining stdout so the child can't block on a full pipe buffer. The stderr drain
+        // is already running on the original cts; we observe it so its read can finish on EOF.
+        var stdoutDrain = process.StandardOutput.ReadToEndAsync();
+#pragma warning disable VSTHRD003 // stderrTask was started by the caller; safe to await here as both run on the ThreadPool
+        try { await Task.WhenAll(stdoutDrain, stderrTask).ConfigureAwait(false); }
+        catch { /* one side may have been canceled if the outer timeout fired first */ }
+#pragma warning restore VSTHRD003
+
+        using var killCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(DetachExitGraceMs));
+        await process.WaitForExitAsync(killCts.Token).ConfigureAwait(false);
+        DebugLogService.Log("CLI", $"Detached bw {args} exited naturally ({sw.ElapsedMilliseconds}ms post-detach)");
+      }
+      catch (Exception ex)
+      {
+        DebugLogService.Log("CLI", $"Detached bw {args} drain/wait failed after {sw.ElapsedMilliseconds}ms: {ex.GetType().Name}: {ex.Message}");
+      }
+      finally
+      {
+        try { if (!process.HasExited) { process.Kill(true); DebugLogService.Log("CLI", $"Detached bw {args} backstop-killed after {sw.ElapsedMilliseconds}ms"); } } catch { }
+        try { process.Dispose(); } catch { }
+        cts.Dispose();
+      }
+    });
   }
 
   internal static bool IsSessionInvalidError(string error) =>
