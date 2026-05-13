@@ -211,6 +211,18 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task Login_WithExplicitNullMethod_OmitsMethodFlag()
+  {
+    // Escape hatch: callers can opt out of the TOTP safety net to let the CLI
+    // auto-select the 2FA method (matches the "None" choice in the login form).
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
+    await svc.LoginAsync("user@test.com", "pass", "123456", twoFactorMethod: null);
+    Assert.DoesNotContain("--method", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    Assert.Contains("--code", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
   public async Task Login_SanitizesEmail()
   {
     var (svc, factory) = CreateService();

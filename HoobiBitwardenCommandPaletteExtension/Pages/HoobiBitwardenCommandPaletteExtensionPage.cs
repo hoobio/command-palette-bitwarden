@@ -26,6 +26,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private string? _errorMessage;
     private string? _pendingEmail;
     private string? _pendingPassword;
+    private int? _pendingTwoFactorMethod;
     private bool _twoFactorRequired;
     private bool _deviceVerificationRequired;
     private ForegroundContext? _context;
@@ -664,6 +665,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _deviceVerificationRequired = false;
         _pendingEmail = null;
         _pendingPassword = null;
+        _pendingTwoFactorMethod = null;
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Checking vault status...", "bw status");
@@ -1038,9 +1040,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         });
     }
 
-    private void OnLoginSubmitted(string email, string password)
+    private void OnLoginSubmitted(string email, string password, int? twoFactorMethod)
     {
-        DebugLogService.Log("Action", "Login submitted by user");
+        DebugLogService.Log("Action", $"Login submitted by user (2FA method: {(twoFactorMethod?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "auto")})");
         _handlingAction = true;
         ClearSearchText();
         _errorMessage = null;
@@ -1048,6 +1050,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _deviceVerificationRequired = false;
         _pendingEmail = null;
         _pendingPassword = null;
+        _pendingTwoFactorMethod = null;
         _currentItems = [];
         IsLoading = true;
         RaiseItemsChanged();
@@ -1065,6 +1068,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                         _twoFactorRequired = true;
                         _pendingEmail = email;
                         _pendingPassword = password;
+                        _pendingTwoFactorMethod = twoFactorMethod;
                         _errorMessage = null;
                     }
                     else if (deviceVerificationRequired)
@@ -1114,7 +1118,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             try
             {
                 ShowLoadingStatus("Verifying 2FA code...", "bw login");
-                var (success, error, _, _) = await _service.LoginAsync(email!, password!, twoFactorCode);
+                var (success, error, _, _) = await _service.LoginAsync(email!, password!, twoFactorCode, _pendingTwoFactorMethod);
                 if (!success)
                 {
                     _errorMessage = error?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true
@@ -1128,6 +1132,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _twoFactorRequired = false;
                 _pendingEmail = null;
                 _pendingPassword = null;
+                _pendingTwoFactorMethod = null;
                 PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();

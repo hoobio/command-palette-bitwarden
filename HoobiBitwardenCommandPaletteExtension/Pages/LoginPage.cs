@@ -10,7 +10,7 @@ internal sealed partial class LoginPage : ContentPage
 {
   private readonly LoginForm _form;
 
-  public LoginPage(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string>? onSubmit = null)
+  public LoginPage(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
   {
     Name = "Login";
     Title = "Login to Bitwarden";
@@ -23,9 +23,14 @@ internal sealed partial class LoginPage : ContentPage
 
 internal sealed partial class LoginForm : FormContent
 {
+  // Sentinel value in the ChoiceSet for "don't pass --method to bw login".
+  // Numeric values match Bitwarden's TwoFactorProviderType enum
+  // (libs/common/src/auth/enums/two-factor-provider-type.ts in bitwarden/clients).
+  private const string NoMethodValue = "none";
+
   private readonly BitwardenCliService _service;
   private readonly BitwardenSettingsManager? _settings;
-  private readonly Action<string, string>? _onSubmit;
+  private readonly Action<string, string, int?>? _onSubmit;
 
   private string BuildTemplate()
   {
@@ -64,6 +69,19 @@ internal sealed partial class LoginForm : FormContent
                 "placeholder": "Enter your master password"
             },
             {
+                "type": "Input.ChoiceSet",
+                "label": "Two-factor method (if prompted)",
+                "id": "TwoFactorMethod",
+                "value": "0",
+                "style": "compact",
+                "choices": [
+                    { "title": "Authenticator app (TOTP)", "value": "0" },
+                    { "title": "Email", "value": "1" },
+                    { "title": "YubiKey OTP", "value": "3" },
+                    { "title": "None (let CLI decide)", "value": "{{NoMethodValue}}" }
+                ]
+            },
+            {
                 "type": "ActionSet",
                 "actions": [
                     {
@@ -92,7 +110,7 @@ internal sealed partial class LoginForm : FormContent
     """;
   }
 
-  public LoginForm(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string>? onSubmit = null)
+  public LoginForm(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
   {
     _service = service;
     _settings = settings;
@@ -116,7 +134,16 @@ internal sealed partial class LoginForm : FormContent
       _settings.SaveSettings();
     }
 
-    _onSubmit?.Invoke(email, password);
+    int? twoFactorMethod = ParseTwoFactorMethod(formInput?["TwoFactorMethod"]?.GetValue<string>());
+
+    _onSubmit?.Invoke(email, password, twoFactorMethod);
     return CommandResult.GoBack();
+  }
+
+  internal static int? ParseTwoFactorMethod(string? raw)
+  {
+    if (string.IsNullOrEmpty(raw) || string.Equals(raw, NoMethodValue, StringComparison.OrdinalIgnoreCase))
+      return null;
+    return int.TryParse(raw, out var method) ? method : 0;
   }
 }

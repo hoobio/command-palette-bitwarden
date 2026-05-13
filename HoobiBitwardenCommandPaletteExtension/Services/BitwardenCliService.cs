@@ -682,7 +682,11 @@ internal sealed class BitwardenCliService
     }
   }
 
-  public async Task<(bool Success, string? Error, bool TwoFactorRequired, bool DeviceVerificationRequired)> LoginAsync(string email, string password, string? twoFactorCode = null, int? twoFactorMethod = null)
+  // Default twoFactorMethod is 0 (Authenticator/TOTP). Self-hosted servers can
+  // otherwise return a different default (e.g. email) when --method is omitted,
+  // causing valid TOTP codes to be rejected as invalid (issue #139). Pass an
+  // explicit null to opt out and let the CLI auto-select.
+  public async Task<(bool Success, string? Error, bool TwoFactorRequired, bool DeviceVerificationRequired)> LoginAsync(string email, string password, string? twoFactorCode = null, int? twoFactorMethod = 0)
   {
     DebugLogService.Log("Auth", "LoginAsync started");
     DisposeDeviceVerificationProcess();
@@ -692,12 +696,10 @@ internal sealed class BitwardenCliService
       var args = $"login \"{sanitizedEmail}\" --passwordenv BW_MP";
       if (!string.IsNullOrEmpty(twoFactorCode))
       {
-        // Default to method 0 (authenticator/TOTP). Self-hosted servers can
-        // otherwise return a different default (e.g. email), which causes the
-        // CLI to reject a correct TOTP code as invalid. See issue #139.
         var sanitizedCode = twoFactorCode.Replace("\"", "");
-        var method = twoFactorMethod ?? 0;
-        args += $" --method {method} --code \"{sanitizedCode}\"";
+        args += twoFactorMethod.HasValue
+            ? $" --method {twoFactorMethod.Value} --code \"{sanitizedCode}\""
+            : $" --code \"{sanitizedCode}\"";
       }
       args += " --raw";
 
