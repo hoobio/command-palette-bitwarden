@@ -682,7 +682,11 @@ internal sealed class BitwardenCliService
     }
   }
 
-  public async Task<(bool Success, string? Error, bool TwoFactorRequired, bool DeviceVerificationRequired)> LoginAsync(string email, string password, string? twoFactorCode = null, int? twoFactorMethod = null)
+  // Default twoFactorMethod is 0 (Authenticator/TOTP). Self-hosted servers can
+  // otherwise return a different default (e.g. email) when --method is omitted,
+  // causing valid TOTP codes to be rejected as invalid (issue #139). Pass an
+  // explicit null to opt out and let the CLI auto-select.
+  public async Task<(bool Success, string? Error, bool TwoFactorRequired, bool DeviceVerificationRequired)> LoginAsync(string email, string password, string? twoFactorCode = null, int? twoFactorMethod = 0)
   {
     DebugLogService.Log("Auth", "LoginAsync started");
     DisposeDeviceVerificationProcess();
@@ -690,11 +694,18 @@ internal sealed class BitwardenCliService
     {
       var sanitizedEmail = email.Replace("\"", "");
       var args = $"login \"{sanitizedEmail}\" --passwordenv BW_MP";
+      // Only pass --method alongside --code on the second attempt. Tempting as it
+      // is to send --method on the first attempt too (so the CLI picks the right
+      // provider straight away and triggers Email 2FA's postTwoFactorEmail call),
+      // vaultwarden < 1.36 (and master at the time of writing) rejects
+      // postTwoFactorEmail with 422 because its SendEmailLoginData struct
+      // mandates deviceIdentifier, which the bw CLI doesn't include in the body.
+      // See vaultwarden src/api/core/two_factor/email.rs and issue #139 thread.
       if (!string.IsNullOrEmpty(twoFactorCode))
       {
         var sanitizedCode = twoFactorCode.Replace("\"", "");
         args += twoFactorMethod.HasValue
-            ? $" --method {twoFactorMethod.Value} --code \"{sanitizedCode}\""
+            ? $" --method {twoFactorMethod.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)} --code \"{sanitizedCode}\""
             : $" --code \"{sanitizedCode}\"";
       }
       args += " --raw";
@@ -781,6 +792,7 @@ internal sealed class BitwardenCliService
           || stderr.Contains("two-factor", StringComparison.OrdinalIgnoreCase);
 
       var error = stderr;
+      DebugLogService.Log("Auth", $"Login failed (exit {exitCode}): {(string.IsNullOrEmpty(error) ? "(no stderr)" : error)}");
       return (false, string.IsNullOrEmpty(error) ? "Login failed" : error, needs2fa, false);
     }
     catch (Exception ex)

@@ -191,12 +191,48 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task Login_WithTwoFactorCode_DefaultsToTotpMethod()
+  {
+    // Regression: self-hosted servers were returning email as the default 2FA
+    // method when --method was omitted, causing valid TOTP codes to be rejected.
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
+    await svc.LoginAsync("user@test.com", "pass", "123456");
+    Assert.Contains("--method 0", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
   public async Task Login_WithTwoFactorCodeAndMethod_IncludesMethodInArgs()
   {
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
-    await svc.LoginAsync("user@test.com", "pass", "123456", 0);
-    Assert.Contains("--method 0", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    await svc.LoginAsync("user@test.com", "pass", "123456", 1);
+    Assert.Contains("--method 1", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public async Task Login_WithExplicitNullMethod_OmitsMethodFlag()
+  {
+    // Escape hatch: callers can opt out of the TOTP safety net to let the CLI
+    // auto-select the 2FA method (matches the "None" choice in the login form).
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
+    await svc.LoginAsync("user@test.com", "pass", "123456", twoFactorMethod: null);
+    Assert.DoesNotContain("--method", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    Assert.Contains("--code", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public async Task Login_MethodWithoutCode_OmitsMethodFlag()
+  {
+    // We deliberately do NOT pass --method on the first login attempt (no code),
+    // because that would make bw call postTwoFactorEmail for Email 2FA, which
+    // vaultwarden rejects with 422 (missing deviceIdentifier).
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Two-step login is required.\n", exitCode: 1));
+    await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: 1);
+    Assert.DoesNotContain("--method", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    Assert.DoesNotContain("--code", factory.LastPsi!.Arguments, StringComparison.Ordinal);
   }
 
   [Fact]
