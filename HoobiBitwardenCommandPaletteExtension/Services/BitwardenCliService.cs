@@ -692,10 +692,12 @@ internal sealed class BitwardenCliService
       var args = $"login \"{sanitizedEmail}\" --passwordenv BW_MP";
       if (!string.IsNullOrEmpty(twoFactorCode))
       {
+        // Default to method 0 (authenticator/TOTP). Self-hosted servers can
+        // otherwise return a different default (e.g. email), which causes the
+        // CLI to reject a correct TOTP code as invalid. See issue #139.
         var sanitizedCode = twoFactorCode.Replace("\"", "");
-        args += twoFactorMethod.HasValue
-            ? $" --method {twoFactorMethod.Value} --code \"{sanitizedCode}\""
-            : $" --code \"{sanitizedCode}\"";
+        var method = twoFactorMethod ?? 0;
+        args += $" --method {method} --code \"{sanitizedCode}\"";
       }
       args += " --raw";
 
@@ -781,6 +783,7 @@ internal sealed class BitwardenCliService
           || stderr.Contains("two-factor", StringComparison.OrdinalIgnoreCase);
 
       var error = stderr;
+      DebugLogService.Log("Auth", $"Login failed (exit {exitCode}): {(string.IsNullOrEmpty(error) ? "(no stderr)" : error)}");
       return (false, string.IsNullOrEmpty(error) ? "Login failed" : error, needs2fa, false);
     }
     catch (Exception ex)

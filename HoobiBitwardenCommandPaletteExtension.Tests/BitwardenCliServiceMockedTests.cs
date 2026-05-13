@@ -191,12 +191,23 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task Login_WithTwoFactorCode_DefaultsToTotpMethod()
+  {
+    // Regression: self-hosted servers were returning email as the default 2FA
+    // method when --method was omitted, causing valid TOTP codes to be rejected.
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
+    await svc.LoginAsync("user@test.com", "pass", "123456");
+    Assert.Contains("--method 0", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
   public async Task Login_WithTwoFactorCodeAndMethod_IncludesMethodInArgs()
   {
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
-    await svc.LoginAsync("user@test.com", "pass", "123456", 0);
-    Assert.Contains("--method 0", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    await svc.LoginAsync("user@test.com", "pass", "123456", 1);
+    Assert.Contains("--method 1", factory.LastPsi!.Arguments, StringComparison.Ordinal);
   }
 
   [Fact]
