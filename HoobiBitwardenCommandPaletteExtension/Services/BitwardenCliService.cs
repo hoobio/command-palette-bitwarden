@@ -694,11 +694,18 @@ internal sealed class BitwardenCliService
     {
       var sanitizedEmail = email.Replace("\"", "");
       var args = $"login \"{sanitizedEmail}\" --passwordenv BW_MP";
+      // Only pass --method alongside --code on the second attempt. Tempting as it
+      // is to send --method on the first attempt too (so the CLI picks the right
+      // provider straight away and triggers Email 2FA's postTwoFactorEmail call),
+      // vaultwarden < 1.36 (and master at the time of writing) rejects
+      // postTwoFactorEmail with 422 because its SendEmailLoginData struct
+      // mandates deviceIdentifier, which the bw CLI doesn't include in the body.
+      // See vaultwarden src/api/core/two_factor/email.rs and issue #139 thread.
       if (!string.IsNullOrEmpty(twoFactorCode))
       {
         var sanitizedCode = twoFactorCode.Replace("\"", "");
         args += twoFactorMethod.HasValue
-            ? $" --method {twoFactorMethod.Value} --code \"{sanitizedCode}\""
+            ? $" --method {twoFactorMethod.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)} --code \"{sanitizedCode}\""
             : $" --code \"{sanitizedCode}\"";
       }
       args += " --raw";

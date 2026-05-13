@@ -223,6 +223,19 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task Login_MethodWithoutCode_OmitsMethodFlag()
+  {
+    // We deliberately do NOT pass --method on the first login attempt (no code),
+    // because that would make bw call postTwoFactorEmail for Email 2FA, which
+    // vaultwarden rejects with 422 (missing deviceIdentifier).
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Two-step login is required.\n", exitCode: 1));
+    await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: 1);
+    Assert.DoesNotContain("--method", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    Assert.DoesNotContain("--code", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
   public async Task Login_SanitizesEmail()
   {
     var (svc, factory) = CreateService();
