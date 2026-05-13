@@ -82,6 +82,13 @@ internal sealed partial class LoginForm : FormContent
                 ]
             },
             {
+                "type": "TextBlock",
+                "text": "Using Duo Push or WebAuthn / FIDO2? Run `bw login <email>` in a terminal first, then return here and unlock with your master password.",
+                "wrap": true,
+                "isSubtle": true,
+                "size": "small"
+            },
+            {
                 "type": "ActionSet",
                 "actions": [
                     {
