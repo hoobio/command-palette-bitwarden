@@ -410,24 +410,22 @@ internal sealed partial class BitwardenCliService
 
   private async Task<bool> VerifySessionAsync()
   {
-    using var lease = NewCliLease("sync", CliTimeoutMs);
     try
     {
-      DebugLogService.Log("Verify", "Running bw sync to verify session");
-      string? line;
-      while ((line = await lease.Process.StandardOutput.ReadLineAsync(lease.Token)) != null)
-      {
-        DebugLogService.Log("Verify", $"sync stdout: {line}");
-        if (line.Contains("Syncing complete.", StringComparison.OrdinalIgnoreCase))
-        {
-          // Detach instead of kill: a force-killed `bw sync` leaves data.json in a half-written
-          // state, which makes the very next `bw list` fail validateUserKey → "Vault is locked.".
-          DebugLogService.Log("Verify", "Session verified successfully, detaching for graceful drain");
-          lease.Detach();
-          return true;
-        }
-      }
-      DebugLogService.Log("Verify", "sync completed without 'Syncing complete.' line");
+      // bw sync only requires authentication, not an unlocked vault: a stale
+      // session key will still pull the encrypted blob just fine and print
+      // "Syncing complete.", so sync alone is a false-positive session check.
+      // Pair it with a decryption-requiring call to actually exercise the
+      // session key. bw list folders is the cheapest such call - tiny payload
+      // but it has to decrypt to render. If the session is dead, RunCliAsync
+      // sees "Vault is locked" in stderr, fires HandleInvalidSession (which
+      // clears _sessionKey), and throws - the catch below returns false.
+      DebugLogService.Log("Verify", "Running bw sync");
+      await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
+      DebugLogService.Log("Verify", "Running bw list folders to verify session");
+      await RunCliAsync("list folders");
+      DebugLogService.Log("Verify", "Session verified successfully");
+      return true;
     }
     catch (Exception ex)
     {
@@ -479,20 +477,21 @@ internal sealed partial class BitwardenCliService
     _sessionKey = stored;
     if (!await VerifySessionAsync())
     {
-      // Same policy as GetVaultStatusCoreAsync: a single bw sync failure can
-      // be transient (network blip, slow CLI startup), so don't burn the
-      // saved credential here. HandleInvalidSession clears it on real CLI
-      // errors that confirm the session is gone.
+      // Same policy as GetVaultStatusCoreAsync: a transient verify failure
+      // (network blip, slow CLI startup) shouldn't burn the saved credential
+      // here. HandleInvalidSession clears it on real CLI errors that confirm
+      // the session is gone.
       DebugLogService.Log("Restore", "Stored session verification failed (preserving credential for retry)");
       return false;
     }
 
-    // bw sync can take seconds. A concurrent HandleInvalidSession (e.g. an
-    // in-flight warmup `bw list` returning "Vault is locked") may have nulled
-    // _sessionKey while we were verifying. The verify just proved the stored
-    // credential is valid, so re-assert it before SetStatus/RefreshCacheAsync,
-    // otherwise IsUnlocked stays false and the cache refresh silently skips,
-    // leaving the page stuck on "Retrieving items from vault...".
+    // The verify takes seconds (sync + list folders). A concurrent
+    // HandleInvalidSession (e.g. an in-flight warmup `bw list` returning
+    // "Vault is locked") may have nulled _sessionKey while we were verifying.
+    // The verify just proved the stored credential is valid, so re-assert it
+    // before SetStatus/RefreshCacheAsync, otherwise IsUnlocked stays false
+    // and the cache refresh silently skips, leaving the page stuck on
+    // "Retrieving items from vault...".
     _sessionKey = stored;
     SetStatus(VaultStatus.Unlocked);
     StatusChanged?.Invoke();
