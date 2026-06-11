@@ -233,6 +233,10 @@ internal sealed partial class BitwardenCliService
     KillAllRunning();
     _sessionKey = null;
     _lastStatus = null;
+    // Abandon any in-flight/cached status check so the next GetVaultStatusAsync
+    // re-evaluates against the new CLI path instead of coalescing onto a check
+    // that ran against the old one.
+    lock (_statusLock) { _statusCheckInFlight = null; }
     ResetStaticState();
     lock (_cacheLock)
     {
@@ -297,83 +301,78 @@ internal sealed partial class BitwardenCliService
   {
     lock (_statusLock)
     {
-      if (_statusCheckInFlight != null)
+      // Only ride a check that's actually still running. Handing back a completed
+      // or faulted task served a stale "CliNotFound" forever after a CLI install -
+      // the fresh check at the newly-installed path never got to run. A completed,
+      // faulted, or cleared (null) field starts a fresh check instead.
+      if (_statusCheckInFlight is { IsCompleted: false })
       {
         DebugLogService.Log("Status", "GetVaultStatusAsync coalesced with in-flight check");
         return _statusCheckInFlight;
       }
 
+      DebugLogService.Log("Status", $"GetVaultStatusAsync starting fresh check (exe: {CliExecutable})");
       _statusCheckInFlight = GetVaultStatusCoreAsync();
       return _statusCheckInFlight;
     }
   }
 
+  // No longer nulls _statusCheckInFlight on completion: the completed task is left
+  // in the field and GetVaultStatusAsync's IsCompleted gate starts a fresh one.
+  // That removes the clobber race where a finishing check would null out a newer
+  // in-flight check started after a CLI-config reset.
   private async Task<VaultStatus> GetVaultStatusCoreAsync()
   {
-    try
+    DebugLogService.Log("Status", "GetVaultStatusAsync started");
+    if (!await IsCliAvailableAsync())
     {
-      DebugLogService.Log("Status", "GetVaultStatusAsync started");
-      if (!await IsCliAvailableAsync())
-      {
-        DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
-        return SetStatus(VaultStatus.CliNotFound);
-      }
-      DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable}), version: {_cliVersion ?? "unknown"}");
+      DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
+      return SetStatus(VaultStatus.CliNotFound);
+    }
+    DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable}), version: {_cliVersion ?? "unknown"}");
 
-      if (_sessionKey != null)
+    if (_sessionKey != null)
+    {
+      DebugLogService.Log("Status", "In-memory session key present, verifying...");
+      if (await VerifySessionAsync())
+        return SetStatus(VaultStatus.Unlocked);
+      DebugLogService.Log("Status", "In-memory session verification failed");
+    }
+
+    var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
+    if (!string.IsNullOrWhiteSpace(envSession))
+    {
+      DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
+      _sessionKey = envSession;
+      if (await VerifySessionAsync())
+        return SetStatus(VaultStatus.Unlocked);
+      DebugLogService.Log("Status", "BW_SESSION env var verification failed");
+    }
+
+    if (_settings?.RememberSession.Value == true)
+    {
+      var stored = SessionStore.Load();
+      if (!string.IsNullOrEmpty(stored))
       {
-        DebugLogService.Log("Status", "In-memory session key present, verifying...");
+        DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
+        _sessionKey = stored;
         if (await VerifySessionAsync())
           return SetStatus(VaultStatus.Unlocked);
-        DebugLogService.Log("Status", "In-memory session verification failed");
+        // Don't clear the credential here - a single sync failure can be a
+        // transient network blip or slow CLI startup right after a deploy.
+        // HandleInvalidSession clears it on real CLI errors that confirm the
+        // session is gone.
+        DebugLogService.Log("Status", "Stored session verification failed (preserving credential for retry)");
       }
-
-      var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
-      if (!string.IsNullOrWhiteSpace(envSession))
+      else
       {
-        DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
-        _sessionKey = envSession;
-        if (await VerifySessionAsync())
-          return SetStatus(VaultStatus.Unlocked);
-        DebugLogService.Log("Status", "BW_SESSION env var verification failed");
+        DebugLogService.Log("Status", "RememberSession enabled but no stored session found");
       }
-
-      if (_settings?.RememberSession.Value == true)
-      {
-        var stored = SessionStore.Load();
-        if (!string.IsNullOrEmpty(stored))
-        {
-          DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
-          _sessionKey = stored;
-          if (await VerifySessionAsync())
-          {
-            // Vault unlock no longer grants protected-item grace; that has to
-            // be earned per-item via RepromptForm.
-            return SetStatus(VaultStatus.Unlocked);
-          }
-          // Don't clear the credential here — a single sync failure can be a
-          // transient network blip or slow CLI startup right after a deploy,
-          // and clearing means the user is forced to biometric/password on
-          // the next launch even though the credential is still valid. Leave
-          // it in place; HandleInvalidSession (called from real CLI errors
-          // with stderr that confirms the session is gone) will clear it
-          // when the credential is genuinely bad.
-          DebugLogService.Log("Status", "Stored session verification failed (preserving credential for retry)");
-        }
-        else
-        {
-          DebugLogService.Log("Status", "RememberSession enabled but no stored session found");
-        }
-      }
-
-      var fallback = await FetchStatusAsync();
-      DebugLogService.Log("Status", $"Falling back to bw status: {fallback}");
-      return SetStatus(fallback);
     }
-    finally
-    {
-      lock (_statusLock) { _statusCheckInFlight = null; }
-    }
+
+    var fallback = await FetchStatusAsync();
+    DebugLogService.Log("Status", $"Falling back to bw status: {fallback}");
+    return SetStatus(fallback);
   }
 
   private VaultStatus SetStatus(VaultStatus status)
@@ -411,26 +410,30 @@ internal sealed partial class BitwardenCliService
       psi.Environment["BW_NOINTERACTION"] = "true";
       psi.Environment["NO_COLOR"] = "1";
       using var process = _processFactory(psi);
-      using var cts = new CancellationTokenSource(CliVersionTimeoutMs);
-      string? line;
-      try
+
+      // A CancellationToken won't interrupt a blocking pipe read, so bound the
+      // call by racing a timer and killing the process on timeout - killing it
+      // closes the pipe and unblocks the read. (bw --version normally returns in
+      // ~1s; this only guards a genuinely wedged process.)
+      var readTask = process.StandardOutput.ReadLineAsync();
+      var finished = await Task.WhenAny(readTask, Task.Delay(CliVersionTimeoutMs));
+      if (finished != readTask)
       {
-        line = await process.StandardOutput.ReadLineAsync(cts.Token);
-      }
-      catch (OperationCanceledException)
-      {
-        // A hung `bw --version` (e.g. a broken shim) must not hang the whole
-        // status check - that's what left the vault stuck on "Verifying...".
         DebugLogService.Log("Status", $"bw --version timed out after {CliVersionTimeoutMs / 1000}s (exe: {CliExecutable})");
-        line = null;
+        try { process.Kill(true); } catch { }
+        return false;
       }
-      _cliVersion = line?.Trim();
+
+      var line = (await readTask)?.Trim();
+      _cliVersion = line;
       try { process.Kill(true); } catch { }
-      return line != null;
+      var available = !string.IsNullOrEmpty(line);
+      DebugLogService.Log("Status", $"bw --version => '{line ?? "(none)"}', available={available} (exe: {CliExecutable})");
+      return available;
     }
     catch (Exception ex)
     {
-      DebugLogService.Log("Status", $"IsCliAvailable failed: {ex.GetType().Name}: {ex.Message}");
+      DebugLogService.Log("Status", $"IsCliAvailable failed: {ex.GetType().Name}: {ex.Message} (exe: {CliExecutable})");
       return false;
     }
   }
