@@ -188,6 +188,16 @@ internal sealed partial class BitwardenCliService
     ResetForCliConfigChange();
   }
 
+  // Apply a path produced by BitwardenCliInstaller: persist it as the CLI override
+  // and re-resolve. CheckCliConfigChanged sees the changed executable and fires
+  // ResetForCliConfigChange -> CliConfigChanged, which the page handles by
+  // re-checking vault status against the freshly installed CLI.
+  public void ApplyInstalledCli(string path)
+  {
+    _settings?.PersistCliPath(path);
+    CheckCliConfigChanged();
+  }
+
   private void CheckRememberSessionDisabled()
   {
     var current = _settings?.RememberSession.Value ?? false;

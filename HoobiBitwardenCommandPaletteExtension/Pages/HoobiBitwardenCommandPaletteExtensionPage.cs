@@ -64,6 +64,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     // transition re-arms it; set once we've kicked off the re-verify so a
     // genuinely-empty vault doesn't re-trigger on each rebuild.
     private volatile bool _emptyVaultReverifyArmed = true;
+    private volatile bool _cliInstalling;
+    private bool _cliInstallFailed;
+    private string? _cliInstallStatus;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -394,15 +397,89 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private static IListItem[] WithDebugLog(IListItem[] items) =>
         DebugLogService.Enabled ? [.. items, BuildCopyDebugLogItem()] : items;
 
-    private static IListItem[] BuildCliNotFoundItems() => WithDebugLog(
-    [
-        new ListItem(new OpenUrlCommand("https://bitwarden.com/help/cli/#download-and-install"))
+    private IListItem[] BuildCliNotFoundItems()
+    {
+        if (_cliInstalling)
         {
-            Title = "Bitwarden CLI not found",
-            Subtitle = "Install the Bitwarden CLI (bw) and ensure it's in your PATH",
-            Icon = new IconInfo("\uE783"),
-        },
-    ]);
+            return WithDebugLog(
+            [
+                new ListItem(new NoOpCommand())
+                {
+                    Title = _cliInstallStatus ?? "Installing Bitwarden CLI...",
+                    Subtitle = "Setting up the Bitwarden CLI - this can take a minute",
+                    Icon = new IconInfo("\uE896"),
+                },
+            ]);
+        }
+
+        var install = new ListItem(new AnonymousCommand(StartCliInstall)
+        {
+            Name = "Install",
+            Result = CommandResult.KeepOpen(),
+        })
+        {
+            Title = _cliInstallFailed ? "Retry automatic install" : "Install Bitwarden CLI",
+            Subtitle = _cliInstallStatus ?? "Set it up automatically via winget, or a signature-verified download",
+            Icon = new IconInfo("\uE896"),
+        };
+        if (_cliInstallFailed)
+            install.Tags = [new Tag("Failed") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
+
+        var manual = new ListItem(new OpenUrlCommand(BitwardenCliInstaller.ManualDownloadUrl))
+        {
+            Title = "Download manually",
+            Subtitle = "Open the Bitwarden CLI download page",
+            Icon = new IconInfo("\uE774"),
+        };
+
+        return WithDebugLog([install, manual]);
+    }
+
+    private void StartCliInstall()
+    {
+        if (_cliInstalling) return;
+        _cliInstalling = true;
+        _cliInstallFailed = false;
+        _cliInstallStatus = "Starting install...";
+        RaiseItemsChanged();
+
+        _ = Task.Run(async () =>
+        {
+            var installer = new BitwardenCliInstaller();
+            var progress = new Progress<string>(s =>
+            {
+                _cliInstallStatus = s;
+                RaiseItemsChanged();
+            });
+
+            CliInstallResult result;
+            try
+            {
+                result = await installer.EnsureInstalledAsync(progress).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                result = new CliInstallResult(false, CliInstallMethod.None, null, ex.Message);
+            }
+
+            _cliInstalling = false;
+            if (result.Success && result.CliPath != null)
+            {
+                DebugLogService.Log("Installer", $"CLI install succeeded via {result.Method}; applying {result.CliPath}");
+                _cliInstallStatus = null;
+                // Fires CliConfigChanged -> OnCliConfigChanged re-checks vault status
+                // against the newly installed CLI and rebuilds the page.
+                _service.ApplyInstalledCli(result.CliPath);
+            }
+            else
+            {
+                _cliInstallFailed = true;
+                _cliInstallStatus = result.Error ?? "Installation failed - try the manual download";
+                DebugLogService.Log("Installer", $"CLI install failed: {_cliInstallStatus}");
+                RaiseItemsChanged();
+            }
+        });
+    }
 
     private IListItem[] BuildUnauthenticatedItems()
     {
