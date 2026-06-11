@@ -55,6 +55,8 @@ public class BitwardenCliServiceMockedTests
     svc.SetSession("test-session-key");
     // IsCliAvailable
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    // VerifySessionAsync → status gate → "unlocked"
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unlocked\"}\n", exitCode: 0));
     // VerifySessionAsync → sync → "Syncing complete."
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
     // VerifySessionAsync → list folders → empty JSON array proves decryption worked
@@ -64,15 +66,34 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
-  public async Task GetVaultStatus_WithSession_VerifyFails_FallsToFetchStatus()
+  public async Task GetVaultStatus_WithSession_StatusGateLocked_FallsToFetchStatus()
   {
     var (svc, factory) = CreateService();
     svc.SetSession("bad-session");
     // IsCliAvailable
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    // VerifySessionAsync → status gate reports locked → short-circuit, no sync/list
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
+    // FetchStatusAsync → RunCliAsync("status")
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
+    var result = await svc.GetVaultStatusAsync();
+    Assert.Equal(VaultStatus.Locked, result);
+  }
+
+  [Fact]
+  public async Task GetVaultStatus_WithSession_StatusUnlockedButDecryptFails_FallsToFetchStatus()
+  {
+    // Stale-key case: status reports unlocked, but the key can't actually decrypt
+    // (e.g. after a server-side key rotation), so the list-folders confirmation fails.
+    var (svc, factory) = CreateService();
+    svc.SetSession("stale-session");
+    // IsCliAvailable
+    factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    // VerifySessionAsync → status gate passes
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unlocked\"}\n", exitCode: 0));
     // VerifySessionAsync → sync succeeds (sync only needs auth, not unlock)
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    // VerifySessionAsync → list folders fails because session is dead → HandleInvalidSession + throw
+    // VerifySessionAsync → list folders fails because the key is stale → HandleInvalidSession + throw
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Vault is locked.\n", exitCode: 1));
     // FetchStatusAsync → RunCliAsync("status")
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
@@ -661,6 +682,7 @@ public class BitwardenCliServiceMockedTests
     var (svc, factory) = CreateService();
     svc.SetSession("test-key");
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unlocked\"}\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     await svc.GetVaultStatusAsync();

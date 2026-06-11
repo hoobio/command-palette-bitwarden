@@ -58,6 +58,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private StatusMessage? _lastBiometricStatus;
     private volatile bool _biometricClickFailed;
     private volatile bool _autoBiometricTriggered;
+    // Latches one authoritative re-check when an unlocked vault renders zero
+    // items with no active search (genuinely empty, or a session that went
+    // stale without erroring). Reset on every status change so a real status
+    // transition re-arms it; set once we've kicked off the re-verify so a
+    // genuinely-empty vault doesn't re-trigger on each rebuild.
+    private volatile bool _emptyVaultReverifyArmed = true;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -121,9 +127,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     switch (_service.LastStatus)
                     {
                         case VaultStatus.Unlocked when _service.IsCacheLoaded:
-                            DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {Search(_currentSearchText).Count} items");
-                            _currentItems = BuildListItems(Search(_currentSearchText));
+                            var loadedResults = Search(_currentSearchText);
+                            DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedResults.Count} items");
+                            _currentItems = BuildListItems(loadedResults);
                             IsLoading = false;
+                            ReverifyIfSuspiciouslyEmpty(loadedResults.Count);
                             break;
                         case VaultStatus.Unlocked:
                             // Vault open but warmup is still loading the cache.
@@ -241,6 +249,35 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _initComplete = true;
         IsLoading = false;
         RaiseItemsChanged();
+        ReverifyIfSuspiciouslyEmpty(results.Count);
+    }
+
+    // An unlocked vault that lists zero items with no active search is suspicious:
+    // either genuinely empty, or a session that went stale without erroring (the
+    // "No items found" symptom). Re-check authoritatively, once, in the background.
+    // If it flips to Locked, StatusChanged rebuilds into the unlock prompt; if it
+    // confirms unlocked but still empty, the vault really is empty and we stop.
+    private void ReverifyIfSuspiciouslyEmpty(int resultCount)
+    {
+        if (resultCount > 0) { _emptyVaultReverifyArmed = true; return; }
+        if (!string.IsNullOrWhiteSpace(_currentSearchText)) return;
+        if (_handlingAction) return;
+        if (!_emptyVaultReverifyArmed) return;
+        _emptyVaultReverifyArmed = false;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var status = await _service.GetVaultStatusAsync().ConfigureAwait(false);
+                if (status == VaultStatus.Unlocked && _service.CacheCount == 0)
+                    await _service.RefreshCacheAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                DebugLogService.Log("Page", $"ReverifyIfSuspiciouslyEmpty failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        });
     }
 
     private void OnStatusChanged()
@@ -265,7 +302,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _biometricClickFailed = false;
                 _autoBiometricTriggered = false;
                 HideBiometricStatus();
-                _currentItems = BuildListItems(Search(_currentSearchText));
+                _emptyVaultReverifyArmed = true;
+                var rebuiltResults = Search(_currentSearchText);
+                _currentItems = BuildListItems(rebuiltResults);
+                ReverifyIfSuspiciouslyEmpty(rebuiltResults.Count);
                 break;
             case VaultStatus.Unauthenticated:
                 _biometricClickFailed = false;
