@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.10.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.9.2...v1.10.0) (2026-06-11)
+
+
+### Features
+
+* ✨ one-click Bitwarden CLI install from the palette ([#171](https://github.com/hoobio/command-palette-bitwarden/issues/171)) ([eb27b5b](https://github.com/hoobio/command-palette-bitwarden/commit/eb27b5b22abd9e48a9813e4161226ccee73572fe))
+* 🏷️ organization tag with deterministic colour and partial-name filter ([#161](https://github.com/hoobio/command-palette-bitwarden/issues/161)) ([c8e0d00](https://github.com/hoobio/command-palette-bitwarden/commit/c8e0d00c61b950c3ca4c1f51eb8c4ef6054ed09c))
+
+
+### Bug Fixes
+
+* 🐛 default 2FA method to TOTP plus method picker and prompt polish ([#158](https://github.com/hoobio/command-palette-bitwarden/issues/158)) ([a0087fb](https://github.com/hoobio/command-palette-bitwarden/commit/a0087fb09091e2216afd0318398fecf8e33a74af)), closes [#139](https://github.com/hoobio/command-palette-bitwarden/issues/139) [#157](https://github.com/hoobio/command-palette-bitwarden/issues/157)
+* 🐛 detach bw sync instead of killing to let data.json flush ([#162](https://github.com/hoobio/command-palette-bitwarden/issues/162)) ([002fbf7](https://github.com/hoobio/command-palette-bitwarden/commit/002fbf71939709a4cb48265019ce9f3ac0a9a3cd))
+* 🐛 gate vault unlock on bw status and distrust empty caches ([#169](https://github.com/hoobio/command-palette-bitwarden/issues/169)) ([19e5df3](https://github.com/hoobio/command-palette-bitwarden/commit/19e5df3559caee18e657e52c59e314001400772f))
+* 🐛 verify session with list folders, not just sync ([#163](https://github.com/hoobio/command-palette-bitwarden/issues/163)) ([e3263f1](https://github.com/hoobio/command-palette-bitwarden/commit/e3263f1ea2dd042861fcfa1591dee7f4ac22fb38))
+* **ci:** 🐛 adopt v2 Dependency-Track hierarchy for SBOM upload ([#170](https://github.com/hoobio/command-palette-bitwarden/issues/170)) ([38c5314](https://github.com/hoobio/command-palette-bitwarden/commit/38c53148b4f0c2db3757b938e40a94c6119387ac))
+
+
+### Performance Improvements
+
+* 🚀 bound favicon download concurrency and prioritise visible items ([#155](https://github.com/hoobio/command-palette-bitwarden/issues/155)) ([2b14372](https://github.com/hoobio/command-palette-bitwarden/commit/2b143724b01ca5423351546d11a3aa381626fa7d))
+
+
+### Miscellaneous Chores
+
+* 🙈 ignore C# Dev Kit .lscache files ([#164](https://github.com/hoobio/command-palette-bitwarden/issues/164)) ([74f59cd](https://github.com/hoobio/command-palette-bitwarden/commit/74f59cde19790422b27ab7e8a4e28c3701e4f9d9))
+
 ## [1.9.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.9.1...v1.9.2) (2026-05-12)
 
 
