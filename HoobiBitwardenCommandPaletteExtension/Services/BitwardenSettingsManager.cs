@@ -240,6 +240,15 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         LogConfig("startup");
     }
 
+    // Programmatic settings changes (e.g. writing the resolved path after an
+    // automated CLI install) don't flow through the settings form, so persist
+    // explicitly here. BitwardenCliService.ApplyInstalledCli then re-resolves.
+    public void PersistCliPath(string path)
+    {
+        CliDirectoryOverride.Value = path;
+        SaveSettings();
+    }
+
     private void OnSettingsChanged(object sender, Settings e)
     {
         SaveSettings();
