@@ -529,11 +529,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
-      # Channel routing for the Backstage hierarchy in Dependency-Track:
+      # Channel routing for the Backstage hierarchy in Dependency-Track (v2):
       #   release event              -> channel=release,    mark-latest=true,  no prune
       #   release-please PR (prerelease tag is cut by pre-release job)
       #                              -> channel=prerelease, mark-latest=false, prune
-      #   push / dispatch / other PR -> channel=ci/<branch>,mark-latest=false, prune
+      #   push / dispatch / other PR -> channel=ci + sub-channel=<branch>, mark-latest=false, prune
       - name: Read version
         id: version
         shell: pwsh
@@ -555,6 +555,10 @@ jobs:
           $isRelease = $env:EVENT_NAME -eq 'release'
           $isPrerelease = $env:EVENT_NAME -eq 'pull_request' -and $env:HEAD_REF -eq 'release-please--branches--main'
 
+          # v2 Backstage hierarchy: feature/CI builds nest under a shared "ci"
+          # channel with the branch as the sub-channel (channel=ci, sub-channel=<branch>).
+          # release / prerelease sit directly under the component (no sub-channel).
+          $subChannel = ''
           if ($isRelease) {
             $channel = 'release'
             $projectVersion = $env:REF_NAME
@@ -570,25 +574,30 @@ jobs:
           else {
             $branchSource = if ($env:EVENT_NAME -eq 'pull_request') { $env:HEAD_REF } else { $env:REF_NAME }
             $sanitized = ($branchSource -replace '[^A-Za-z0-9._/-]', '-')
-            $channel = "ci/$sanitized"
+            $channel = 'ci'
+            $subChannel = $sanitized
             $projectVersion = $env:SHA
             $markLatest = 'false'
             $prune = 'true'
           }
 
           "channel=$channel"               | Out-File -Append $env:GITHUB_OUTPUT
+          "sub_channel=$subChannel"        | Out-File -Append $env:GITHUB_OUTPUT
           "project_version=$projectVersion"| Out-File -Append $env:GITHUB_OUTPUT
           "mark_latest=$markLatest"        | Out-File -Append $env:GITHUB_OUTPUT
           "prune=$prune"                   | Out-File -Append $env:GITHUB_OUTPUT
           Write-Host "Channel:        $channel"
+          Write-Host "SubChannel:     $subChannel"
           Write-Host "ProjectVersion: $projectVersion"
           Write-Host "MarkLatest:     $markLatest"
           Write-Host "Prune:          $prune"
 
       - name: Generate CycloneDX SBOM
-        uses: hoobio/pipeline-tools/pipeline/github/step/cyclonedx-sbom-dotnet@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-cyclonedx-sbom@feat/sbom-clean-scoping
         with:
-          solution-path: ${{ env.SOLUTION_PATH }}
+          app-language: dotnet
+          app-manifest-path: ${{ env.SOLUTION_PATH }}
+          dotnet-spec-version: '1.6'
           output-path: ${{ env.BOM_FILE }}
 
       - name: Upload SBOM artifact
@@ -600,7 +609,7 @@ jobs:
 
       - name: Upload SBOM to Dependency-Track
         if: env.DT_HOST != '' && env.DT_API_KEY != ''
-        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@feat/sbom-clean-scoping
         with:
           bom-path: ${{ env.BOM_FILE }}
           upload-artifact: 'false'
@@ -610,6 +619,7 @@ jobs:
           system: ${{ env.DT_SYSTEM }}
           component: ${{ env.DT_COMPONENT }}
           channel: ${{ steps.dt.outputs.channel }}
+          sub-channel: ${{ steps.dt.outputs.sub_channel }}
           project-version: ${{ steps.dt.outputs.project_version }}
           project-tags: channel=${{ steps.dt.outputs.channel }},repo=${{ github.repository }},commit=${{ github.sha }},run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           mark-latest: ${{ steps.dt.outputs.mark_latest }}
