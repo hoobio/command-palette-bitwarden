@@ -49,6 +49,7 @@ internal sealed class BitwardenCliInstaller
 
   public async Task<CliInstallResult> EnsureInstalledAsync(IProgress<string>? progress = null, CancellationToken ct = default)
   {
+    DebugLogService.Log("Installer", "EnsureInstalledAsync started");
     var existing = ResolveInstalledCliPath();
     if (existing != null)
     {

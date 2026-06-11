@@ -437,11 +437,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private void StartCliInstall()
     {
+        DebugLogService.Log("Installer", $"Install CLI requested (alreadyRunning={_cliInstalling})");
         if (_cliInstalling) return;
         _cliInstalling = true;
         _cliInstallFailed = false;
         _cliInstallStatus = "Starting install...";
-        RaiseItemsChanged();
+        RefreshCliNotFoundItems();
 
         _ = Task.Run(async () =>
         {
@@ -449,7 +450,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             var progress = new Progress<string>(s =>
             {
                 _cliInstallStatus = s;
-                RaiseItemsChanged();
+                RefreshCliNotFoundItems();
             });
 
             CliInstallResult result;
@@ -476,9 +477,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _cliInstallFailed = true;
                 _cliInstallStatus = result.Error ?? "Installation failed - try the manual download";
                 DebugLogService.Log("Installer", $"CLI install failed: {_cliInstallStatus}");
-                RaiseItemsChanged();
+                RefreshCliNotFoundItems();
             }
         });
+    }
+
+    // GetItems only rebuilds on demand for the unlocked vault; for every other
+    // state it returns the cached _currentItems. So an in-place state change like
+    // the install progress has to refresh _currentItems itself before raising,
+    // otherwise the list never visibly updates.
+    private void RefreshCliNotFoundItems()
+    {
+        lock (_itemsLock)
+            _currentItems = BuildCliNotFoundItems();
+        RaiseItemsChanged();
     }
 
     private IListItem[] BuildUnauthenticatedItems()
