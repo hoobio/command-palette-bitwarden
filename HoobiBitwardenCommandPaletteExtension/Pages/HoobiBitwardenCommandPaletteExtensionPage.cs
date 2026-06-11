@@ -435,6 +435,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return WithDebugLog([install, manual]);
     }
 
+    // Ceilings so the install flow can never leave the user on a spinner:
+    // the install itself, and the post-install wait for the CLI to be detected.
+    private const int CliInstallTimeoutMs = 300_000;
+    private const int CliDetectTimeoutMs = 60_000;
+    private const int CliDetectPollMs = 2_000;
+
     private void StartCliInstall()
     {
         DebugLogService.Log("Installer", $"Install CLI requested (alreadyRunning={_cliInstalling})");
@@ -443,43 +449,87 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _cliInstallFailed = false;
         _cliInstallStatus = "Starting install...";
         RefreshCliNotFoundItems();
+        _ = Task.Run(RunCliInstallAsync);
+    }
 
-        _ = Task.Run(async () =>
+    private async Task RunCliInstallAsync()
+    {
+        var installer = new BitwardenCliInstaller();
+        var progress = new Progress<string>(s =>
         {
-            var installer = new BitwardenCliInstaller();
-            var progress = new Progress<string>(s =>
-            {
-                _cliInstallStatus = s;
-                RefreshCliNotFoundItems();
-            });
+            _cliInstallStatus = s;
+            RefreshCliNotFoundItems();
+        });
 
-            CliInstallResult result;
+        CliInstallResult result;
+        try
+        {
+            using var cts = new CancellationTokenSource(CliInstallTimeoutMs);
+            result = await installer.EnsureInstalledAsync(progress, cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            result = new CliInstallResult(false, CliInstallMethod.None, null, "Installation timed out");
+        }
+        catch (Exception ex)
+        {
+            result = new CliInstallResult(false, CliInstallMethod.None, null, ex.Message);
+        }
+
+        if (!result.Success || result.CliPath == null)
+        {
+            FailCliInstall(result.Error ?? "Installation failed - try the manual download");
+            return;
+        }
+
+        DebugLogService.Log("Installer", $"CLI install succeeded via {result.Method}; applying {result.CliPath}");
+        _cliInstallStatus = "Verifying Bitwarden CLI...";
+        RefreshCliNotFoundItems();
+        _service.ApplyInstalledCli(result.CliPath);
+
+        // Watchdog: ApplyInstalledCli also kicks a re-check via CliConfigChanged,
+        // but don't depend on that event reaching us. Poll vault status until it
+        // leaves CliNotFound, then hand off to the normal rebuild. Bail out with a
+        // recovery message if the CLI doesn't respond within the deadline, so the
+        // progress item can never get stuck.
+        var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(CliDetectTimeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            VaultStatus status;
             try
             {
-                result = await installer.EnsureInstalledAsync(progress).ConfigureAwait(false);
+                status = await _service.GetVaultStatusAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                result = new CliInstallResult(false, CliInstallMethod.None, null, ex.Message);
+                DebugLogService.Log("Installer", $"Post-install status check failed: {ex.GetType().Name}: {ex.Message}");
+                status = VaultStatus.CliNotFound;
             }
 
-            _cliInstalling = false;
-            if (result.Success && result.CliPath != null)
+            if (status != VaultStatus.CliNotFound)
             {
-                DebugLogService.Log("Installer", $"CLI install succeeded via {result.Method}; applying {result.CliPath}");
+                DebugLogService.Log("Installer", $"CLI detected after install; status={status}");
+                _cliInstalling = false;
                 _cliInstallStatus = null;
-                // Fires CliConfigChanged -> OnCliConfigChanged re-checks vault status
-                // against the newly installed CLI and rebuilds the page.
-                _service.ApplyInstalledCli(result.CliPath);
+                if (!_handlingAction)
+                    RebuildForCurrentStatus();
+                return;
             }
-            else
-            {
-                _cliInstallFailed = true;
-                _cliInstallStatus = result.Error ?? "Installation failed - try the manual download";
-                DebugLogService.Log("Installer", $"CLI install failed: {_cliInstallStatus}");
-                RefreshCliNotFoundItems();
-            }
-        });
+
+            await Task.Delay(CliDetectPollMs).ConfigureAwait(false);
+        }
+
+        DebugLogService.Log("Installer", "CLI installed but status still CliNotFound after detect timeout");
+        FailCliInstall("Installed, but the CLI didn't respond yet. Reopen the palette, or retry.");
+    }
+
+    private void FailCliInstall(string message)
+    {
+        _cliInstalling = false;
+        _cliInstallFailed = true;
+        _cliInstallStatus = message;
+        DebugLogService.Log("Installer", $"CLI install failed: {message}");
+        RefreshCliNotFoundItems();
     }
 
     // GetItems only rebuilds on demand for the unlocked vault; for every other
