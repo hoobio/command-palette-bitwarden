@@ -306,6 +306,26 @@ jobs:
           manifest-path: ${{ env.APPXMANIFEST_PATH }}
           version: ${{ steps.version.outputs.version }}
 
+      # Unsigned (PR / contributor) builds can only be installed via
+      # `Add-AppxPackage -AllowUnsigned` when the publisher sits in the reserved
+      # unsigned namespace (the OID below). Windows also guarantees this identity
+      # never collides with the signed/Store build, so it's safe to diverge here.
+      # Signed builds skip this and keep the certificate-matching publisher.
+      - name: Use unsigned-namespace publisher (unsigned builds only)
+        if: env.SHOULD_BUILD == 'true' && (env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true')
+        shell: pwsh
+        env:
+          MANIFEST: ${{ env.APPXMANIFEST_PATH }}
+        run: |
+          [xml]$doc = Get-Content -LiteralPath $env:MANIFEST -Raw
+          $nsm = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+          $nsm.AddNamespace('d', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+          $identity = $doc.SelectSingleNode('/d:Package/d:Identity', $nsm)
+          if (-not $identity) { throw 'Identity element not found in manifest' }
+          $identity.SetAttribute('Publisher', 'CN=Hoobi, OID.2.25.311729368913984317654407730594956997722=1')
+          $doc.Save((Resolve-Path -LiteralPath $env:MANIFEST).Path)
+          Write-Host "::notice::Unsigned build - publisher set to the unsigned namespace; install with: Add-AppxPackage -Path <pkg>.msix -AllowUnsigned"
+
       - name: Build MSIX
         if: env.SHOULD_BUILD == 'true'
         uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.6.0
