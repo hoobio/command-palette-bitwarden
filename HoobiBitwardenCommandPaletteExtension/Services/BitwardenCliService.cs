@@ -62,6 +62,8 @@ internal sealed partial class BitwardenCliService
 
   public bool IsCacheLoaded => _cacheLoaded;
 
+  internal int CacheCount { get { lock (_cacheLock) return _cache.Count; } }
+
   public VaultStatus? LastStatus => _lastStatus;
 
   internal static string? ServerUrl { get; private set; }
@@ -412,17 +414,31 @@ internal sealed partial class BitwardenCliService
   {
     try
     {
-      // bw sync only requires authentication, not an unlocked vault: a stale
-      // session key will still pull the encrypted blob just fine and print
-      // "Syncing complete.", so sync alone is a false-positive session check.
-      // Pair it with a decryption-requiring call to actually exercise the
-      // session key. bw list folders is the cheapest such call - tiny payload
-      // but it has to decrypt to render. If the session is dead, RunCliAsync
-      // sees "Vault is locked" in stderr, fires HandleInvalidSession (which
-      // clears _sessionKey), and throws - the catch below returns false.
+      // Authoritative, network-free gate first. `bw status` reflects the active
+      // BW_SESSION and reports "unlocked" only when the session key actually
+      // unlocks the local vault; a locked or expired session reports "locked"
+      // (or "unauthenticated"). Checking this up front means a dead session is
+      // rejected definitively instead of being inferred later from an empty or
+      // failed list - the exact case that surfaced to users as "No items found"
+      // against an apparently-unlocked vault.
+      DebugLogService.Log("Verify", "Running bw status to gate session");
+      var statusJson = await RunCliAsync("status");
+      var status = JsonNode.Parse(statusJson)?["status"]?.GetValue<string>();
+      if (!string.Equals(status, "unlocked", StringComparison.OrdinalIgnoreCase))
+      {
+        DebugLogService.Log("Verify", $"bw status reports '{status ?? "null"}', session not unlocked");
+        _sessionKey = null;
+        return false;
+      }
+
+      // status can still report "unlocked" for a session key left stale by a
+      // server-side key rotation, so confirm with a sync (refresh local data)
+      // plus a decryption-requiring list folders. If the key can't decrypt,
+      // RunCliAsync sees "Vault is locked" in stderr, fires HandleInvalidSession
+      // (which clears _sessionKey), and throws - the catch below returns false.
       DebugLogService.Log("Verify", "Running bw sync");
       await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
-      DebugLogService.Log("Verify", "Running bw list folders to verify session");
+      DebugLogService.Log("Verify", "Running bw list folders to confirm decryption");
       await RunCliAsync("list folders");
       DebugLogService.Log("Verify", "Session verified successfully");
       return true;
@@ -1363,7 +1379,7 @@ internal sealed partial class BitwardenCliService
         try
         {
           await RefreshCacheAsync();
-          if (IsCacheLoaded)
+          if (IsCacheLoaded && CacheCount > 0)
           {
             SetStatus(VaultStatus.Unlocked);
             _ = Task.Run(async () =>
@@ -1375,6 +1391,14 @@ internal sealed partial class BitwardenCliService
             WarmupCompleted?.Invoke();
             return;
           }
+
+          // Loaded but empty: a stale session can return an empty `list` with no
+          // error (exit 0), which would render as "No items found" against an
+          // apparently-unlocked vault. Don't trust the fast path here - fall
+          // through to the authoritative status check below, which either
+          // confirms unlocked (and repopulates after its sync) or flips to
+          // Locked. A genuinely empty vault simply pays one slower launch.
+          DebugLogService.Log("Warmup", $"Fast restore cache empty/unloaded (loaded={IsCacheLoaded}, count={CacheCount}); verifying authoritatively");
         }
         catch (InvalidOperationException)
         {
