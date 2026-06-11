@@ -593,7 +593,7 @@ jobs:
           Write-Host "Prune:          $prune"
 
       - name: Generate CycloneDX SBOM
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-cyclonedx-sbom@feat/sbom-clean-scoping
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-cyclonedx-sbom@v2.3.1
         with:
           app-language: dotnet
           app-manifest-path: ${{ env.SOLUTION_PATH }}
@@ -609,7 +609,7 @@ jobs:
 
       - name: Upload SBOM to Dependency-Track
         if: env.DT_HOST != '' && env.DT_API_KEY != ''
-        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@feat/sbom-clean-scoping
+        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v2.3.1
         with:
           bom-path: ${{ env.BOM_FILE }}
           upload-artifact: 'false'
