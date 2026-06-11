@@ -313,7 +313,7 @@ internal sealed partial class BitwardenCliService
     try
     {
       DebugLogService.Log("Status", "GetVaultStatusAsync started");
-      if (!IsCliAvailable())
+      if (!await IsCliAvailableAsync())
       {
         DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
         return SetStatus(VaultStatus.CliNotFound);
@@ -392,7 +392,9 @@ internal sealed partial class BitwardenCliService
     return status;
   }
 
-  private bool IsCliAvailable()
+  private const int CliVersionTimeoutMs = 8_000;
+
+  private async Task<bool> IsCliAvailableAsync()
   {
     try
     {
@@ -409,13 +411,26 @@ internal sealed partial class BitwardenCliService
       psi.Environment["BW_NOINTERACTION"] = "true";
       psi.Environment["NO_COLOR"] = "1";
       using var process = _processFactory(psi);
-      var line = process.StandardOutput.ReadLine();
+      using var cts = new CancellationTokenSource(CliVersionTimeoutMs);
+      string? line;
+      try
+      {
+        line = await process.StandardOutput.ReadLineAsync(cts.Token);
+      }
+      catch (OperationCanceledException)
+      {
+        // A hung `bw --version` (e.g. a broken shim) must not hang the whole
+        // status check - that's what left the vault stuck on "Verifying...".
+        DebugLogService.Log("Status", $"bw --version timed out after {CliVersionTimeoutMs / 1000}s (exe: {CliExecutable})");
+        line = null;
+      }
       _cliVersion = line?.Trim();
       try { process.Kill(true); } catch { }
       return line != null;
     }
-    catch
+    catch (Exception ex)
     {
+      DebugLogService.Log("Status", $"IsCliAvailable failed: {ex.GetType().Name}: {ex.Message}");
       return false;
     }
   }

@@ -178,7 +178,31 @@ internal sealed class BitwardenCliInstaller
   // winget updates the registry PATH, but this process's copy was snapshotted at
   // launch, so a freshly winget-installed shim wouldn't be visible via PATH alone.
   public static string? ResolveInstalledCliPath() =>
-      GetCandidateCliPaths().FirstOrDefault(File.Exists);
+      WingetPackagesCliPath() ?? GetCandidateCliPaths().FirstOrDefault(File.Exists);
+
+  // Prefer the real winget package executable over the Links\bw.exe shim. That
+  // shim is a symlink, and bw (a Node single-file exe) can't locate its bundled
+  // snapshot when launched through it, so `bw --version` fails. The actual exe
+  // under WinGet\Packages\Bitwarden.CLI_*\ runs correctly.
+  internal static string? WingetPackagesCliPath()
+  {
+    try
+    {
+      var packages = Path.Combine(
+          Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+          "Microsoft", "WinGet", "Packages");
+      if (!Directory.Exists(packages))
+        return null;
+      return Directory.EnumerateDirectories(packages, "Bitwarden.CLI_*")
+          .SelectMany(d => Directory.EnumerateFiles(d, "bw.exe", SearchOption.AllDirectories))
+          .FirstOrDefault();
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Installer", $"WingetPackagesCliPath probe failed: {ex.GetType().Name}: {ex.Message}");
+      return null;
+    }
+  }
 
   internal static IEnumerable<string> GetCandidateCliPaths()
   {
