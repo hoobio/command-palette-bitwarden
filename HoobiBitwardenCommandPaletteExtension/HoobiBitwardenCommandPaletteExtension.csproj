@@ -211,5 +211,30 @@
              Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
   </Target>
 
+  <!--
+    Publish the companion WinUI 3 app (self-contained, matching RID) straight into the package
+    layout's Companion\ folder, so the second <Application> entry in Package.appxmanifest resolves
+    at register/package time. Runs after the extension build so the loose-registered dev package
+    (Add-AppxPackage -Register AppxManifest.xml) and CI packaging both include it. Set
+    IncludeCompanion=false to skip (e.g. for a fast extension-only inner loop).
+  -->
+  <PropertyGroup>
+    <IncludeCompanion Condition="'$(IncludeCompanion)' == ''">true</IncludeCompanion>
+    <CompanionProject>$(MSBuildProjectDirectory)\..\HoobiBitwardenCompanion\HoobiBitwardenCompanion.csproj</CompanionProject>
+    <CompanionRid Condition="'$(Platform)' == 'ARM64'">win-arm64</CompanionRid>
+    <CompanionRid Condition="'$(CompanionRid)' == ''">win-x64</CompanionRid>
+  </PropertyGroup>
+
+  <Target Name="PublishCompanionIntoPackage"
+          AfterTargets="Build"
+          Condition="'$(IncludeCompanion)' == 'true'">
+    <PropertyGroup>
+      <CompanionOutDir>$([System.IO.Path]::GetFullPath('$(OutDir)Companion\'))</CompanionOutDir>
+    </PropertyGroup>
+    <Message Importance="high" Text="Publishing companion ($(CompanionRid)) -> $(CompanionOutDir)" />
+    <MSBuild Projects="$(CompanionProject)"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=$(CompanionRid);SelfContained=true;PublishDir=$(CompanionOutDir)" />
+  </Target>
 
 </Project>
