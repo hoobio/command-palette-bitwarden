@@ -134,13 +134,16 @@ internal sealed partial class LoginForm : FormContent
 
   public override ICommandResult SubmitForm(string inputs, string data)
   {
-    EnterKeySubmitService.Disarm();
     var formInput = JsonNode.Parse(inputs)?.AsObject();
     var email = formInput?["Email"]?.GetValue<string>()?.Trim();
     var password = formInput?["MasterPassword"]?.GetValue<string>();
 
+    // Keep the form armed on an empty submit (KeepOpen leaves it open), else a
+    // single Enter on an empty field would disable Enter for the form's life.
     if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();
+
+    EnterKeySubmitService.Disarm();
 
     var remember = formInput?["RememberSession"]?.GetValue<string>() == "true";
     if (_settings != null && _settings.RememberSession.Value != remember)

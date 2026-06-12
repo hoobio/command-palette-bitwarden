@@ -24,6 +24,14 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 //
 // Known limitation: if PowerToys runs elevated and this extension does not, UIPI blocks
 // both the hook and UIA access, and Enter falls back to doing nothing (upstream status quo).
+//
+// Failsafe layering, so a global keyboard hook can never outlive a live form:
+//   1. The OS uninstalls the hook automatically if this process dies.
+//   2. The EVENT_SYSTEM_FOREGROUND WinEvent removes it the instant focus leaves
+//      Command Palette (covers the palette closing or being killed).
+//   3. A watchdog timer is the backstop for (2): out-of-context WinEvents can be
+//      dropped under load, so every tick it removes the hook if it's still
+//      installed while Command Palette is no longer the foreground window.
 internal static unsafe partial class EnterKeySubmitService
 {
   // Tests toggle this off so page GetContent calls don't install a real hook.
@@ -39,6 +47,8 @@ internal static unsafe partial class EnterKeySubmitService
   private static bool _pumpStarted;
   private static long _lastInvokeTimestamp;
   private static readonly ConcurrentDictionary<uint, bool> _pidIsCmdPal = new();
+  private static Timer? _watchdog;
+  private const int WatchdogIntervalMs = 2000;
 
   internal static void Arm(string submitButtonName)
   {
@@ -78,6 +88,26 @@ internal static unsafe partial class EnterKeySubmitService
       thread.Start();
       _pumpReady.Wait(TimeSpan.FromSeconds(5));
       _pumpStarted = true;
+      _watchdog ??= new Timer(static _ => WatchdogTick(), null, WatchdogIntervalMs, WatchdogIntervalMs);
+    }
+  }
+
+  // Backstop for a dropped foreground WinEvent (see class header): if the hook is
+  // still installed but Command Palette isn't foreground anymore, tear it down.
+  private static void WatchdogTick()
+  {
+    try
+    {
+      if (_keyboardHook == 0 || IsCommandPaletteWindow(GetForegroundWindow()))
+        return;
+
+      _armedButtonName = null;
+      if (_pumpStarted)
+        PostThreadMessageW(_pumpThreadId, WM_APP_UNINSTALL_HOOK, 0, 0);
+    }
+    catch
+    {
+      // Backstop must never throw on a timer thread.
     }
   }
 

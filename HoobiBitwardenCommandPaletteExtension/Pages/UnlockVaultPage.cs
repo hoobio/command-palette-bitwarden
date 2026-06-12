@@ -104,7 +104,6 @@ internal sealed partial class UnlockForm : FormContent
 
   public override ICommandResult SubmitForm(string inputs, string data)
   {
-    EnterKeySubmitService.Disarm();
     var formInput = JsonNode.Parse(inputs)?.AsObject();
     var actionData = JsonNode.Parse(data)?.AsObject();
     var action = actionData?["action"]?.GetValue<string>();
@@ -118,16 +117,21 @@ internal sealed partial class UnlockForm : FormContent
 
     if (action == "biometric")
     {
+      EnterKeySubmitService.Disarm();
       _onBiometricUnlock?.Invoke();
       // Same behavior as the password path: the unlock runs asynchronously
       // on the parent page (status + items refresh), so the form is done.
       return CommandResult.GoBack();
     }
 
+    // Keep the form armed on an empty submit (form stays open via KeepOpen),
+    // otherwise pressing Enter once with an empty field would disable Enter
+    // for the rest of the form's life. Disarm only when we navigate away.
     var password = formInput?["MasterPassword"]?.GetValue<string>();
     if (string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();
 
+    EnterKeySubmitService.Disarm();
     _onSubmit?.Invoke(password);
     return CommandResult.GoBack();
   }
