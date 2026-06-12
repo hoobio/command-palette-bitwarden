@@ -1,0 +1,19 @@
+<Page
+    x:Class="HoobiBitwardenCompanion.Views.PlaceholderPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    mc:Ignorable="d"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+
+    <Border Style="{StaticResource SectionCardStyle}"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Stretch">
+        <StackPanel Spacing="{StaticResource SpacingSmall}">
+            <TextBlock Text="Bitwarden Companion" Style="{StaticResource PageHeaderTextStyle}" />
+            <TextBlock x:Name="DescriptionText" Style="{StaticResource PageSubheaderTextStyle}" />
+            <TextBlock Text="Phase 1 skeleton - real flows land in later phases."
+                       Style="{StaticResource MutedCaptionTextStyle}" />
+        </StackPanel>
+    </Border>
+</Page>
