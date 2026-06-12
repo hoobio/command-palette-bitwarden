@@ -1,9 +1,51 @@
-# GitHub Copilot Instructions
+# Agent Instructions
+
+Guidance for AI coding agents (Copilot, Claude Code, etc.) working in this repository.
+
+## Local Build & Deploy
+
+This is an out-of-process Command Palette extension (a packaged WinRT COM server). To see a code change live you must rebuild, re-register the package, and restart PowerToys.
+
+VS Code task **Build, Kill & Deploy (Debug x64)** (`.vscode/tasks.json`) runs the full cycle: kill PowerToys, build, register the loose package, restart PowerToys. The equivalent commands:
+
+```powershell
+# 1. Stop PowerToys, Command Palette, and the extension host so files unlock
+@('PowerToys','Microsoft.CmdPal.UI','HoobiBitwardenCommandPaletteExtension') +
+  ((Get-Process | Where-Object ProcessName -like 'Microsoft.CmdPal.Ext.*').ProcessName | Select-Object -Unique) |
+  Select-Object -Unique | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue }
+
+# 2. Build (Debug stamps the side-by-side "Dev" channel identity)
+dotnet build .\HoobiBitwardenCommandPaletteExtension\HoobiBitwardenCommandPaletteExtension.csproj -c Debug /p:Platform=x64
+
+# 3. Register the loose layout, then restart PowerToys
+$out = '.\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64'
+Copy-Item "$out\..\..\..\..\..\Assets\*" "$out\Assets" -Recurse -Force
+Add-AppxPackage -Register -Path "$out\AppxManifest.xml" -ForceUpdateFromAnyVersion
+Start-Process 'shell:AppsFolder\Microsoft.PowerToysWin32'
+```
+
+Debug builds install as a separate **Dev** channel (`Hoobi.BitwardenCommandPaletteExtension.Dev`, display name suffixed `(Dev)`) so they sit side by side with a production install. Test against the **(Dev)** entry in Command Palette.
+
+### Working in a git worktree (important)
+
+`Add-AppxPackage -Register` deduplicates on package **identity + version**. The Dev identity and version (`1.10.0.0`) are the same across every checkout, so if a Dev package is already registered (e.g. pointing at the main checkout's `bin`), registering again from a worktree's `bin` is silently skipped (`Deployed.` prints, but `InstallLocation` does not change). You then run old code and think the change "did nothing".
+
+When deploying from a worktree, force the registration to repoint:
+
+```powershell
+# Confirm where the Dev package currently points
+(Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension.Dev').InstallLocation
+
+# If it isn't your worktree bin: remove it, then re-register from the worktree
+Remove-AppxPackage -Package (Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension.Dev').PackageFullName
+Add-AppxPackage -Register -Path "<worktree>\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppxManifest.xml" -ForceUpdateFromAnyVersion
+```
+
+Stamping note: a Debug build rewrites `Package.appxmanifest` to the Dev identity as a side effect. Don't commit that change. If the generated output `AppxManifest.xml` ever goes stale (shows the Release identity), delete `bin\...\win-x64\AppxManifest.xml` and `bin\...\win-x64\AppX` and rebuild to regenerate it.
 
 ## Git Commit Message Format
 
-All commit messages MUST follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for release-please compatibility.
-Commits and pull requests in this repo DO NOT require an Azure DevOps work item number as this repo is not associated with an Azure DevOps project.
+All commit messages MUST follow [Conventional Commits](https://www.conventionalcommits.org/) for release-please compatibility. Commits and PRs in this repo do NOT require an Azure DevOps work item number (this repo isn't associated with an ADO project).
 
 ### Required Format
 
@@ -87,14 +129,12 @@ feat(utils): another feature in the same PR
 - Only `feat`, `fix`, `perf`, and `revert` types produce changelog entries; `ci`, `test`, `docs`, `chore` do not
 - These additional entries each produce their own changelog line
 
-## Notes
+### Notes
 
 - First line limited to 72 characters
 - Description uses imperative mood ("add" not "adds" or "added")
 - No period at end of description
 - Emoji are NOT allowed (incompatible with release-please)
-
----
 
 ## Command Palette Extension SDK Reference
 
@@ -122,7 +162,7 @@ When you need to look up SDK types, interfaces, properties, or capabilities, use
 - **IDL (full API surface):** https://raw.githubusercontent.com/microsoft/PowerToys/main/src/modules/cmdpal/extensionsdk/Microsoft.CommandPalette.Extensions/Microsoft.CommandPalette.Extensions.idl
 - **Toolkit C# wrappers:** https://github.com/microsoft/PowerToys/tree/main/src/modules/cmdpal/extensionsdk/Microsoft.CommandPalette.Extensions.Toolkit
 - Key files: `ListItem.cs`, `Tag.cs`, `DynamicListPage.cs`, `ColorHelpers.cs`, `StatusMessage.cs`, `CommandResult.cs`
-- Use `fetch_webpage` to read raw source files directly from GitHub
+- Read raw source files directly from GitHub
 
 ### 5. Inspecting NuGet DLLs (last resort)
 
@@ -142,25 +182,19 @@ When you need to look up SDK types, interfaces, properties, or capabilities, use
 - `StatusMessage` - Status bar message with `MessageState` (`Info`, `Success`, `Warning`, `Error`)
 - `IconInfo` - Icon from Segoe MDL2 Assets unicode or image URL
 
----
-
 ## PowerShell Terminal Commands
 
 - In PowerShell, the escape character is a backtick (`` ` ``), **not** a backslash (`\`)
 - When constructing multi-line strings or escaping quotes in terminal commands, use `` `" `` not `\"`
 - Example: `gh pr create --body "line one`nline two"` not `"line one\nline two"`
 
----
-
 ## Code Coverage
 
 Every C# source file touched in a PR must meet **50% line coverage** (measured against unit tests in `HoobiBitwardenCommandPaletteExtension.Tests`). The CI pipeline enforces this and will fail the PR if the threshold is not met.
 
 - When adding or modifying logic in a `.cs` file, add or update tests in the corresponding test file under `HoobiBitwardenCommandPaletteExtension.Tests/`
-- Files listed in `.github/coverage-exclusions.json` are exempt from the threshold (e.g. UI-only pages that can't be unit tested)
+- Files listed in `.github/coverage-exclusions.json` are exempt from the threshold (e.g. UI-only pages, Win32/COM interop that can't be unit tested)
 - Test files themselves (`*.Tests/**`) are excluded from coverage measurement
-
----
 
 ## Wiki Documentation (`docs/`)
 
@@ -168,8 +202,8 @@ The `docs/` folder contains GitHub Wiki pages documenting all extension function
 
 ### When to Update
 
-- **Adding a feature**: Add relevant details to the appropriate wiki page, or create a new page if the feature is significant. Update [Home.md](../docs/Home.md) and [\_Sidebar.md](../docs/_Sidebar.md) if adding a new page.
+- **Adding a feature**: Add relevant details to the appropriate wiki page, or create a new page if the feature is significant. Update [Home.md](docs/Home.md) and [\_Sidebar.md](docs/_Sidebar.md) if adding a new page.
 - **Changing behavior**: Update the page that describes the affected feature.
-- **Adding/changing settings**: Update [Settings.md](../docs/Settings.md) with the new setting's type, default, and description.
-- **Changing sort order or tags**: Update [Search-and-Filtering.md](../docs/Search-and-Filtering.md) and/or [Watchtower-Tags.md](../docs/Watchtower-Tags.md).
-- **Changing architecture/services**: Update [Architecture.md](../docs/Architecture.md).
+- **Adding/changing settings**: Update [Settings.md](docs/Settings.md) with the new setting's type, default, and description.
+- **Changing sort order or tags**: Update [Search-and-Filtering.md](docs/Search-and-Filtering.md) and/or [Watchtower-Tags.md](docs/Watchtower-Tags.md).
+- **Changing architecture/services**: Update [Architecture.md](docs/Architecture.md).

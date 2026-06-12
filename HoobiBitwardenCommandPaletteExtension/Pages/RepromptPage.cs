@@ -82,11 +82,17 @@ internal sealed partial class RepromptPage : ContentPage
     _form = new RepromptForm(service, itemId, innerAction, actionLabel);
   }
 
-  public override IContent[] GetContent() => [_form];
+  public override IContent[] GetContent()
+  {
+    EnterKeySubmitService.Arm(RepromptForm.SubmitButtonTitle);
+    return [_form];
+  }
 }
 
 internal sealed partial class RepromptForm : FormContent
 {
+  internal const string SubmitButtonTitle = "Verify & Continue";
+
   private readonly BitwardenCliService _service;
   private readonly string _itemId;
   private readonly Action _innerAction;
@@ -220,6 +226,7 @@ internal sealed partial class RepromptForm : FormContent
   // time it has already been treated as cancelled).
   private CommandResult HandleBiometric()
   {
+    EnterKeySubmitService.Disarm();
     RepromptPage.RaiseBiometricRequested(
       new BiometricVerificationRequest(_itemId, _service, _innerAction, _actionLabel));
     return CommandResult.GoBack();
@@ -266,6 +273,7 @@ internal sealed partial class RepromptForm : FormContent
       return CommandResult.KeepOpen();
     }
 
+    EnterKeySubmitService.Disarm();
     RepromptPage.RecordVerification(_itemId);
     try { _innerAction(); }
     catch (Exception ex)

@@ -410,11 +410,16 @@ public class VaultItemHelperTests
     RepromptPage.GracePeriodSeconds = 60;
     RepromptPage.ClearGracePeriod();
 
-    RepromptPage.RecordVerification("item-a");
-
+    // Start from a clean slate: a stale grace.json from an older build (which
+    // did persist) must not make this regression test pass or fail spuriously.
     var graceFile = Path.Combine(
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
       "HoobiBitwardenCommandPalette", "grace.json");
+    if (File.Exists(graceFile))
+      File.Delete(graceFile);
+
+    RepromptPage.RecordVerification("item-a");
+
     Assert.False(File.Exists(graceFile));
     RepromptPage.ClearGracePeriod();
   }
