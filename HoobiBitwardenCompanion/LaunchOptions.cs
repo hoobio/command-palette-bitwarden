@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HoobiBitwardenCompanionIpc;
 
 namespace HoobiBitwardenCompanion;
 
@@ -12,9 +13,9 @@ internal enum CompanionMode
 }
 
 // What the companion was asked to do, parsed from the launch command line the extension passes
-// (e.g. `--mode item --id <guid>`). The extension is the vault authority; the id just tells the
-// companion which item to drive over IPC.
-internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId)
+// (e.g. `--mode item --id <guid> --pipe <name>`). The extension is the vault authority; the id tells
+// the companion which item to drive over IPC and the pipe name is the channel back to the extension.
+internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId, string? PipeName)
 {
     public static LaunchOptions Parse(string[] argv)
     {
@@ -22,18 +23,21 @@ internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId)
         for (var i = 0; i < argv.Length - 1; i++)
         {
             if (argv[i].StartsWith("--", StringComparison.Ordinal))
-                args[argv[i][2..]] = argv[i + 1];
+                args[argv[i]] = argv[i + 1];
         }
 
-        var mode = args.TryGetValue("mode", out var m) ? m.ToLowerInvariant() : "login";
-        var itemId = args.GetValueOrDefault("id");
+        var mode = args.TryGetValue(IpcLaunchArgs.Mode, out var m) ? m.ToLowerInvariant() : "login";
+        var itemId = args.GetValueOrDefault(IpcLaunchArgs.ItemId);
+        var pipe = args.GetValueOrDefault(IpcLaunchArgs.Pipe);
 
-        return mode switch
+        var parsedMode = mode switch
         {
-            "item" or "detail" => new LaunchOptions(CompanionMode.ItemDetail, itemId),
-            "generate" => new LaunchOptions(CompanionMode.Generate, null),
-            "rotate" => new LaunchOptions(CompanionMode.QuickRotate, itemId),
-            _ => new LaunchOptions(CompanionMode.Login, null),
+            "item" or "detail" => CompanionMode.ItemDetail,
+            "generate" => CompanionMode.Generate,
+            "rotate" => CompanionMode.QuickRotate,
+            _ => CompanionMode.Login,
         };
+
+        return new LaunchOptions(parsedMode, itemId, pipe);
     }
 }

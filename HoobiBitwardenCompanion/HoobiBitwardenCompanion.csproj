@@ -37,4 +37,9 @@
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared IPC contract, linked (not copied) so it stays identical to the extension's copy. -->
+    <Compile Include="..\Shared\CompanionIpc.cs" Link="Shared\CompanionIpc.cs" />
+  </ItemGroup>
 </Project>

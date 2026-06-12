@@ -34,6 +34,11 @@
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Shared IPC contract, linked (not copied) so it stays identical to the companion's copy. -->
+    <Compile Include="..\Shared\CompanionIpc.cs" Link="Shared\CompanionIpc.cs" />
+  </ItemGroup>
+
   <!--
     Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
     Tools extension to be activated for this project even if the Windows App SDK Nuget
