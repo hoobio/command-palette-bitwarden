@@ -1,21 +1,28 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
+using HoobiBitwardenCompanion.Services;
 using HoobiBitwardenCompanion.Views;
 using Windows.Graphics;
 
 namespace HoobiBitwardenCompanion;
 
+[SuppressMessage("Reliability", "CA1001", Justification = "_ipc is disposed in the Closed handler; Window cannot implement IDisposable.")]
 public sealed partial class MainWindow : Window
 {
     private readonly LaunchOptions _options;
+    private ExtensionIpcClient? _ipc;
 
     internal MainWindow(LaunchOptions options)
     {
         _options = options;
         InitializeComponent();
+
+        Closed += (_, _) => _ipc?.Dispose();
 
         // Theme-aware Mica, matching the Earmark house style. The Window-level SystemBackdrop
         // tracks the app theme on its own, so no manual controller wiring is needed.
@@ -28,22 +35,39 @@ public sealed partial class MainWindow : Window
         UpdateCaptionButtonColors();
 
         Resize(720, 900);
-        Navigate();
+        _ = InitializeAsync();
     }
 
-    private void Navigate()
+    private async Task InitializeAsync()
     {
-        // Phase 1 skeleton: a single placeholder until the real pages land. The Frame and
-        // mode switch are the seams later phases plug login/detail/generate/rotate pages into.
-        var description = _options.Mode switch
+        VaultClient? client = null;
+        if (!string.IsNullOrEmpty(_options.PipeName))
         {
-            CompanionMode.ItemDetail => $"Item detail / edit\nItem id: {_options.ItemId ?? "(none)"}",
-            CompanionMode.Generate => "Standalone password generator",
-            CompanionMode.QuickRotate => $"Quick Rotate\nItem id: {_options.ItemId ?? "(none)"}",
-            _ => "Login / unlock",
-        };
+            _ipc = new ExtensionIpcClient(_options.PipeName);
+            try
+            {
+                await _ipc.ConnectAsync();
+                client = new VaultClient(_ipc);
+            }
+            catch (Exception ex)
+            {
+                ContentFrame.Navigate(typeof(PlaceholderPage),
+                    $"Could not connect to the Bitwarden extension.\n{ex.Message}");
+                return;
+            }
+        }
 
-        ContentFrame.Navigate(typeof(PlaceholderPage), description);
+        var context = new CompanionContext(client, _options);
+        switch (_options.Mode)
+        {
+            case CompanionMode.Generate:
+                ContentFrame.Navigate(typeof(GeneratePage), context);
+                break;
+            default:
+                ContentFrame.Navigate(typeof(PlaceholderPage),
+                    $"Mode '{_options.Mode}' is not built yet (Phase 1 in progress).");
+                break;
+        }
     }
 
     private void Resize(int width, int height)

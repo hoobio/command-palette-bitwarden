@@ -39,7 +39,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Shared IPC contract, linked (not copied) so it stays identical to the extension's copy. -->
-    <Compile Include="..\Shared\CompanionIpc.cs" Link="Shared\CompanionIpc.cs" />
+    <!-- Shared, process-agnostic source linked (not copied) from the extension/Shared folder:
+         IPC contract + framing, generator options, item model + parser. One source of truth. -->
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+    <Compile Include="..\HoobiBitwardenCommandPaletteExtension\Models\BitwardenItem.cs" Link="Shared\BitwardenItem.cs" />
+    <Compile Include="..\HoobiBitwardenCommandPaletteExtension\Models\BitwardenItemParser.cs" Link="Shared\BitwardenItemParser.cs" />
   </ItemGroup>
 </Project>

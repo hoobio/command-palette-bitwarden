@@ -1,7 +1,5 @@
 using System;
-using System.Buffers.Binary;
 using System.IO.Pipes;
-using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,8 +18,6 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 // in the same MSIX package and the pipe's default ACL restricts it to the current user.
 internal sealed partial class CompanionIpcServer : IDisposable
 {
-  private const int MaxMessageBytes = 4 * 1024 * 1024;
-
   private readonly string _pipeName;
   private readonly BitwardenCliService _service;
   private readonly CancellationTokenSource _cts = new();
@@ -85,7 +81,7 @@ internal sealed partial class CompanionIpcServer : IDisposable
       {
         while (pipe.IsConnected && !_cts.IsCancellationRequested)
         {
-          var request = await ReadMessageAsync(pipe, _cts.Token);
+          var request = await IpcFraming.ReadMessageAsync(pipe, _cts.Token);
           if (request == null) break;
 
           JsonObject response;
@@ -99,7 +95,7 @@ internal sealed partial class CompanionIpcServer : IDisposable
             response = Error(request[IpcFields.Id]?.GetValue<int>() ?? 0, ex.Message);
           }
 
-          await WriteMessageAsync(pipe, response, _cts.Token);
+          await IpcFraming.WriteMessageAsync(pipe, response, _cts.Token);
         }
       }
       catch (OperationCanceledException) { }
@@ -289,42 +285,6 @@ internal sealed partial class CompanionIpcServer : IDisposable
     [IpcFields.Ok] = false,
     [IpcFields.Error] = message,
   };
-
-  private static async Task<JsonObject?> ReadMessageAsync(NamedPipeServerStream pipe, CancellationToken token)
-  {
-    var lengthBuffer = new byte[4];
-    if (!await ReadExactAsync(pipe, lengthBuffer, token)) return null;
-
-    var length = BinaryPrimitives.ReadInt32LittleEndian(lengthBuffer);
-    if (length <= 0 || length > MaxMessageBytes) return null;
-
-    var payload = new byte[length];
-    if (!await ReadExactAsync(pipe, payload, token)) return null;
-
-    return JsonNode.Parse(Encoding.UTF8.GetString(payload)) as JsonObject;
-  }
-
-  private static async Task WriteMessageAsync(NamedPipeServerStream pipe, JsonObject message, CancellationToken token)
-  {
-    var payload = Encoding.UTF8.GetBytes(message.ToJsonString());
-    var frame = new byte[4 + payload.Length];
-    BinaryPrimitives.WriteInt32LittleEndian(frame, payload.Length);
-    Buffer.BlockCopy(payload, 0, frame, 4, payload.Length);
-    await pipe.WriteAsync(frame, token);
-    await pipe.FlushAsync(token);
-  }
-
-  private static async Task<bool> ReadExactAsync(NamedPipeServerStream pipe, byte[] buffer, CancellationToken token)
-  {
-    var offset = 0;
-    while (offset < buffer.Length)
-    {
-      var read = await pipe.ReadAsync(buffer.AsMemory(offset), token);
-      if (read == 0) return false;
-      offset += read;
-    }
-    return true;
-  }
 
   public void Dispose()
   {

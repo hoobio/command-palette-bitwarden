@@ -35,8 +35,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Shared IPC contract, linked (not copied) so it stays identical to the companion's copy. -->
-    <Compile Include="..\Shared\CompanionIpc.cs" Link="Shared\CompanionIpc.cs" />
+    <!-- Shared, process-agnostic source linked (not copied) into both the extension and the
+         companion: IPC contract + framing, generator options, item model + parser. One source of
+         truth, no duplication. The live BitwardenCliService session stays extension-only. -->
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!--

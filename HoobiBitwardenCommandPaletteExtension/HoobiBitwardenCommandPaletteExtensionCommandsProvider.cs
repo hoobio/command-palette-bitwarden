@@ -38,6 +38,18 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
 #endif
                 Subtitle = "Search your vault",
             },
+            // Standalone generator (Phase 1 §3.7): opens the companion window. Generation runs in the
+            // extension via IPC, so it needs no unlocked vault and writes nothing.
+            new CommandItem(new AnonymousCommand(() => CompanionLauncher.Launch(_service, CompanionLauncher.ModeGenerate))
+            {
+                Name = "Generate",
+                Result = CommandResult.Dismiss(),
+            })
+            {
+                Title = "Generate password",
+                Subtitle = "Create a password or passphrase",
+                Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
+            },
         ];
 
         Settings = _settingsManager.Settings;

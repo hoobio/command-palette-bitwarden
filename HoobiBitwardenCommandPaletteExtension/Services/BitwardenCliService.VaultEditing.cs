@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCompanionIpc;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -162,7 +163,7 @@ internal sealed partial class BitwardenCliService
 
   internal static BitwardenItem? ParseSingleItem(string json)
   {
-    try { return TryParseItemNode(JsonNode.Parse(json)); }
+    try { return BitwardenItemParser.TryParseItemNode(JsonNode.Parse(json)); }
     catch { return null; }
   }
 

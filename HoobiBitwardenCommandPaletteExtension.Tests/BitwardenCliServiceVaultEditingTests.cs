@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
+using HoobiBitwardenCompanionIpc;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
