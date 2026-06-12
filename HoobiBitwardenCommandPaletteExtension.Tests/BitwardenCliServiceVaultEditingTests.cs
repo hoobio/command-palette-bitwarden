@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Text.Json.Nodes;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -198,5 +199,53 @@ public class BitwardenCliServiceVaultEditingTests
     var args = BitwardenCliService.BuildArgString(opts.ToCliArgs());
 
     Assert.Contains("--separator \" \"", args, StringComparison.Ordinal);
+  }
+
+  // --- Quick Rotate target selection ---
+
+  [Fact]
+  public void TrySetSingleHiddenSecret_LoginPassword_SetsIt()
+  {
+    var item = JsonNode.Parse("{\"login\":{\"password\":\"old\"}}")!.AsObject();
+
+    var ok = BitwardenCliService.TrySetSingleHiddenSecret(item, "NEW", out var error);
+
+    Assert.True(ok);
+    Assert.Null(error);
+    Assert.Equal("NEW", item["login"]!["password"]!.GetValue<string>());
+  }
+
+  [Fact]
+  public void TrySetSingleHiddenSecret_SingleHiddenField_SetsIt()
+  {
+    var item = JsonNode.Parse("{\"fields\":[{\"name\":\"api\",\"value\":\"old\",\"type\":1}]}")!.AsObject();
+
+    var ok = BitwardenCliService.TrySetSingleHiddenSecret(item, "NEW", out var error);
+
+    Assert.True(ok);
+    Assert.Null(error);
+    Assert.Equal("NEW", item["fields"]![0]!["value"]!.GetValue<string>());
+  }
+
+  [Fact]
+  public void TrySetSingleHiddenSecret_NoSecret_Fails()
+  {
+    var item = JsonNode.Parse("{\"login\":{\"username\":\"u\"}}")!.AsObject();
+
+    var ok = BitwardenCliService.TrySetSingleHiddenSecret(item, "NEW", out var error);
+
+    Assert.False(ok);
+    Assert.NotNull(error);
+  }
+
+  [Fact]
+  public void TrySetSingleHiddenSecret_PasswordAndHiddenField_IsAmbiguous()
+  {
+    var item = JsonNode.Parse("{\"login\":{\"password\":\"p\"},\"fields\":[{\"name\":\"x\",\"value\":\"v\",\"type\":1}]}")!.AsObject();
+
+    var ok = BitwardenCliService.TrySetSingleHiddenSecret(item, "NEW", out var error);
+
+    Assert.False(ok);
+    Assert.NotNull(error);
   }
 }
