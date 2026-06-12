@@ -1134,6 +1134,15 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
             return;
 
+        // Only auto-trigger in the foreground. The startup warmup completes on a
+        // background thread and fires WarmupCompleted -> RebuildForCurrentStatus
+        // before the user has opened the palette; prompting for Windows Hello then
+        // pops a verification dialog the user has no context for. _initialLoadStarted
+        // flips only when the user actually opens the page (GetItems) or changes the
+        // CLI config, so it gates this to genuine foreground interactions.
+        if (!_initialLoadStarted)
+            return;
+
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true
                             && _settings?.AutoBiometricUnlock.Value == true;
         var rememberSession = _settings?.RememberSession.Value == true;
