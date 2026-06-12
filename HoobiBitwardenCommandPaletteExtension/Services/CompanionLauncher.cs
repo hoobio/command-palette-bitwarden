@@ -55,21 +55,32 @@ internal static class CompanionLauncher
       return;
     }
 
-    var psi = new ProcessStartInfo(exePath) { UseShellExecute = false };
-    psi.ArgumentList.Add(IpcLaunchArgs.Mode);
-    psi.ArgumentList.Add(mode);
-    psi.ArgumentList.Add(IpcLaunchArgs.Pipe);
-    psi.ArgumentList.Add(pipeName);
+    var args = new System.Collections.Generic.List<string> { IpcLaunchArgs.Mode, mode, IpcLaunchArgs.Pipe, pipeName };
     if (!string.IsNullOrEmpty(itemId))
     {
-      psi.ArgumentList.Add(IpcLaunchArgs.ItemId);
-      psi.ArgumentList.Add(itemId);
+      args.Add(IpcLaunchArgs.ItemId);
+      args.Add(itemId);
     }
+
+    // The command line must lead with the program name (argv[0]) so the companion's argument parser
+    // and CreateProcessW both see it correctly.
+    var commandLine = BitwardenCliService.QuoteArgIfNeeded(exePath) + " " + BitwardenCliService.BuildArgString(args);
+    var workingDir = Path.GetDirectoryName(exePath) ?? AppContext.BaseDirectory;
 
     try
     {
+      // Break away from the package so the unpackaged self-contained companion doesn't inherit the
+      // extension's MSIX identity (which crashes WinUI at startup). Fall back to Process.Start.
+      if (DesktopAppLauncher.TryLaunchDetached(exePath, commandLine, workingDir))
+      {
+        DebugLogService.Log("CompanionIpc", $"Launched companion (detached): mode={mode} id={itemId ?? "(none)"}");
+        return;
+      }
+
+      DebugLogService.Log("CompanionIpc", "Detached launch failed; falling back to Process.Start");
+      var psi = new ProcessStartInfo(exePath) { UseShellExecute = false, WorkingDirectory = workingDir };
+      foreach (var a in args) psi.ArgumentList.Add(a);
       Process.Start(psi);
-      DebugLogService.Log("CompanionIpc", $"Launched companion: mode={mode} id={itemId ?? "(none)"}");
     }
     catch (Exception ex)
     {

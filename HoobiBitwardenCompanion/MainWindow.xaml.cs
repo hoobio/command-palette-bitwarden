@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
@@ -34,8 +35,18 @@ public sealed partial class MainWindow : Window
         RootGrid.ActualThemeChanged += (_, _) => UpdateCaptionButtonColors();
         UpdateCaptionButtonColors();
 
-        Resize(720, 900);
+        ResizeAndCenter(720, 900);
+        Activated += OnFirstActivated;
         _ = InitializeAsync();
+    }
+
+    // Bring the freshly launched window to the foreground on its current monitor (it's spawned by
+    // the extension, so it won't always steal focus on its own).
+    private void OnFirstActivated(object sender, WindowActivatedEventArgs e)
+    {
+        Activated -= OnFirstActivated;
+        try { SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)); }
+        catch { /* best-effort */ }
     }
 
     private async Task InitializeAsync()
@@ -79,13 +90,30 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void Resize(int width, int height)
+    private void ResizeAndCenter(int width, int height)
     {
-        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
-        width = Math.Min(width, area.WorkArea.Width - 80);
-        height = Math.Min(height, area.WorkArea.Height - 80);
-        AppWindow.Resize(new SizeInt32(width, height));
+        // Center on the monitor under the cursor (where the user is working), not the primary.
+        var area = GetCursorPos(out var cursor)
+            ? DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest)
+            : DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+        var work = area.WorkArea;
+        width = Math.Min(width, work.Width - 80);
+        height = Math.Min(height, work.Height - 80);
+        var x = work.X + ((work.Width - width) / 2);
+        var y = work.Y + ((work.Height - height) / 2);
+        AppWindow.MoveAndResize(new RectInt32(x, y, width, height));
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetCursorPos(out POINT lpPoint);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(IntPtr hWnd);
 
     private void UpdateCaptionButtonColors()
     {

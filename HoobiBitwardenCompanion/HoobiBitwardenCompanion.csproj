@@ -14,6 +14,7 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- The companion ships inside the extension's MSIX as a second <Application>. It does not
          produce its own package, so it builds as a self-contained Windows App SDK exe (no
