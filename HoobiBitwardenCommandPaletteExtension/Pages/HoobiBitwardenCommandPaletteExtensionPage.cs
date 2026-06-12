@@ -1306,7 +1306,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             try
             {
                 ShowLoadingStatus("Logging in...", "bw login");
-                var (success, error, twoFactorRequired, deviceVerificationRequired) = await _service.LoginAsync(email, password, null);
+                // Pass the chosen method on the first attempt so Email (1) triggers the
+                // CLI's send-email-login call. Non-Email methods stay method-less here
+                // (see LoginAsync); the method is also kept for the second (code) attempt.
+                var (success, error, twoFactorRequired, deviceVerificationRequired) = await _service.LoginAsync(email, password, null, twoFactorMethod);
                 if (!success)
                 {
                     if (twoFactorRequired)
