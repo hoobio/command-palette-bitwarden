@@ -18,11 +18,17 @@ internal sealed partial class UnlockVaultPage : ContentPage
     _form = new UnlockForm(service, settings, onSubmit, onBiometricUnlock);
   }
 
-  public override IContent[] GetContent() => [_form];
+  public override IContent[] GetContent()
+  {
+    EnterKeySubmitService.Arm(UnlockForm.SubmitButtonTitle);
+    return [_form];
+  }
 }
 
 internal sealed partial class UnlockForm : FormContent
 {
+  internal const string SubmitButtonTitle = "Unlock";
+
   private readonly BitwardenCliService _service;
   private readonly BitwardenSettingsManager? _settings;
   private readonly Action<string>? _onSubmit;
@@ -69,7 +75,7 @@ internal sealed partial class UnlockForm : FormContent
                 "actions": [
                     {
                         "type": "Action.Submit",
-                        "title": "Unlock",
+                        "title": "{{SubmitButtonTitle}}",
                         "data": { "action": "password" }
                     }{{windowsHelloAction}}
                 ]
@@ -81,13 +87,6 @@ internal sealed partial class UnlockForm : FormContent
                 "valueOn": "true",
                 "valueOff": "false",
                 "value": "{{(rememberChecked ? "true" : "false")}}"
-            },
-            {
-                "type": "TextBlock",
-                "text": "[Upvote this issue](https://github.com/microsoft/PowerToys/issues/46003) to help bring Enter key support.",
-                "wrap": true,
-                "isSubtle": true,
-                "size": "small"
             }
         ]
     }
@@ -105,6 +104,7 @@ internal sealed partial class UnlockForm : FormContent
 
   public override ICommandResult SubmitForm(string inputs, string data)
   {
+    EnterKeySubmitService.Disarm();
     var formInput = JsonNode.Parse(inputs)?.AsObject();
     var actionData = JsonNode.Parse(data)?.AsObject();
     var action = actionData?["action"]?.GetValue<string>();

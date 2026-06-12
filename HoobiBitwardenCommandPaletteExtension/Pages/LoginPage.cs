@@ -18,11 +18,17 @@ internal sealed partial class LoginPage : ContentPage
     _form = new LoginForm(service, settings, onSubmit);
   }
 
-  public override IContent[] GetContent() => [_form];
+  public override IContent[] GetContent()
+  {
+    EnterKeySubmitService.Arm(LoginForm.SubmitButtonTitle);
+    return [_form];
+  }
 }
 
 internal sealed partial class LoginForm : FormContent
 {
+  internal const string SubmitButtonTitle = "Login";
+
   // Sentinel value in the ChoiceSet for "don't pass --method to bw login".
   // Numeric values match Bitwarden's TwoFactorProviderType enum
   // (libs/common/src/auth/enums/two-factor-provider-type.ts in bitwarden/clients).
@@ -101,7 +107,7 @@ internal sealed partial class LoginForm : FormContent
                 "actions": [
                     {
                         "type": "Action.Submit",
-                        "title": "Login"
+                        "title": "{{SubmitButtonTitle}}"
                     }
                 ]
             },
@@ -112,13 +118,6 @@ internal sealed partial class LoginForm : FormContent
                 "valueOn": "true",
                 "valueOff": "false",
                 "value": "{{(rememberChecked ? "true" : "false")}}"
-            },
-            {
-                "type": "TextBlock",
-                "text": "[Upvote this issue](https://github.com/microsoft/PowerToys/issues/46003) to help bring Enter key support.",
-                "wrap": true,
-                "isSubtle": true,
-                "size": "small"
             }
         ]
     }
@@ -135,6 +134,7 @@ internal sealed partial class LoginForm : FormContent
 
   public override ICommandResult SubmitForm(string inputs, string data)
   {
+    EnterKeySubmitService.Disarm();
     var formInput = JsonNode.Parse(inputs)?.AsObject();
     var email = formInput?["Email"]?.GetValue<string>()?.Trim();
     var password = formInput?["MasterPassword"]?.GetValue<string>();
