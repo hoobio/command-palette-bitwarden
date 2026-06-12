@@ -95,23 +95,50 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     <EnableAotAnalyzer>true</EnableAotAnalyzer>
-
-    <!-- Add .Debug suffix to package name for side-by-side installation -->
-    <PackageNameSuffix>.Debug</PackageNameSuffix>
-    <DisplayNameSuffix> (Dev)</DisplayNameSuffix>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'!='Debug'">
-    <!-- In Release builds, trimming is enabled by default. 
+    <!-- In Release builds, trimming is enabled by default.
          feel free to disable this if needed -->
     <PublishTrimmed>true</PublishTrimmed>
 
     <!-- In release, also ignore the aforementioned ILLink warning -->
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
+  </PropertyGroup>
 
-    <!-- No suffix for release builds -->
+  <!--
+    Side-by-side channel identity. PackageChannel (Dev | Prerelease | Release) selects a
+    distinct package Identity Name, DisplayName, and COM activation CLSID so all three
+    channels install and run alongside each other (Add/Remove Programs, Command Palette,
+    COM activation). It defaults to Dev for local Debug builds and Release otherwise; CI
+    sets the PackageChannel env var to Prerelease for the release-please pre-release build.
+    The CLSID per channel must stay in lockstep with the [Guid] attribute selected in
+    HoobiBitwardenCommandPaletteExtension.cs (see CHANNEL_* DefineConstants below).
+  -->
+  <PropertyGroup>
+    <PackageChannel Condition="'$(PackageChannel)'=='' and '$(Configuration)'=='Debug'">Dev</PackageChannel>
+    <PackageChannel Condition="'$(PackageChannel)'==''">Release</PackageChannel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PackageChannel)'=='Dev'">
+    <PackageNameSuffix>.Dev</PackageNameSuffix>
+    <DisplayNameSuffix> (Dev)</DisplayNameSuffix>
+    <ComServerClsid>ef6edc31-9567-4d38-8463-4a59b038148d</ComServerClsid>
+    <DefineConstants>$(DefineConstants);CHANNEL_DEV</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PackageChannel)'=='Prerelease'">
+    <PackageNameSuffix>.Prerelease</PackageNameSuffix>
+    <DisplayNameSuffix> (Prerelease)</DisplayNameSuffix>
+    <ComServerClsid>e874e604-b64e-42f1-b391-756d4d406c51</ComServerClsid>
+    <DefineConstants>$(DefineConstants);CHANNEL_PRERELEASE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PackageChannel)'=='Release'">
     <PackageNameSuffix></PackageNameSuffix>
     <DisplayNameSuffix></DisplayNameSuffix>
+    <ComServerClsid>8345c10d-0df8-4116-a767-3f8647adf4df</ComServerClsid>
+    <DefineConstants>$(DefineConstants);CHANNEL_RELEASE</DefineConstants>
   </PropertyGroup>
 
   <Target Name="StampPackageIdentityName" BeforeTargets="Build;_ConvertItems">
@@ -167,6 +194,20 @@
     <XmlPoke XmlInputPath="$(AppxManifestPath)"
              Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/@Description"
              Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
+    <!-- Stamp the per-channel COM activation CLSID. The Command Palette host activates the
+         extension by this class id; each channel needs its own so two channels don't claim
+         the same CLSID and collide. Must match the [Guid] in HoobiBitwardenCommandPaletteExtension.cs. -->
+    <Message Text="Stamping COM server CLSID: $(ComServerClsid)" Importance="high" Condition="'$(ComServerClsid)' != ''" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Condition="'$(ComServerClsid)' != ''"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/com:Class/@Id"
+             Value="$(ComServerClsid)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Condition="'$(ComServerClsid)' != ''"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/uap3:Properties/ns:CmdPalProvider/ns:Activation/ns:CreateInstance/@ClassId"
+             Value="$(ComServerClsid)"
              Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
   </Target>
 

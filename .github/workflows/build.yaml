@@ -273,6 +273,11 @@ jobs:
       # Sign on release-please PRs and on main pushes; PRs from contributors stay unsigned.
       SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
+      # Side-by-side package identity. The release-please pre-release PR builds the Prerelease
+      # channel (its own Identity Name, DisplayName, and COM CLSID); every other shipped build
+      # is Release. MSBuild promotes this env var to the $(PackageChannel) property the .csproj
+      # reads. Local Debug builds default to the Dev channel.
+      PackageChannel: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') && 'Prerelease' || 'Release' }}
     steps:
       - name: Skip notice (no code changes)
         if: env.SHOULD_BUILD != 'true'
