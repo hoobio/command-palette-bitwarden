@@ -43,16 +43,9 @@
         </uap3:Extension>
       </Extensions>
     </Application>
-    <!-- Companion WinUI 3 app: a second full-trust executable shipped in the same package so it
-         shares package identity and %LOCALAPPDATA% with the extension. Hidden from the Start menu
-         (AppListEntry="none"); launched by the extension. Its files are published into the
-         Companion\ folder by the PublishCompanionIntoPackage build target in the .csproj. -->
-    <Application Id="Companion" Executable="Companion\HoobiBitwardenCompanion.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="Bitwarden Companion" Description="Bitwarden Companion" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" AppListEntry="none">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
-        <uap:SplashScreen Image="Assets\SplashScreen.png" />
-      </uap:VisualElements>
-    </Application>
+    <!-- The companion ships in this package's Companion\ folder (PublishCompanionIntoPackage target)
+         but is NOT a second <Application>: it's unpackaged + self-contained and launched by the
+         extension via Process.Start. Declaring it as a packaged app fails to register (0x80070490). -->
   </Applications>
   <Capabilities>
     <Capability Name="internetClient" />

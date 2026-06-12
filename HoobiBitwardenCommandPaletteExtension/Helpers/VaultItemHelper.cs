@@ -32,8 +32,18 @@ internal static partial class VaultItemHelper
 
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null)
   {
-    if (item.Reprompt == 1 && service != null && !RepromptPage.IsWithinGracePeriod(item.Id))
-      return new RepromptPage(service, item.Id, BuildDefaultAction(item), "Open");
+    // Primary action (Enter) opens the WinUI detail/edit window (Phase 1 §3.4). The website,
+    // web vault, and SSH session stay one keystroke away as context actions. Falls back to the
+    // legacy open behaviour when no service (companion) is available.
+    if (service != null)
+    {
+      void OpenDetail() => CompanionLauncher.Launch(service, CompanionLauncher.ModeItem, item.Id);
+
+      if (item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id))
+        return new RepromptPage(service, item.Id, OpenDetail, "Open");
+
+      return Track(item.Id, new AnonymousCommand(OpenDetail) { Name = "Open", Result = CommandResult.Dismiss() });
+    }
 
     return Track(item.Id, item.Type switch
     {
@@ -42,17 +52,6 @@ internal static partial class VaultItemHelper
       _ => BuildOpenInWebVaultCommand(item.Id),
     });
   }
-
-  private static Action BuildDefaultAction(BitwardenItem item) => item.Type switch
-  {
-    BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) =>
-      () => Process.Start(new ProcessStartInfo(item.FirstUri) { UseShellExecute = true }),
-    BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
-      () => { try { Process.Start(new ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } },
-    _ => () => Process.Start(new ProcessStartInfo(
-      $"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
-    { UseShellExecute = true }),
-  };
 
   internal static CommandContextItem[] BuildContextItems(BitwardenItem item, BitwardenCliService? service = null)
   {
@@ -245,17 +244,8 @@ internal static partial class VaultItemHelper
 
   private static void AddCompanionContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService service)
   {
-    items.Add(new CommandContextItem(new AnonymousCommand(() => CompanionLauncher.Launch(service, CompanionLauncher.ModeItem, id))
-    {
-      Name = "View & Edit",
-      Result = CommandResult.Dismiss(),
-    })
-    {
-      Title = "View & Edit",
-      Icon = new IconInfo(""),
-      RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.Enter),
-    });
-
+    // Enter already opens the detail/edit window (GetDefaultCommand). Only Quick Rotate is added
+    // here, for items with a single rotatable secret.
     var hiddenCount = item.CustomFields.Values.Count(f => f.IsHidden);
     var hasLoginPassword = item.Type == BitwardenItemType.Login && !string.IsNullOrEmpty(item.Password);
     var singleSecret = (hasLoginPassword ? 1 : 0) + hiddenCount == 1;
