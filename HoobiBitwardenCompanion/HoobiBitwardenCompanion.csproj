@@ -20,6 +20,8 @@
          framework dependency) that is copied into the package layout by the extension build. -->
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-$(Platform.ToLower())</RuntimeIdentifier>
 
     <!-- No AOT/trim constraint for the companion (JIT is fine); keep trimming off so WinUI
          reflection-driven XAML works without trim annotations. -->
@@ -33,6 +35,9 @@
          compiler on modern .NET and builds cleanly (matches the Earmark.App house-style project).
          Safe to diverge because the companion is a separate self-contained exe/process. -->
     <PackageReference Include="Microsoft.WindowsAppSDK" VersionOverride="2.1.3" />
+    <!-- Force a coherent self-contained runtime layout (WindowsAppSDK#6071): the 2.1.3 metapackage
+         otherwise pulls a mismatched runtime, and the WinUI startup fails. Mirrors Earmark.App. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" VersionOverride="2.1.3" />
   </ItemGroup>
 
   <ItemGroup>
