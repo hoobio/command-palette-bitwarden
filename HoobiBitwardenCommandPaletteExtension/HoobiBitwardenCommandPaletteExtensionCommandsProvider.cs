@@ -14,8 +14,10 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
 
     public HoobiBitwardenCommandPaletteExtensionCommandsProvider()
     {
-#if DEBUG
+#if CHANNEL_DEV
         DisplayName = "Bitwarden (Dev)";
+#elif CHANNEL_PRERELEASE
+        DisplayName = "Bitwarden (Prerelease)";
 #else
         DisplayName = "Bitwarden";
 #endif
@@ -27,8 +29,10 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         _commands = [
             new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(_service, _settingsManager))
             {
-#if DEBUG
+#if CHANNEL_DEV
                 Title = "Bitwarden (Dev)",
+#elif CHANNEL_PRERELEASE
+                Title = "Bitwarden (Prerelease)",
 #else
                 Title = "Bitwarden",
 #endif
