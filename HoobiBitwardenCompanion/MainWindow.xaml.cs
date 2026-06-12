@@ -63,6 +63,12 @@ public sealed partial class MainWindow : Window
             case CompanionMode.Generate:
                 ContentFrame.Navigate(typeof(GeneratePage), context);
                 break;
+            case CompanionMode.ItemDetail:
+                ContentFrame.Navigate(typeof(ItemDetailPage), context);
+                break;
+            case CompanionMode.QuickRotate:
+                ContentFrame.Navigate(typeof(QuickRotatePage), context);
+                break;
             default:
                 ContentFrame.Navigate(typeof(PlaceholderPage),
                     $"Mode '{_options.Mode}' is not built yet (Phase 1 in progress).");

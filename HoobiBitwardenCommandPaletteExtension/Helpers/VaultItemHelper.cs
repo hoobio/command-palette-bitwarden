@@ -60,6 +60,11 @@ internal static partial class VaultItemHelper
     var id = item.Id;
     var reprompt = item.Reprompt == 1 ? service : null;
 
+    // Companion WinUI actions (Phase 1 §3.4/§3.8): full detail/edit window, and Quick Rotate for
+    // items with a single rotatable secret. Launched out-of-process; the extension drives the vault.
+    if (service != null)
+      AddCompanionContextItems(items, item, id, service);
+
     switch (item.Type)
     {
       case BitwardenItemType.Login:
@@ -86,7 +91,7 @@ internal static partial class VaultItemHelper
     {
       items.Add(new CommandContextItem(Track(id, BuildOpenInWebVaultCommand(id)))
       {
-        Title = "View in Web Vault",
+        Title = "Open in Web Vault",
         Icon = new IconInfo("\uE774"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.O),
       });
@@ -236,6 +241,37 @@ internal static partial class VaultItemHelper
 
     if (item.Uris.Count > 0 && item.Uris.Any(u => u.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
       tags.Add(new Tag("Insecure URL") { Foreground = ColorHelpers.FromRgb(0xF2, 0x87, 0x79) });
+  }
+
+  private static void AddCompanionContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService service)
+  {
+    items.Add(new CommandContextItem(new AnonymousCommand(() => CompanionLauncher.Launch(service, CompanionLauncher.ModeItem, id))
+    {
+      Name = "View & Edit",
+      Result = CommandResult.Dismiss(),
+    })
+    {
+      Title = "View & Edit",
+      Icon = new IconInfo(""),
+      RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.Enter),
+    });
+
+    var hiddenCount = item.CustomFields.Values.Count(f => f.IsHidden);
+    var hasLoginPassword = item.Type == BitwardenItemType.Login && !string.IsNullOrEmpty(item.Password);
+    var singleSecret = (hasLoginPassword ? 1 : 0) + hiddenCount == 1;
+    if (singleSecret)
+    {
+      items.Add(new CommandContextItem(new AnonymousCommand(() => CompanionLauncher.Launch(service, CompanionLauncher.ModeRotate, id))
+      {
+        Name = "Quick Rotate",
+        Result = CommandResult.Dismiss(),
+      })
+      {
+        Title = "Quick Rotate",
+        Icon = new IconInfo(""),
+        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.R),
+      });
+    }
   }
 
   private static void AddLoginContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
