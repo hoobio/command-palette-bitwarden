@@ -8,6 +8,10 @@
     "reason": "Entry point, WinRT activation boilerplate"
   },
   {
+    "pattern": "HoobiBitwardenCommandPaletteExtension\\.cs$",
+    "reason": "IExtension COM server class, WinRT activation boilerplate, cannot be instantiated in unit tests"
+  },
+  {
     "pattern": "CommandsProvider\\.cs$",
     "reason": "Bootstraps WinRT SDK types (CommandItem, CommandProvider) in constructor, cannot be instantiated in unit tests"
   },
