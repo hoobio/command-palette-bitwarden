@@ -50,6 +50,17 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
                 Subtitle = "Create a password or passphrase",
                 Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
             },
+            // WinUI login/unlock window (Phase 1 §3.3): drives login/unlock/biometrics over IPC.
+            new CommandItem(new AnonymousCommand(() => CompanionLauncher.Launch(_service, CompanionLauncher.ModeLogin))
+            {
+                Name = "Sign in",
+                Result = CommandResult.Dismiss(),
+            })
+            {
+                Title = "Sign in to Bitwarden",
+                Subtitle = "Log in or unlock in a dedicated window",
+                Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
+            },
         ];
 
         Settings = _settingsManager.Settings;

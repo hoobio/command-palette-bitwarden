@@ -57,9 +57,12 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        var context = new CompanionContext(client, _options);
+        var context = new CompanionContext(client, _options, Close);
         switch (_options.Mode)
         {
+            case CompanionMode.Login:
+                ContentFrame.Navigate(typeof(LoginPage), context);
+                break;
             case CompanionMode.Generate:
                 ContentFrame.Navigate(typeof(GeneratePage), context);
                 break;
