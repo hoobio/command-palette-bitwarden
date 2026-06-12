@@ -247,17 +247,44 @@ public class BitwardenCliServiceMockedTests
     Assert.Contains("--code", factory.LastPsi!.Arguments, StringComparison.Ordinal);
   }
 
-  [Fact]
-  public async Task Login_MethodWithoutCode_OmitsMethodFlag()
+  [Theory]
+  [InlineData(0)]   // Authenticator/TOTP
+  [InlineData(3)]   // YubiKey OTP
+  public async Task Login_NonEmailMethodWithoutCode_OmitsMethodFlag(int method)
   {
-    // We deliberately do NOT pass --method on the first login attempt (no code),
-    // because that would make bw call postTwoFactorEmail for Email 2FA, which
-    // vaultwarden rejects with 422 (missing deviceIdentifier).
+    // For non-Email methods we don't pass --method on the first attempt (no code):
+    // a self-hosted server picking the wrong default would reject a valid code (#139/#158).
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Two-step login is required.\n", exitCode: 1));
+    await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: method);
+    Assert.DoesNotContain("--method", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    Assert.DoesNotContain("--code", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public async Task Login_EmailMethodWithoutCode_PassesMethodToTriggerSend()
+  {
+    // Email is the exception: the CLI only emails a code when --method 1 is passed
+    // (it calls send-email-login), so we trigger it on the first attempt (#157).
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Two-step login is required.\n", exitCode: 1));
     await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: 1);
-    Assert.DoesNotContain("--method", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+    Assert.Contains("--method 1", factory.LastPsi!.Arguments, StringComparison.Ordinal);
     Assert.DoesNotContain("--code", factory.LastPsi!.Arguments, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public async Task Login_EmailMethod_ServerRejectsWith422_ReturnsUseAnotherMethodError()
+  {
+    // vaultwarden without the #7225 fix 422s send-email-login. Rather than prompt
+    // for a code that never arrives, surface a clear "use another method" error.
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"response\":null,\"statusCode\":422}\n", stderr: "", exitCode: 1));
+    var (success, error, twoFa, deviceVerification) = await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: 1);
+    Assert.False(success);
+    Assert.False(twoFa);
+    Assert.False(deviceVerification);
+    Assert.Contains("Email 2FA isn't supported", error!, StringComparison.Ordinal);
   }
 
   [Fact]

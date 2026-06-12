@@ -729,6 +729,9 @@ internal sealed partial class BitwardenCliService
     }
   }
 
+  // Bitwarden TwoFactorProviderType value for Email 2FA (see two-factor-provider-type.ts).
+  internal const int EmailTwoFactorMethod = 1;
+
   // Default twoFactorMethod is 0 (Authenticator/TOTP). Self-hosted servers can
   // otherwise return a different default (e.g. email) when --method is omitted,
   // causing valid TOTP codes to be rejected as invalid (issue #139). Pass an
@@ -741,19 +744,25 @@ internal sealed partial class BitwardenCliService
     {
       var sanitizedEmail = email.Replace("\"", "");
       var args = $"login \"{sanitizedEmail}\" --passwordenv BW_MP";
-      // Only pass --method alongside --code on the second attempt. Tempting as it
-      // is to send --method on the first attempt too (so the CLI picks the right
-      // provider straight away and triggers Email 2FA's postTwoFactorEmail call),
-      // vaultwarden < 1.36 (and master at the time of writing) rejects
-      // postTwoFactorEmail with 422 because its SendEmailLoginData struct
-      // mandates deviceIdentifier, which the bw CLI doesn't include in the body.
-      // See vaultwarden src/api/core/two_factor/email.rs and issue #139 thread.
+      // For non-Email methods we don't pass --method on the first attempt (no code):
+      // letting the CLI report the required provider avoids a self-hosted server
+      // picking the wrong default and rejecting a valid TOTP code (issue #139/#158).
+      // Email is the exception: the CLI only emails a code when it calls
+      // send-email-login, which it does only when --method 1 is supplied. So Email
+      // gets the flag on the first attempt to actually trigger the send. On servers
+      // missing the vaultwarden #7225 fix this 422s (SendEmailLoginData mandates a
+      // deviceIdentifier the CLI never sends); we detect that below and surface a
+      // "use another method" error instead of a dead-end code prompt (issue #157).
       if (!string.IsNullOrEmpty(twoFactorCode))
       {
         var sanitizedCode = twoFactorCode.Replace("\"", "");
         args += twoFactorMethod.HasValue
             ? $" --method {twoFactorMethod.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)} --code \"{sanitizedCode}\""
             : $" --code \"{sanitizedCode}\"";
+      }
+      else if (twoFactorMethod == EmailTwoFactorMethod)
+      {
+        args += $" --method {EmailTwoFactorMethod.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
       }
       args += " --raw";
 
@@ -833,6 +842,21 @@ internal sealed partial class BitwardenCliService
         if (_settings?.RememberSession.Value == true)
           SessionStore.Save(stdout);
         return (true, null, false, false);
+      }
+
+      // Email 2FA send rejected by the server. vaultwarden before the #7225 fix
+      // 422s send-email-login (its SendEmailLoginData mandates a deviceIdentifier
+      // the bw CLI doesn't send), so the code is never emailed. Surface an
+      // actionable message instead of prompting for a code that will never arrive.
+      var combined = stdout + "\n" + stderr;
+      if (twoFactorMethod == EmailTwoFactorMethod && string.IsNullOrEmpty(twoFactorCode)
+          && combined.Contains("422", StringComparison.Ordinal)
+          && combined.Contains("statusCode", StringComparison.OrdinalIgnoreCase))
+      {
+        DebugLogService.Log("Auth", "Email 2FA send rejected with 422 - server lacks the send-email-login fix (#157)");
+        return (false,
+            "Email 2FA isn't supported by this server yet (requires new Vaultwarden release #157).",
+            false, false);
       }
 
       var needs2fa = stderr.Contains("Two-step", StringComparison.OrdinalIgnoreCase)
