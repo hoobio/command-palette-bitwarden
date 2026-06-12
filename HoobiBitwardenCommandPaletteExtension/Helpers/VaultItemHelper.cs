@@ -42,7 +42,7 @@ internal static partial class VaultItemHelper
       if (item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id))
         return new RepromptPage(service, item.Id, OpenDetail, "Open");
 
-      return Track(item.Id, new AnonymousCommand(OpenDetail) { Name = "Open", Result = CommandResult.Dismiss() });
+      return Track(item.Id, new AnonymousCommand(OpenDetail) { Name = "Open", Icon = new IconInfo(""), Result = CommandResult.Dismiss() });
     }
 
     return Track(item.Id, item.Type switch

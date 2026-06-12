@@ -11,23 +11,25 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 internal static partial class DesktopAppLauncher
 {
   private const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
-  // ProcThreadAttributeValue(ProcThreadAttributeDesktopAppPolicy=12, Thread=false, Input=true, Additive=false)
-  private const nuint PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY = 0x0002000C;
+  // ProcThreadAttributeValue(ProcThreadAttributeDesktopAppPolicy=18, Thread=false, Input=true, Additive=false)
+  // = 18 | PROC_THREAD_ATTRIBUTE_INPUT(0x20000) = 0x00020012.
+  private const nuint PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY = 0x00020012;
   private const uint PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE = 0x00000001;
 
-  public static bool TryLaunchDetached(string exePath, string commandLine, string workingDirectory)
+  public static (bool Ok, int Win32Error) TryLaunchDetached(string exePath, string commandLine, string workingDirectory, Action<string>? log = null)
   {
     nuint size = 0;
     InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size); // query required size
+    log?.Invoke($"attr-list size={size}");
     var attributeList = Marshal.AllocHGlobal((nint)size);
     try
     {
       if (!InitializeProcThreadAttributeList(attributeList, 1, 0, ref size))
-        return false;
+        return (false, LogErr(log, "Initialize"));
 
       uint policy = PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE;
       if (!UpdateProcThreadAttribute(attributeList, 0, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, ref policy, sizeof(uint), IntPtr.Zero, IntPtr.Zero))
-        return false;
+        return (false, LogErr(log, "Update"));
 
       var startupInfo = new STARTUPINFOEXW();
       startupInfo.StartupInfo.cb = (uint)Marshal.SizeOf<STARTUPINFOEXW>();
@@ -52,14 +54,22 @@ internal static partial class DesktopAppLauncher
       {
         CloseHandle(processInfo.hThread);
         CloseHandle(processInfo.hProcess);
+        return (true, 0);
       }
-      return created;
+      return (false, LogErr(log, "CreateProcess"));
     }
     finally
     {
       DeleteProcThreadAttributeList(attributeList);
       Marshal.FreeHGlobal(attributeList);
     }
+  }
+
+  private static int LogErr(Action<string>? log, string step)
+  {
+    var err = Marshal.GetLastWin32Error();
+    log?.Invoke($"{step} failed win32={err}");
+    return err;
   }
 
   [StructLayout(LayoutKind.Sequential)]

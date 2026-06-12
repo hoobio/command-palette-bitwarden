@@ -67,23 +67,28 @@ internal static class CompanionLauncher
     var commandLine = BitwardenCliService.QuoteArgIfNeeded(exePath) + " " + BitwardenCliService.BuildArgString(args);
     var workingDir = Path.GetDirectoryName(exePath) ?? AppContext.BaseDirectory;
 
+    LaunchLog($"exe={exePath} exists={File.Exists(exePath)} cmd={commandLine}");
     try
     {
       // Break away from the package so the unpackaged self-contained companion doesn't inherit the
       // extension's MSIX identity (which crashes WinUI at startup). Fall back to Process.Start.
-      if (DesktopAppLauncher.TryLaunchDetached(exePath, commandLine, workingDir))
+      var (detached, win32Error) = DesktopAppLauncher.TryLaunchDetached(exePath, commandLine, workingDir, LaunchLog);
+      if (detached)
       {
+        LaunchLog("launched detached (breakaway) OK");
         DebugLogService.Log("CompanionIpc", $"Launched companion (detached): mode={mode} id={itemId ?? "(none)"}");
         return;
       }
 
-      DebugLogService.Log("CompanionIpc", "Detached launch failed; falling back to Process.Start");
+      LaunchLog($"detached launch FAILED (win32={win32Error}); falling back to Process.Start");
       var psi = new ProcessStartInfo(exePath) { UseShellExecute = false, WorkingDirectory = workingDir };
       foreach (var a in args) psi.ArgumentList.Add(a);
       Process.Start(psi);
+      LaunchLog("Process.Start fallback launched");
     }
     catch (Exception ex)
     {
+      LaunchLog($"EXCEPTION: {ex.GetType().Name}: {ex.Message}");
       DebugLogService.Log("CompanionIpc", $"Failed to launch companion: {ex.GetType().Name}: {ex.Message}");
     }
   }
@@ -101,6 +106,18 @@ internal static class CompanionLauncher
       // Fallback for non-packaged contexts: alongside the extension binary.
       return Path.Combine(AppContext.BaseDirectory, "Companion", "HoobiBitwardenCompanion.exe");
     }
+  }
+
+  // Temporary on-disk launch diagnostics (the in-memory debug log isn't reachable while iterating).
+  private static void LaunchLog(string message)
+  {
+    try
+    {
+      var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HoobiBitwardenCommandPalette");
+      Directory.CreateDirectory(dir);
+      File.AppendAllText(Path.Combine(dir, "companion-launch.log"), $"{DateTime.Now:HH:mm:ss} {message}{Environment.NewLine}");
+    }
+    catch { }
   }
 
   private static string BuildPipeName()
