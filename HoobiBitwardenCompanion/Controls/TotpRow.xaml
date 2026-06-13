@@ -45,7 +45,7 @@
             <Button x:Name="CopyButton"
                     Grid.Column="2"
                     Style="{StaticResource GhostIconButtonStyle}"
-                    ToolTipService.ToolTip="Copy code"
+                    ToolTipService.ToolTip="Copy code&#x0a;(Ctrl+Alt+C)"
                     VerticalAlignment="Center"
                     Click="OnCopyClick">
                 <FontIcon Glyph="&#xE8C8;" FontSize="16" />

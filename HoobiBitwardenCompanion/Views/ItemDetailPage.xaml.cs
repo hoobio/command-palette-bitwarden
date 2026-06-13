@@ -60,6 +60,7 @@ public sealed partial class ItemDetailPage : Page
     {
         AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control, CopyUsername);
         AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, CopyPassword);
+        AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Menu, CopyTotp);
         AddAccelerator(Windows.System.VirtualKey.O, Windows.System.VirtualKeyModifiers.Control, () => _ = OpenInWebVaultAsync());
         AddAccelerator(Windows.System.VirtualKey.Enter, Windows.System.VirtualKeyModifiers.Menu, OpenInBrowser);
     }
@@ -81,6 +82,17 @@ public sealed partial class ItemDetailPage : Page
     private void CopyPassword()
     {
         if (LoginField("password") is { Length: > 0 } p) ClipboardHelper.Copy(p, "Password");
+    }
+
+    private void CopyTotp()
+    {
+        if (LoginField("totp") is not { Length: > 0 } seed) return;
+        try
+        {
+            var (code, _, _) = HoobiBitwardenCompanionIpc.TotpCalculator.ComputeCode(seed);
+            ClipboardHelper.Copy(code, "TOTP");
+        }
+        catch { /* invalid seed */ }
     }
 
     private void OpenInBrowser()
