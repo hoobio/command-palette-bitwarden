@@ -81,7 +81,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - id: rp
-        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v2.3.1
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
           app-private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
@@ -306,7 +306,7 @@ jobs:
 
       - name: Stamp Package.appxmanifest version
         if: env.SHOULD_BUILD == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v2.3.1
         with:
           manifest-path: ${{ env.APPXMANIFEST_PATH }}
           version: ${{ steps.version.outputs.version }}
@@ -333,7 +333,7 @@ jobs:
 
       - name: Build MSIX
         if: env.SHOULD_BUILD == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v2.3.1
         with:
           project-path: ${{ env.PROJECT_PATH }}
           platform: ${{ matrix.platform }}
@@ -362,7 +362,7 @@ jobs:
 
       - name: Sign MSIX
         if: env.SHOULD_BUILD == 'true' && env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v2.3.1
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -464,7 +464,7 @@ jobs:
       # which (because the .wxs filename matches ASSET_BASE_NAME) is already the
       # final asset name we want for upload + release.
       - name: Build MSI
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v2.3.1
         with:
           wix-source-path: ${{ env.WIX_SOURCE_PATH }}
           version: ${{ steps.version.outputs.version }}
@@ -478,7 +478,7 @@ jobs:
 
       - name: Sign MSI
         if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v2.3.1
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -519,7 +519,7 @@ jobs:
           path: msix
 
       - name: Run WACK
-        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v2.3.1
         with:
           msix-path: msix
           report-path: wack-report-${{ matrix.platform }}.xml
@@ -752,7 +752,7 @@ jobs:
       # from follow-up workflow triggers, which is why v1.9.1 only uploaded to
       # Dependency-Track under channel=ci/main.
       - name: Publish draft release
-        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v1.6.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v2.3.1
         with:
           tag: ${{ needs.release-please.outputs.tag_name }}
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
