@@ -205,6 +205,12 @@
       <ExtensionOutDir>$([System.IO.Path]::GetFullPath('$(OutDir)Extension\'))</ExtensionOutDir>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing extension ($(ExtensionRid)) -> $(ExtensionOutDir)" />
+    <!-- Restore the extension for the target RID first: it's a separate project invoked via the
+         MSBuild task (not a ProjectReference), so the package project's restore doesn't cover it -
+         on a clean CI runner its project.assets.json would be missing (NETSDK1004). -->
+    <MSBuild Projects="$(ExtensionProject)"
+             Targets="Restore"
+             Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=$(ExtensionRid);PackageChannel=$(PackageChannel)" />
     <MSBuild Projects="$(ExtensionProject)"
              Targets="Publish"
              Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=$(ExtensionRid);PublishDir=$(ExtensionOutDir);PackageChannel=$(PackageChannel)" />
