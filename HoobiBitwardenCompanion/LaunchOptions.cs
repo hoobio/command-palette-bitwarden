@@ -12,10 +12,17 @@ internal enum CompanionMode
     QuickRotate = 3,
 }
 
+internal enum BackdropMode
+{
+    Mica = 0,
+    Acrylic = 1,
+    Solid = 2,
+}
+
 // What the companion was asked to do, parsed from the launch command line the extension passes
 // (e.g. `--mode item --id <guid> --pipe <name>`). The extension is the vault authority; the id tells
 // the companion which item to drive over IPC and the pipe name is the channel back to the extension.
-internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId, string? PipeName)
+internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId, string? PipeName, BackdropMode Backdrop)
 {
     public static LaunchOptions Parse(string[] argv)
     {
@@ -38,6 +45,13 @@ internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId, string?
             _ => CompanionMode.Login,
         };
 
-        return new LaunchOptions(parsedMode, itemId, pipe);
+        var backdrop = args.GetValueOrDefault(IpcLaunchArgs.Backdrop)?.ToLowerInvariant() switch
+        {
+            "acrylic" => BackdropMode.Acrylic,
+            "solid" => BackdropMode.Solid,
+            _ => BackdropMode.Mica,
+        };
+
+        return new LaunchOptions(parsedMode, itemId, pipe, backdrop);
     }
 }

@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
@@ -25,9 +26,7 @@ public sealed partial class MainWindow : Window
 
         Closed += (_, _) => _ipc?.Dispose();
 
-        // Theme-aware Mica, matching the Earmark house style. The Window-level SystemBackdrop
-        // tracks the app theme on its own, so no manual controller wiring is needed.
-        SystemBackdrop = new MicaBackdrop();
+        ApplyBackdrop(_options.Backdrop);
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -119,6 +118,26 @@ public sealed partial class MainWindow : Window
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetForegroundWindow(IntPtr hWnd);
+
+    // Window background material, chosen in the Command Palette settings and passed at launch.
+    // Mica/Acrylic use the built-in Window backdrops (they track the app theme themselves); Solid
+    // drops the backdrop and paints an opaque themed fill so the window stays readable.
+    private void ApplyBackdrop(BackdropMode mode)
+    {
+        switch (mode)
+        {
+            case BackdropMode.Acrylic when DesktopAcrylicController.IsSupported():
+                SystemBackdrop = new DesktopAcrylicBackdrop();
+                break;
+            case BackdropMode.Mica when MicaController.IsSupported():
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
+                break;
+            default:
+                SystemBackdrop = null;
+                RootGrid.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
+                break;
+        }
+    }
 
     private void UpdateCaptionButtonColors()
     {

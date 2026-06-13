@@ -82,4 +82,5 @@ internal static class IpcLaunchArgs
     public const string Mode = "--mode";
     public const string ItemId = "--id";
     public const string Pipe = "--pipe";
+    public const string Backdrop = "--backdrop";  // Mica | Acrylic | Solid
 }

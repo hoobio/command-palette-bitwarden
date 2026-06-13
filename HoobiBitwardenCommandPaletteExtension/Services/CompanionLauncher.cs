@@ -27,6 +27,11 @@ internal static class CompanionLauncher
   public const string ModeGenerate = "generate";
   public const string ModeRotate = "rotate";
 
+  // Backdrop material for companion windows, kept in sync from settings (single source of truth on
+  // the extension). Passed on the command line so the window can pick its material at construction,
+  // before the IPC channel is up.
+  public static string Backdrop { get; set; } = "Mica";
+
   private static readonly System.Threading.Lock Gate = new();
   private static CompanionIpcServer? _server;
   private static string? _pipeName;
@@ -65,6 +70,8 @@ internal static class CompanionLauncher
     psi.ArgumentList.Add(mode);
     psi.ArgumentList.Add(IpcLaunchArgs.Pipe);
     psi.ArgumentList.Add(pipeName);
+    psi.ArgumentList.Add(IpcLaunchArgs.Backdrop);
+    psi.ArgumentList.Add(Backdrop);
     if (!string.IsNullOrEmpty(itemId))
     {
       psi.ArgumentList.Add(IpcLaunchArgs.ItemId);
