@@ -29,6 +29,8 @@ public sealed partial class ItemDetailPage : Page
 
     private readonly List<(FieldRow Row, Action<string> WriteBack)> _editable = [];
     private readonly List<FieldRow> _secrets = [];
+    private UriListEditor? _uriEditor;
+    private ToggleSwitch? _repromptToggle;
 
     public ItemDetailPage() => InitializeComponent();
 
@@ -84,6 +86,8 @@ public sealed partial class ItemDetailPage : Page
         FieldsPanel.Children.Clear();
         _editable.Clear();
         _secrets.Clear();
+        _uriEditor = null;
+        _repromptToggle = null;
 
         var item = _item!;
         var type = item["type"]?.GetValue<int>() ?? 0;
@@ -110,16 +114,10 @@ public sealed partial class ItemDetailPage : Page
     private void ApplyHeader(JsonObject item)
     {
         var name = item["name"]?.GetValue<string>() ?? "(no name)";
-        IconSource icon = new FontIconSource { Glyph = "" };
 
         var host = string.IsNullOrEmpty(_iconBaseUrl) ? null : FirstHost(item);
-        if (!string.IsNullOrEmpty(host))
-        {
-            try { icon = new ImageIconSource { ImageSource = new BitmapImage(new Uri($"{_iconBaseUrl}/{host}/icon.png")) }; }
-            catch { /* keep the glyph */ }
-        }
-
-        _host?.SetItemHeader(icon, name);
+        var faviconUrl = string.IsNullOrEmpty(host) ? null : $"{_iconBaseUrl}/{host}/icon.png";
+        _host?.SetItemHeader(faviconUrl, name);
     }
 
     private static string? FirstHost(JsonObject item)
@@ -170,14 +168,28 @@ public sealed partial class ItemDetailPage : Page
             panel.Children.Add(new TotpRow(totpSeed));
         }
 
-        if (login["uris"] is JsonArray uris && uris.Count > 0)
+        BuildAutofillSection(login);
+    }
+
+    // Autofill options: in edit mode a full URI editor (add/remove/reorder + per-URI match
+    // detection); in view mode a read-only list with copy. Reads/writes login["uris"] directly.
+    private void BuildAutofillSection(JsonObject login)
+    {
+        var uris = login["uris"] as JsonArray;
+        if (_editing)
         {
-            var urlPanel = AddSection("Autofill URLs");
-            for (var i = 0; i < uris.Count; i++)
+            AddSectionHeader("Autofill options");
+            _uriEditor = new UriListEditor();
+            _uriEditor.Load(uris);
+            FieldsPanel.Children.Add(_uriEditor);
+        }
+        else if (uris is { Count: > 0 })
+        {
+            var panel = AddSection("Autofill options");
+            foreach (var u in uris)
             {
-                if (uris[i] is not JsonObject uo) continue;
-                var row = AddRow(urlPanel, "Website", uo["uri"]?.GetValue<string>(), editable: true);
-                _editable.Add((row, v => uo["uri"] = v));
+                if (u is not JsonObject uo) continue;
+                AddRow(panel, "Website", uo["uri"]?.GetValue<string>(), editable: false);
             }
         }
     }
@@ -198,13 +210,24 @@ public sealed partial class ItemDetailPage : Page
         }
     }
 
+    // Additional options: notes plus the master-password re-prompt toggle (item["reprompt"]:
+    // 0 = none, 1 = require the master password to reveal/use the item).
     private void BuildNotesSection(JsonObject item)
     {
-        if (item["type"]?.GetValue<int>() is 1 or 2 || item["notes"]?.GetValue<string>() is { Length: > 0 })
+        var panel = AddSection("Additional options");
+
+        var row = AddRow(panel, "Notes", item["notes"]?.GetValue<string>(), editable: true);
+        _editable.Add((row, v => item["notes"] = string.IsNullOrEmpty(v) ? null : v));
+
+        var repromptOn = (item["reprompt"]?.GetValue<int>() ?? 0) != 0;
+        if (_editing)
         {
-            var panel = AddSection("Notes");
-            var row = AddRow(panel, "Notes", item["notes"]?.GetValue<string>(), editable: true);
-            _editable.Add((row, v => item["notes"] = string.IsNullOrEmpty(v) ? null : v));
+            _repromptToggle = new ToggleSwitch { Header = "Master password re-prompt", IsOn = repromptOn };
+            panel.Children.Add(_repromptToggle);
+        }
+        else
+        {
+            AddRow(panel, "Master password re-prompt", repromptOn ? "On" : "Off", editable: false);
         }
     }
 
@@ -215,6 +238,13 @@ public sealed partial class ItemDetailPage : Page
         var panel = AddSection("Item history");
         AddRow(panel, "Last edited", FormatDate(revised), editable: false);
     }
+
+    private void AddSectionHeader(string title) =>
+        FieldsPanel.Children.Add(new TextBlock
+        {
+            Text = title,
+            Style = (Style)Application.Current.Resources["SectionTitleTextStyle"],
+        });
 
     private StackPanel AddSection(string title)
     {
@@ -278,6 +308,12 @@ public sealed partial class ItemDetailPage : Page
 
         foreach (var (row, writeBack) in _editable)
             writeBack(row.CurrentValue);
+
+        // Collection-shaped fields can't use the per-row write-backs: rebuild them from their editors.
+        if (_uriEditor != null && _item["login"] is JsonObject loginObj)
+            loginObj["uris"] = _uriEditor.ToJsonArray();
+        if (_repromptToggle != null)
+            _item["reprompt"] = _repromptToggle.IsOn ? 1 : 0;
 
         var mustContain = _secrets
             .Select(r => r.CurrentValue)

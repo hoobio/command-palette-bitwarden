@@ -87,11 +87,40 @@ public sealed partial class MainWindow : Window
     }
 
     // Set the title-bar icon + name for the current item (the item windows have no separate header
-    // row). Falls back to a generic glyph when there's no favicon.
-    public void SetItemHeader(IconSource? icon, string title)
+    // row). Uses the TitleBar's leading Content slot with a larger (28px) favicon than the built-in
+    // IconSource allows; falls back to a generic glyph when there's no favicon.
+    public void SetItemHeader(string? faviconUrl, string title)
     {
-        AppTitleBar.IconSource = icon;
-        AppTitleBar.Title = title;
+        FrameworkElement iconElement;
+        if (!string.IsNullOrEmpty(faviconUrl))
+        {
+            var image = new Image { Width = 28, Height = 28 };
+            try { image.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(faviconUrl)); }
+            catch { /* fall through to glyph below if the URI is bad */ }
+            iconElement = image;
+        }
+        else
+        {
+            iconElement = new FontIcon { Glyph = "", FontSize = 22 };
+        }
+
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        panel.Children.Add(iconElement);
+        panel.Children.Add(new TextBlock
+        {
+            Text = title,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        });
+
+        AppTitleBar.Content = panel;
     }
 
     // Bring the freshly launched window to the foreground on its current monitor. It's spawned by the
