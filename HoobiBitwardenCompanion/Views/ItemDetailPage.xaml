@@ -16,7 +16,7 @@
              the inner content carries the horizontal padding instead. -->
         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="FieldsPanel" Spacing="{StaticResource SpacingMedium}"
-                        Padding="16,4,16,8" />
+                        Padding="16,0,16,8" />
         </ScrollViewer>
 
         <!-- Loading state: shown while the item is fetched (instant when served from the extension's

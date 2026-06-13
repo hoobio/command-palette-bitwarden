@@ -7,7 +7,6 @@ using HoobiBitwardenCompanion.Controls;
 using HoobiBitwardenCompanion.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 
@@ -36,7 +35,8 @@ public sealed partial class ItemDetailPage : Page
     private Dictionary<string, string> _folders = [];
     private Dictionary<string, string> _organizations = [];
     private TextBox? _nameBox;
-    private ToggleButton? _favoriteToggle;
+    private bool _favoriteOn;
+    private bool _hasFavoriteControl;
     private ComboBox? _ownerBox;
     private ComboBox? _folderBox;
     private StackPanel? _collectionsPanel;
@@ -100,7 +100,7 @@ public sealed partial class ItemDetailPage : Page
         _uriEditor = null;
         _repromptToggle = null;
         _nameBox = null;
-        _favoriteToggle = null;
+        _hasFavoriteControl = false;
         _ownerBox = null;
         _folderBox = null;
         _collectionsPanel = null;
@@ -155,7 +155,10 @@ public sealed partial class ItemDetailPage : Page
             return;
         }
 
-        var panel = AddSection("Item details");
+        // View mode has no "Item details" title: the card sits flush under the title bar (matching
+        // the mockup). Build a bare card.
+        var panel = new StackPanel { Spacing = (double)Application.Current.Resources["SpacingSmall"] };
+        FieldsPanel.Children.Add(new Border { Style = (Style)Application.Current.Resources["SectionCardStyle"], Child = panel });
 
         // Name row: favicon + name, no copy.
         var nameRow = new Grid { ColumnSpacing = (double)Application.Current.Resources["SpacingSmall"] };
@@ -198,16 +201,17 @@ public sealed partial class ItemDetailPage : Page
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = new TextBlock { Text = "Item details", Style = (Style)Application.Current.Resources["SectionTitleTextStyle"] };
         Grid.SetColumn(title, 0);
-        _favoriteToggle = new ToggleButton
-        {
-            Style = (Style)Application.Current.Resources["GhostIconButtonStyle"],
-            Content = new FontIcon { Glyph = "", FontSize = 16 }, // FavoriteStar
-            IsChecked = item["favorite"]?.GetValue<bool>() ?? false,
-        };
-        ToolTipService.SetToolTip(_favoriteToggle, "Favourite");
-        Grid.SetColumn(_favoriteToggle, 1);
+        // Favourite toggle: a plain Button whose star glyph flips filled/outline (a ToggleButton
+        // can't take the Button-targeted GhostIconButtonStyle, which fail-fasts XAML).
+        _favoriteOn = item["favorite"]?.GetValue<bool>() ?? false;
+        _hasFavoriteControl = true;
+        var star = new FontIcon { Glyph = _favoriteOn ? "" : "", FontSize = 16 };
+        var favoriteButton = new Button { Style = (Style)Application.Current.Resources["GhostIconButtonStyle"], Content = star };
+        ToolTipService.SetToolTip(favoriteButton, "Favourite");
+        favoriteButton.Click += (_, _) => { _favoriteOn = !_favoriteOn; star.Glyph = _favoriteOn ? "" : ""; };
+        Grid.SetColumn(favoriteButton, 1);
         header.Children.Add(title);
-        header.Children.Add(_favoriteToggle);
+        header.Children.Add(favoriteButton);
         FieldsPanel.Children.Add(header);
 
         var stack = new StackPanel { Spacing = (double)Application.Current.Resources["SpacingSmall"] };
@@ -482,8 +486,8 @@ public sealed partial class ItemDetailPage : Page
         // Item details edit controls.
         if (_nameBox != null)
             _item["name"] = _nameBox.Text;
-        if (_favoriteToggle != null)
-            _item["favorite"] = _favoriteToggle.IsChecked ?? false;
+        if (_hasFavoriteControl)
+            _item["favorite"] = _favoriteOn;
         if (_folderBox != null)
         {
             var folderId = SelectedTag(_folderBox);

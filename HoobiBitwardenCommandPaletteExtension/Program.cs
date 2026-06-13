@@ -37,7 +37,22 @@ public class Program
         }
         else
         {
-            Console.WriteLine("Not being launched as a Extension... exiting.");
+            // Launched from the Start menu / app list (not COM activation): there's no window of our
+            // own to show, so open Command Palette - where this extension lives - instead of doing
+            // nothing. (Launching the host by AUMID via the shell.)
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = @"shell:AppsFolder\Microsoft.CommandPalette_8wekyb3d8bbwe!App",
+                    UseShellExecute = true,
+                });
+            }
+            catch
+            {
+                // best-effort: nothing more we can do from here
+            }
         }
     }
 }

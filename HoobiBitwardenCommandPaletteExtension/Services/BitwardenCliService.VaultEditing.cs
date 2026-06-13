@@ -62,7 +62,8 @@ internal sealed partial class BitwardenCliService
   public async Task<Dictionary<string, string>> ListCollectionsAsync(string organizationId)
   {
     var result = new Dictionary<string, string>();
-    if (string.IsNullOrWhiteSpace(organizationId)) return result;
+    // Org ids are GUIDs; validate strictly so the value can't inject extra CLI arguments.
+    if (!Guid.TryParse(organizationId, out _)) return result;
 
     try
     {
