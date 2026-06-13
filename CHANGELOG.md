@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.11.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.10.0...v1.11.0) (2026-06-13)
+
+
+### Features
+
+* ✨ side-by-side dev/prerelease/release package identities ([#172](https://github.com/hoobio/command-palette-bitwarden/issues/172)) ([5136d5c](https://github.com/hoobio/command-palette-bitwarden/commit/5136d5c7012789f284009ca5b22440a9ebdac40d))
+* ✨ submit auth forms with Enter via keyboard hook + UIA shim ([#175](https://github.com/hoobio/command-palette-bitwarden/issues/175)) ([f496887](https://github.com/hoobio/command-palette-bitwarden/commit/f49688780ebb3393baa867aceb5669b4bf43cf61))
+
+
+### Bug Fixes
+
+* 🐛 re-enable email 2FA and surface unsupported-server 422 ([#157](https://github.com/hoobio/command-palette-bitwarden/issues/157)) ([#173](https://github.com/hoobio/command-palette-bitwarden/issues/173)) ([b252ea8](https://github.com/hoobio/command-palette-bitwarden/commit/b252ea8262774fbf876e91a1fd2f569ea9457b66))
+* 🐛 stop background Windows Hello prompt at startup and show (Prerelease) name ([#176](https://github.com/hoobio/command-palette-bitwarden/issues/176)) ([625754e](https://github.com/hoobio/command-palette-bitwarden/commit/625754e69854ac54e716111a3bbf969df9250d9f))
+* 🐛 stop one-click install from clobbering the user's CLI path override ([#178](https://github.com/hoobio/command-palette-bitwarden/issues/178)) ([#179](https://github.com/hoobio/command-palette-bitwarden/issues/179)) ([87c0de1](https://github.com/hoobio/command-palette-bitwarden/commit/87c0de1ee6036e24ad4a36ad143e7a3d22aaccee))
+
+
+### Miscellaneous Chores
+
+* migrate Copilot instructions to AGENTS.md and add CLAUDE.md ([f496887](https://github.com/hoobio/command-palette-bitwarden/commit/f49688780ebb3393baa867aceb5669b4bf43cf61))
+
+
+### Build System
+
+* **deps:** bump hoobio/pipeline-tools from 1.6.0 to 2.3.1 ([#177](https://github.com/hoobio/command-palette-bitwarden/issues/177)) ([60578bd](https://github.com/hoobio/command-palette-bitwarden/commit/60578bdd9f1a86c54693dca58de97fc152a32604))
+
 ## [1.10.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.9.2...v1.10.0) (2026-06-11)
 
 
