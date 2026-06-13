@@ -23,7 +23,11 @@
             <Border Grid.Column="0" Width="40" Height="40"
                     CornerRadius="{StaticResource CardCornerRadius}"
                     Background="{ThemeResource SubtleFillColorTertiaryBrush}">
-                <FontIcon x:Name="ItemIcon" Glyph="&#xE8C8;" FontSize="20" />
+                <Grid>
+                    <FontIcon x:Name="ItemIcon" Glyph="&#xE8C8;" FontSize="20" />
+                    <Image x:Name="FaviconImage" Width="24" Height="24" Visibility="Collapsed"
+                           ImageOpened="OnFaviconOpened" />
+                </Grid>
             </Border>
             <TextBlock x:Name="ItemName" Grid.Column="1" VerticalAlignment="Center"
                        Style="{StaticResource PageHeaderTextStyle}"
@@ -38,6 +42,17 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel x:Name="FieldsPanel" Spacing="{StaticResource SpacingMedium}" />
         </ScrollViewer>
+
+        <!-- Loading state: shown while the item is fetched (instant when served from the extension's
+             vault cache; a moment longer on a cache miss that falls back to the CLI). -->
+        <StackPanel x:Name="LoadingPanel" Grid.Row="1"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Orientation="Horizontal" Spacing="{StaticResource SpacingSmall}"
+                    Visibility="Collapsed">
+            <ProgressRing IsActive="True" Width="20" Height="20" />
+            <TextBlock x:Name="LoadingText" VerticalAlignment="Center"
+                       Style="{StaticResource MutedCaptionTextStyle}" />
+        </StackPanel>
 
         <!-- Footer -->
         <StackPanel Grid.Row="2" Spacing="{StaticResource SpacingSmall}">

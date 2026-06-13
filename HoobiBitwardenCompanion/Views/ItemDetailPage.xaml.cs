@@ -7,6 +7,7 @@ using HoobiBitwardenCompanion.Controls;
 using HoobiBitwardenCompanion.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -21,6 +22,7 @@ public sealed partial class ItemDetailPage : Page
     private string _itemId = string.Empty;
     private JsonObject? _item;
     private string? _originalJson;
+    private string? _iconBaseUrl;
     private bool _editing;
 
     private readonly List<(FieldRow Row, Action<string> WriteBack)> _editable = [];
@@ -45,22 +47,32 @@ public sealed partial class ItemDetailPage : Page
 
         _client = client;
         _itemId = ctx.Options.ItemId!;
+        _iconBaseUrl = ctx.Options.IconBaseUrl;
         await ReloadAsync();
     }
 
     private async Task ReloadAsync()
     {
-        var item = await _client!.GetItemAsync(_itemId);
-        if (item == null)
+        LoadingText.Text = "Loading item details…";
+        LoadingPanel.Visibility = Visibility.Visible;
+        try
         {
-            ShowStatus("Could not load the item. Is the vault unlocked?", isError: true);
-            EditButton.IsEnabled = false;
-            return;
-        }
+            var item = await _client!.GetItemAsync(_itemId);
+            if (item == null)
+            {
+                ShowStatus("Could not load the item. Is the vault unlocked?", isError: true);
+                EditButton.IsEnabled = false;
+                return;
+            }
 
-        _item = item;
-        _originalJson = item.ToJsonString();
-        BuildFields();
+            _item = item;
+            _originalJson = item.ToJsonString();
+            BuildFields();
+        }
+        finally
+        {
+            LoadingPanel.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void BuildFields()
@@ -72,6 +84,7 @@ public sealed partial class ItemDetailPage : Page
         var item = _item!;
         ItemName.Text = item["name"]?.GetValue<string>() ?? "(no name)";
         var type = item["type"]?.GetValue<int>() ?? 0;
+        TrySetFavicon(item);
 
         AddNameSection(item);
 
@@ -86,6 +99,41 @@ public sealed partial class ItemDetailPage : Page
 
         // Only Login + custom fields/notes are editable in Phase 1.
         EditButton.Visibility = _editable.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // Show the website favicon from the Bitwarden icon server (base resolved by the extension and
+    // passed at launch; empty when the privacy setting is off). The glyph stays until the image loads.
+    private void TrySetFavicon(JsonObject item)
+    {
+        FaviconImage.Visibility = Visibility.Collapsed;
+        ItemIcon.Visibility = Visibility.Visible;
+        if (string.IsNullOrEmpty(_iconBaseUrl)) return;
+
+        var host = FirstHost(item);
+        if (string.IsNullOrEmpty(host)) return;
+
+        try { FaviconImage.Source = new BitmapImage(new Uri($"{_iconBaseUrl}/{host}/icon.png")); }
+        catch { /* leave the glyph */ }
+    }
+
+    private void OnFaviconOpened(object sender, RoutedEventArgs e)
+    {
+        FaviconImage.Visibility = Visibility.Visible;
+        ItemIcon.Visibility = Visibility.Collapsed;
+    }
+
+    private static string? FirstHost(JsonObject item)
+    {
+        if (item["login"] is not JsonObject login || login["uris"] is not JsonArray uris) return null;
+        foreach (var u in uris)
+        {
+            var uri = (u as JsonObject)?["uri"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(uri)) continue;
+            if (!uri.Contains("://", StringComparison.Ordinal)) uri = "https://" + uri;
+            if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && !string.IsNullOrEmpty(parsed.Host))
+                return parsed.Host;
+        }
+        return null;
     }
 
     private void AddNameSection(JsonObject item)

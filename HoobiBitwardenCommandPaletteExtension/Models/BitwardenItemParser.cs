@@ -50,7 +50,7 @@ internal static class BitwardenItemParser
     var organizationId = node["organizationId"]?.GetValue<string>();
     var reprompt = node["reprompt"]?.GetValue<int>() ?? 0;
 
-    return type switch
+    var item = type switch
     {
       BitwardenItemType.Login => ParseLogin(node["login"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
       BitwardenItemType.SecureNote => new BitwardenItem { Id = id, Name = name, Type = type, Notes = notes, RevisionDate = revisionDate, CustomFields = customFields, Favorite = favorite, FolderId = folderId, OrganizationId = organizationId, Reprompt = reprompt },
@@ -59,6 +59,10 @@ internal static class BitwardenItemParser
       BitwardenItemType.SshKey => ParseSshKey(node["sshKey"], id, name, notes, revisionDate, customFields, favorite, folderId, organizationId, reprompt),
       _ => null,
     };
+
+    // Keep the source JSON so the companion's edit round-trip can be served from the cache.
+    if (item != null) item.RawJson = node.ToJsonString();
+    return item;
   }
 
   private static BitwardenItem ParseLogin(JsonNode? login, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)

@@ -24,8 +24,38 @@ internal sealed partial class BitwardenCliService
   public async Task<string?> GetItemRawAsync(string id)
   {
     if (string.IsNullOrWhiteSpace(id)) return null;
+
+    // Serve from the in-memory vault cache when we have it - the companion gets the item instantly
+    // instead of waiting ~1s for a `bw get item` Node spawn. Falls back to the CLI on a cache miss
+    // (e.g. an item added since the last sync).
+    var cached = GetCachedRawJson(id);
+    if (cached != null)
+    {
+      DebugLogService.Log("Companion", $"GetItemRaw served from cache for {id}");
+      return cached;
+    }
+
+    DebugLogService.Log("Companion", $"GetItemRaw cache miss for {id}; spawning bw get item");
+    return await GetItemRawFromCliAsync(id);
+  }
+
+  // Authoritative read straight from the CLI, bypassing the cache. Used by the save verify step
+  // (§3.6), which must confirm the value landed on the SERVER and can't trust a possibly-stale cache.
+  private async Task<string?> GetItemRawFromCliAsync(string id)
+  {
+    if (string.IsNullOrWhiteSpace(id)) return null;
     var json = await RunCliAsync($"get item {id}");
     return LooksLikeItemJson(json) ? json : null;
+  }
+
+  private string? GetCachedRawJson(string id)
+  {
+    lock (_cacheLock)
+    {
+      foreach (var item in _cache)
+        if (item.Id == id) return item.RawJson;
+    }
+    return null;
   }
 
   // Parsed item for display. Reuses the same parser the cache uses.
@@ -78,11 +108,12 @@ internal sealed partial class BitwardenCliService
       return new SaveResult(false, $"Saved locally but the sync to the server failed: {ex.Message}. The change may not be on the server yet.", null);
     }
 
-    // Verify persistence: re-fetch and confirm the intended value(s) actually landed.
+    // Verify persistence: re-fetch from the CLI (NOT the cache) and confirm the intended value(s)
+    // actually landed on the server.
     string? verifyJson;
     try
     {
-      verifyJson = await GetItemRawAsync(id);
+      verifyJson = await GetItemRawFromCliAsync(id);
     }
     catch (Exception ex)
     {
