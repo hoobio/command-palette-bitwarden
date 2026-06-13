@@ -94,14 +94,14 @@ public sealed partial class UriListEditor : UserControl
         var removeButton = new Button
         {
             Style = (Style)Application.Current.Resources["GhostIconButtonStyle"],
-            Content = new FontIcon { Glyph = "", FontSize = 16 }, // Remove
+            Content = new FontIcon { Glyph = "", FontSize = 16 }, // Remove
             VerticalAlignment = VerticalAlignment.Bottom,
         };
         ToolTipService.SetToolTip(removeButton, "Remove");
 
         var dragHandle = new FontIcon
         {
-            Glyph = "", // GripBarDots
+            Glyph = "", // GripBarDots
             FontSize = 16,
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(2, 0, 0, 8),
@@ -109,14 +109,25 @@ public sealed partial class UriListEditor : UserControl
         };
         ToolTipService.SetToolTip(dragHandle, "Drag to reorder");
 
+        var gearButton = new Button
+        {
+            Style = (Style)Application.Current.Resources["GhostIconButtonStyle"],
+            Content = new FontIcon { Glyph = "", FontSize = 16 }, // Settings
+            VerticalAlignment = VerticalAlignment.Bottom,
+        };
+        ToolTipService.SetToolTip(gearButton, "Match detection options");
+
         var topRow = new Grid { ColumnSpacing = 4 };
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(uriBox, 0);
-        Grid.SetColumn(removeButton, 1);
-        Grid.SetColumn(dragHandle, 2);
+        Grid.SetColumn(gearButton, 1);
+        Grid.SetColumn(removeButton, 2);
+        Grid.SetColumn(dragHandle, 3);
         topRow.Children.Add(uriBox);
+        topRow.Children.Add(gearButton);
         topRow.Children.Add(removeButton);
         topRow.Children.Add(dragHandle);
 
@@ -124,12 +135,24 @@ public sealed partial class UriListEditor : UserControl
         {
             Text = "URI match detection is how Bitwarden identifies autofill suggestions.",
             Style = (Style)Application.Current.Resources["MutedCaptionTextStyle"],
+            TextWrapping = TextWrapping.Wrap,
         };
+
+        // Match-detection options live behind the gear: collapsed by default, shown when the gear is
+        // toggled or when the URI already has a non-default match mode.
+        var matchSection = new StackPanel
+        {
+            Spacing = (double)Application.Current.Resources["SpacingXSmall"],
+            Visibility = match.HasValue ? Visibility.Visible : Visibility.Collapsed,
+        };
+        matchSection.Children.Add(matchBox);
+        matchSection.Children.Add(helper);
+        gearButton.Click += (_, _) =>
+            matchSection.Visibility = matchSection.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
 
         var stack = new StackPanel { Spacing = (double)Application.Current.Resources["SpacingSmall"] };
         stack.Children.Add(topRow);
-        stack.Children.Add(matchBox);
-        stack.Children.Add(helper);
+        stack.Children.Add(matchSection);
 
         var card = new Border
         {

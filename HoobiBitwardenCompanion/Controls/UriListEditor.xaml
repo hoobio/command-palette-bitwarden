@@ -28,7 +28,7 @@
 
         <Button x:Name="AddButton" Click="OnAddClick" HorizontalAlignment="Left">
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <FontIcon Glyph="" FontSize="14" />
+                <FontIcon Glyph="" FontSize="14" />
                 <TextBlock Text="Add website" />
             </StackPanel>
         </Button>
