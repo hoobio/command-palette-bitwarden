@@ -28,7 +28,10 @@
     <WindowsPackageType>MSIX</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-$(Platform.ToLower())</RuntimeIdentifier>
+    <!-- Map the build Platform to a real RID; fall back to win-x64 when Platform is AnyCPU/unset
+         (e.g. the SBOM restore runs without -p:Platform, which would otherwise yield win-anycpu). -->
+    <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
 
     <PublishTrimmed>false</PublishTrimmed>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">true</PublishReadyToRun>
@@ -87,6 +90,102 @@
   </ItemGroup>
 
   <!--
+    Side-by-side channel identity. PackageChannel (Dev | Prerelease | Release) selects a distinct
+    package Identity Name, DisplayName, and COM activation CLSID so all three channels install and
+    run alongside each other. Defaults to Dev for local Debug, Release otherwise; CI sets it to
+    Prerelease for the release-please pre-release build. The CLSID per channel must match the [Guid]
+    selected in the extension (CHANNEL_* constants there) - and PublishExtensionIntoPackage forwards
+    PackageChannel to the extension build so they stay in lockstep.
+  -->
+  <PropertyGroup>
+    <PackageChannel Condition="'$(PackageChannel)'=='' and '$(Configuration)'=='Debug'">Dev</PackageChannel>
+    <PackageChannel Condition="'$(PackageChannel)'==''">Release</PackageChannel>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PackageChannel)'=='Dev'">
+    <PackageNameSuffix>.Dev</PackageNameSuffix>
+    <DisplayNameSuffix> (Dev)</DisplayNameSuffix>
+    <ComServerClsid>ef6edc31-9567-4d38-8463-4a59b038148d</ComServerClsid>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PackageChannel)'=='Prerelease'">
+    <PackageNameSuffix>.Prerelease</PackageNameSuffix>
+    <DisplayNameSuffix> (Prerelease)</DisplayNameSuffix>
+    <ComServerClsid>e874e604-b64e-42f1-b391-756d4d406c51</ComServerClsid>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PackageChannel)'=='Release'">
+    <PackageNameSuffix></PackageNameSuffix>
+    <DisplayNameSuffix></DisplayNameSuffix>
+    <ComServerClsid>8345c10d-0df8-4116-a767-3f8647adf4df</ComServerClsid>
+  </PropertyGroup>
+
+  <Target Name="StampPackageIdentityName" BeforeTargets="Build;_ConvertItems">
+    <PropertyGroup>
+      <AppxManifestPath>$(MSBuildProjectDirectory)\Package.appxmanifest</AppxManifestPath>
+      <VersionTxtPath>$(MSBuildProjectDirectory)\..\version.txt</VersionTxtPath>
+      <BasePackageName>Hoobi.BitwardenCommandPaletteExtension</BasePackageName>
+      <FullPackageName>$(BasePackageName)$(PackageNameSuffix)</FullPackageName>
+      <BaseDisplayName>Command Palette Extension for Bitwarden</BaseDisplayName>
+      <FullDisplayName>$(BaseDisplayName)$(DisplayNameSuffix)</FullDisplayName>
+    </PropertyGroup>
+    <ReadLinesFromFile File="$(VersionTxtPath)" Condition="Exists('$(VersionTxtPath)')">
+      <Output TaskParameter="Lines" ItemName="VersionTxtLines" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <SemVerFromFile>@(VersionTxtLines)</SemVerFromFile>
+      <FourPartVersion Condition="'$(SemVerFromFile)' != ''">$(SemVerFromFile).0</FourPartVersion>
+    </PropertyGroup>
+    <Message Text="Stamping package identity: $(FullPackageName) ($(FullDisplayName)) v$(FourPartVersion), CLSID $(ComServerClsid)" Importance="high" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Condition="'$(FourPartVersion)' != ''"
+             Query="/ns:Package/ns:Identity/@Version"
+             Value="$(FourPartVersion)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Identity/@Name"
+             Value="$(FullPackageName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Properties/ns:DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
+    <!-- Only the extension's "App" element gets the channel display name; the Companion app keeps its own. -->
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application[@Id='App']/uap:VisualElements/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application[@Id='App']/uap:VisualElements/@Description"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/com:Class/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/@DisplayName"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/@Description"
+             Value="$(FullDisplayName)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
+    <!-- Per-channel COM activation CLSID; must match the [Guid] the extension compiles in. -->
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Condition="'$(ComServerClsid)' != ''"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/com:Class/@Id"
+             Value="$(ComServerClsid)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
+    <XmlPoke XmlInputPath="$(AppxManifestPath)"
+             Condition="'$(ComServerClsid)' != ''"
+             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/uap3:Properties/ns:CmdPalProvider/ns:Activation/ns:CreateInstance/@ClassId"
+             Value="$(ComServerClsid)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
+  </Target>
+
+  <!--
     Ship the Command Palette extension (a separate AOT COM-server exe) as a guest inside this package.
     After the companion build, publish the extension straight into the package root so the manifest's
     second <Application> + COM ExeServer resolve at register/package time. Set IncludeExtension=false
@@ -108,7 +207,7 @@
     <Message Importance="high" Text="Publishing extension ($(ExtensionRid)) -> $(ExtensionOutDir)" />
     <MSBuild Projects="$(ExtensionProject)"
              Targets="Publish"
-             Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=$(ExtensionRid);PublishDir=$(ExtensionOutDir)" />
+             Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=$(ExtensionRid);PublishDir=$(ExtensionOutDir);PackageChannel=$(PackageChannel)" />
 
     <!-- IExtension is a third-party WinRT interface; the OS only resolves its metadata from the
          PACKAGE ROOT when building the cross-process proxy for CmdPal's CoCreateInstance(IID_IExtension).
