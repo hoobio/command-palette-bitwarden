@@ -22,8 +22,7 @@
                        VerticalAlignment="Center"
                        FontFamily="Consolas"
                        FontSize="20"
-                       CharacterSpacing="50"
-                       IsTextSelectionEnabled="True" />
+                       CharacterSpacing="50" />
 
             <!-- Countdown ring: a custom arc redrawn ~30x/sec so it shrinks smoothly over the period
                  and snaps back instantly at rollover (no slow reverse animation). Remaining seconds

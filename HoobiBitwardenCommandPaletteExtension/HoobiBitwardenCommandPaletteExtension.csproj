@@ -20,15 +20,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Icons used by the palette (resolved as relative file paths, not MRT resources), so they ship
-         alongside the extension exe in the package's Extension\ folder. -->
-    <Content Include="Assets\SplashScreen.scale-200.png" />
-    <Content Include="Assets\LockScreenLogo.scale-200.png" />
-    <Content Include="Assets\Square150x150Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
-    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <!-- Icons used by the palette (resolved as relative file paths via IconHelpers.FromRelativePath,
+         not MRT resources), so they must be copied as loose files next to the extension exe in the
+         package's Extension\ folder. -->
+    <Content Include="Assets\SplashScreen.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\StoreLogo.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

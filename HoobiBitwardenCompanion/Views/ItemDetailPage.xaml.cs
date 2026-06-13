@@ -58,6 +58,10 @@ public sealed partial class ItemDetailPage : Page
     // browser, open in web vault.
     private void AddAccelerators()
     {
+        // Page-level accelerators otherwise show their key combo as a tooltip across the whole page;
+        // hide that (the shortcuts are surfaced on the relevant copy buttons' tooltips instead).
+        KeyboardAcceleratorPlacementMode = Microsoft.UI.Xaml.Input.KeyboardAcceleratorPlacementMode.Hidden;
+
         AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control, CopyUsername);
         AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, CopyPassword);
         AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Menu, CopyTotp);

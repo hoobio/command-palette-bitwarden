@@ -17,10 +17,11 @@
             </Grid.ColumnDefinitions>
 
             <!-- Read-only display -->
+            <!-- Text selection is off so Ctrl+C (copy username) reaches the page accelerator instead of
+                 being consumed as a text-copy of an empty selection. Copy via the button or shortcut. -->
             <TextBlock x:Name="DisplayText"
                        Grid.Column="0"
                        VerticalAlignment="Center"
-                       IsTextSelectionEnabled="True"
                        TextWrapping="Wrap" />
 
             <!-- Editable -->
