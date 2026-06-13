@@ -109,8 +109,18 @@ public sealed partial class ItemDetailPage : Page
         _editable.Add((password, v => login["password"] = v));
         _secrets.Add(password);
 
-        if (login["totp"]?.GetValue<string>() is { Length: > 0 })
-            AddRow(panel, "Authenticator key (TOTP)", login["totp"]?.GetValue<string>(), editable: false, secret: true);
+        // TOTP: show the live code with a countdown ring when viewing; show the raw seed (editable,
+        // masked) only when editing. The user never needs the seed except to change it.
+        var totpSeed = login["totp"]?.GetValue<string>();
+        if (_editing)
+        {
+            var seedRow = AddRow(panel, "Authenticator key (TOTP)", totpSeed, editable: true, secret: true);
+            _editable.Add((seedRow, v => login["totp"] = string.IsNullOrEmpty(v) ? null : v));
+        }
+        else if (!string.IsNullOrEmpty(totpSeed))
+        {
+            panel.Children.Add(new TotpRow(totpSeed));
+        }
 
         if (login["uris"] is JsonArray uris && uris.Count > 0)
         {
@@ -198,14 +208,15 @@ public sealed partial class ItemDetailPage : Page
         if (_originalJson != null && JsonNode.Parse(_originalJson) is JsonObject pristine)
             _item = pristine;
         SetEditing(false);
-        BuildFields();
     }
 
     private void SetEditing(bool editing)
     {
         _editing = editing;
-        foreach (var (row, _) in _editable) row.IsEditing = editing;
-        EditButton.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
+        // Rebuild so mode-specific rows swap (e.g. live TOTP code <-> editable seed). BuildFields
+        // sets EditButton visibility from the editable count, so fix the button row up afterwards.
+        BuildFields();
+        EditButton.Visibility = editing || _editable.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         SaveButton.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
         StatusText.Visibility = Visibility.Collapsed;
@@ -242,7 +253,6 @@ public sealed partial class ItemDetailPage : Page
             _originalJson = refreshed.ToJsonString();
         }
         SetEditing(false);
-        BuildFields();
         ShowStatus("Saved and verified on the server ✓", isError: false);
     }
 
