@@ -42,10 +42,14 @@ public sealed partial class MainWindow : Window
         // reserved Row 0 are the same height and content sits cleanly below them).
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
 
-        // Taskbar / window icon (the package logo). The window is launched by the extension, not its
-        // tile, so set it explicitly or there's no taskbar icon. Resolve relative to the install root.
+        // Window icon (title bar + Alt-Tab) from the loose .ico.
         try { AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico")); }
         catch { /* best-effort */ }
+
+        // Taskbar icon: a packaged window normally takes it from the app tile logo via its AUMID, but
+        // that doesn't resolve for a Process.Start-launched window, so set it directly on the window's
+        // property store via RelaunchIconResource (pointing at the exe's embedded icon).
+        TrySetTaskbarIcon();
 
         RootGrid.ActualThemeChanged += (_, _) => UpdateCaptionButtonColors();
         UpdateCaptionButtonColors();
@@ -240,6 +244,67 @@ public sealed partial class MainWindow : Window
 
     [LibraryImport("user32.dll")]
     private static partial uint GetDpiForWindow(IntPtr hWnd);
+
+    // Set the window's taskbar icon directly via the AppUserModel property store, pointing at the
+    // exe's embedded icon - the packaged tile-logo path doesn't resolve for our Process.Start window.
+    private void TrySetTaskbarIcon()
+    {
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var iid = typeof(IPropertyStore).GUID;
+            if (SHGetPropertyStoreForWindow(hwnd, ref iid, out var store) != 0 || store == null) return;
+            try
+            {
+                var exe = Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "HoobiBitwardenCompanion.exe");
+                SetStringProperty(store, PKEY_AppUserModel_RelaunchIconResource, $"{exe},0");
+                store.Commit();
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(store);
+            }
+        }
+        catch { /* best-effort cosmetic */ }
+    }
+
+    private static void SetStringProperty(IPropertyStore store, PROPERTYKEY key, string value)
+    {
+        if (InitPropVariantFromString(value, out var pv) != 0) return;
+        try { store.SetValue(ref key, ref pv); }
+        finally { _ = PropVariantClear(ref pv); }
+    }
+
+    private static readonly PROPERTYKEY PKEY_AppUserModel_RelaunchIconResource = new()
+    {
+        fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"),
+        pid = 3,
+    };
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROPERTYKEY { public Guid fmtid; public uint pid; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROPVARIANT { public ushort vt; public ushort w1, w2, w3; public IntPtr p; public IntPtr p2; }
+
+    [ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        void GetCount(out uint cProps);
+        void GetAt(uint iProp, out PROPERTYKEY pkey);
+        void GetValue(ref PROPERTYKEY key, out PROPVARIANT pv);
+        void SetValue(ref PROPERTYKEY key, ref PROPVARIANT pv);
+        void Commit();
+    }
+
+    [DllImport("shell32.dll")]
+    private static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, ref Guid riid, out IPropertyStore propertyStore);
+
+    [DllImport("propsys.dll")]
+    private static extern int InitPropVariantFromString([MarshalAs(UnmanagedType.LPWStr)] string psz, out PROPVARIANT ppropvar);
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref PROPVARIANT pvar);
 
     private const uint WM_GETMINMAXINFO = 0x0024;
 
