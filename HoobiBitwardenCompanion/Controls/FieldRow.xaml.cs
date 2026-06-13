@@ -70,6 +70,17 @@ public sealed partial class FieldRow : UserControl
         set => SetValue(ShowCopyProperty, value);
     }
 
+    // When true, a value that parses as an absolute http(s) URI is shown as a clickable hyperlink
+    // (opens in the browser) instead of plain text.
+    public static readonly DependencyProperty IsLinkProperty =
+        DependencyProperty.Register(nameof(IsLink), typeof(bool), typeof(FieldRow), new PropertyMetadata(false, OnAppearanceChanged));
+
+    public bool IsLink
+    {
+        get => (bool)GetValue(IsLinkProperty);
+        set => SetValue(IsLinkProperty, value);
+    }
+
     // Optional keyboard-shortcut hint shown on the copy tooltip, e.g. "Ctrl+Shift+C".
     public static readonly DependencyProperty CopyShortcutProperty =
         DependencyProperty.Register(nameof(CopyShortcut), typeof(string), typeof(FieldRow), new PropertyMetadata(string.Empty, OnAppearanceChanged));
@@ -97,8 +108,16 @@ public sealed partial class FieldRow : UserControl
         DisplayText.FontFamily = font;
         EditBox.FontFamily = font;
 
+        Uri? linkUri = null;
+        var asLink = IsLink && !IsEditing && !IsSecret && TryGetLinkUri(Value, out linkUri);
+        LinkText.Visibility = asLink ? Visibility.Visible : Visibility.Collapsed;
         EditBox.Visibility = IsEditing ? Visibility.Visible : Visibility.Collapsed;
-        DisplayText.Visibility = IsEditing ? Visibility.Collapsed : Visibility.Visible;
+        DisplayText.Visibility = IsEditing || asLink ? Visibility.Collapsed : Visibility.Visible;
+        if (asLink)
+        {
+            LinkText.Content = Value;
+            LinkText.NavigateUri = linkUri;
+        }
 
         // Sync the edit box only when it differs, so typing (which writes Value back) doesn't loop,
         // while an external change (e.g. regenerate) still flows in.
@@ -116,6 +135,16 @@ public sealed partial class FieldRow : UserControl
         var copyTip = string.IsNullOrEmpty(Label) ? "Copy" : $"Copy {Label}";
         if (!string.IsNullOrEmpty(CopyShortcut)) copyTip += $"\n({CopyShortcut})";
         ToolTipService.SetToolTip(CopyButton, copyTip);
+    }
+
+    private static bool TryGetLinkUri(string? value, out Uri? uri)
+    {
+        uri = null;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var parsed)) return false;
+        if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps) return false;
+        uri = parsed;
+        return true;
     }
 
     private void OnRevealClick(object sender, RoutedEventArgs e)

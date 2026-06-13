@@ -424,7 +424,8 @@ public sealed partial class ItemDetailPage : Page
             foreach (var u in uris)
             {
                 if (u is not JsonObject uo) continue;
-                AddRow(panel, "Website", uo["uri"]?.GetValue<string>(), editable: false);
+                var row = AddRow(panel, "Website", uo["uri"]?.GetValue<string>(), editable: false);
+                row.IsLink = true; // render as a clickable hyperlink when it's a real http(s) URI
             }
         }
     }

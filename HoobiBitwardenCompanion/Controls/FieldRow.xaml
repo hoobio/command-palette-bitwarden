@@ -24,6 +24,13 @@
                        VerticalAlignment="Center"
                        TextWrapping="Wrap" />
 
+            <!-- Clickable link (shown for link fields whose value is a real http(s) URI). -->
+            <HyperlinkButton x:Name="LinkText"
+                             Grid.Column="0"
+                             Visibility="Collapsed"
+                             Padding="0"
+                             HorizontalAlignment="Left" />
+
             <!-- Editable -->
             <TextBox x:Name="EditBox"
                      Grid.Column="0"
