@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using HoobiBitwardenCompanion.Services;
 using HoobiBitwardenCompanionIpc;
 using Microsoft.UI.Xaml;
@@ -7,28 +5,22 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace HoobiBitwardenCompanion.Controls;
 
-// Reusable password/passphrase generator (COMPANION_WINUI_PHASE1 section 3.5). Decoupled from IPC:
-// the host sets Generator (typically VaultClient.GenerateAsync) and the control owns the options UI,
-// coalesced regeneration, and copy. Used by the standalone generate window, item detail regenerate,
-// and Quick Rotate.
+// Reusable password/passphrase generator (COMPANION_WINUI_PHASE1 section 3.5). Generates locally with
+// a CSPRNG (PasswordGenerator) - instant, no IPC or `bw generate` round-trip - and owns the options UI
+// and copy. Used by the standalone generate window, item detail regenerate, and Quick Rotate.
 public sealed partial class GeneratorControl : UserControl
 {
     private bool _ready;
-    private bool _pending;
-    private bool _running;
 
     public GeneratorControl() => InitializeComponent();
 
-    // Host-provided generator. Returns the generated value (or null on failure).
-    internal Func<GeneratorOptions, Task<string?>>? Generator { get; set; }
-
     public string? Value { get; private set; }
 
-    // Call after Generator is set to produce the first value.
-    public async Task InitializeAsync()
+    // Produces the first value; call once the control is loaded.
+    public void Initialize()
     {
         _ready = true;
-        await RegenerateAsync();
+        Regenerate();
     }
 
     internal GeneratorOptions BuildOptions()
@@ -60,39 +52,11 @@ public sealed partial class GeneratorControl : UserControl
         };
     }
 
-    // Coalesces bursts of option changes into a single in-flight generation so a slider drag doesn't
-    // spawn a `bw generate` per tick.
-    public async Task RegenerateAsync()
+    public void Regenerate()
     {
-        if (!_ready || Generator == null) return;
-
-        _pending = true;
-        if (_running) return;
-        _running = true;
-        try
-        {
-            while (_pending)
-            {
-                _pending = false;
-                var options = BuildOptions();
-                string? value;
-                try
-                {
-                    value = await Generator(options);
-                }
-                catch (Exception ex)
-                {
-                    ValueText.Text = $"Generator error: {ex.Message}";
-                    return;
-                }
-                Value = value;
-                ValueText.Text = value ?? "(failed to generate)";
-            }
-        }
-        finally
-        {
-            _running = false;
-        }
+        if (!_ready) return;
+        Value = PasswordGenerator.Generate(BuildOptions());
+        ValueText.Text = Value;
     }
 
     private void OnModeChanged(object sender, SelectionChangedEventArgs e)
@@ -101,21 +65,21 @@ public sealed partial class GeneratorControl : UserControl
         var passphrase = ModeSelector.SelectedIndex == 1;
         PasswordOptions.Visibility = passphrase ? Visibility.Collapsed : Visibility.Visible;
         PassphraseOptions.Visibility = passphrase ? Visibility.Visible : Visibility.Collapsed;
-        _ = RegenerateAsync();
+        Regenerate();
     }
 
     private void OnOptionChanged(object sender, object e)
     {
         if (LengthValueText != null && LengthSlider != null)
             LengthValueText.Text = ((int)LengthSlider.Value).ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _ = RegenerateAsync();
+        Regenerate();
     }
 
-    private void OnOptionClicked(object sender, RoutedEventArgs e) => _ = RegenerateAsync();
+    private void OnOptionClicked(object sender, RoutedEventArgs e) => Regenerate();
 
-    private void OnSeparatorChanged(object sender, TextChangedEventArgs e) => _ = RegenerateAsync();
+    private void OnSeparatorChanged(object sender, TextChangedEventArgs e) => Regenerate();
 
-    private void OnRegenerateClick(object sender, RoutedEventArgs e) => _ = RegenerateAsync();
+    private void OnRegenerateClick(object sender, RoutedEventArgs e) => Regenerate();
 
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {

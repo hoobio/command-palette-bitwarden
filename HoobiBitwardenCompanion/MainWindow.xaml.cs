@@ -32,6 +32,11 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
+        // Taskbar / window icon (the package logo). The window is launched by the extension, not its
+        // tile, so set it explicitly or there's no taskbar icon. Resolve relative to the install root.
+        try { AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico")); }
+        catch { /* best-effort */ }
+
         RootGrid.ActualThemeChanged += (_, _) => UpdateCaptionButtonColors();
         UpdateCaptionButtonColors();
 

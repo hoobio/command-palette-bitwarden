@@ -18,6 +18,8 @@ internal static class IpcCommands
     public const string SetServerUrl = "SetServerUrl";
     public const string GetItem = "GetItem";
     public const string SaveItem = "SaveItem";
+    public const string EditItem = "EditItem";   // apply an edited item (no sync) - step 1 of a save
+    public const string Sync = "Sync";           // push to server + refresh palette - step 2 of a save
     public const string Generate = "Generate";
     public const string QuickRotate = "QuickRotate";
 }

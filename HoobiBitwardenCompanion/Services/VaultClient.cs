@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -88,6 +89,50 @@ internal sealed class VaultClient
         var refreshedJson = r.GetString(IpcFields.ItemJson);
         var refreshed = refreshedJson == null ? null : JsonNode.Parse(refreshedJson) as JsonObject;
         return (ok, r.GetString(IpcFields.Error), refreshed);
+    }
+
+    // Stepwise save so the UI can show live progress: apply -> sync -> verify on the server. The
+    // verify (mustContain present in the re-fetched item) is the §3.6 data-loss safety - success is
+    // only reported once the value is confirmed server-side. progress() is invoked on the caller's
+    // (UI) thread between steps.
+    public async Task<(bool Ok, string? Error, JsonObject? Item)> SaveSteppedAsync(
+        string id, JsonObject item, IEnumerable<string>? mustContain, Action<string> progress)
+    {
+        progress("Applying your changes…");
+        var (editOk, editErr) = await EditItemAsync(id, item);
+        if (!editOk) return (false, editErr ?? "The change could not be applied.", null);
+
+        progress("Syncing to the Bitwarden server…");
+        var (syncOk, syncErr) = await SyncAsync();
+        if (!syncOk) return (false, $"Saved locally but the server sync failed: {syncErr}. The change may not be on the server yet.", null);
+
+        progress("Verifying the change on the server…");
+        var refetched = await GetItemAsync(id);
+        if (refetched == null) return (false, "Could not verify the save reached the server.", null);
+
+        if (mustContain != null)
+        {
+            var json = refetched.ToJsonString();
+            foreach (var value in mustContain)
+            {
+                if (!string.IsNullOrEmpty(value) && !json.Contains(value, StringComparison.Ordinal))
+                    return (false, "Verification failed: the new value is not present on the server. Do NOT assume it was saved.", null);
+            }
+        }
+
+        return (true, null, refetched);
+    }
+
+    private async Task<(bool Ok, string? Error)> EditItemAsync(string id, JsonObject item)
+    {
+        var r = await _ipc.SendAsync(IpcCommands.EditItem, new JsonObject { [IpcFields.ItemId] = id, [IpcFields.ItemJson] = item.ToJsonString() });
+        return (r.GetBool(IpcFields.Success), r.GetString(IpcFields.Error));
+    }
+
+    private async Task<(bool Ok, string? Error)> SyncAsync()
+    {
+        var r = await _ipc.SendAsync(IpcCommands.Sync);
+        return (r.GetBool(IpcFields.Success), r.GetString(IpcFields.Error));
     }
 
     public async Task<string?> GenerateAsync(GeneratorOptions options)

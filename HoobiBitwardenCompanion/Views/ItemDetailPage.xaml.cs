@@ -226,8 +226,8 @@ public sealed partial class ItemDetailPage : Page
             .ToArray();
 
         SaveButton.IsEnabled = false;
-        ShowStatus("Saving and verifying…", isError: false);
-        var (ok, error, refreshed) = await _client.SaveItemAsync(_itemId, _item, mustContain);
+        var (ok, error, refreshed) = await _client.SaveSteppedAsync(
+            _itemId, _item, mustContain, msg => ShowStatus(msg, isError: false));
         SaveButton.IsEnabled = true;
 
         if (!ok)
@@ -243,14 +243,12 @@ public sealed partial class ItemDetailPage : Page
         }
         SetEditing(false);
         BuildFields();
-        ShowStatus("Saved and verified on the server.", isError: false);
+        ShowStatus("Saved and verified on the server ✓", isError: false);
     }
 
     private async Task RegenerateAsync(FieldRow row)
     {
-        if (_client == null) return;
-
-        var generator = new GeneratorControl { Generator = _client.GenerateAsync };
+        var generator = new GeneratorControl();
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
@@ -260,7 +258,7 @@ public sealed partial class ItemDetailPage : Page
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
         };
-        await generator.InitializeAsync();
+        generator.Initialize();
 
         if (await dialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrEmpty(generator.Value))
             row.Value = generator.Value;

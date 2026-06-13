@@ -55,8 +55,7 @@ public sealed partial class QuickRotatePage : Page
             return;
         }
 
-        Generator.Generator = _client.GenerateAsync;
-        await Generator.InitializeAsync();
+        Generator.Initialize();
     }
 
     private void OnRotateClick(object sender, RoutedEventArgs e) => _ = RotateAsync();
@@ -87,8 +86,8 @@ public sealed partial class QuickRotatePage : Page
         }
 
         RotateButton.IsEnabled = false;
-        ShowStatus("Saving and verifying…", isError: false);
-        var (ok, saveError, _) = await _client.SaveItemAsync(_itemId, item, [value]);
+        var (ok, saveError, _) = await _client.SaveSteppedAsync(
+            _itemId, item, [value], msg => ShowStatus(msg, isError: false));
         RotateButton.IsEnabled = true;
 
         if (!ok)

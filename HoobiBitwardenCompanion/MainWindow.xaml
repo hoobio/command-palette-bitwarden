@@ -14,11 +14,11 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
+        <!-- No title text: the page content carries its own header; the title bar is just the drag
+             region + caption buttons. -->
         <controls:TitleBar
             x:Name="AppTitleBar"
-            Grid.Row="0"
-            Title="Bitwarden"
-            Subtitle="Companion" />
+            Grid.Row="0" />
 
         <Grid Grid.Row="1" Padding="{StaticResource PagePadding}">
             <Frame x:Name="ContentFrame"

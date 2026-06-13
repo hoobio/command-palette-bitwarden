@@ -193,6 +193,40 @@ internal sealed partial class CompanionIpcServer : IDisposable
         return Ok(id, data);
       }
 
+      // EditItem + Sync are the discrete steps of a save, so the companion can show live progress
+      // (apply -> sync -> verify) instead of one opaque call.
+      case IpcCommands.EditItem:
+      {
+        try
+        {
+          var edited = await _service.EditItemAsync(args[IpcFields.ItemId]?.GetValue<string>() ?? "", args[IpcFields.ItemJson]?.GetValue<string>() ?? "");
+          data[IpcFields.Success] = edited != null;
+          data[IpcFields.Error] = edited == null ? "The Bitwarden CLI rejected the edit." : null;
+        }
+        catch (Exception ex)
+        {
+          data[IpcFields.Success] = false;
+          data[IpcFields.Error] = ex.Message;
+        }
+        return Ok(id, data);
+      }
+
+      case IpcCommands.Sync:
+      {
+        try
+        {
+          await _service.SyncVaultAsync();
+          await _service.RefreshCacheAsync(); // live palette update
+          data[IpcFields.Success] = true;
+        }
+        catch (Exception ex)
+        {
+          data[IpcFields.Success] = false;
+          data[IpcFields.Error] = ex.Message;
+        }
+        return Ok(id, data);
+      }
+
       case IpcCommands.Generate:
       {
         var value = await _service.GenerateAsync(ParseGeneratorOptions(args));

@@ -34,7 +34,7 @@ public class BitwardenCliServiceVaultEditingTests
 
     Assert.Equal("Generated!Pass1", result);
     Assert.Equal(
-      "generate --length 20 --uppercase --lowercase --number --special --min-number 1 --min-special 1",
+      "generate --length 20 --uppercase --lowercase --number --special --minNumber 1 --minSpecial 1",
       factory.LastArgs);
   }
 
@@ -168,7 +168,7 @@ public class BitwardenCliServiceVaultEditingTests
     Assert.Contains("--lowercase", args, StringComparison.Ordinal);
     Assert.DoesNotContain("--special", args, StringComparison.Ordinal);
     Assert.DoesNotContain("--number", args, StringComparison.Ordinal);
-    Assert.DoesNotContain("--min-special", args, StringComparison.Ordinal);
+    Assert.DoesNotContain("--minSpecial", args, StringComparison.Ordinal);
   }
 
   [Fact]

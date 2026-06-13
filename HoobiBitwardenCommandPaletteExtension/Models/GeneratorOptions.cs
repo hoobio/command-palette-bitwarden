@@ -41,12 +41,12 @@ internal static class GeneratorOptionsCliExtensions
     if (special) args.Add("--special");
     if (number && o.MinNumber > 0)
     {
-      args.Add("--min-number");
+      args.Add("--minNumber");
       args.Add(o.MinNumber.ToString(CultureInfo.InvariantCulture));
     }
     if (special && o.MinSpecial > 0)
     {
-      args.Add("--min-special");
+      args.Add("--minSpecial");
       args.Add(o.MinSpecial.ToString(CultureInfo.InvariantCulture));
     }
     // `--ambiguous` ALLOWS ambiguous characters; omit it to avoid them.
