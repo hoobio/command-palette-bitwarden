@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
 
         // Taskbar / window icon (the package logo). The window is launched by the extension, not its
         // tile, so set it explicitly or there's no taskbar icon. Resolve relative to the install root.
@@ -49,30 +50,38 @@ public sealed partial class MainWindow : Window
 
         // Compact default that fits the title bar, item details and login credentials; the rest of
         // the fields scroll. A DPI-aware minimum keeps those always visible as the user resizes.
-        ResizeAndCenter(460, 560);
-        EnforceMinimumSize(420, 500);
+        ResizeAndCenter(440, 480);
+        EnforceMinimumSize(400, 440);
         Activated += OnFirstActivated;
         _ = InitializeAsync();
     }
 
-    // Clamp the window so it can't be resized below the minimum that keeps the header + item + login
-    // visible. AppWindow has no built-in minimum, so re-grow it from the Changed event.
+    // Enforce a minimum window size via WM_GETMINMAXINFO (a window subclass), the same way the OS
+    // limits any resizable window - so the drag stops cleanly at the minimum instead of the visual
+    // artifacting you get from re-growing the window after the fact.
+    private SubclassProc? _subclassProc; // kept alive for the lifetime of the window
+    private int _minWidthPx, _minHeightPx;
+
     private void EnforceMinimumSize(int minWidthDip, int minHeightDip)
     {
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var scale = GetDpiForWindow(hwnd) / 96.0;
-        var minWidth = (int)(minWidthDip * scale);
-        var minHeight = (int)(minHeightDip * scale);
+        _minWidthPx = (int)(minWidthDip * scale);
+        _minHeightPx = (int)(minHeightDip * scale);
+        _subclassProc = MinSizeSubclassProc;
+        SetWindowSubclass(hwnd, _subclassProc, 1, IntPtr.Zero);
+    }
 
-        AppWindow.Changed += (sender, args) =>
+    private IntPtr MinSizeSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, uint uIdSubclass, IntPtr dwRefData)
+    {
+        if (uMsg == WM_GETMINMAXINFO)
         {
-            if (!args.DidSizeChange) return;
-            var size = sender.Size;
-            var width = Math.Max(size.Width, minWidth);
-            var height = Math.Max(size.Height, minHeight);
-            if (width != size.Width || height != size.Height)
-                sender.Resize(new SizeInt32(width, height));
-        };
+            var info = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            info.ptMinTrackSize.X = _minWidthPx;
+            info.ptMinTrackSize.Y = _minHeightPx;
+            Marshal.StructureToPtr(info, lParam, false);
+        }
+        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
 
     // Set the title-bar icon + name for the current item (the item windows have no separate header
@@ -105,20 +114,28 @@ public sealed partial class MainWindow : Window
         catch { /* best-effort */ }
     }
 
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _toastTimer;
+
     private void OnClipboardCopied() => DispatcherQueue.TryEnqueue(ShowCopyToast);
 
+    // Fade the toast in (the Border's OpacityTransition animates the Opacity change) and schedule it
+    // back out. No Storyboard - a code-built one fail-fasts the dispatcher if the path doesn't bind.
     private void ShowCopyToast()
     {
-        var storyboard = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
-        var fadeIn = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(120) };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(fadeIn, CopyToast);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fadeIn, "Opacity");
-        var fadeOut = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), BeginTime = TimeSpan.FromMilliseconds(1300) };
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(fadeOut, CopyToast);
-        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fadeOut, "Opacity");
-        storyboard.Children.Add(fadeIn);
-        storyboard.Children.Add(fadeOut);
-        storyboard.Begin();
+        CopyToast.Opacity = 1;
+        _toastTimer ??= DispatcherQueue.CreateTimer();
+        _toastTimer.Stop();
+        _toastTimer.Interval = TimeSpan.FromMilliseconds(1500);
+        _toastTimer.IsRepeating = false;
+        _toastTimer.Tick -= OnToastTick;
+        _toastTimer.Tick += OnToastTick;
+        _toastTimer.Start();
+    }
+
+    private void OnToastTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        CopyToast.Opacity = 0;
+        sender.Stop();
     }
 
     private async Task InitializeAsync()
@@ -204,6 +221,23 @@ public sealed partial class MainWindow : Window
 
     [LibraryImport("user32.dll")]
     private static partial uint GetDpiForWindow(IntPtr hWnd);
+
+    private const uint WM_GETMINMAXINFO = 0x0024;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved, ptMaxSize, ptMaxPosition, ptMinTrackSize, ptMaxTrackSize;
+    }
+
+    private delegate IntPtr SubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, uint uIdSubclass, IntPtr dwRefData);
+
+    [DllImport("comctl32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowSubclass(IntPtr hWnd, SubclassProc pfnSubclass, uint uIdSubclass, IntPtr dwRefData);
+
+    [DllImport("comctl32.dll")]
+    private static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
 
     // Window background material, chosen in the Command Palette settings and passed at launch.
     // Mica/Acrylic use the built-in Window backdrops (they track the app theme themselves); Solid

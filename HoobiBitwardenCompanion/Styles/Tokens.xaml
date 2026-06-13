@@ -38,7 +38,7 @@
     <!-- Layout -->
     <x:Double x:Key="ContentMaxWidth">640</x:Double>
     <Thickness x:Key="PagePadding">24,16,24,24</Thickness>
-    <Thickness x:Key="SectionPadding">16</Thickness>
+    <Thickness x:Key="SectionPadding">12,10</Thickness>
     <Thickness x:Key="SubtleCardPadding">12,10</Thickness>
 
     <!-- Text styles -->
