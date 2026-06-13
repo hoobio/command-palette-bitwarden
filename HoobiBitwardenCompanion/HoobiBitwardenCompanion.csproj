@@ -199,7 +199,7 @@
   </PropertyGroup>
 
   <Target Name="PublishExtensionIntoPackage"
-          AfterTargets="Build"
+          BeforeTargets="_ComputeAppxPackagePayload"
           Condition="'$(IncludeExtension)' == 'true'">
     <PropertyGroup>
       <ExtensionOutDir>$([System.IO.Path]::GetFullPath('$(OutDir)Extension\'))</ExtensionOutDir>
@@ -218,12 +218,25 @@
     <!-- IExtension is a third-party WinRT interface; the OS only resolves its metadata from the
          PACKAGE ROOT when building the cross-process proxy for CmdPal's CoCreateInstance(IID_IExtension).
          The extension exe lives in Extension\, so copy its .winmd up to the root or activation fails
-         with E_NOINTERFACE. -->
+         with E_NOINTERFACE. (For the loose dev layout that Add-AppxPackage -Register reads.) -->
     <ItemGroup>
-      <_ExtensionWinmd Include="$(ExtensionOutDir)*.winmd" />
+      <_ExtensionWinmd Include="$(ExtensionOutDir)Microsoft.CommandPalette.Extensions.winmd" />
     </ItemGroup>
     <Copy SourceFiles="@(_ExtensionWinmd)"
           DestinationFolder="$([System.IO.Path]::GetFullPath('$(OutDir)'))"
           SkipUnchangedFiles="true" />
+
+    <!-- For the packaged MSIX (CI `dotnet publish`), MakeAppx only includes declared payload, not
+         files copied into the output dir. Declare the guest extension files as package payload under
+         Extension\, plus the IExtension metadata at the package root. -->
+    <ItemGroup>
+      <_ExtensionPayload Include="$(ExtensionOutDir)**\*" />
+      <AppxPackagePayload Include="@(_ExtensionPayload)">
+        <TargetPath>Extension\%(_ExtensionPayload.RecursiveDir)%(_ExtensionPayload.Filename)%(_ExtensionPayload.Extension)</TargetPath>
+      </AppxPackagePayload>
+      <AppxPackagePayload Include="$(ExtensionOutDir)Microsoft.CommandPalette.Extensions.winmd">
+        <TargetPath>Microsoft.CommandPalette.Extensions.winmd</TargetPath>
+      </AppxPackagePayload>
+    </ItemGroup>
   </Target>
 </Project>
