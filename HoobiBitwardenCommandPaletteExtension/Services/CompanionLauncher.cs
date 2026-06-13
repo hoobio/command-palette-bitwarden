@@ -9,8 +9,9 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 // Starts the companion WinUI process and the IPC server it talks back to. The extension owns the
 // session/CLI, so it hosts the server (one per extension process) and hands the companion the pipe
-// name on the command line. The companion runs as a second <Application> in the same package, so its
-// exe lives under Companion\ in the install location.
+// name on the command line. The companion ships under Companion\ in the package and runs with the
+// shared package identity (it's built as a packaged self-contained Windows App SDK app), so a plain
+// child Process.Start is all that's needed.
 internal static class CompanionLauncher
 {
 #if CHANNEL_DEV
@@ -55,69 +56,47 @@ internal static class CompanionLauncher
       return;
     }
 
-    var args = new System.Collections.Generic.List<string> { IpcLaunchArgs.Mode, mode, IpcLaunchArgs.Pipe, pipeName };
+    var psi = new ProcessStartInfo(exePath)
+    {
+      UseShellExecute = false,
+      WorkingDirectory = Path.GetDirectoryName(exePath) ?? AppContext.BaseDirectory,
+    };
+    psi.ArgumentList.Add(IpcLaunchArgs.Mode);
+    psi.ArgumentList.Add(mode);
+    psi.ArgumentList.Add(IpcLaunchArgs.Pipe);
+    psi.ArgumentList.Add(pipeName);
     if (!string.IsNullOrEmpty(itemId))
     {
-      args.Add(IpcLaunchArgs.ItemId);
-      args.Add(itemId);
+      psi.ArgumentList.Add(IpcLaunchArgs.ItemId);
+      psi.ArgumentList.Add(itemId);
     }
 
-    // The command line must lead with the program name (argv[0]) so the companion's argument parser
-    // and CreateProcessW both see it correctly.
-    var commandLine = BitwardenCliService.QuoteArgIfNeeded(exePath) + " " + BitwardenCliService.BuildArgString(args);
-    var workingDir = Path.GetDirectoryName(exePath) ?? AppContext.BaseDirectory;
-
-    LaunchLog($"exe={exePath} exists={File.Exists(exePath)} cmd={commandLine}");
     try
     {
-      // Break away from the package so the unpackaged self-contained companion doesn't inherit the
-      // extension's MSIX identity (which crashes WinUI at startup). Fall back to Process.Start.
-      var (detached, win32Error) = DesktopAppLauncher.TryLaunchDetached(exePath, commandLine, workingDir, LaunchLog);
-      if (detached)
-      {
-        LaunchLog("launched detached (breakaway) OK");
-        DebugLogService.Log("CompanionIpc", $"Launched companion (detached): mode={mode} id={itemId ?? "(none)"}");
-        return;
-      }
-
-      LaunchLog($"detached launch FAILED (win32={win32Error}); falling back to Process.Start");
-      var psi = new ProcessStartInfo(exePath) { UseShellExecute = false, WorkingDirectory = workingDir };
-      foreach (var a in args) psi.ArgumentList.Add(a);
       Process.Start(psi);
-      LaunchLog("Process.Start fallback launched");
+      DebugLogService.Log("CompanionIpc", $"Launched companion: mode={mode} id={itemId ?? "(none)"}");
     }
     catch (Exception ex)
     {
-      LaunchLog($"EXCEPTION: {ex.GetType().Name}: {ex.Message}");
       DebugLogService.Log("CompanionIpc", $"Failed to launch companion: {ex.GetType().Name}: {ex.Message}");
     }
   }
 
   private static string? ResolveCompanionExePath()
   {
+    // The companion is the package owner, so its exe sits at the package root. The extension runs
+    // from the Extension\ subfolder, so step up one level to reach it.
     try
     {
       var installDir = Windows.ApplicationModel.Package.Current.InstalledLocation.Path;
-      return Path.Combine(installDir, "Companion", "HoobiBitwardenCompanion.exe");
+      return Path.Combine(installDir, "HoobiBitwardenCompanion.exe");
     }
     catch (Exception ex)
     {
       DebugLogService.Log("CompanionIpc", $"Could not resolve package install location: {ex.Message}");
-      // Fallback for non-packaged contexts: alongside the extension binary.
-      return Path.Combine(AppContext.BaseDirectory, "Companion", "HoobiBitwardenCompanion.exe");
+      var parent = Directory.GetParent(AppContext.BaseDirectory)?.FullName ?? AppContext.BaseDirectory;
+      return Path.Combine(parent, "HoobiBitwardenCompanion.exe");
     }
-  }
-
-  // Temporary on-disk launch diagnostics (the in-memory debug log isn't reachable while iterating).
-  private static void LaunchLog(string message)
-  {
-    try
-    {
-      var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HoobiBitwardenCommandPalette");
-      Directory.CreateDirectory(dir);
-      File.AppendAllText(Path.Combine(dir, "companion-launch.log"), $"{DateTime.Now:HH:mm:ss} {message}{Environment.NewLine}");
-    }
-    catch { }
   }
 
   private static string BuildPipeName()

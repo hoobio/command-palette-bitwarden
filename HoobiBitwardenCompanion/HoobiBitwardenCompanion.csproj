@@ -16,29 +16,57 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <!-- The companion ships inside the extension's MSIX as a second <Application>. It does not
-         produce its own package, so it builds as a self-contained Windows App SDK exe (no
-         framework dependency) that is copied into the package layout by the extension build. -->
-    <WindowsPackageType>None</WindowsPackageType>
+    <!-- This project OWNS the MSIX (single-project packaging). Because it's the WinUI app, its XAML
+         resources are merged into the package resources.pri, so it runs correctly under the package
+         identity. The Command Palette extension ships as a guest exe inside this package (see the
+         PublishExtensionIntoPackage target). Fully self-contained: carries its own .NET + Windows
+         App SDK, so no framework/runtime install is required. -->
+    <WindowsPackageType>MSIX</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-$(Platform.ToLower())</RuntimeIdentifier>
 
-    <!-- No AOT/trim constraint for the companion (JIT is fine); keep trimming off so WinUI
-         reflection-driven XAML works without trim annotations. -->
     <PublishTrimmed>false</PublishTrimmed>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The companion pins a newer Windows App SDK than the centrally-managed 1.8 the extension
-         uses: 1.8's net472 XAML markup compiler crashes under .NET 10 here, while 2.1.x runs its
-         compiler on modern .NET and builds cleanly (matches the Earmark.App house-style project).
-         Safe to diverge because the companion is a separate self-contained exe/process. -->
+    <!-- Companion pins a newer Windows App SDK than the centrally-managed 1.8 (whose net472 XAML
+         compiler crashes under .NET 10 here); 2.1.x runs its compiler on modern .NET. The explicit
+         Runtime pin forces a coherent self-contained runtime layout (WindowsAppSDK#6071). -->
     <PackageReference Include="Microsoft.WindowsAppSDK" VersionOverride="2.1.3" />
-    <!-- Force a coherent self-contained runtime layout (WindowsAppSDK#6071): the 2.1.3 metapackage
-         otherwise pulls a mismatched runtime, and the WinUI startup fails. Mirrors Earmark.App. -->
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" VersionOverride="2.1.3" />
+
+    <!-- Workaround: the MSIX build task DLL depends on System.Security.Permissions but doesn't ship
+         it; Directory.Build.targets copies it into place. -->
+    <PackageReference Include="System.Security.Permissions">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <!-- A loose .ico next to the exe for AppWindow.SetIcon (taskbar/window icon). Packaged visual
+         assets live only in resources.pri, so the window icon needs a physical file. Not fed to MakePri. -->
+    <None Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,10 +74,47 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Shared, process-agnostic source linked (not copied) from the extension/Shared folder:
-         IPC contract + framing, generator options, item model + parser. One source of truth. -->
+    <!-- Shared, process-agnostic source linked from the extension/Shared folder. One source of truth. -->
     <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
     <Compile Include="..\HoobiBitwardenCommandPaletteExtension\Models\BitwardenItem.cs" Link="Shared\BitwardenItem.cs" />
     <Compile Include="..\HoobiBitwardenCommandPaletteExtension\Models\BitwardenItemParser.cs" Link="Shared\BitwardenItemParser.cs" />
+    <!-- EFF word list (7776 words) for local passphrase generation; reused, not duplicated. -->
+    <Compile Include="..\HoobiBitwardenCommandPaletteExtension\Helpers\EFFWordList.cs" Link="Shared\EFFWordList.cs" />
   </ItemGroup>
+
+  <!--
+    Ship the Command Palette extension (a separate AOT COM-server exe) as a guest inside this package.
+    After the companion build, publish the extension straight into the package root so the manifest's
+    second <Application> + COM ExeServer resolve at register/package time. Set IncludeExtension=false
+    for a companion-only inner loop.
+  -->
+  <PropertyGroup>
+    <IncludeExtension Condition="'$(IncludeExtension)' == ''">true</IncludeExtension>
+    <ExtensionProject>$(MSBuildProjectDirectory)\..\HoobiBitwardenCommandPaletteExtension\HoobiBitwardenCommandPaletteExtension.csproj</ExtensionProject>
+    <ExtensionRid Condition="'$(Platform)' == 'ARM64'">win-arm64</ExtensionRid>
+    <ExtensionRid Condition="'$(ExtensionRid)' == ''">win-x64</ExtensionRid>
+  </PropertyGroup>
+
+  <Target Name="PublishExtensionIntoPackage"
+          AfterTargets="Build"
+          Condition="'$(IncludeExtension)' == 'true'">
+    <PropertyGroup>
+      <ExtensionOutDir>$([System.IO.Path]::GetFullPath('$(OutDir)Extension\'))</ExtensionOutDir>
+    </PropertyGroup>
+    <Message Importance="high" Text="Publishing extension ($(ExtensionRid)) -> $(ExtensionOutDir)" />
+    <MSBuild Projects="$(ExtensionProject)"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);Platform=$(Platform);RuntimeIdentifier=$(ExtensionRid);PublishDir=$(ExtensionOutDir)" />
+
+    <!-- IExtension is a third-party WinRT interface; the OS only resolves its metadata from the
+         PACKAGE ROOT when building the cross-process proxy for CmdPal's CoCreateInstance(IID_IExtension).
+         The extension exe lives in Extension\, so copy its .winmd up to the root or activation fails
+         with E_NOINTERFACE. -->
+    <ItemGroup>
+      <_ExtensionWinmd Include="$(ExtensionOutDir)*.winmd" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ExtensionWinmd)"
+          DestinationFolder="$([System.IO.Path]::GetFullPath('$(OutDir)'))"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

@@ -9,7 +9,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'HoobiBitwardenCommandPaletteExtension'">
+  <!-- The companion owns the MSIX, so the package version (from version.txt) applies to it; the
+       extension keeps it too for its assembly version. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'HoobiBitwardenCommandPaletteExtension' or '$(MSBuildProjectName)' == 'HoobiBitwardenCompanion'">
     <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)version.txt').Trim())</Version>
   </PropertyGroup>
 
