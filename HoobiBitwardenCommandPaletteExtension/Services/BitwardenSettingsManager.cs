@@ -255,13 +255,47 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         LogConfig("startup");
     }
 
-    // Programmatic settings changes (e.g. writing the resolved path after an
-    // automated CLI install) don't flow through the settings form, so persist
-    // explicitly here. BitwardenCliService.ApplyInstalledCli then re-resolves.
+    // The path a one-click install resolved to. Stored separately from the
+    // user-facing CliDirectoryOverride so an automated install can never overwrite
+    // a path the user set by hand (issue #178). Lives next to settings.json rather
+    // than inside it, since it's internal state and must not surface in the form.
+    private string AutoInstalledCliPathFile => Path.Combine(
+        Path.GetDirectoryName(FilePath) is { Length: > 0 } dir ? dir : SettingsDir,
+        "cli_install_path");
+
+    public string? AutoInstalledCliPath
+    {
+        get
+        {
+            try
+            {
+                return File.Exists(AutoInstalledCliPathFile)
+                    ? File.ReadAllText(AutoInstalledCliPathFile).Trim()
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
+    // Records the path resolved by an automated CLI install. Kept out of the
+    // settings form and the user's CliDirectoryOverride; BitwardenCliService falls
+    // back to it only when the user hasn't set an explicit override.
     public void PersistCliPath(string path)
     {
-        CliDirectoryOverride.Value = path;
-        SaveSettings();
+        try
+        {
+            var dir = Path.GetDirectoryName(AutoInstalledCliPathFile);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(AutoInstalledCliPathFile, path);
+        }
+        catch (Exception ex)
+        {
+            DebugLogService.Log("Installer", $"Failed to persist auto-installed CLI path: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void OnSettingsChanged(object sender, Settings e)

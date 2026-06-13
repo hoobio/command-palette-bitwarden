@@ -75,12 +75,31 @@ internal sealed partial class BitwardenCliService
     IconsUrl = null;
   }
 
-  internal static string ResolveCliExecutable(string? pathOverride)
+  // Resolution order: the user's explicit override always wins (even if broken,
+  // so a misconfiguration surfaces a clear error rather than silently falling
+  // back). Otherwise use the path an automated install remembered, but only if
+  // it still exists. Finally fall back to "bw" on PATH. The user override and the
+  // auto-installed path are kept in separate stores so a one-click install can
+  // never overwrite a path the user set by hand (issue #178).
+  internal static string ResolveCliExecutable(string? pathOverride, string? autoInstalledPath = null)
   {
-    if (string.IsNullOrWhiteSpace(pathOverride))
-      return "bw";
+    var explicitPath = NormalizeCliPath(pathOverride);
+    if (explicitPath != null)
+      return explicitPath;
 
-    var trimmed = pathOverride.Trim();
+    var auto = NormalizeCliPath(autoInstalledPath);
+    if (auto != null && File.Exists(auto))
+      return auto;
+
+    return "bw";
+  }
+
+  private static string? NormalizeCliPath(string? path)
+  {
+    if (string.IsNullOrWhiteSpace(path))
+      return null;
+
+    var trimmed = path.Trim();
     var name = Path.GetFileName(trimmed);
     if (name.Equals("bw", StringComparison.OrdinalIgnoreCase)
         || name.Equals("bw.exe", StringComparison.OrdinalIgnoreCase))
@@ -107,7 +126,9 @@ internal sealed partial class BitwardenCliService
     return null;
   }
 
-  private string CliExecutable => ResolveCliExecutable(_settings?.CliDirectoryOverride.Value);
+  private string CliExecutable => ResolveCliExecutable(
+    _settings?.CliDirectoryOverride.Value,
+    _settings?.AutoInstalledCliPath);
 
   private string? DataDirectory => ResolveDataDirectory(
     _settings?.CliDirectoryOverride.Value,
@@ -188,10 +209,12 @@ internal sealed partial class BitwardenCliService
     ResetForCliConfigChange();
   }
 
-  // Apply a path produced by BitwardenCliInstaller: persist it as the CLI override
-  // and re-resolve. CheckCliConfigChanged sees the changed executable and fires
-  // ResetForCliConfigChange -> CliConfigChanged, which the page handles by
-  // re-checking vault status against the freshly installed CLI.
+  // Apply a path produced by BitwardenCliInstaller: remember it as the
+  // auto-installed CLI path (kept separate from the user's CLI Path Override so it
+  // can never clobber a hand-set value) and re-resolve. CheckCliConfigChanged sees
+  // the changed executable and fires ResetForCliConfigChange -> CliConfigChanged,
+  // which the page handles by re-checking vault status against the freshly
+  // installed CLI.
   public void ApplyInstalledCli(string path)
   {
     _settings?.PersistCliPath(path);
