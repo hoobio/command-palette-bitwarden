@@ -2,9 +2,5 @@
   {
     "test": "Blocked executables",
     "reason": "mscordbi.dll and Microsoft.CommandPalette.Extensions.Toolkit.dll (PowerToys SDK) reference CreateProcessW — these are third-party binaries outside our control"
-  },
-  {
-    "test": "Application count",
-    "reason": "The package intentionally declares two applications — the Command Palette extension (guest COM-server exe) and the WinUI companion that owns the package. This is by design and is distributed via MSI/sideload, not the Microsoft Store, so the Store's single-application restriction doesn't apply."
   }
 ]

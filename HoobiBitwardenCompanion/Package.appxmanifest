@@ -14,11 +14,13 @@
     <Resource Language="x-generate" />
   </Resources>
   <Applications>
-    <!-- The Command Palette extension: a full-trust AOT COM-server exe, shipped as a guest in the
-         Extension\ folder (published by the companion build). It needs no MRT/XAML resources, so it's
-         fine not owning the package. Listed first (primary app) and activated by the palette host via
-         the COM CLSID below. -->
-    <Application Id="App" Executable="Extension\HoobiBitwardenCommandPaletteExtension.exe" EntryPoint="Windows.FullTrustApplication">
+    <!-- A SINGLE application (the Microsoft Store rejects packages with more than one). This is the
+         WinUI companion - the package owner, so its XAML resources land in the package resources.pri
+         and it runs correctly under the package identity. The Command Palette extension is NOT a
+         separate <Application>: it's activated by the palette host through the COM server declared
+         below, whose com:ExeServer Executable points at the guest extension exe in Extension\. The
+         companion exe is also launched directly (Process.Start) by that extension for its windows. -->
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
       <uap:VisualElements DisplayName="Command Palette Extension for Bitwarden" Description="Command Palette Extension for Bitwarden" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
@@ -46,15 +48,6 @@
           </uap3:AppExtension>
         </uap3:Extension>
       </Extensions>
-    </Application>
-    <!-- Package owner: the WinUI 3 companion. Because this project builds the package, its XAML
-         resources land in the package resources.pri, so it runs correctly under package identity.
-         Hidden from the Start list; launched by the extension. -->
-    <Application Id="Companion" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
-      <uap:VisualElements DisplayName="Bitwarden Companion" Description="Bitwarden Companion" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" AppListEntry="none">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
-        <uap:SplashScreen Image="Assets\SplashScreen.png" />
-      </uap:VisualElements>
     </Application>
   </Applications>
   <Capabilities>
