@@ -219,24 +219,35 @@ public sealed partial class ItemDetailPage : Page
         var row = AddRow(panel, "Notes", item["notes"]?.GetValue<string>(), editable: true);
         _editable.Add((row, v => item["notes"] = string.IsNullOrEmpty(v) ? null : v));
 
-        var repromptOn = (item["reprompt"]?.GetValue<int>() ?? 0) != 0;
+        // Master password re-prompt: edit-only, on a single line (label left, toggle right).
         if (_editing)
         {
-            _repromptToggle = new ToggleSwitch { Header = "Master password re-prompt", IsOn = repromptOn };
-            panel.Children.Add(_repromptToggle);
-        }
-        else
-        {
-            AddRow(panel, "Master password re-prompt", repromptOn ? "On" : "Off", editable: false);
+            _repromptToggle = new ToggleSwitch { OnContent = null, OffContent = null, MinWidth = 0 };
+            _repromptToggle.IsOn = (item["reprompt"]?.GetValue<int>() ?? 0) != 0;
+
+            var grid = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var label = new TextBlock { Text = "Master password re-prompt", VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(label, 0);
+            Grid.SetColumn(_repromptToggle, 1);
+            grid.Children.Add(label);
+            grid.Children.Add(_repromptToggle);
+            panel.Children.Add(grid);
         }
     }
 
     private void BuildHistorySection(JsonObject item)
     {
+        var created = item["creationDate"]?.GetValue<string>();
         var revised = item["revisionDate"]?.GetValue<string>();
-        if (string.IsNullOrEmpty(revised)) return;
+        if (string.IsNullOrEmpty(created) && string.IsNullOrEmpty(revised)) return;
+
         var panel = AddSection("Item history");
-        AddRow(panel, "Last edited", FormatDate(revised), editable: false);
+        if (!string.IsNullOrEmpty(revised))
+            AddRow(panel, "Last edited", FormatDate(revised), editable: false, showCopy: false);
+        if (!string.IsNullOrEmpty(created))
+            AddRow(panel, "Created", FormatDate(created), editable: false, showCopy: false);
     }
 
     private void AddSectionHeader(string title) =>
@@ -262,7 +273,7 @@ public sealed partial class ItemDetailPage : Page
         return stack;
     }
 
-    private FieldRow AddRow(StackPanel panel, string label, string? value, bool editable, bool secret = false, bool regenerate = false)
+    private FieldRow AddRow(StackPanel panel, string label, string? value, bool editable, bool secret = false, bool regenerate = false, bool showCopy = true)
     {
         var row = new FieldRow
         {
@@ -270,6 +281,7 @@ public sealed partial class ItemDetailPage : Page
             Value = value ?? string.Empty,
             IsSecret = secret,
             ShowRegenerate = regenerate,
+            ShowCopy = showCopy,
             IsEditing = _editing && editable,
         };
         if (regenerate)

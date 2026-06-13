@@ -61,6 +61,15 @@ public sealed partial class FieldRow : UserControl
         set => SetValue(IsEditingProperty, value);
     }
 
+    public static readonly DependencyProperty ShowCopyProperty =
+        DependencyProperty.Register(nameof(ShowCopy), typeof(bool), typeof(FieldRow), new PropertyMetadata(true, OnAppearanceChanged));
+
+    public bool ShowCopy
+    {
+        get => (bool)GetValue(ShowCopyProperty);
+        set => SetValue(ShowCopyProperty, value);
+    }
+
     // Raised when the user clicks regenerate; the host opens the generator and assigns the result.
     public event EventHandler? RegenerateRequested;
 
@@ -92,6 +101,7 @@ public sealed partial class FieldRow : UserControl
 
         RevealButton.Visibility = IsSecret && !IsEditing ? Visibility.Visible : Visibility.Collapsed;
         RegenerateButton.Visibility = ShowRegenerate && IsEditing ? Visibility.Visible : Visibility.Collapsed;
+        CopyButton.Visibility = ShowCopy ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnRevealClick(object sender, RoutedEventArgs e)
