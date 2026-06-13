@@ -13,14 +13,12 @@ public partial class App : Application
 
     public App()
     {
-        // The extension launches us via Process.Start, so we inherit the package identity but no
-        // explicit AppUserModelID. Packaged apps take their taskbar icon from the app's AUMID tile
-        // logo (not the window icon), so without this the taskbar button is blank. Point it at the
-        // "App" id: its AppListEntry is visible so the shell resolves its Square44x44 logo (the
-        // Companion id is AppListEntry="none", which the taskbar can't resolve a logo for).
+        // The extension launches us via Process.Start. Pin the AppUserModelID to our own "Companion"
+        // app id (the app this exe belongs to) so the taskbar button groups under it and shows its
+        // Square44x44 logo, rather than an ambiguous/blank association.
         try
         {
-            var aumid = Windows.ApplicationModel.Package.Current.Id.FamilyName + "!App";
+            var aumid = Windows.ApplicationModel.Package.Current.Id.FamilyName + "!Companion";
             SetCurrentProcessExplicitAppUserModelID(aumid);
         }
         catch { /* unpackaged / no identity: nothing to do */ }
