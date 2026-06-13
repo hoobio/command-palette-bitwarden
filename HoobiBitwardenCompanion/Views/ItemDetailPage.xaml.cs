@@ -7,6 +7,7 @@ using HoobiBitwardenCompanion.Controls;
 using HoobiBitwardenCompanion.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 
@@ -31,6 +32,15 @@ public sealed partial class ItemDetailPage : Page
     private readonly List<FieldRow> _secrets = [];
     private UriListEditor? _uriEditor;
     private ToggleSwitch? _repromptToggle;
+
+    private Dictionary<string, string> _folders = [];
+    private Dictionary<string, string> _organizations = [];
+    private TextBox? _nameBox;
+    private ToggleButton? _favoriteToggle;
+    private ComboBox? _ownerBox;
+    private ComboBox? _folderBox;
+    private StackPanel? _collectionsPanel;
+    private readonly List<(CheckBox Box, string Id)> _collectionChecks = [];
 
     public ItemDetailPage() => InitializeComponent();
 
@@ -71,6 +81,7 @@ public sealed partial class ItemDetailPage : Page
                 return;
             }
 
+            (_folders, _organizations) = await _client.GetMetadataAsync();
             _item = item;
             _originalJson = item.ToJsonString();
             BuildFields();
@@ -88,12 +99,17 @@ public sealed partial class ItemDetailPage : Page
         _secrets.Clear();
         _uriEditor = null;
         _repromptToggle = null;
+        _nameBox = null;
+        _favoriteToggle = null;
+        _ownerBox = null;
+        _folderBox = null;
+        _collectionsPanel = null;
+        _collectionChecks.Clear();
 
         var item = _item!;
         var type = item["type"]?.GetValue<int>() ?? 0;
-        ApplyHeader(item);
 
-        AddNameSection(item);
+        BuildItemDetailsSection(item);
 
         if (type == 1) // Login
         {
@@ -108,16 +124,10 @@ public sealed partial class ItemDetailPage : Page
         EditButton.Visibility = _editable.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // Put the item icon + name in the window title bar (the item windows have no separate header
-    // row). Uses the website favicon from the Bitwarden icon server when available (base resolved by
-    // the extension, empty when the privacy setting is off), else a generic glyph.
-    private void ApplyHeader(JsonObject item)
+    private string? FaviconUrl(JsonObject item)
     {
-        var name = item["name"]?.GetValue<string>() ?? "(no name)";
-
         var host = string.IsNullOrEmpty(_iconBaseUrl) ? null : FirstHost(item);
-        var faviconUrl = string.IsNullOrEmpty(host) ? null : $"{_iconBaseUrl}/{host}/icon.png";
-        _host?.SetItemHeader(faviconUrl, name);
+        return string.IsNullOrEmpty(host) ? null : $"{_iconBaseUrl}/{host}/icon.png";
     }
 
     private static string? FirstHost(JsonObject item)
@@ -134,11 +144,153 @@ public sealed partial class ItemDetailPage : Page
         return null;
     }
 
-    private void AddNameSection(JsonObject item)
+    // Item details (COMPANION_WINUI_PHASE1 §3.4): in view mode, the item icon + name with its folder
+    // (and organization, for org items); in edit mode, the name, owner, folder, collections and the
+    // favourite star. Replaces the old title-bar header - the identity lives in this card now.
+    private void BuildItemDetailsSection(JsonObject item)
     {
-        var panel = AddSection("Item");
-        var name = AddRow(panel, "Name", item["name"]?.GetValue<string>(), editable: true);
-        _editable.Add((name, v => item["name"] = v));
+        if (_editing)
+        {
+            BuildItemDetailsEdit(item);
+            return;
+        }
+
+        var panel = AddSection("Item details");
+
+        // Name row: favicon + name, no copy.
+        var nameRow = new Grid { ColumnSpacing = (double)Application.Current.Resources["SpacingSmall"] };
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var favicon = FaviconUrl(item);
+        FrameworkElement icon = favicon != null
+            ? new Image { Width = 28, Height = 28, Source = SafeBitmap(favicon) }
+            : new FontIcon { Glyph = "", FontSize = 22 };
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(icon, 0);
+        var nameText = new TextBlock
+        {
+            Text = item["name"]?.GetValue<string>() ?? "(no name)",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(nameText, 1);
+        nameRow.Children.Add(icon);
+        nameRow.Children.Add(nameText);
+        panel.Children.Add(nameRow);
+
+        // Organization (org items) then folder, each with a leading glyph.
+        var orgId = item["organizationId"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(orgId) && _organizations.TryGetValue(orgId, out var orgName))
+            panel.Children.Add(IconTextRow("", orgName)); // org/people glyph
+
+        var folderId = item["folderId"]?.GetValue<string>();
+        var folderName = !string.IsNullOrEmpty(folderId) && _folders.TryGetValue(folderId, out var fn) ? fn : "No folder";
+        panel.Children.Add(IconTextRow("", folderName)); // folder glyph
+    }
+
+    private void BuildItemDetailsEdit(JsonObject item)
+    {
+        // Header row: "Item details" title + favourite star.
+        var header = new Grid();
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var title = new TextBlock { Text = "Item details", Style = (Style)Application.Current.Resources["SectionTitleTextStyle"] };
+        Grid.SetColumn(title, 0);
+        _favoriteToggle = new ToggleButton
+        {
+            Style = (Style)Application.Current.Resources["GhostIconButtonStyle"],
+            Content = new FontIcon { Glyph = "", FontSize = 16 }, // FavoriteStar
+            IsChecked = item["favorite"]?.GetValue<bool>() ?? false,
+        };
+        ToolTipService.SetToolTip(_favoriteToggle, "Favourite");
+        Grid.SetColumn(_favoriteToggle, 1);
+        header.Children.Add(title);
+        header.Children.Add(_favoriteToggle);
+        FieldsPanel.Children.Add(header);
+
+        var stack = new StackPanel { Spacing = (double)Application.Current.Resources["SpacingSmall"] };
+        FieldsPanel.Children.Add(new Border { Style = (Style)Application.Current.Resources["SectionCardStyle"], Child = stack });
+
+        _nameBox = new TextBox { Header = "Item name", Text = item["name"]?.GetValue<string>() ?? string.Empty };
+        stack.Children.Add(_nameBox);
+
+        // Owner: "You" (no org) or one of the organizations.
+        _ownerBox = new ComboBox { Header = "Owner", HorizontalAlignment = HorizontalAlignment.Stretch };
+        _ownerBox.Items.Add(new ComboBoxItem { Content = "You", Tag = string.Empty });
+        var currentOrg = item["organizationId"]?.GetValue<string>() ?? string.Empty;
+        foreach (var (oid, oname) in _organizations)
+            _ownerBox.Items.Add(new ComboBoxItem { Content = oname, Tag = oid });
+        _ownerBox.SelectedIndex = IndexOfTag(_ownerBox, currentOrg);
+        stack.Children.Add(_ownerBox);
+
+        // Folder.
+        _folderBox = new ComboBox { Header = "Folder", HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var (fid, fname) in _folders)
+            _folderBox.Items.Add(new ComboBoxItem { Content = fname, Tag = fid });
+        _folderBox.Items.Add(new ComboBoxItem { Content = "No folder", Tag = string.Empty });
+        _folderBox.SelectedIndex = IndexOfTag(_folderBox, item["folderId"]?.GetValue<string>() ?? string.Empty);
+        stack.Children.Add(_folderBox);
+
+        // Collections (org items only). Rebuild when the owner changes.
+        _collectionsPanel = new StackPanel { Spacing = (double)Application.Current.Resources["SpacingXSmall"] };
+        stack.Children.Add(_collectionsPanel);
+        _ownerBox.SelectionChanged += (_, _) => _ = RefreshCollectionsAsync(SelectedTag(_ownerBox), item);
+        _ = RefreshCollectionsAsync(currentOrg, item);
+    }
+
+    private async Task RefreshCollectionsAsync(string orgId, JsonObject item)
+    {
+        if (_collectionsPanel == null) return;
+        _collectionsPanel.Children.Clear();
+        _collectionChecks.Clear();
+        if (string.IsNullOrEmpty(orgId) || _client == null) return;
+
+        var collections = await _client.GetCollectionsAsync(orgId);
+        if (collections.Count == 0) return;
+
+        var selected = new HashSet<string>();
+        if (item["collectionIds"] is JsonArray cids)
+            foreach (var c in cids)
+                if (c?.GetValue<string>() is { } s) selected.Add(s);
+
+        _collectionsPanel.Children.Add(new TextBlock { Text = "Collections", Style = (Style)Application.Current.Resources["MutedCaptionTextStyle"] });
+        foreach (var (cid, cname) in collections)
+        {
+            var check = new CheckBox { Content = cname, IsChecked = selected.Contains(cid) };
+            _collectionChecks.Add((check, cid));
+            _collectionsPanel.Children.Add(check);
+        }
+    }
+
+    private static int IndexOfTag(ComboBox box, string tag)
+    {
+        for (var i = 0; i < box.Items.Count; i++)
+            if (box.Items[i] is ComboBoxItem ci && (ci.Tag as string) == tag) return i;
+        return 0;
+    }
+
+    private static string SelectedTag(ComboBox box) => (box.SelectedItem as ComboBoxItem)?.Tag as string ?? string.Empty;
+
+    private static Microsoft.UI.Xaml.Media.Imaging.BitmapImage? SafeBitmap(string url)
+    {
+        try { return new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(url)); }
+        catch { return null; }
+    }
+
+    private static Grid IconTextRow(string glyph, string text)
+    {
+        var row = new Grid { ColumnSpacing = (double)Application.Current.Resources["SpacingSmall"] };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = new FontIcon { Glyph = glyph, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(icon, 0);
+        var label = new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(label, 1);
+        row.Children.Add(icon);
+        row.Children.Add(label);
+        return row;
     }
 
     private void BuildLoginSection(JsonObject item)
@@ -326,6 +478,33 @@ public sealed partial class ItemDetailPage : Page
             loginObj["uris"] = _uriEditor.ToJsonArray();
         if (_repromptToggle != null)
             _item["reprompt"] = _repromptToggle.IsOn ? 1 : 0;
+
+        // Item details edit controls.
+        if (_nameBox != null)
+            _item["name"] = _nameBox.Text;
+        if (_favoriteToggle != null)
+            _item["favorite"] = _favoriteToggle.IsChecked ?? false;
+        if (_folderBox != null)
+        {
+            var folderId = SelectedTag(_folderBox);
+            _item["folderId"] = string.IsNullOrEmpty(folderId) ? null : folderId;
+        }
+        if (_ownerBox != null)
+        {
+            var orgId = SelectedTag(_ownerBox);
+            _item["organizationId"] = string.IsNullOrEmpty(orgId) ? null : orgId;
+            if (string.IsNullOrEmpty(orgId))
+            {
+                _item["collectionIds"] = null;
+            }
+            else
+            {
+                var collections = new JsonArray();
+                foreach (var (box, cid) in _collectionChecks)
+                    if (box.IsChecked == true) collections.Add(cid);
+                _item["collectionIds"] = collections;
+            }
+        }
 
         var mustContain = _secrets
             .Select(r => r.CurrentValue)

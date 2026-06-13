@@ -58,6 +58,33 @@ internal sealed partial class BitwardenCliService
     return null;
   }
 
+  // Collections for an organization (id -> name), for the companion's org-item collection picker.
+  public async Task<Dictionary<string, string>> ListCollectionsAsync(string organizationId)
+  {
+    var result = new Dictionary<string, string>();
+    if (string.IsNullOrWhiteSpace(organizationId)) return result;
+
+    try
+    {
+      var json = await RunCliAsync($"list collections --organizationid {organizationId}");
+      if (JsonNode.Parse(json) is JsonArray array)
+      {
+        foreach (var node in array)
+        {
+          var cid = node?["id"]?.GetValue<string>();
+          var name = node?["name"]?.GetValue<string>();
+          if (!string.IsNullOrEmpty(cid) && name != null) result[cid] = name;
+        }
+      }
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Companion", $"ListCollections failed: {ex.GetType().Name}: {ex.Message}");
+    }
+
+    return result;
+  }
+
   // Parsed item for display. Reuses the same parser the cache uses.
   public async Task<BitwardenItem?> GetItemAsync(string id)
   {

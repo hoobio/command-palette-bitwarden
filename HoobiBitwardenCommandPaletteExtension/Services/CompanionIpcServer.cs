@@ -247,6 +247,20 @@ internal sealed partial class CompanionIpcServer : IDisposable
         return Ok(id, data);
       }
 
+      case IpcCommands.GetMetadata:
+      {
+        data[IpcFields.Folders] = MapToJson(_service.Folders);
+        data[IpcFields.Organizations] = MapToJson(_service.Organizations);
+        return Ok(id, data);
+      }
+
+      case IpcCommands.GetCollections:
+      {
+        var collections = await _service.ListCollectionsAsync(args[IpcFields.OrgId]?.GetValue<string>() ?? "");
+        data[IpcFields.Collections] = MapToJson(collections);
+        return Ok(id, data);
+      }
+
       default:
         return Error(id, $"Unknown command '{command}'.");
     }
@@ -305,6 +319,13 @@ internal sealed partial class CompanionIpcServer : IDisposable
       if (!string.IsNullOrEmpty(s)) list.Add(s);
     }
     return [.. list];
+  }
+
+  private static JsonObject MapToJson(System.Collections.Generic.IReadOnlyDictionary<string, string> map)
+  {
+    var obj = new JsonObject();
+    foreach (var (key, value) in map) obj[key] = value;
+    return obj;
   }
 
   private static string StatusToString(VaultStatus status) => status switch

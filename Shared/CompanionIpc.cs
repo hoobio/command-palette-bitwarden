@@ -23,6 +23,8 @@ internal static class IpcCommands
     public const string Generate = "Generate";
     public const string QuickRotate = "QuickRotate";
     public const string GetServerUrl = "GetServerUrl"; // configured web vault base, resolved live
+    public const string GetMetadata = "GetMetadata";   // folders + organizations (id -> name)
+    public const string GetCollections = "GetCollections"; // collections for an organization
 }
 
 internal static class IpcFields
@@ -42,6 +44,10 @@ internal static class IpcFields
     public const string Status = "status";            // unlocked | locked | unauthenticated | clinotfound
     public const string Success = "success";
     public const string Value = "value";              // generated secret
+    public const string Folders = "folders";          // { id: name } incl. "" : "No folder"
+    public const string Organizations = "organizations"; // { id: name }
+    public const string Collections = "collections";  // { id: name } for one organization
+    public const string OrgId = "orgId";
 
     // Auth args
     public const string Password = "password";

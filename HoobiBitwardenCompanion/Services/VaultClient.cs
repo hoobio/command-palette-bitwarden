@@ -68,6 +68,29 @@ internal sealed class VaultClient
         return r.Ok ? r.GetString(IpcFields.ServerUrl) : null;
     }
 
+    public async Task<(Dictionary<string, string> Folders, Dictionary<string, string> Organizations)> GetMetadataAsync()
+    {
+        var r = await _ipc.SendAsync(IpcCommands.GetMetadata);
+        return (ReadMap(r, IpcFields.Folders), ReadMap(r, IpcFields.Organizations));
+    }
+
+    public async Task<Dictionary<string, string>> GetCollectionsAsync(string organizationId)
+    {
+        var r = await _ipc.SendAsync(IpcCommands.GetCollections, new JsonObject { [IpcFields.OrgId] = organizationId });
+        return ReadMap(r, IpcFields.Collections);
+    }
+
+    private static Dictionary<string, string> ReadMap(IpcResponse response, string field)
+    {
+        var map = new Dictionary<string, string>();
+        if (response.Data[field] is JsonObject obj)
+        {
+            foreach (var pair in obj)
+                if (pair.Value is JsonValue v) map[pair.Key] = v.GetValue<string>();
+        }
+        return map;
+    }
+
     public async Task<JsonObject?> GetItemAsync(string id)
     {
         var r = await _ipc.SendAsync(IpcCommands.GetItem, new JsonObject { [IpcFields.ItemId] = id });
