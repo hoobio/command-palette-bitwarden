@@ -25,13 +25,17 @@
                        CharacterSpacing="50"
                        IsTextSelectionEnabled="True" />
 
-            <!-- Countdown ring: a determinate ProgressRing depleting over the period, with the
-                 remaining seconds shown in the centre. Coloured green, then amber/red as it runs out. -->
-            <Grid Grid.Column="1" Width="32" Height="32" VerticalAlignment="Center">
-                <ProgressRing x:Name="CountdownRing"
-                              IsIndeterminate="False"
-                              Minimum="0"
-                              Width="32" Height="32" />
+            <!-- Countdown ring: a custom arc redrawn ~30x/sec so it shrinks smoothly over the period
+                 and snaps back instantly at rollover (no slow reverse animation). Remaining seconds
+                 sit in the centre; the arc goes green, then amber/red in the last few seconds. -->
+            <Grid Grid.Column="1" Width="34" Height="34" VerticalAlignment="Center">
+                <Ellipse Width="30" Height="30"
+                         StrokeThickness="2.5"
+                         Stroke="{ThemeResource ControlStrokeColorDefaultBrush}" />
+                <Path x:Name="CountdownArc"
+                      StrokeThickness="2.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round" />
                 <TextBlock x:Name="SecondsText"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"

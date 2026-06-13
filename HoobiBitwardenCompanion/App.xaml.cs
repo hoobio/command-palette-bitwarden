@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 
 namespace HoobiBitwardenCompanion;
@@ -7,7 +8,24 @@ public partial class App : Application
 {
     private Window? _window;
 
-    public App() => InitializeComponent();
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int SetCurrentProcessExplicitAppUserModelID(string appID);
+
+    public App()
+    {
+        // The extension launches us via Process.Start, so we inherit the package identity but no
+        // explicit AppUserModelID. Packaged apps take their taskbar icon from the app's AUMID logo
+        // (not the window icon), so without this the taskbar button falls back to a blank/default
+        // icon. Point it at our Companion app id so the taskbar shows the package logo.
+        try
+        {
+            var aumid = Windows.ApplicationModel.Package.Current.Id.FamilyName + "!Companion";
+            SetCurrentProcessExplicitAppUserModelID(aumid);
+        }
+        catch { /* unpackaged / no identity: nothing to do */ }
+
+        InitializeComponent();
+    }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {

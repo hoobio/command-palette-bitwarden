@@ -83,4 +83,5 @@ internal static class IpcLaunchArgs
     public const string ItemId = "--id";
     public const string Pipe = "--pipe";
     public const string Backdrop = "--backdrop";  // Mica | Acrylic | Solid
+    public const string IconBase = "--icons";     // icon-server base URL, or empty if icons are off
 }

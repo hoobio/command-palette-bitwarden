@@ -32,6 +32,10 @@ internal static class CompanionLauncher
   // before the IPC channel is up.
   public static string Backdrop { get; set; } = "Mica";
 
+  // Whether website icons are enabled (privacy setting). When on, the companion is handed the
+  // resolved icon-server base at launch so item windows show favicons.
+  public static bool ShowWebsiteIcons { get; set; } = true;
+
   private static readonly System.Threading.Lock Gate = new();
   private static CompanionIpcServer? _server;
   private static string? _pipeName;
@@ -72,6 +76,8 @@ internal static class CompanionLauncher
     psi.ArgumentList.Add(pipeName);
     psi.ArgumentList.Add(IpcLaunchArgs.Backdrop);
     psi.ArgumentList.Add(Backdrop);
+    psi.ArgumentList.Add(IpcLaunchArgs.IconBase);
+    psi.ArgumentList.Add(ShowWebsiteIcons ? Helpers.VaultItemHelper.GetIconBaseUrl() : string.Empty);
     if (!string.IsNullOrEmpty(itemId))
     {
       psi.ArgumentList.Add(IpcLaunchArgs.ItemId);

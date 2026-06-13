@@ -274,7 +274,11 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         LogConfig("settings changed");
     }
 
-    private void SyncCompanionSettings() => CompanionLauncher.Backdrop = CompanionBackdrop.Value ?? "Mica";
+    private void SyncCompanionSettings()
+    {
+        CompanionLauncher.Backdrop = CompanionBackdrop.Value ?? "Mica";
+        CompanionLauncher.ShowWebsiteIcons = ShowWebsiteIcons.Value;
+    }
 
     private void SyncClipboardSettings()
     {

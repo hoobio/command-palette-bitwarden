@@ -524,20 +524,25 @@ internal static partial class VaultItemHelper
     if (string.IsNullOrEmpty(host))
       return new IconInfo("\uE774");
 
-    var serverUrl = BitwardenCliService.ServerUrl;
-    var iconsUrl = BitwardenCliService.IconsUrl;
-    string iconBase;
-    if (!string.IsNullOrEmpty(iconsUrl))
-      iconBase = iconsUrl;
-    else if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
-      iconBase = "https://icons.bitwarden.net";
-    else if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
-      iconBase = "https://vault.bitwarden.eu/icons";
-    else
-      iconBase = serverUrl + "/icons";
-    var iconUrl = $"{iconBase}/{host}/icon.png";
+    var iconUrl = $"{GetIconBaseUrl()}/{host}/icon.png";
 
     return FaviconService.GetOrQueue(host, iconUrl, priority: priority);
+  }
+
+  // Resolves the Bitwarden icon-server base for the configured server (custom icons URL, cloud
+  // com/eu, or a self-hosted /icons path). Shared with the companion, which is handed this base at
+  // launch so its item windows show the same favicons.
+  internal static string GetIconBaseUrl()
+  {
+    var serverUrl = BitwardenCliService.ServerUrl;
+    var iconsUrl = BitwardenCliService.IconsUrl;
+    if (!string.IsNullOrEmpty(iconsUrl))
+      return iconsUrl;
+    if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+      return "https://icons.bitwarden.net";
+    if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+      return "https://vault.bitwarden.eu/icons";
+    return serverUrl + "/icons";
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>
