@@ -243,14 +243,15 @@ public sealed partial class ItemDetailPage : Page
         nameRow.Children.Add(nameText);
         panel.Children.Add(nameRow);
 
-        // Organization (org items) then folder, each with a leading glyph.
+        // Organization + folder on one line; the folder is only shown when the item is actually in one.
+        var meta = new StackPanel { Orientation = Orientation.Horizontal, Spacing = (double)Application.Current.Resources["SpacingMedium"] };
         var orgId = item["organizationId"]?.GetValue<string>();
         if (!string.IsNullOrEmpty(orgId) && _organizations.TryGetValue(orgId, out var orgName))
-            panel.Children.Add(IconTextRow("", orgName)); // org/people glyph
-
+            meta.Children.Add(IconTextInline("", orgName));
         var folderId = item["folderId"]?.GetValue<string>();
-        var folderName = !string.IsNullOrEmpty(folderId) && _folders.TryGetValue(folderId, out var fn) ? fn : "No folder";
-        panel.Children.Add(IconTextRow("", folderName)); // folder glyph
+        if (!string.IsNullOrEmpty(folderId) && _folders.TryGetValue(folderId, out var folderName))
+            meta.Children.Add(IconTextInline("", folderName));
+        if (meta.Children.Count > 0) panel.Children.Add(meta);
     }
 
     private void BuildItemDetailsEdit(JsonObject item)
@@ -319,13 +320,35 @@ public sealed partial class ItemDetailPage : Page
             foreach (var c in cids)
                 if (c?.GetValue<string>() is { } s) selected.Add(s);
 
-        _collectionsPanel.Children.Add(new TextBlock { Text = "Collections", Style = (Style)Application.Current.Resources["MutedCaptionTextStyle"] });
+        // Compact multiselect: a dropdown button summarising the selection, with a checkbox list in
+        // its flyout (raw inline checkboxes took too much vertical space).
+        var button = new DropDownButton { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var list = new StackPanel { Spacing = (double)Application.Current.Resources["SpacingXSmall"], MinWidth = 220 };
+
+        void UpdateSummary()
+        {
+            var names = _collectionChecks.Where(c => c.Box.IsChecked == true).Select(c => (string)c.Box.Content).ToList();
+            button.Content = new TextBlock
+            {
+                Text = names.Count == 0 ? "Select collections" : string.Join(", ", names),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+        }
+
         foreach (var (cid, cname) in collections)
         {
             var check = new CheckBox { Content = cname, IsChecked = selected.Contains(cid) };
+            check.Checked += (_, _) => UpdateSummary();
+            check.Unchecked += (_, _) => UpdateSummary();
             _collectionChecks.Add((check, cid));
-            _collectionsPanel.Children.Add(check);
+            list.Children.Add(check);
         }
+
+        button.Flyout = new Flyout { Content = new ScrollViewer { Content = list, MaxHeight = 280 } };
+        UpdateSummary();
+
+        _collectionsPanel.Children.Add(new TextBlock { Text = "Collections", Style = (Style)Application.Current.Resources["MutedCaptionTextStyle"] });
+        _collectionsPanel.Children.Add(button);
     }
 
     private static int IndexOfTag(ComboBox box, string tag)
@@ -343,17 +366,11 @@ public sealed partial class ItemDetailPage : Page
         catch { return null; }
     }
 
-    private static Grid IconTextRow(string glyph, string text)
+    private static StackPanel IconTextInline(string glyph, string text)
     {
-        var row = new Grid { ColumnSpacing = (double)Application.Current.Resources["SpacingSmall"] };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var icon = new FontIcon { Glyph = glyph, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(icon, 0);
-        var label = new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(label, 1);
-        row.Children.Add(icon);
-        row.Children.Add(label);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new FontIcon { Glyph = glyph, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
         return row;
     }
 
