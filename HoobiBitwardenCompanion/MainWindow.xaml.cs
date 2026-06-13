@@ -37,8 +37,10 @@ public sealed partial class MainWindow : Window
         ApplyBackdrop(_options.Backdrop);
 
         ExtendsContentIntoTitleBar = true;
+        // The WinUI TitleBar control owns the caption height (it renders tall to fit the icon +
+        // title and tells the window to reserve that height); setting PreferredHeightOption manually
+        // here desynced it from the content, so the content slid up under the caption.
         SetTitleBar(AppTitleBar);
-        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
 
         // Taskbar / window icon (the package logo). The window is launched by the extension, not its
         // tile, so set it explicitly or there's no taskbar icon. Resolve relative to the install root.

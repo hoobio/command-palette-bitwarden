@@ -306,7 +306,8 @@ public sealed partial class ItemDetailPage : Page
 
     private async Task RegenerateAsync(FieldRow row)
     {
-        var generator = new GeneratorControl();
+        // Fixed width so the dialog doesn't resize when switching between password and passphrase.
+        var generator = new GeneratorControl { Width = 360 };
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
