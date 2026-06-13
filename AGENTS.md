@@ -30,18 +30,34 @@ Debug builds install as a separate **Dev** channel (`Hoobi.BitwardenCommandPalet
 
 `Add-AppxPackage -Register` deduplicates on package **identity + version**. The Dev identity and version (`1.10.0.0`) are the same across every checkout, so if a Dev package is already registered (e.g. pointing at the main checkout's `bin`), registering again from a worktree's `bin` is silently skipped (`Deployed.` prints, but `InstallLocation` does not change). You then run old code and think the change "did nothing".
 
-When deploying from a worktree, force the registration to repoint:
+When deploying from a worktree, **always remove-then-register and then verify** - registering in place is silently skipped:
 
 ```powershell
-# Confirm where the Dev package currently points
-(Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension.Dev').InstallLocation
+# 1. Remove any existing Dev registration (wherever it points), then register from THIS worktree
+Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension.Dev' | Remove-AppxPackage -ErrorAction SilentlyContinue
+$out = "<worktree>\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64"
+Add-AppxPackage -Register -Path "$out\AppxManifest.xml" -ForceUpdateFromAnyVersion
 
-# If it isn't your worktree bin: remove it, then re-register from the worktree
-Remove-AppxPackage -Package (Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension.Dev').PackageFullName
-Add-AppxPackage -Register -Path "<worktree>\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\AppxManifest.xml" -ForceUpdateFromAnyVersion
+# 2. VERIFY (do not skip): identity must be .Dev and InstallLocation must be your worktree bin
+$p = Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension.Dev'
+"$($p.Name) -> $($p.InstallLocation)"   # Name must end in .Dev; path must be your worktree
 ```
 
-Stamping note: a Debug build rewrites `Package.appxmanifest` to the Dev identity as a side effect. Don't commit that change. If the generated output `AppxManifest.xml` ever goes stale (shows the Release identity), delete `bin\...\win-x64\AppxManifest.xml` and `bin\...\win-x64\AppX` and rebuild to regenerate it.
+If `Name` has no `.Dev` suffix, or `InstallLocation` is not your worktree, the deploy is wrong - do not stop there.
+
+### Release-build trap (this is the one that bites)
+
+The per-channel identity is stamped into `Package.appxmanifest` at build time, and the stamp is **incremental**. If you run a `-c Release` build first (e.g. for lint/test parity) and then a `-c Debug` build in the same checkout, the Debug build can skip regenerating the output `AppxManifest.xml`, leaving it stamped with the **Release** identity. Registering that loose layout installs the *production* channel from your Debug bin - exactly the "I deployed but nothing changed / wrong channel" symptom.
+
+Guard against it: when deploying from a worktree, do a clean Debug build with the channel pinned explicitly, and check the output manifest before registering:
+
+```powershell
+Remove-Item -Recurse -Force "<worktree>\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug" -ErrorAction SilentlyContinue
+dotnet build .\HoobiBitwardenCommandPaletteExtension\HoobiBitwardenCommandPaletteExtension.csproj -c Debug /p:Platform=x64 /p:PackageChannel=Dev
+Select-String -Path "$out\AppxManifest.xml" -Pattern '<Identity Name'   # must show ...Extension.Dev
+```
+
+Stamping note: a Debug build rewrites the tracked `Package.appxmanifest` to the Dev identity as a side effect. **Don't commit that change** - `git checkout -- HoobiBitwardenCommandPaletteExtension/Package.appxmanifest` before committing.
 
 ## Git Commit Message Format
 
