@@ -84,6 +84,6 @@ public sealed partial class GeneratorControl : UserControl
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(Value))
-            ClipboardHelper.Copy(Value);
+            ClipboardHelper.Copy(Value, "generated value");
     }
 }

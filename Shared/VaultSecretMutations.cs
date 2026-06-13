@@ -8,14 +8,19 @@ namespace HoobiBitwardenCompanionIpc;
 
 internal static class VaultSecretMutations
 {
-    // Quick Rotate targets an item with a SINGLE secret/hidden field (the common case: one login
-    // password, or one hidden custom field). Sets it to newValue in-place. Returns false with a reason
-    // when there is no secret, or more than one (ambiguous - the user should edit explicitly).
+    // Quick Rotate's target: the login password takes priority (the primary secret, so any login can
+    // be rotated even when it also has hidden fields); otherwise a single hidden custom field. Sets it
+    // to newValue in-place. Returns false with a reason when there's no password and zero, or several,
+    // hidden fields (ambiguous - the user should edit explicitly).
     public static bool TrySetSingleHiddenSecret(JsonObject item, string newValue, out string? error)
     {
         error = null;
         var login = item["login"]?.AsObject();
-        var hasLoginPassword = login != null && !string.IsNullOrEmpty(login["password"]?.GetValue<string>());
+        if (login != null && !string.IsNullOrEmpty(login["password"]?.GetValue<string>()))
+        {
+            login["password"] = newValue;
+            return true;
+        }
 
         var hiddenFields = new List<JsonObject>();
         if (item["fields"] is JsonArray fields)
@@ -27,23 +32,18 @@ internal static class VaultSecretMutations
             }
         }
 
-        var candidateCount = (hasLoginPassword ? 1 : 0) + hiddenFields.Count;
-        if (candidateCount == 0)
+        if (hiddenFields.Count == 0)
         {
             error = "This item has no password or hidden field to rotate.";
             return false;
         }
-        if (candidateCount > 1)
+        if (hiddenFields.Count > 1)
         {
-            error = "This item has more than one secret field. Open it and rotate the field you want.";
+            error = "This item has more than one hidden field. Open it and rotate the field you want.";
             return false;
         }
 
-        if (hasLoginPassword)
-            login!["password"] = newValue;
-        else
-            hiddenFields[0]["value"] = newValue;
-
+        hiddenFields[0]["value"] = newValue;
         return true;
     }
 }

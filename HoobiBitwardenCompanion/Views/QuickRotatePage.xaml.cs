@@ -45,7 +45,13 @@ public sealed partial class QuickRotatePage : Page
             return;
         }
 
-        SubheaderText.Text = $"Generate a new secret for “{item["name"]?.GetValue<string>() ?? "this item"}”.";
+        // Item icon + name in the title bar (matches the item window).
+        var host = FirstHost(item);
+        var faviconUrl = string.IsNullOrEmpty(ctx.Options.IconBaseUrl) || string.IsNullOrEmpty(host)
+            ? null
+            : $"{ctx.Options.IconBaseUrl}/{host}/icon.png";
+        ctx.Host?.SetItemHeader(faviconUrl, item["name"]?.GetValue<string>() ?? "Quick Rotate");
+        SubheaderText.Text = "Generate and save a new secret. It's copied once the save is verified.";
 
         // Validate up front that there's exactly one secret to rotate.
         if (!VaultSecretMutations.TrySetSingleHiddenSecret(item, "probe", out var error))
@@ -56,6 +62,20 @@ public sealed partial class QuickRotatePage : Page
         }
 
         Generator.Initialize();
+    }
+
+    private static string? FirstHost(JsonObject item)
+    {
+        if (item["login"] is not JsonObject login || login["uris"] is not JsonArray uris) return null;
+        foreach (var u in uris)
+        {
+            var uri = (u as JsonObject)?["uri"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(uri)) continue;
+            if (!uri.Contains("://", StringComparison.Ordinal)) uri = "https://" + uri;
+            if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && !string.IsNullOrEmpty(parsed.Host))
+                return parsed.Host;
+        }
+        return null;
     }
 
     private void OnRotateClick(object sender, RoutedEventArgs e) => _ = RotateAsync();
@@ -96,7 +116,7 @@ public sealed partial class QuickRotatePage : Page
             return;
         }
 
-        ClipboardHelper.Copy(value);
+        ClipboardHelper.Copy(value, "new secret");
         ShowStatus("Rotated, verified on the server, and copied to the clipboard.", isError: false);
     }
 

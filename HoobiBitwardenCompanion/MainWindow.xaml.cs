@@ -50,9 +50,16 @@ public sealed partial class MainWindow : Window
         RootGrid.ActualThemeChanged += (_, _) => UpdateCaptionButtonColors();
         UpdateCaptionButtonColors();
 
-        // Compact default that fits the title bar, item details and login credentials; the rest of
-        // the fields scroll. A DPI-aware minimum keeps those always visible as the user resizes.
-        ResizeAndCenter(440, 440);
+        // Size for the mode: the generator (Generate / Quick Rotate) is tall, the item view fits
+        // through login credentials by default and scrolls the rest. A DPI-aware minimum keeps the
+        // essentials visible as the user resizes.
+        var (width, height) = _options.Mode switch
+        {
+            CompanionMode.Generate or CompanionMode.QuickRotate => (460, 620),
+            CompanionMode.Login => (420, 560),
+            _ => (440, 440),
+        };
+        ResizeAndCenter(width, height);
         EnforceMinimumSize(380, 400);
         Activated += OnFirstActivated;
         _ = InitializeAsync();
@@ -127,12 +134,13 @@ public sealed partial class MainWindow : Window
 
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _toastTimer;
 
-    private void OnClipboardCopied() => DispatcherQueue.TryEnqueue(ShowCopyToast);
+    private void OnClipboardCopied(string label) => DispatcherQueue.TryEnqueue(() => ShowCopyToast(label));
 
-    // Fade the toast in (the Border's OpacityTransition animates the Opacity change) and schedule it
-    // back out. No Storyboard - a code-built one fail-fasts the dispatcher if the path doesn't bind.
-    private void ShowCopyToast()
+    // Show the toast ("Copied X to clipboard") and schedule it back out. No Storyboard - a code-built
+    // one fail-fasts the dispatcher if the path doesn't bind; a plain Opacity set is enough.
+    private void ShowCopyToast(string label)
     {
+        ToastText.Text = string.IsNullOrEmpty(label) ? "Copied to clipboard" : $"Copied {label} to clipboard";
         CopyToast.Opacity = 1;
         _toastTimer ??= DispatcherQueue.CreateTimer();
         _toastTimer.Stop();

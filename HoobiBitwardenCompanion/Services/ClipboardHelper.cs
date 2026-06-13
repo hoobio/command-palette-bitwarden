@@ -16,8 +16,9 @@ internal static class ClipboardHelper
     private static bool _autoClear = true;
     private static int _clearSeconds = 30;
 
-    // Raised after a successful copy so the active window can show an in-app "Copied" toast.
-    public static event Action? Copied;
+    // Raised after a successful copy (with the field label, e.g. "Username") so the active window can
+    // show an in-app "Copied X to clipboard" toast.
+    public static event Action<string>? Copied;
 
     // Apply the clipboard settings shared from the extension (see CompanionLauncher / LaunchOptions).
     public static void Configure(bool autoClear, int clearSeconds)
@@ -26,7 +27,7 @@ internal static class ClipboardHelper
         _clearSeconds = clearSeconds > 0 ? clearSeconds : 30;
     }
 
-    public static void Copy(string value)
+    public static void Copy(string value, string label = "")
     {
         var mine = Interlocked.Increment(ref _sequence);
 
@@ -35,7 +36,7 @@ internal static class ClipboardHelper
         // Keep secrets out of clipboard history and cloud sync, matching the extension's secure copy.
         var options = new ClipboardContentOptions { IsAllowedInHistory = false, IsRoamable = false };
         Clipboard.SetContentWithOptions(package, options);
-        Copied?.Invoke();
+        Copied?.Invoke(label);
 
         if (!_autoClear || _clearSeconds <= 0) return;
 

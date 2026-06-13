@@ -244,12 +244,13 @@ internal static partial class VaultItemHelper
 
   private static void AddCompanionContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService service)
   {
-    // Enter already opens the detail/edit window (GetDefaultCommand). Only Quick Rotate is added
-    // here, for items with a single rotatable secret.
+    // Enter already opens the detail/edit window (GetDefaultCommand). Quick Rotate is added for any
+    // item with an unambiguous rotation target: a login password (primary secret, even alongside
+    // hidden fields) or a single hidden field.
     var hiddenCount = item.CustomFields.Values.Count(f => f.IsHidden);
     var hasLoginPassword = item.Type == BitwardenItemType.Login && !string.IsNullOrEmpty(item.Password);
-    var singleSecret = (hasLoginPassword ? 1 : 0) + hiddenCount == 1;
-    if (singleSecret)
+    var canRotate = hasLoginPassword || hiddenCount == 1;
+    if (canRotate)
     {
       items.Add(new CommandContextItem(new AnonymousCommand(() => CompanionLauncher.Launch(service, CompanionLauncher.ModeRotate, id))
       {

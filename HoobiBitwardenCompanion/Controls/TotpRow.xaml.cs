@@ -127,6 +127,6 @@ public sealed partial class TotpRow : UserControl
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(_currentCode))
-            ClipboardHelper.Copy(_currentCode);
+            ClipboardHelper.Copy(_currentCode, "TOTP");
     }
 }

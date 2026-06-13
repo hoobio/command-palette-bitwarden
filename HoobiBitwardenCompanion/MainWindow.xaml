@@ -41,7 +41,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <FontIcon Glyph="&#xE73E;" FontSize="14"
                               Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
-                    <TextBlock Text="Copied to clipboard" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ToastText" Text="Copied to clipboard" VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
         </Grid>

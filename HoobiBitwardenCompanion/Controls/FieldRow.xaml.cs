@@ -115,7 +115,7 @@ public sealed partial class FieldRow : UserControl
     private void OnCopyClick(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(CurrentValue))
-            ClipboardHelper.Copy(CurrentValue);
+            ClipboardHelper.Copy(CurrentValue, Label);
     }
 
     private void OnEditTextChanged(object sender, TextChangedEventArgs e)

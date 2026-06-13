@@ -240,9 +240,23 @@ public class BitwardenCliServiceVaultEditingTests
   }
 
   [Fact]
-  public void TrySetSingleHiddenSecret_PasswordAndHiddenField_IsAmbiguous()
+  public void TrySetSingleHiddenSecret_PasswordAndHiddenField_RotatesPassword()
   {
+    // The login password is the primary secret: rotate it even when hidden fields also exist.
     var item = JsonNode.Parse("{\"login\":{\"password\":\"p\"},\"fields\":[{\"name\":\"x\",\"value\":\"v\",\"type\":1}]}")!.AsObject();
+
+    var ok = BitwardenCliService.TrySetSingleHiddenSecret(item, "NEW", out var error);
+
+    Assert.True(ok);
+    Assert.Null(error);
+    Assert.Equal("NEW", item["login"]!["password"]!.GetValue<string>());
+    Assert.Equal("v", item["fields"]![0]!["value"]!.GetValue<string>());
+  }
+
+  [Fact]
+  public void TrySetSingleHiddenSecret_MultipleHiddenFieldsNoPassword_IsAmbiguous()
+  {
+    var item = JsonNode.Parse("{\"fields\":[{\"name\":\"a\",\"value\":\"1\",\"type\":1},{\"name\":\"b\",\"value\":\"2\",\"type\":1}]}")!.AsObject();
 
     var ok = BitwardenCliService.TrySetSingleHiddenSecret(item, "NEW", out var error);
 
