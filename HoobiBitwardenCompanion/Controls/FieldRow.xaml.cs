@@ -70,6 +70,16 @@ public sealed partial class FieldRow : UserControl
         set => SetValue(ShowCopyProperty, value);
     }
 
+    // Optional keyboard-shortcut hint shown on the copy tooltip, e.g. "Ctrl+Shift+C".
+    public static readonly DependencyProperty CopyShortcutProperty =
+        DependencyProperty.Register(nameof(CopyShortcut), typeof(string), typeof(FieldRow), new PropertyMetadata(string.Empty, OnAppearanceChanged));
+
+    public string CopyShortcut
+    {
+        get => (string)GetValue(CopyShortcutProperty);
+        set => SetValue(CopyShortcutProperty, value);
+    }
+
     // Raised when the user clicks regenerate; the host opens the generator and assigns the result.
     public event EventHandler? RegenerateRequested;
 
@@ -102,6 +112,10 @@ public sealed partial class FieldRow : UserControl
         RevealButton.Visibility = IsSecret && !IsEditing ? Visibility.Visible : Visibility.Collapsed;
         RegenerateButton.Visibility = ShowRegenerate && IsEditing ? Visibility.Visible : Visibility.Collapsed;
         CopyButton.Visibility = ShowCopy ? Visibility.Visible : Visibility.Collapsed;
+
+        var copyTip = string.IsNullOrEmpty(Label) ? "Copy" : $"Copy {Label}";
+        if (!string.IsNullOrEmpty(CopyShortcut)) copyTip += $"\n({CopyShortcut})";
+        ToolTipService.SetToolTip(CopyButton, copyTip);
     }
 
     private void OnRevealClick(object sender, RoutedEventArgs e)

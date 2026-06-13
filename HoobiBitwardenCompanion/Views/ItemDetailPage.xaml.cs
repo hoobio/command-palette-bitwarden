@@ -349,9 +349,11 @@ public sealed partial class ItemDetailPage : Page
         var panel = AddSection("Login credentials");
 
         var username = AddRow(panel, "Username", login["username"]?.GetValue<string>(), editable: true);
+        username.CopyShortcut = "Ctrl+C";
         _editable.Add((username, v => login["username"] = v));
 
         var password = AddRow(panel, "Password", login["password"]?.GetValue<string>(), editable: true, secret: true, regenerate: true);
+        password.CopyShortcut = "Ctrl+Shift+C";
         _editable.Add((password, v => login["password"] = v));
         _secrets.Add(password);
 
