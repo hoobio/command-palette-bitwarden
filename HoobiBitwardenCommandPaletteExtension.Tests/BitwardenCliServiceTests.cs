@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -38,6 +40,47 @@ public class BitwardenCliServiceTests
   {
     var result = BitwardenCliService.ResolveCliExecutable(@"C:\tools\bw-windows-2026.2.0\bw");
     Assert.Equal(@"C:\tools\bw-windows-2026.2.0\bw", result);
+  }
+
+  [Fact]
+  public void ResolveCliExecutable_UserOverride_WinsOverAutoInstalled()
+  {
+    var autoInstalled = Path.Combine(Path.GetTempPath(), $"bw_auto_{Guid.NewGuid():N}", "bw.exe");
+    Directory.CreateDirectory(Path.GetDirectoryName(autoInstalled)!);
+    File.WriteAllText(autoInstalled, "stub");
+    try
+    {
+      var result = BitwardenCliService.ResolveCliExecutable(@"C:\tools\custom\bw.exe", autoInstalled);
+      Assert.Equal(@"C:\tools\custom\bw.exe", result);
+    }
+    finally
+    {
+      Directory.Delete(Path.GetDirectoryName(autoInstalled)!, recursive: true);
+    }
+  }
+
+  [Fact]
+  public void ResolveCliExecutable_NoOverride_UsesAutoInstalledWhenItExists()
+  {
+    var autoInstalled = Path.Combine(Path.GetTempPath(), $"bw_auto_{Guid.NewGuid():N}", "bw.exe");
+    Directory.CreateDirectory(Path.GetDirectoryName(autoInstalled)!);
+    File.WriteAllText(autoInstalled, "stub");
+    try
+    {
+      var result = BitwardenCliService.ResolveCliExecutable(null, autoInstalled);
+      Assert.Equal(autoInstalled, result);
+    }
+    finally
+    {
+      Directory.Delete(Path.GetDirectoryName(autoInstalled)!, recursive: true);
+    }
+  }
+
+  [Fact]
+  public void ResolveCliExecutable_NoOverride_FallsBackToBwWhenAutoInstalledMissing()
+  {
+    var missing = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}", "bw.exe");
+    Assert.Equal("bw", BitwardenCliService.ResolveCliExecutable(null, missing));
   }
 
   // --- ResolveDataDirectory ---

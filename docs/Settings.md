@@ -128,7 +128,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Text |
 | **Default** | *(empty)* |
-| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. |
+| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. When set, this always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. |
 
 ### Use CLI Path as Data Directory
 

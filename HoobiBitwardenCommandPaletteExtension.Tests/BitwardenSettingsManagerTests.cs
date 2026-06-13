@@ -56,6 +56,29 @@ public class BitwardenSettingsManagerTests : IDisposable
     }
 
     [Fact]
+    public void PersistCliPath_DoesNotOverwriteUserOverride()
+    {
+        var m = CreateManager();
+        m.CliDirectoryOverride.Value = @"C:\Users\me\scoop\apps\bitwarden-cli\current\bw.exe";
+
+        m.PersistCliPath(@"C:\Users\me\AppData\Local\Microsoft\WinGet\Packages\Bitwarden.CLI_x\bw.exe");
+
+        Assert.Equal(@"C:\Users\me\scoop\apps\bitwarden-cli\current\bw.exe", m.CliDirectoryOverride.Value);
+    }
+
+    [Fact]
+    public void PersistCliPath_RoundTripsThroughAutoInstalledCliPath()
+    {
+        var m = CreateManager();
+        Assert.Null(m.AutoInstalledCliPath);
+
+        var path = @"C:\Users\me\AppData\Local\Microsoft\WinGet\Packages\Bitwarden.CLI_x\bw.exe";
+        m.PersistCliPath(path);
+
+        Assert.Equal(path, m.AutoInstalledCliPath);
+    }
+
+    [Fact]
     public void OnSettingsChanged_DoesNotClearSession_DirectlyInSettingsManager()
     {
         var m = CreateManager();
