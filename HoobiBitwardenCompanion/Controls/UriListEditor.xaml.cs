@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Text.Json.Nodes;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -6,33 +7,43 @@ using Microsoft.UI.Xaml.Controls;
 namespace HoobiBitwardenCompanion.Controls;
 
 // Editable list of login autofill URIs (COMPANION_WINUI_PHASE1 §3.4): each row is a website with a
-// per-URI match-detection mode; rows can be added, removed and reordered. Reads/writes the raw
+// per-URI match-detection mode; rows can be added, removed and drag-reordered. Reads/writes the raw
 // login["uris"] JsonArray so unmodelled fields round-trip untouched.
 public sealed partial class UriListEditor : UserControl
 {
-    // Bitwarden URI match-detection values (login.uris[].match): null = use the global default.
     private sealed record MatchOption(string Label, int? Value);
 
-    private static readonly MatchOption[] MatchOptions =
+    // Bitwarden URI match-detection values (login.uris[].match): null = use the global default. The
+    // last two sit under a non-selectable "Advanced options" category in the dropdown.
+    private static readonly MatchOption[] StandardOptions =
     [
         new("Default", null),
         new("Base domain", 0),
         new("Host", 1),
         new("Exact", 3),
         new("Never", 5),
+    ];
+
+    private static readonly MatchOption[] AdvancedOptions =
+    [
         new("Starts with", 2),
         new("Regular expression", 4),
     ];
 
-    private sealed record Row(Border Card, TextBox UriBox, ComboBox MatchBox);
+    private sealed record Row(TextBox UriBox, ComboBox MatchBox);
 
-    private readonly List<Row> _rows = [];
+    private readonly ObservableCollection<Border> _cards = [];
+    private readonly Dictionary<Border, Row> _rows = [];
 
-    public UriListEditor() => InitializeComponent();
+    public UriListEditor()
+    {
+        InitializeComponent();
+        RowsList.ItemsSource = _cards;
+    }
 
     public void Load(JsonArray? uris)
     {
-        RowsPanel.Children.Clear();
+        _cards.Clear();
         _rows.Clear();
         if (uris != null)
         {
@@ -47,11 +58,12 @@ public sealed partial class UriListEditor : UserControl
     public JsonArray ToJsonArray()
     {
         var array = new JsonArray();
-        foreach (var row in _rows)
+        foreach (var card in _cards) // ObservableCollection order reflects any drag-reordering
         {
+            if (!_rows.TryGetValue(card, out var row)) continue;
             var uri = row.UriBox.Text?.Trim();
             if (string.IsNullOrEmpty(uri)) continue;
-            var match = (row.MatchBox.SelectedItem as MatchOption)?.Value;
+            var match = (row.MatchBox.SelectedItem as ComboBoxItem)?.Tag as int?;
             array.Add(new JsonObject
             {
                 ["uri"] = uri,
@@ -76,52 +88,48 @@ public sealed partial class UriListEditor : UserControl
         {
             Header = "Match detection",
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = MatchOptions,
-            DisplayMemberPath = nameof(MatchOption.Label),
-            SelectedIndex = IndexOfMatch(match),
         };
+        PopulateMatchOptions(matchBox, match);
 
         var removeButton = new Button
         {
             Style = (Style)Application.Current.Resources["GhostIconButtonStyle"],
-            Content = new FontIcon { Glyph = "", FontSize = 16 },
+            Content = new FontIcon { Glyph = "", FontSize = 16 }, // Remove
             VerticalAlignment = VerticalAlignment.Bottom,
         };
         ToolTipService.SetToolTip(removeButton, "Remove");
 
-        var upButton = new Button
+        var dragHandle = new FontIcon
         {
-            Style = (Style)Application.Current.Resources["GhostIconButtonStyle"],
-            Content = new FontIcon { Glyph = "", FontSize = 14 },
+            Glyph = "", // GripBarDots
+            FontSize = 16,
             VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(2, 0, 0, 8),
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
         };
-        ToolTipService.SetToolTip(upButton, "Move up");
-
-        var downButton = new Button
-        {
-            Style = (Style)Application.Current.Resources["GhostIconButtonStyle"],
-            Content = new FontIcon { Glyph = "", FontSize = 14 },
-            VerticalAlignment = VerticalAlignment.Bottom,
-        };
-        ToolTipService.SetToolTip(downButton, "Move down");
+        ToolTipService.SetToolTip(dragHandle, "Drag to reorder");
 
         var topRow = new Grid { ColumnSpacing = 4 };
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(uriBox, 0);
-        Grid.SetColumn(upButton, 1);
-        Grid.SetColumn(downButton, 2);
-        Grid.SetColumn(removeButton, 3);
+        Grid.SetColumn(removeButton, 1);
+        Grid.SetColumn(dragHandle, 2);
         topRow.Children.Add(uriBox);
-        topRow.Children.Add(upButton);
-        topRow.Children.Add(downButton);
         topRow.Children.Add(removeButton);
+        topRow.Children.Add(dragHandle);
+
+        var helper = new TextBlock
+        {
+            Text = "URI match detection is how Bitwarden identifies autofill suggestions.",
+            Style = (Style)Application.Current.Resources["MutedCaptionTextStyle"],
+        };
 
         var stack = new StackPanel { Spacing = (double)Application.Current.Resources["SpacingSmall"] };
         stack.Children.Add(topRow);
         stack.Children.Add(matchBox);
+        stack.Children.Add(helper);
 
         var card = new Border
         {
@@ -129,36 +137,33 @@ public sealed partial class UriListEditor : UserControl
             Child = stack,
         };
 
-        var row = new Row(card, uriBox, matchBox);
-        removeButton.Click += (_, _) => RemoveRow(row);
-        upButton.Click += (_, _) => MoveRow(row, -1);
-        downButton.Click += (_, _) => MoveRow(row, +1);
+        removeButton.Click += (_, _) => { _cards.Remove(card); _rows.Remove(card); };
 
-        _rows.Add(row);
-        RowsPanel.Children.Add(card);
+        _rows[card] = new Row(uriBox, matchBox);
+        _cards.Add(card);
     }
 
-    private void RemoveRow(Row row)
+    private static void PopulateMatchOptions(ComboBox box, int? selected)
     {
-        _rows.Remove(row);
-        RowsPanel.Children.Remove(row.Card);
-    }
+        ComboBoxItem? toSelect = null;
 
-    private void MoveRow(Row row, int delta)
-    {
-        var index = _rows.IndexOf(row);
-        var target = index + delta;
-        if (index < 0 || target < 0 || target >= _rows.Count) return;
-        _rows.RemoveAt(index);
-        _rows.Insert(target, row);
-        RowsPanel.Children.RemoveAt(index);
-        RowsPanel.Children.Insert(target, row.Card);
-    }
+        foreach (var option in StandardOptions)
+        {
+            var item = new ComboBoxItem { Content = option.Label, Tag = option.Value };
+            box.Items.Add(item);
+            if (option.Value == selected) toSelect = item;
+        }
 
-    private static int IndexOfMatch(int? match)
-    {
-        for (var i = 0; i < MatchOptions.Length; i++)
-            if (MatchOptions[i].Value == match) return i;
-        return 0;
+        // Non-selectable greyed category header.
+        box.Items.Add(new ComboBoxItem { Content = "Advanced options", IsEnabled = false });
+
+        foreach (var option in AdvancedOptions)
+        {
+            var item = new ComboBoxItem { Content = option.Label, Tag = option.Value };
+            box.Items.Add(item);
+            if (option.Value == selected) toSelect = item;
+        }
+
+        box.SelectedItem = toSelect ?? box.Items[0];
     }
 }

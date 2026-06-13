@@ -1476,6 +1476,16 @@ internal sealed partial class BitwardenCliService
 
 
 
+  // The last 4 digits of a card are the visible part (Bitwarden shows "•••• 1234"), so let users
+  // find a card by typing them. Only the trailing 4 digits are matched, not the full number.
+  private static bool CardLast4Matches(string? cardNumber, string query)
+  {
+    if (string.IsNullOrWhiteSpace(cardNumber)) return false;
+    var digits = new string(cardNumber.Where(char.IsDigit).ToArray());
+    if (digits.Length < 4) return false;
+    return digits[^4..].Contains(query.Trim(), StringComparison.OrdinalIgnoreCase);
+  }
+
   internal static bool Matches(BitwardenItem item, string query)
   {
     if (item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
@@ -1488,7 +1498,8 @@ internal sealed partial class BitwardenCliService
           || item.Uris.Any(u => u.Uri.Contains(query, StringComparison.OrdinalIgnoreCase)),
       BitwardenItemType.Card =>
           (item.CardholderName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-          || (item.CardBrand?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false),
+          || (item.CardBrand?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
+          || CardLast4Matches(item.CardNumber, query),
       BitwardenItemType.Identity =>
           (item.IdentityFullName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
           || (item.IdentityEmail?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)

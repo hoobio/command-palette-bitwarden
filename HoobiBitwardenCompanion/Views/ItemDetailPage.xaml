@@ -37,15 +37,17 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <HyperlinkButton x:Name="WebVaultButton" Grid.Column="0" Content="Open in Web Vault"
                                  HorizontalAlignment="Left" Padding="4,2" Click="OnWebVaultClick" />
-                <Button x:Name="EditButton" Grid.Column="1" Content="Edit" Padding="14,4" MinHeight="0" Click="OnEditClick" />
-                <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" Padding="14,4" MinHeight="0" Visibility="Collapsed" Click="OnCancelClick" />
-                <Button x:Name="SaveButton" Grid.Column="3" Content="Save" Style="{StaticResource AccentButtonStyle}"
-                        Padding="14,4" MinHeight="0" Visibility="Collapsed" Click="OnSaveClick" />
+                <!-- Right-aligned actions in one panel so the visible button sits flush to the edge
+                     (empty grid columns + spacing were leaving a gap). -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="{StaticResource SpacingSmall}">
+                    <Button x:Name="EditButton" Content="Edit" Padding="14,4" MinHeight="0" Click="OnEditClick" />
+                    <Button x:Name="CancelButton" Content="Cancel" Padding="14,4" MinHeight="0" Visibility="Collapsed" Click="OnCancelClick" />
+                    <Button x:Name="SaveButton" Content="Save" Style="{StaticResource AccentButtonStyle}"
+                            Padding="14,4" MinHeight="0" Visibility="Collapsed" Click="OnSaveClick" />
+                </StackPanel>
             </Grid>
         </StackPanel>
     </Grid>
