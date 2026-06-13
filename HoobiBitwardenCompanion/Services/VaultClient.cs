@@ -62,6 +62,12 @@ internal sealed class VaultClient
         return (r.GetBool(IpcFields.Success), r.GetString(IpcFields.Error));
     }
 
+    public async Task<string?> GetServerUrlAsync()
+    {
+        var r = await _ipc.SendAsync(IpcCommands.GetServerUrl);
+        return r.Ok ? r.GetString(IpcFields.ServerUrl) : null;
+    }
+
     public async Task<JsonObject?> GetItemAsync(string id)
     {
         var r = await _ipc.SendAsync(IpcCommands.GetItem, new JsonObject { [IpcFields.ItemId] = id });

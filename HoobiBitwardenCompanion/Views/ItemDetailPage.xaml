@@ -30,8 +30,8 @@
                        Style="{StaticResource MutedCaptionTextStyle}" />
         </StackPanel>
 
-        <!-- Footer -->
-        <StackPanel Grid.Row="1" Spacing="{StaticResource SpacingSmall}" Padding="16,8,16,12">
+        <!-- Footer: a compact action row. -->
+        <StackPanel Grid.Row="1" Spacing="4" Padding="12,4,12,8">
             <TextBlock x:Name="StatusText" Style="{StaticResource MutedCaptionTextStyle}" Visibility="Collapsed" />
             <Grid ColumnSpacing="{StaticResource SpacingSmall}">
                 <Grid.ColumnDefinitions>
@@ -41,11 +41,11 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <HyperlinkButton x:Name="WebVaultButton" Grid.Column="0" Content="Open in Web Vault"
-                                 HorizontalAlignment="Left" Click="OnWebVaultClick" />
-                <Button x:Name="EditButton" Grid.Column="1" Content="Edit" Click="OnEditClick" />
-                <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" Visibility="Collapsed" Click="OnCancelClick" />
+                                 HorizontalAlignment="Left" Padding="4,2" Click="OnWebVaultClick" />
+                <Button x:Name="EditButton" Grid.Column="1" Content="Edit" Padding="14,4" MinHeight="0" Click="OnEditClick" />
+                <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" Padding="14,4" MinHeight="0" Visibility="Collapsed" Click="OnCancelClick" />
                 <Button x:Name="SaveButton" Grid.Column="3" Content="Save" Style="{StaticResource AccentButtonStyle}"
-                        Visibility="Collapsed" Click="OnSaveClick" />
+                        Padding="14,4" MinHeight="0" Visibility="Collapsed" Click="OnSaveClick" />
             </Grid>
         </StackPanel>
     </Grid>

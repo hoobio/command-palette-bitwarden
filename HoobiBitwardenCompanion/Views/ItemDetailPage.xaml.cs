@@ -323,10 +323,14 @@ public sealed partial class ItemDetailPage : Page
             row.Value = generator.Value;
     }
 
-    private void OnWebVaultClick(object sender, RoutedEventArgs e)
+    private void OnWebVaultClick(object sender, RoutedEventArgs e) => _ = OpenInWebVaultAsync();
+
+    private async Task OpenInWebVaultAsync()
     {
-        // Use the configured server (passed at launch); fall back to the public cloud vault.
-        var baseUrl = string.IsNullOrEmpty(_vaultUrl) ? "https://vault.bitwarden.com" : _vaultUrl!.TrimEnd('/');
+        // Prefer the live server URL from the extension (the launch-time value can be empty if the
+        // process hadn't resolved it yet); fall back to the launch arg, then the public cloud vault.
+        var serverUrl = _client != null ? await _client.GetServerUrlAsync() : null;
+        var baseUrl = (serverUrl ?? _vaultUrl) is { Length: > 0 } b ? b.TrimEnd('/') : "https://vault.bitwarden.com";
         var url = $"{baseUrl}/#/vault?itemId={Uri.EscapeDataString(_itemId)}";
         _ = Windows.System.Launcher.LaunchUriAsync(new Uri(url));
     }

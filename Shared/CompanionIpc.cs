@@ -22,6 +22,7 @@ internal static class IpcCommands
     public const string Sync = "Sync";           // push to server + refresh palette - step 2 of a save
     public const string Generate = "Generate";
     public const string QuickRotate = "QuickRotate";
+    public const string GetServerUrl = "GetServerUrl"; // configured web vault base, resolved live
 }
 
 internal static class IpcFields

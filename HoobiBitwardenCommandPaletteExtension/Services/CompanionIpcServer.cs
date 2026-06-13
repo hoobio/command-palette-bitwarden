@@ -238,6 +238,15 @@ internal sealed partial class CompanionIpcServer : IDisposable
       case IpcCommands.QuickRotate:
         return await QuickRotateAsync(id, args[IpcFields.ItemId]?.GetValue<string>() ?? "", data);
 
+      case IpcCommands.GetServerUrl:
+      {
+        // Make sure the server URL is populated (a fresh process may not have run status yet).
+        if (string.IsNullOrEmpty(BitwardenCliService.ServerUrl))
+          await _service.GetVaultStatusAsync();
+        data[IpcFields.ServerUrl] = BitwardenCliService.ServerUrl;
+        return Ok(id, data);
+      }
+
       default:
         return Error(id, $"Unknown command '{command}'.");
     }

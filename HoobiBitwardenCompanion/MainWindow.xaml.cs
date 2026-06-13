@@ -37,10 +37,10 @@ public sealed partial class MainWindow : Window
         ApplyBackdrop(_options.Backdrop);
 
         ExtendsContentIntoTitleBar = true;
-        // The WinUI TitleBar control owns the caption height (it renders tall to fit the icon +
-        // title and tells the window to reserve that height); setting PreferredHeightOption manually
-        // here desynced it from the content, so the content slid up under the caption.
         SetTitleBar(AppTitleBar);
+        // Tall caption buttons to match the pinned 48px TitleBar height (so the caption and the
+        // reserved Row 0 are the same height and content sits cleanly below them).
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
 
         // Taskbar / window icon (the package logo). The window is launched by the extension, not its
         // tile, so set it explicitly or there's no taskbar icon. Resolve relative to the install root.
@@ -52,8 +52,8 @@ public sealed partial class MainWindow : Window
 
         // Compact default that fits the title bar, item details and login credentials; the rest of
         // the fields scroll. A DPI-aware minimum keeps those always visible as the user resizes.
-        ResizeAndCenter(440, 480);
-        EnforceMinimumSize(400, 440);
+        ResizeAndCenter(440, 440);
+        EnforceMinimumSize(380, 400);
         Activated += OnFirstActivated;
         _ = InitializeAsync();
     }

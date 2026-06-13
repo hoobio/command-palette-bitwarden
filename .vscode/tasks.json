@@ -54,7 +54,7 @@
     {
       "label": "Start PowerToys",
       "type": "shell",
-      "command": "Start-Process 'shell:AppsFolder\\Microsoft.PowerToysWin32'; Write-Host 'PowerToys started.'",
+      "command": "Start-Process 'shell:AppsFolder\\Microsoft.CommandPalette_8wekyb3d8bbwe!App'; Write-Host 'Command Palette started.'",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
