@@ -19,10 +19,12 @@ namespace HoobiBitwardenCompanion.Views;
 public sealed partial class ItemDetailPage : Page
 {
     private VaultClient? _client;
+    private MainWindow? _host;
     private string _itemId = string.Empty;
     private JsonObject? _item;
     private string? _originalJson;
     private string? _iconBaseUrl;
+    private string? _vaultUrl;
     private bool _editing;
 
     private readonly List<(FieldRow Row, Action<string> WriteBack)> _editable = [];
@@ -46,8 +48,10 @@ public sealed partial class ItemDetailPage : Page
         }
 
         _client = client;
+        _host = ctx.Host;
         _itemId = ctx.Options.ItemId!;
         _iconBaseUrl = ctx.Options.IconBaseUrl;
+        _vaultUrl = ctx.Options.VaultUrl;
         await ReloadAsync();
     }
 
@@ -82,9 +86,8 @@ public sealed partial class ItemDetailPage : Page
         _secrets.Clear();
 
         var item = _item!;
-        ItemName.Text = item["name"]?.GetValue<string>() ?? "(no name)";
         var type = item["type"]?.GetValue<int>() ?? 0;
-        TrySetFavicon(item);
+        ApplyHeader(item);
 
         AddNameSection(item);
 
@@ -101,25 +104,22 @@ public sealed partial class ItemDetailPage : Page
         EditButton.Visibility = _editable.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // Show the website favicon from the Bitwarden icon server (base resolved by the extension and
-    // passed at launch; empty when the privacy setting is off). The glyph stays until the image loads.
-    private void TrySetFavicon(JsonObject item)
+    // Put the item icon + name in the window title bar (the item windows have no separate header
+    // row). Uses the website favicon from the Bitwarden icon server when available (base resolved by
+    // the extension, empty when the privacy setting is off), else a generic glyph.
+    private void ApplyHeader(JsonObject item)
     {
-        FaviconImage.Visibility = Visibility.Collapsed;
-        ItemIcon.Visibility = Visibility.Visible;
-        if (string.IsNullOrEmpty(_iconBaseUrl)) return;
+        var name = item["name"]?.GetValue<string>() ?? "(no name)";
+        IconSource icon = new FontIconSource { Glyph = "" };
 
-        var host = FirstHost(item);
-        if (string.IsNullOrEmpty(host)) return;
+        var host = string.IsNullOrEmpty(_iconBaseUrl) ? null : FirstHost(item);
+        if (!string.IsNullOrEmpty(host))
+        {
+            try { icon = new ImageIconSource { ImageSource = new BitmapImage(new Uri($"{_iconBaseUrl}/{host}/icon.png")) }; }
+            catch { /* keep the glyph */ }
+        }
 
-        try { FaviconImage.Source = new BitmapImage(new Uri($"{_iconBaseUrl}/{host}/icon.png")); }
-        catch { /* leave the glyph */ }
-    }
-
-    private void OnFaviconOpened(object sender, RoutedEventArgs e)
-    {
-        FaviconImage.Visibility = Visibility.Visible;
-        ItemIcon.Visibility = Visibility.Collapsed;
+        _host?.SetItemHeader(icon, name);
     }
 
     private static string? FirstHost(JsonObject item)
@@ -324,9 +324,9 @@ public sealed partial class ItemDetailPage : Page
 
     private void OnWebVaultClick(object sender, RoutedEventArgs e)
     {
-        // Keep the existing web-vault deep-link behaviour (Phase 1 §3.4); self-hosted server URLs
-        // are a follow-up once the companion knows the configured server.
-        var url = $"https://vault.bitwarden.com/#/vault?itemId={Uri.EscapeDataString(_itemId)}";
+        // Use the configured server (passed at launch); fall back to the public cloud vault.
+        var baseUrl = string.IsNullOrEmpty(_vaultUrl) ? "https://vault.bitwarden.com" : _vaultUrl!.TrimEnd('/');
+        var url = $"{baseUrl}/#/vault?itemId={Uri.EscapeDataString(_itemId)}";
         _ = Windows.System.Launcher.LaunchUriAsync(new Uri(url));
     }
 

@@ -84,4 +84,7 @@ internal static class IpcLaunchArgs
     public const string Pipe = "--pipe";
     public const string Backdrop = "--backdrop";  // Mica | Acrylic | Solid
     public const string IconBase = "--icons";     // icon-server base URL, or empty if icons are off
+    public const string ClipAutoClear = "--clip-autoclear"; // true | false
+    public const string ClipDelay = "--clip-delay";         // seconds
+    public const string VaultUrl = "--vaulturl";            // configured web vault base URL
 }

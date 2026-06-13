@@ -6,6 +6,7 @@ using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using HoobiBitwardenCompanion.Services;
 using HoobiBitwardenCompanion.Views;
@@ -24,7 +25,14 @@ public sealed partial class MainWindow : Window
         _options = options;
         InitializeComponent();
 
-        Closed += (_, _) => _ipc?.Dispose();
+        // Share the extension's clipboard behaviour and surface a "copied" toast for in-app copies.
+        ClipboardHelper.Configure(_options.ClipboardAutoClear, _options.ClipboardClearSeconds);
+        ClipboardHelper.Copied += OnClipboardCopied;
+        Closed += (_, _) =>
+        {
+            ClipboardHelper.Copied -= OnClipboardCopied;
+            _ipc?.Dispose();
+        };
 
         ApplyBackdrop(_options.Backdrop);
 
@@ -39,18 +47,78 @@ public sealed partial class MainWindow : Window
         RootGrid.ActualThemeChanged += (_, _) => UpdateCaptionButtonColors();
         UpdateCaptionButtonColors();
 
-        ResizeAndCenter(720, 900);
+        // Compact default that fits the title bar, item details and login credentials; the rest of
+        // the fields scroll. A DPI-aware minimum keeps those always visible as the user resizes.
+        ResizeAndCenter(460, 560);
+        EnforceMinimumSize(420, 500);
         Activated += OnFirstActivated;
         _ = InitializeAsync();
     }
 
-    // Bring the freshly launched window to the foreground on its current monitor (it's spawned by
-    // the extension, so it won't always steal focus on its own).
+    // Clamp the window so it can't be resized below the minimum that keeps the header + item + login
+    // visible. AppWindow has no built-in minimum, so re-grow it from the Changed event.
+    private void EnforceMinimumSize(int minWidthDip, int minHeightDip)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var scale = GetDpiForWindow(hwnd) / 96.0;
+        var minWidth = (int)(minWidthDip * scale);
+        var minHeight = (int)(minHeightDip * scale);
+
+        AppWindow.Changed += (sender, args) =>
+        {
+            if (!args.DidSizeChange) return;
+            var size = sender.Size;
+            var width = Math.Max(size.Width, minWidth);
+            var height = Math.Max(size.Height, minHeight);
+            if (width != size.Width || height != size.Height)
+                sender.Resize(new SizeInt32(width, height));
+        };
+    }
+
+    // Set the title-bar icon + name for the current item (the item windows have no separate header
+    // row). Falls back to a generic glyph when there's no favicon.
+    public void SetItemHeader(IconSource? icon, string title)
+    {
+        AppTitleBar.IconSource = icon;
+        AppTitleBar.Title = title;
+    }
+
+    // Bring the freshly launched window to the foreground on its current monitor. It's spawned by the
+    // extension (a different process), so the OS won't let a bare SetForegroundWindow steal focus -
+    // a brief topmost toggle plus a restore is the reliable way to pull it to the front.
     private void OnFirstActivated(object sender, WindowActivatedEventArgs e)
     {
         Activated -= OnFirstActivated;
-        try { SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)); }
+        BringToFront();
+    }
+
+    private void BringToFront()
+    {
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            ShowWindow(hwnd, SW_SHOWNORMAL);
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetForegroundWindow(hwnd);
+        }
         catch { /* best-effort */ }
+    }
+
+    private void OnClipboardCopied() => DispatcherQueue.TryEnqueue(ShowCopyToast);
+
+    private void ShowCopyToast()
+    {
+        var storyboard = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+        var fadeIn = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 1, Duration = TimeSpan.FromMilliseconds(120) };
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(fadeIn, CopyToast);
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fadeIn, "Opacity");
+        var fadeOut = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation { To = 0, Duration = TimeSpan.FromMilliseconds(300), BeginTime = TimeSpan.FromMilliseconds(1300) };
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(fadeOut, CopyToast);
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fadeOut, "Opacity");
+        storyboard.Children.Add(fadeIn);
+        storyboard.Children.Add(fadeOut);
+        storyboard.Begin();
     }
 
     private async Task InitializeAsync()
@@ -72,7 +140,7 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        var context = new CompanionContext(client, _options, Close);
+        var context = new CompanionContext(client, _options, Close, this);
         switch (_options.Mode)
         {
             case CompanionMode.Login:
@@ -118,6 +186,24 @@ public sealed partial class MainWindow : Window
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetForegroundWindow(IntPtr hWnd);
+
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private static readonly IntPtr HWND_NOTOPMOST = new(-2);
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOACTIVATE = 0x0010;
+    private const int SW_SHOWNORMAL = 1;
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDpiForWindow(IntPtr hWnd);
 
     // Window background material, chosen in the Command Palette settings and passed at launch.
     // Mica/Acrylic use the built-in Window backdrops (they track the app theme themselves); Solid

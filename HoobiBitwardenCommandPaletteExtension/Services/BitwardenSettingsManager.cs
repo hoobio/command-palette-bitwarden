@@ -283,8 +283,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     private void SyncClipboardSettings()
     {
         SecureClipboardService.AutoClearEnabled = AutoClearClipboard.Value;
+        CompanionLauncher.ClipboardAutoClear = AutoClearClipboard.Value;
         if (int.TryParse(ClipboardClearDelay.Value, out var delay))
+        {
             SecureClipboardService.ClearDelaySeconds = delay;
+            CompanionLauncher.ClipboardClearDelaySeconds = delay;
+        }
     }
 
     private void SyncRepromptSettings()

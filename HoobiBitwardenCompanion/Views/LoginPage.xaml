@@ -6,7 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
 
-    <StackPanel Spacing="{StaticResource SpacingMedium}" VerticalAlignment="Top" MaxWidth="420" HorizontalAlignment="Center">
+    <StackPanel Spacing="{StaticResource SpacingMedium}" VerticalAlignment="Top" MaxWidth="420" HorizontalAlignment="Center" Padding="{StaticResource PagePadding}">
         <StackPanel Spacing="{StaticResource SpacingXSmall}">
             <TextBlock Text="Bitwarden" Style="{StaticResource PageHeaderTextStyle}" />
             <TextBlock x:Name="SubheaderText" Style="{StaticResource PageSubheaderTextStyle}" />

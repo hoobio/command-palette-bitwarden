@@ -36,6 +36,11 @@ internal static class CompanionLauncher
   // resolved icon-server base at launch so item windows show favicons.
   public static bool ShowWebsiteIcons { get; set; } = true;
 
+  // Clipboard auto-clear settings, shared with the companion so its copies behave like the
+  // extension's (kept in sync from settings alongside SecureClipboardService).
+  public static bool ClipboardAutoClear { get; set; } = true;
+  public static int ClipboardClearDelaySeconds { get; set; } = 30;
+
   private static readonly System.Threading.Lock Gate = new();
   private static CompanionIpcServer? _server;
   private static string? _pipeName;
@@ -78,6 +83,12 @@ internal static class CompanionLauncher
     psi.ArgumentList.Add(Backdrop);
     psi.ArgumentList.Add(IpcLaunchArgs.IconBase);
     psi.ArgumentList.Add(ShowWebsiteIcons ? Helpers.VaultItemHelper.GetIconBaseUrl() : string.Empty);
+    psi.ArgumentList.Add(IpcLaunchArgs.ClipAutoClear);
+    psi.ArgumentList.Add(ClipboardAutoClear ? "true" : "false");
+    psi.ArgumentList.Add(IpcLaunchArgs.ClipDelay);
+    psi.ArgumentList.Add(ClipboardClearDelaySeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    psi.ArgumentList.Add(IpcLaunchArgs.VaultUrl);
+    psi.ArgumentList.Add(BitwardenCliService.ServerUrl ?? string.Empty);
     if (!string.IsNullOrEmpty(itemId))
     {
       psi.ArgumentList.Add(IpcLaunchArgs.ItemId);

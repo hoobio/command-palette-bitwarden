@@ -6,46 +6,22 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
 
-    <Grid RowSpacing="{StaticResource SpacingMedium}">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Grid Grid.Row="0" ColumnSpacing="{StaticResource SpacingMedium}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Width="40" Height="40"
-                    CornerRadius="{StaticResource CardCornerRadius}"
-                    Background="{ThemeResource SubtleFillColorTertiaryBrush}">
-                <Grid>
-                    <FontIcon x:Name="ItemIcon" Glyph="&#xE8C8;" FontSize="20" />
-                    <Image x:Name="FaviconImage" Width="24" Height="24" Visibility="Collapsed"
-                           ImageOpened="OnFaviconOpened" />
-                </Grid>
-            </Border>
-            <TextBlock x:Name="ItemName" Grid.Column="1" VerticalAlignment="Center"
-                       Style="{StaticResource PageHeaderTextStyle}"
-                       TextTrimming="CharacterEllipsis" />
-            <Button x:Name="EditButton" Grid.Column="2" Style="{StaticResource GhostIconButtonStyle}"
-                    ToolTipService.ToolTip="Edit" Click="OnEditClick">
-                <FontIcon Glyph="&#xE70F;" FontSize="16" />
-            </Button>
-        </Grid>
-
-        <!-- Fields -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="FieldsPanel" Spacing="{StaticResource SpacingMedium}" />
+        <!-- Fields. The ScrollViewer spans edge to edge so its scrollbar sits on the window edge;
+             the inner content carries the horizontal padding instead. -->
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="FieldsPanel" Spacing="{StaticResource SpacingMedium}"
+                        Padding="16,4,16,8" />
         </ScrollViewer>
 
         <!-- Loading state: shown while the item is fetched (instant when served from the extension's
              vault cache; a moment longer on a cache miss that falls back to the CLI). -->
-        <StackPanel x:Name="LoadingPanel" Grid.Row="1"
+        <StackPanel x:Name="LoadingPanel" Grid.Row="0"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     Orientation="Horizontal" Spacing="{StaticResource SpacingSmall}"
                     Visibility="Collapsed">
@@ -55,18 +31,20 @@
         </StackPanel>
 
         <!-- Footer -->
-        <StackPanel Grid.Row="2" Spacing="{StaticResource SpacingSmall}">
+        <StackPanel Grid.Row="1" Spacing="{StaticResource SpacingSmall}" Padding="16,8,16,12">
             <TextBlock x:Name="StatusText" Style="{StaticResource MutedCaptionTextStyle}" Visibility="Collapsed" />
             <Grid ColumnSpacing="{StaticResource SpacingSmall}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <HyperlinkButton x:Name="WebVaultButton" Grid.Column="0" Content="Open in Web Vault"
                                  HorizontalAlignment="Left" Click="OnWebVaultClick" />
-                <Button x:Name="CancelButton" Grid.Column="1" Content="Cancel" Visibility="Collapsed" Click="OnCancelClick" />
-                <Button x:Name="SaveButton" Grid.Column="2" Content="Save" Style="{StaticResource AccentButtonStyle}"
+                <Button x:Name="EditButton" Grid.Column="1" Content="Edit" Click="OnEditClick" />
+                <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" Visibility="Collapsed" Click="OnCancelClick" />
+                <Button x:Name="SaveButton" Grid.Column="3" Content="Save" Style="{StaticResource AccentButtonStyle}"
                         Visibility="Collapsed" Click="OnSaveClick" />
             </Grid>
         </StackPanel>

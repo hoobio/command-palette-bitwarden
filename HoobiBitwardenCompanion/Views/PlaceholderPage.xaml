@@ -8,7 +8,8 @@
 
     <Border Style="{StaticResource SectionCardStyle}"
             VerticalAlignment="Center"
-            HorizontalAlignment="Stretch">
+            HorizontalAlignment="Stretch"
+            Margin="{StaticResource PagePadding}">
         <StackPanel Spacing="{StaticResource SpacingSmall}">
             <TextBlock Text="Bitwarden Companion" Style="{StaticResource PageHeaderTextStyle}" />
             <TextBlock x:Name="DescriptionText" Style="{StaticResource PageSubheaderTextStyle}" />

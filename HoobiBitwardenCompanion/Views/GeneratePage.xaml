@@ -7,7 +7,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
 
-    <StackPanel Spacing="{StaticResource SpacingMedium}" VerticalAlignment="Top">
+    <StackPanel Spacing="{StaticResource SpacingMedium}" VerticalAlignment="Top" Padding="{StaticResource PagePadding}">
         <StackPanel Spacing="{StaticResource SpacingXSmall}">
             <TextBlock Text="Generate" Style="{StaticResource PageHeaderTextStyle}" />
             <TextBlock Text="Create a password or passphrase. Nothing is saved to your vault."

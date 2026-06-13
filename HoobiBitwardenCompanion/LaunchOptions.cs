@@ -22,7 +22,9 @@ internal enum BackdropMode
 // What the companion was asked to do, parsed from the launch command line the extension passes
 // (e.g. `--mode item --id <guid> --pipe <name>`). The extension is the vault authority; the id tells
 // the companion which item to drive over IPC and the pipe name is the channel back to the extension.
-internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId, string? PipeName, BackdropMode Backdrop, string? IconBaseUrl)
+internal sealed record LaunchOptions(
+    CompanionMode Mode, string? ItemId, string? PipeName, BackdropMode Backdrop, string? IconBaseUrl,
+    bool ClipboardAutoClear, int ClipboardClearSeconds, string? VaultUrl)
 {
     public static LaunchOptions Parse(string[] argv)
     {
@@ -54,6 +56,14 @@ internal sealed record LaunchOptions(CompanionMode Mode, string? ItemId, string?
 
         var iconBase = args.GetValueOrDefault(IpcLaunchArgs.IconBase);
 
-        return new LaunchOptions(parsedMode, itemId, pipe, backdrop, string.IsNullOrEmpty(iconBase) ? null : iconBase);
+        var clipAutoClear = !string.Equals(args.GetValueOrDefault(IpcLaunchArgs.ClipAutoClear), "false", StringComparison.OrdinalIgnoreCase);
+        _ = int.TryParse(args.GetValueOrDefault(IpcLaunchArgs.ClipDelay), out var clipDelay);
+        if (clipDelay <= 0) clipDelay = 30;
+
+        var vaultUrl = args.GetValueOrDefault(IpcLaunchArgs.VaultUrl);
+
+        return new LaunchOptions(parsedMode, itemId, pipe, backdrop,
+            string.IsNullOrEmpty(iconBase) ? null : iconBase, clipAutoClear, clipDelay,
+            string.IsNullOrEmpty(vaultUrl) ? null : vaultUrl);
     }
 }
