@@ -13,12 +13,13 @@ public partial class App : Application
 
     public App()
     {
-        // The extension launches us via Process.Start. Pin the AppUserModelID to our own "Companion"
-        // app id (the app this exe belongs to) so the taskbar button groups under it and shows its
-        // Square44x44 logo, rather than an ambiguous/blank association.
+        // The extension launches us via Process.Start. The packaged taskbar icon comes from the
+        // AUMID's app tile logo; the "Companion" app is AppListEntry="none" so the shell won't resolve
+        // a logo for it (blank button). Point at the visible "App" id, whose branded Square44x44 logo
+        // does resolve, so the taskbar shows the Bitwarden shield.
         try
         {
-            var aumid = Windows.ApplicationModel.Package.Current.Id.FamilyName + "!Companion";
+            var aumid = Windows.ApplicationModel.Package.Current.Id.FamilyName + "!App";
             SetCurrentProcessExplicitAppUserModelID(aumid);
         }
         catch { /* unpackaged / no identity: nothing to do */ }
