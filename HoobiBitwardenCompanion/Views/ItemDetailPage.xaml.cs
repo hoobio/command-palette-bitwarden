@@ -42,12 +42,56 @@ public sealed partial class ItemDetailPage : Page
     private StackPanel? _collectionsPanel;
     private readonly List<(CheckBox Box, string Id)> _collectionChecks = [];
 
-    public ItemDetailPage() => InitializeComponent();
+    public ItemDetailPage()
+    {
+        InitializeComponent();
+        AddAccelerators();
+    }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         _ = LoadAsync(e.Parameter);
+    }
+
+    // Mirror the Command Palette's item shortcuts inside the window: copy username/password, open in
+    // browser, open in web vault.
+    private void AddAccelerators()
+    {
+        AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control, CopyUsername);
+        AddAccelerator(Windows.System.VirtualKey.C, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, CopyPassword);
+        AddAccelerator(Windows.System.VirtualKey.O, Windows.System.VirtualKeyModifiers.Control, () => _ = OpenInWebVaultAsync());
+        AddAccelerator(Windows.System.VirtualKey.Enter, Windows.System.VirtualKeyModifiers.Menu, OpenInBrowser);
+    }
+
+    private void AddAccelerator(Windows.System.VirtualKey key, Windows.System.VirtualKeyModifiers modifiers, Action action)
+    {
+        var accelerator = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = key, Modifiers = modifiers };
+        accelerator.Invoked += (_, args) => { args.Handled = true; action(); };
+        KeyboardAccelerators.Add(accelerator);
+    }
+
+    private string? LoginField(string name) => (_item?["login"] as JsonObject)?[name]?.GetValue<string>();
+
+    private void CopyUsername()
+    {
+        if (LoginField("username") is { Length: > 0 } u) ClipboardHelper.Copy(u, "Username");
+    }
+
+    private void CopyPassword()
+    {
+        if (LoginField("password") is { Length: > 0 } p) ClipboardHelper.Copy(p, "Password");
+    }
+
+    private void OpenInBrowser()
+    {
+        var uri = (_item?["login"] as JsonObject)?["uris"] is JsonArray uris && uris.Count > 0
+            ? (uris[0] as JsonObject)?["uri"]?.GetValue<string>()
+            : null;
+        if (string.IsNullOrEmpty(uri)) return;
+        if (!uri.Contains("://", StringComparison.Ordinal)) uri = "https://" + uri;
+        if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+            _ = Windows.System.Launcher.LaunchUriAsync(parsed);
     }
 
     private async Task LoadAsync(object? parameter)
