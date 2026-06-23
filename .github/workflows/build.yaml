@@ -91,7 +91,7 @@ jobs:
     if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -287,7 +287,7 @@ jobs:
           echo "### 💭 No MSIX build needed (${{ matrix.platform }})" >> "$GITHUB_STEP_SUMMARY"
           echo "Build was skipped because this PR has no code changes. Reporting success so the required check passes." >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: env.SHOULD_BUILD == 'true'
 
       - uses: actions/setup-dotnet@v5
@@ -415,7 +415,7 @@ jobs:
       SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Read version
         id: version
@@ -507,7 +507,7 @@ jobs:
       matrix:
         platform: [x64, ARM64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: .github/wack-exclusions.json
           sparse-checkout-cone-mode: false
@@ -548,7 +548,7 @@ jobs:
       DT_SYSTEM: command-palette
       DT_COMPONENT: bitwarden-extension
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -773,7 +773,7 @@ jobs:
       contents: write
       pull-requests: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
