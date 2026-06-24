@@ -497,6 +497,97 @@ jobs:
           path: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}\${{ env.ASSET_BASE_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform }}.msi
           if-no-files-found: error
 
+  bundle:
+    name: Bundle MSIX (all platforms)
+    # Combine the per-arch .msix into one signed .msixbundle - the Store artifact
+    # (the msstore CLI uploads exactly one package per submission) and an extra
+    # release asset. Same gate as build-msi: signed paths only (release-please
+    # PRs + main pushes), so the per-arch .msix it consumes are signed.
+    needs: [detect-changes, build-msix]
+    if: >-
+      always()
+      && needs.build-msix.result == 'success'
+      && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
+      && (
+        (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main')
+        || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      )
+    runs-on: windows-latest
+    env:
+      HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content version.txt -Raw).Trim()
+          "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
+
+      # Both per-arch artifacts land in the same folder so makeappx bundles them together.
+      - name: Download MSIX (x64)
+        uses: actions/download-artifact@v8
+        with:
+          name: msix-x64
+          path: ${{ github.workspace }}\staging\bundle-input
+      - name: Download MSIX (ARM64)
+        uses: actions/download-artifact@v8
+        with:
+          name: msix-ARM64
+          path: ${{ github.workspace }}\staging\bundle-input
+
+      - name: Build signed .msixbundle
+        env:
+          PFX_BASE64: ${{ secrets.SIGNING_CERTIFICATE }}
+          PFX_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          THUMBPRINT: ${{ vars.SIGNING_CERT_THUMBPRINT }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Newest x64 makeappx + signtool from the Windows SDK.
+          $kit = 'C:\Program Files (x86)\Windows Kits\10\bin'
+          function Resolve-SdkTool($name) {
+            Get-ChildItem $kit -Recurse -Filter $name -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match '\\x64\\' } |
+              Sort-Object { [version]($_.FullName -replace '.*\\(\d+\.\d+\.\d+\.\d+)\\.*', '$1') } -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          $makeappx = Resolve-SdkTool 'makeappx.exe'
+          $signtool = Resolve-SdkTool 'signtool.exe'
+          if (-not $makeappx -or -not $signtool) { throw 'Windows SDK tooling not found' }
+
+          $outDir = "$env:GITHUB_WORKSPACE\staging\bundle"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $bundle = Join-Path $outDir "$env:ASSET_BASE_NAME-$env:VERSION.msixbundle"
+
+          & $makeappx bundle /d "$env:GITHUB_WORKSPACE\staging\bundle-input" /p $bundle /bv "$env:VERSION.0" /o
+          if ($LASTEXITCODE -ne 0) { throw "makeappx bundle failed ($LASTEXITCODE)" }
+
+          # Sign the bundle (sideloaded from the release; the Store re-signs but
+          # accepts a signed bundle). Mirrors the per-arch sign-msix step.
+          if ($env:HAS_SIGNING_CERT -eq 'true') {
+            $pfx = Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString('N') + '.pfx')
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+            try {
+              $sec = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+              Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $sec | Out-Null
+            } finally { Remove-Item $pfx -Force -ErrorAction SilentlyContinue }
+            & $signtool sign /fd SHA256 /sha1 $env:THUMBPRINT /td SHA256 $bundle
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed ($LASTEXITCODE)" }
+          } else {
+            Write-Host "::warning::Bundle produced unsigned (no signing cert configured)"
+          }
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: msixbundle
+          path: ${{ github.workspace }}\staging\bundle\*.msixbundle
+          if-no-files-found: error
+
   wack:
     name: WACK (${{ matrix.platform }})
     needs: [build-msix, detect-changes]
@@ -658,13 +749,14 @@ jobs:
 
   release:
     name: Publish Release
-    needs: [release-please, lint-and-test, build-msix, build-msi, wack, sbom]
+    needs: [release-please, lint-and-test, build-msix, build-msi, bundle, wack, sbom]
     if: >-
       always()
       && needs.release-please.outputs.release_created == 'true'
       && needs.lint-and-test.result == 'success'
       && needs.build-msix.result == 'success'
       && needs.build-msi.result == 'success'
+      && needs.bundle.result == 'success'
       && needs.wack.result == 'success'
       && needs.sbom.result == 'success'
     runs-on: ubuntu-latest
@@ -708,11 +800,16 @@ jobs:
         with:
           name: wack-report-ARM64
           path: release/wack-ARM64
+      - name: Download MSIX bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: msixbundle
+          path: release/bundle
 
       - name: Attest installer provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: "release/msix-*/*.msix,release/msi-*/*.msi"
+          subject-path: "release/msix-*/*.msix,release/msi-*/*.msi,release/bundle/*.msixbundle"
 
       - name: Attach all artefacts to draft release
         env:
@@ -722,6 +819,7 @@ jobs:
           set -euo pipefail
           mapfile -t RELEASE_FILES < <(find release -type f \( \
             -name '*.msix' -o \
+            -name '*.msixbundle' -o \
             -name '*.msi'  -o \
             -name '*.cdx.json' -o \
             -name 'wack-report-*.xml' \))
@@ -758,15 +856,90 @@ jobs:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
           app-private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
 
+  store-publish:
+    name: Publish to Microsoft Store
+    # Real releases only. Takes the prebuilt .msixbundle artifact and submits it to
+    # the Store with the WHATS_NEW.md release notes. msstore uploads one package per
+    # submission and matches by extension, hence a single bundle (not two .msix).
+    needs: [release-please, bundle, release]
+    if: >-
+      always()
+      && needs.release-please.outputs.release_created == 'true'
+      && needs.bundle.result == 'success'
+      && needs.release.result == 'success'
+    runs-on: windows-latest
+    env:
+      STORE_PRODUCT_ID: 9P5KS8T80MV3
+      WHATS_NEW_PATH: HoobiBitwardenCommandPaletteExtension/Assets/WHATS_NEW.md
+    steps:
+      - uses: actions/checkout@v7 # for WHATS_NEW.md
+
+      - name: Download MSIX bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: msixbundle
+          path: bundle
+
+      - name: Setup Microsoft Store CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.3
+
+      - name: Configure Store credentials
+        shell: pwsh
+        run: |
+          msstore reconfigure `
+            --tenantId     '${{ secrets.AZURE_TENANT_ID }}' `
+            --sellerId     '${{ secrets.SELLER_ID }}' `
+            --clientId     '${{ secrets.AZURE_AD_CLIENT_ID }}' `
+            --clientSecret '${{ secrets.AZURE_AD_CLIENT_SECRET }}'
+
+      - name: Publish bundle + release notes to Store
+        shell: pwsh
+        env:
+          PRODUCT_ID: ${{ env.STORE_PRODUCT_ID }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = (Get-ChildItem bundle -Filter *.msixbundle | Select-Object -First 1).FullName
+          if (-not $bundle) { throw 'No .msixbundle artifact found' }
+
+          # Clear any leftover pending draft so publish starts from the live submission.
+          msstore submission delete $env:PRODUCT_ID --no-confirm 2>$null
+          $global:LASTEXITCODE = 0
+
+          # Clone the live submission, upload the bundle, hold the commit.
+          msstore publish $bundle -id $env:PRODUCT_ID --noCommit
+          if ($LASTEXITCODE -ne 0) { throw "msstore publish failed ($LASTEXITCODE)" }
+
+          # Splice in WHATS_NEW.md, and retire any non-bundle (loose .msix) packages
+          # the clone carried over. The PendingDelete loop auto-handles the one-time
+          # .msix -> .msixbundle migration and is a no-op after that (bundle -> bundle).
+          $out = msstore submission get $env:PRODUCT_ID | Out-String
+          $s = $out.IndexOf('{'); $e = $out.LastIndexOf('}')
+          if ($s -lt 0 -or $e -le $s) { throw 'Could not parse submission JSON from msstore output' }
+          $sub = $out.Substring($s, $e - $s + 1) | ConvertFrom-Json
+
+          $sub.Listings.'en-us'.BaseListing.ReleaseNotes = (Get-Content -Raw $env:WHATS_NEW_PATH).TrimEnd()
+          foreach ($p in $sub.ApplicationPackages) {
+            if ($p.FileName -notlike '*.msixbundle') { $p.FileStatus = 'PendingDelete' }
+          }
+
+          $sub | ConvertTo-Json -Depth 100 | Set-Content -Path patched.json -Encoding utf8
+          msstore submission updateMetadata $env:PRODUCT_ID (Get-Content -Raw patched.json)
+          if ($LASTEXITCODE -ne 0) { throw "updateMetadata failed ($LASTEXITCODE)" }
+
+          msstore submission publish $env:PRODUCT_ID
+          if ($LASTEXITCODE -ne 0) { throw "submission publish failed ($LASTEXITCODE)" }
+          Write-Host "Submitted $bundle to the Store (product $env:PRODUCT_ID)."
+
   pre-release:
     name: Pre-Release
-    needs: [build-msix, build-msi, lint-and-test]
+    needs: [build-msix, build-msi, bundle, lint-and-test]
     if: >-
       always()
       && github.event_name == 'pull_request'
       && github.head_ref == 'release-please--branches--main'
       && needs.build-msix.result == 'success'
       && needs.build-msi.result == 'success'
+      && needs.bundle.result == 'success'
       && needs.lint-and-test.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -826,6 +999,12 @@ jobs:
           name: msi-ARM64
           path: release/msi-ARM64
 
+      - name: Download MSIX bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: msixbundle
+          path: release/bundle
+
       # Create as a draft so action-gh-release can attach assets. On repos
       # with "immutable releases" enabled, publishing a release locks its
       # asset list, and softprops/action-gh-release publishes before
@@ -843,6 +1022,7 @@ jobs:
           body_path: /tmp/release_notes.txt
           files: |
             release/**/*.msix
+            release/**/*.msixbundle
             release/**/*.msi
 
       - name: Publish pre-release
