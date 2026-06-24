@@ -94,15 +94,34 @@ public class BitwardenCliInstallerTests
   // --- static helpers ---
 
   [Fact]
-  public void GetCandidateCliPaths_IncludesWingetLinksAndAppDataInstallDir()
+  public void GetCandidateCliPaths_IncludesAppDataInstallDir_NotLinksShim()
   {
     var paths = BitwardenCliInstaller.GetCandidateCliPaths()
         .Select(p => p.Replace('\\', '/'))
         .ToList();
 
-    Assert.Contains(paths, p => p.Contains("Microsoft/WinGet/Links/bw.exe", StringComparison.OrdinalIgnoreCase));
     Assert.Contains(paths, p => p.Contains("HoobiBitwardenCommandPalette/cli/bw.exe", StringComparison.OrdinalIgnoreCase));
+    // The WinGet\Links\bw.exe symlink shim is deliberately excluded (bw can't run through it).
+    Assert.DoesNotContain(paths, p => p.Contains("Microsoft/WinGet/Links/bw.exe", StringComparison.OrdinalIgnoreCase));
     Assert.All(paths, p => Assert.EndsWith("bw.exe", p, StringComparison.OrdinalIgnoreCase));
+  }
+
+  [Fact]
+  public void GetCandidateCliPaths_IncludesDirsFromProcessPath()
+  {
+    var original = Environment.GetEnvironmentVariable("PATH");
+    try
+    {
+      Environment.SetEnvironmentVariable("PATH", @"C:\hoobi-test-cli-dir");
+      var paths = BitwardenCliInstaller.GetCandidateCliPaths()
+          .Select(p => p.Replace('\\', '/'))
+          .ToList();
+      Assert.Contains(paths, p => p.Equals("C:/hoobi-test-cli-dir/bw.exe", StringComparison.OrdinalIgnoreCase));
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable("PATH", original);
+    }
   }
 
   [Fact]
