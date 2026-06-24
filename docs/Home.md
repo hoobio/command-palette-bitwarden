@@ -14,6 +14,7 @@ A free, open-source replacement for 1Password Quick Access, built for the [Power
 - [Settings](Settings)
 - [Vault Item Actions](Vault-Item-Actions)
 - [Architecture](Architecture)
+- [Release & Store Publishing](Release-and-Store-Publishing)
 
 ## Feature Overview
 

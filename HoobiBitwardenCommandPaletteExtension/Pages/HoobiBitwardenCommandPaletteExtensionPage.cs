@@ -223,12 +223,35 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
         else
         {
-            _ = Task.Run(async () =>
-            {
-                IsLoading = true;
-                await _service.RefreshCacheAsync();
-            });
+            // Cache isn't loaded yet (cold start / warmup still running). The text
+            // is already recorded in _currentSearchText above; make sure it gets
+            // applied once the cache lands. Relying on the warmup's CacheUpdated
+            // alone is racy - it can rebuild the list a moment before this
+            // keystroke's text is recorded, leaving results unfiltered until the
+            // user types another character.
+            _ = Task.Run(ApplySearchWhenCacheReadyAsync);
         }
+    }
+
+    private async Task ApplySearchWhenCacheReadyAsync()
+    {
+        IsLoading = true;
+        // Await the in-flight warmup instead of firing a concurrent `bw list
+        // items`, which can hang the CLI when both run at once.
+#pragma warning disable VSTHRD003 // WarmupTask is a ThreadPool task; this runs on ThreadPool via Task.Run
+        try { await _service.WarmupTask.ConfigureAwait(false); } catch { }
+#pragma warning restore VSTHRD003
+        if (!_service.IsCacheLoaded)
+            await _service.RefreshCacheAsync().ConfigureAwait(false);
+
+        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
+            return;
+
+        // Re-apply whatever has been typed by now (read here, after the cache is
+        // ready, so it reflects the latest keystroke rather than a stale snapshot).
+        _currentItems = BuildListItems(Search(_currentSearchText));
+        IsLoading = false;
+        RaiseItemsChanged();
     }
 
     private void OnSearchDebounceTick(object? _)

@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.11.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.0...v1.11.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* apply search typed while the vault is still loading ([#186](https://github.com/hoobio/command-palette-bitwarden/issues/186)) ([da60f88](https://github.com/hoobio/command-palette-bitwarden/commit/da60f88c5102873e71154793b888f5e3a6722d32))
+* detect a PATH-installed Bitwarden CLI without a reboot ([#184](https://github.com/hoobio/command-palette-bitwarden/issues/184)) ([6702980](https://github.com/hoobio/command-palette-bitwarden/commit/67029800b788bbe205e6107fcef278f55570b2b0))
+
+
+### Build System
+
+* **deps:** bump actions/checkout from 6 to 7 ([#181](https://github.com/hoobio/command-palette-bitwarden/issues/181)) ([6ca9a7f](https://github.com/hoobio/command-palette-bitwarden/commit/6ca9a7f9e4575c6501f1f8119c67491dbb347797))
+
+
+### Continuous Integration
+
+* add Microsoft Store publish workflow ([#185](https://github.com/hoobio/command-palette-bitwarden/issues/185)) ([4b964be](https://github.com/hoobio/command-palette-bitwarden/commit/4b964bea526148d4c139fe9614fed5546d495a23))
+
 ## [1.11.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.10.0...v1.11.0) (2026-06-13)
 
 

@@ -207,7 +207,6 @@ internal sealed class BitwardenCliInstaller
   internal static IEnumerable<string> GetCandidateCliPaths()
   {
     var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-    yield return Path.Combine(localAppData, "Microsoft", "WinGet", "Links", "bw.exe");
     yield return Path.Combine(localAppData, "HoobiBitwardenCommandPalette", "cli", "bw.exe");
     yield return Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "scoop", "shims", "bw.exe");
@@ -216,13 +215,42 @@ internal sealed class BitwardenCliInstaller
     if (!string.IsNullOrEmpty(programData))
       yield return Path.Combine(programData, "chocolatey", "bin", "bw.exe");
 
-    var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-    foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    // Exclude the WinGet\Links\bw.exe symlink shim everywhere - including when it's
+    // on PATH, which it is for winget users. bw (a Node single-file exe) can't
+    // locate its bundled snapshot when launched through the shim, so `bw --version`
+    // fails; resolving to it is the exact "didn't respond yet" failure.
+    // WingetPackagesCliPath already covers the real winget exe.
+    var linksShim = Path.Combine(localAppData, "Microsoft", "WinGet", "Links", "bw.exe");
+    foreach (var dir in PathDirectories())
     {
       var candidate = TryCombine(dir, "bw.exe");
-      if (candidate != null)
+      if (candidate != null && !string.Equals(candidate, linksShim, StringComparison.OrdinalIgnoreCase))
         yield return candidate;
     }
+  }
+
+  // PATH directories from the process snapshot plus the live User/Machine registry
+  // values. The process copy is frozen at launch, so a folder added to PATH after
+  // the host started - the manual-install flow - is only visible via the registry
+  // targets. Reading them is the "reimport" that lets us find a hand-placed bw
+  // without a reboot.
+  internal static IEnumerable<string> PathDirectories()
+  {
+    var sources = new List<string?> { Environment.GetEnvironmentVariable("PATH") };
+    try
+    {
+      sources.Add(Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User));
+      sources.Add(Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine));
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Installer", $"Registry PATH read failed: {ex.GetType().Name}: {ex.Message}");
+    }
+
+    return sources
+        .Where(p => !string.IsNullOrEmpty(p))
+        .SelectMany(p => p!.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        .Distinct(StringComparer.OrdinalIgnoreCase);
   }
 
   private static string? TryCombine(string dir, string file)
