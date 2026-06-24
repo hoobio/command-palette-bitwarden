@@ -13,3 +13,4 @@
   - [Settings](Settings)
 - **Development**
   - [Architecture](Architecture)
+  - [Release & Store Publishing](Release-and-Store-Publishing)
