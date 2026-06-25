@@ -1,0 +1,22 @@
+name: Clear need-more-info on author reply
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  clear:
+    if: >
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.event.issue.user.login &&
+      contains(github.event.issue.labels.*.name, 'need-more-info')
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue edit "$NUMBER" --remove-label need-more-info --repo "$REPO"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
