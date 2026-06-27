@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.1...v1.11.2) (2026-06-24)
+
+
+### Continuous Integration
+
+* build msixbundle in the pipeline and attach to draft release ([#187](https://github.com/hoobio/command-palette-bitwarden/issues/187)) ([274fa3b](https://github.com/hoobio/command-palette-bitwarden/commit/274fa3ba39bf60ed1fc2b8a3d1615d9df5cb1e70))
+
 ## [1.11.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.0...v1.11.1) (2026-06-24)
 
 
