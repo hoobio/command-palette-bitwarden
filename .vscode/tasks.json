@@ -7,7 +7,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\HoobiBitwardenCommandPaletteExtension.csproj",
+        "${workspaceFolder}\\HoobiBitwardenCompanion\\HoobiBitwardenCompanion.csproj",
         "-c",
         "Debug",
         "/p:Platform=x64"
@@ -35,7 +35,7 @@
     {
       "label": "Deploy (Debug x64)",
       "type": "shell",
-      "command": "$dst = '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\Assets'; New-Item -ItemType Directory -Path $dst -Force | Out-Null; Copy-Item -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\Assets\\*' -Destination $dst -Recurse -Force; Add-AppxPackage -Register -Path '${workspaceFolder}\\HoobiBitwardenCommandPaletteExtension\\bin\\x64\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\AppxManifest.xml' -ForceUpdateFromAnyVersion; Write-Host 'Deployed.'",
+      "command": "$manifest = '${workspaceFolder}\\HoobiBitwardenCompanion\\bin\\x64\\Debug\\net10.0-windows10.0.26100.0\\win-x64\\AppxManifest.xml'; Get-AppxPackage '*BitwardenCommandPaletteExtension*' | ForEach-Object { Write-Host \"Removing $($_.PackageFullName)\"; Remove-AppxPackage $_.PackageFullName -ErrorAction SilentlyContinue }; Add-AppxPackage -Register -Path $manifest -ForceUpdateFromAnyVersion; Write-Host 'Deployed.'",
       "options": {
         "shell": {
           "executable": "powershell.exe",
@@ -54,7 +54,7 @@
     {
       "label": "Start PowerToys",
       "type": "shell",
-      "command": "Start-Process 'shell:AppsFolder\\Microsoft.PowerToysWin32'; Write-Host 'PowerToys started.'",
+      "command": "Start-Process 'shell:AppsFolder\\Microsoft.CommandPalette_8wekyb3d8bbwe!App'; Write-Host 'Command Palette started.'",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",

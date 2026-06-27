@@ -184,6 +184,16 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             new("5 minutes", "300"),
         ]);
 
+    public ChoiceSetSetting CompanionBackdrop { get; } = new(
+        "companionBackdrop",
+        "Companion Window Material",
+        "Background material for the companion windows (item editor, generator, login)",
+        [
+            new("Mica", "Mica"),
+            new("Acrylic", "Acrylic"),
+            new("Solid", "Solid"),
+        ]);
+
     public ToggleSetting DebugLogging { get; } = new(
         "debugLogging",
         "Debug Logging",
@@ -199,6 +209,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         OrganizationTagStyle.Value = "name";
         BackgroundRefresh.Value = "5";
         RepromptGracePeriod.Value = "60";
+        CompanionBackdrop.Value = "Mica";
         Settings.Add(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
         Settings.Add(RememberSession);
         Settings.Add(UseDesktopIntegration);
@@ -229,12 +240,16 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         Settings.Add(UsePortableDataDirectory);
         Settings.Add(CliDataDirectoryOverride);
 
+        Settings.Add(new SectionHeaderSetting("_section_companion", "Companion Window"));
+        Settings.Add(CompanionBackdrop);
+
         Settings.Add(new SectionHeaderSetting("_section_advanced", "Advanced"));
         Settings.Add(DebugLogging);
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();
         SyncClipboardSettings();
+        SyncCompanionSettings();
         SyncRepromptSettings();
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("startup");
@@ -287,16 +302,27 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     {
         SaveSettings();
         SyncClipboardSettings();
+        SyncCompanionSettings();
         SyncRepromptSettings();
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("settings changed");
     }
 
+    private void SyncCompanionSettings()
+    {
+        CompanionLauncher.Backdrop = CompanionBackdrop.Value ?? "Mica";
+        CompanionLauncher.ShowWebsiteIcons = ShowWebsiteIcons.Value;
+    }
+
     private void SyncClipboardSettings()
     {
         SecureClipboardService.AutoClearEnabled = AutoClearClipboard.Value;
+        CompanionLauncher.ClipboardAutoClear = AutoClearClipboard.Value;
         if (int.TryParse(ClipboardClearDelay.Value, out var delay))
+        {
             SecureClipboardService.ClearDelaySeconds = delay;
+            CompanionLauncher.ClipboardClearDelaySeconds = delay;
+        }
     }
 
     private void SyncRepromptSettings()
@@ -355,6 +381,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (CliDirectoryOverride.Key, CliDirectoryOverride.Value);
         yield return (UsePortableDataDirectory.Key, (object?)UsePortableDataDirectory.Value);
         yield return (CliDataDirectoryOverride.Key, CliDataDirectoryOverride.Value);
+        yield return (CompanionBackdrop.Key, CompanionBackdrop.Value);
         yield return (DebugLogging.Key, (object?)DebugLogging.Value);
     }
 }

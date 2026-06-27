@@ -1,0 +1,69 @@
+using System;
+using System.Collections.Generic;
+using HoobiBitwardenCompanionIpc;
+
+namespace HoobiBitwardenCompanion;
+
+internal enum CompanionMode
+{
+    Login = 0,
+    ItemDetail = 1,
+    Generate = 2,
+    QuickRotate = 3,
+}
+
+internal enum BackdropMode
+{
+    Mica = 0,
+    Acrylic = 1,
+    Solid = 2,
+}
+
+// What the companion was asked to do, parsed from the launch command line the extension passes
+// (e.g. `--mode item --id <guid> --pipe <name>`). The extension is the vault authority; the id tells
+// the companion which item to drive over IPC and the pipe name is the channel back to the extension.
+internal sealed record LaunchOptions(
+    CompanionMode Mode, string? ItemId, string? PipeName, BackdropMode Backdrop, string? IconBaseUrl,
+    bool ClipboardAutoClear, int ClipboardClearSeconds, string? VaultUrl)
+{
+    public static LaunchOptions Parse(string[] argv)
+    {
+        var args = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < argv.Length - 1; i++)
+        {
+            if (argv[i].StartsWith("--", StringComparison.Ordinal))
+                args[argv[i]] = argv[i + 1];
+        }
+
+        var mode = args.TryGetValue(IpcLaunchArgs.Mode, out var m) ? m.ToLowerInvariant() : "login";
+        var itemId = args.GetValueOrDefault(IpcLaunchArgs.ItemId);
+        var pipe = args.GetValueOrDefault(IpcLaunchArgs.Pipe);
+
+        var parsedMode = mode switch
+        {
+            "item" or "detail" => CompanionMode.ItemDetail,
+            "generate" => CompanionMode.Generate,
+            "rotate" => CompanionMode.QuickRotate,
+            _ => CompanionMode.Login,
+        };
+
+        var backdrop = args.GetValueOrDefault(IpcLaunchArgs.Backdrop)?.ToLowerInvariant() switch
+        {
+            "acrylic" => BackdropMode.Acrylic,
+            "solid" => BackdropMode.Solid,
+            _ => BackdropMode.Mica,
+        };
+
+        var iconBase = args.GetValueOrDefault(IpcLaunchArgs.IconBase);
+
+        var clipAutoClear = !string.Equals(args.GetValueOrDefault(IpcLaunchArgs.ClipAutoClear), "false", StringComparison.OrdinalIgnoreCase);
+        _ = int.TryParse(args.GetValueOrDefault(IpcLaunchArgs.ClipDelay), out var clipDelay);
+        if (clipDelay <= 0) clipDelay = 30;
+
+        var vaultUrl = args.GetValueOrDefault(IpcLaunchArgs.VaultUrl);
+
+        return new LaunchOptions(parsedMode, itemId, pipe, backdrop,
+            string.IsNullOrEmpty(iconBase) ? null : iconBase, clipAutoClear, clipDelay,
+            string.IsNullOrEmpty(vaultUrl) ? null : vaultUrl);
+    }
+}

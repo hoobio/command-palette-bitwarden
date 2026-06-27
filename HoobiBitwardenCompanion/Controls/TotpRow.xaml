@@ -1,0 +1,54 @@
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Controls.TotpRow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    mc:Ignorable="d"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded">
+
+    <StackPanel Spacing="2">
+        <TextBlock Text="Verification code (TOTP)" Style="{StaticResource MutedCaptionTextStyle}" />
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock x:Name="CodeText"
+                       Grid.Column="0"
+                       VerticalAlignment="Center"
+                       FontFamily="Consolas"
+                       FontSize="20"
+                       CharacterSpacing="50" />
+
+            <!-- Countdown ring: a custom arc redrawn ~30x/sec so it shrinks smoothly over the period
+                 and snaps back instantly at rollover (no slow reverse animation). Remaining seconds
+                 sit in the centre; the arc goes green, then amber/red in the last few seconds. -->
+            <Grid Grid.Column="1" Width="34" Height="34" VerticalAlignment="Center">
+                <Ellipse Width="30" Height="30"
+                         StrokeThickness="2.5"
+                         Stroke="{ThemeResource ControlStrokeColorDefaultBrush}" />
+                <Path x:Name="CountdownArc"
+                      StrokeThickness="2.5"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round" />
+                <TextBlock x:Name="SecondsText"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="11" />
+            </Grid>
+
+            <Button x:Name="CopyButton"
+                    Grid.Column="2"
+                    Style="{StaticResource GhostIconButtonStyle}"
+                    ToolTipService.ToolTip="Copy code&#x0a;(Ctrl+Alt+C)"
+                    VerticalAlignment="Center"
+                    Click="OnCopyClick">
+                <FontIcon Glyph="&#xE8C8;" FontSize="16" />
+            </Button>
+        </Grid>
+    </StackPanel>
+</UserControl>

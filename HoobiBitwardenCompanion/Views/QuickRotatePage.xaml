@@ -1,0 +1,22 @@
+<Page
+    x:Class="HoobiBitwardenCompanion.Views.QuickRotatePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:HoobiBitwardenCompanion.Controls"
+    mc:Ignorable="d"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+
+    <!-- Icon + item name live in the title bar; the page is raw controls on the backdrop (no card). -->
+    <StackPanel Spacing="{StaticResource SpacingMedium}" VerticalAlignment="Top" Padding="16,8,16,16">
+        <TextBlock x:Name="SubheaderText" Style="{StaticResource PageSubheaderTextStyle}" TextWrapping="Wrap" />
+
+        <controls:GeneratorControl x:Name="Generator" />
+
+        <TextBlock x:Name="StatusText" Style="{StaticResource MutedCaptionTextStyle}" TextWrapping="Wrap" Visibility="Collapsed" />
+
+        <Button x:Name="RotateButton" Content="Rotate, save &amp; copy"
+                Style="{StaticResource AccentButtonStyle}"
+                HorizontalAlignment="Right" Click="OnRotateClick" />
+    </StackPanel>
+</Page>

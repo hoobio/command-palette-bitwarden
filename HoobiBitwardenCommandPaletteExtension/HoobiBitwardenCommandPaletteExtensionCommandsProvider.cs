@@ -38,6 +38,29 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
 #endif
                 Subtitle = "Search your vault",
             },
+            // Standalone generator (Phase 1 §3.7): opens the companion window. Generation runs in the
+            // extension via IPC, so it needs no unlocked vault and writes nothing.
+            new CommandItem(new AnonymousCommand(() => CompanionLauncher.Launch(_service, CompanionLauncher.ModeGenerate))
+            {
+                Name = "Generate",
+                Result = CommandResult.Dismiss(),
+            })
+            {
+                Title = "Generate password",
+                Subtitle = "Create a password or passphrase",
+                Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
+            },
+            // WinUI login/unlock window (Phase 1 §3.3): drives login/unlock/biometrics over IPC.
+            new CommandItem(new AnonymousCommand(() => CompanionLauncher.Launch(_service, CompanionLauncher.ModeLogin))
+            {
+                Name = "Sign in",
+                Result = CommandResult.Dismiss(),
+            })
+            {
+                Title = "Sign in to Bitwarden",
+                Subtitle = "Log in or unlock in a dedicated window",
+                Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
+            },
         ];
 
         Settings = _settingsManager.Settings;

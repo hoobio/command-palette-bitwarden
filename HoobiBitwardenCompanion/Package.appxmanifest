@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" IgnorableNamespaces="uap uap3 rescap">
-  <Identity Name="Hoobi.BitwardenCommandPaletteExtension" Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71" Version="1.10.0.0" />
+  <Identity Name="Hoobi.BitwardenCommandPaletteExtension" Publisher="CN=D74C026B-1081-4787-BDE6-0CFA2F1EDD71" Version="1.11.0.0" />
   <Properties>
     <DisplayName>Command Palette Extension for Bitwarden</DisplayName>
     <PublisherDisplayName>Hoobi</PublisherDisplayName>
@@ -14,6 +14,12 @@
     <Resource Language="x-generate" />
   </Resources>
   <Applications>
+    <!-- A SINGLE application (the Microsoft Store rejects packages with more than one). This is the
+         WinUI companion - the package owner, so its XAML resources land in the package resources.pri
+         and it runs correctly under the package identity. The Command Palette extension is NOT a
+         separate <Application>: it's activated by the palette host through the COM server declared
+         below, whose com:ExeServer Executable points at the guest extension exe in Extension\. The
+         companion exe is also launched directly (Process.Start) by that extension for its windows. -->
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
       <uap:VisualElements DisplayName="Command Palette Extension for Bitwarden" Description="Command Palette Extension for Bitwarden" BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
@@ -22,7 +28,7 @@
       <Extensions>
         <com:Extension Category="windows.comServer">
           <com:ComServer>
-            <com:ExeServer Executable="HoobiBitwardenCommandPaletteExtension.exe" Arguments="-RegisterProcessAsComServer" DisplayName="Command Palette Extension for Bitwarden">
+            <com:ExeServer Executable="Extension\HoobiBitwardenCommandPaletteExtension.exe" Arguments="-RegisterProcessAsComServer" DisplayName="Command Palette Extension for Bitwarden">
               <com:Class Id="8345c10d-0df8-4116-a767-3f8647adf4df" DisplayName="Command Palette Extension for Bitwarden" />
             </com:ExeServer>
           </com:ComServer>

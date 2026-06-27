@@ -1,0 +1,49 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    mc:Ignorable="d"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Bitwarden">
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Tall title bar (matches the Earmark house style). Height is pinned to the tall caption
+             height so the reserved Row 0 matches the system caption buttons and content doesn't slide
+             under them. The item icon + name are set on it from the item page. -->
+        <controls:TitleBar
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Height="48" />
+
+        <Grid Grid.Row="1">
+            <Frame x:Name="ContentFrame"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch" />
+
+            <!-- In-app "copied" toast: a transient pill above the bottom edge, shown when a value is
+                 copied to the clipboard. -->
+            <Border x:Name="CopyToast"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,0,24"
+                    Padding="16,8"
+                    CornerRadius="16"
+                    Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                    Opacity="0"
+                    IsHitTestVisible="False">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE73E;" FontSize="14"
+                              Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
+                    <TextBlock x:Name="ToastText" Text="Copied to clipboard" VerticalAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

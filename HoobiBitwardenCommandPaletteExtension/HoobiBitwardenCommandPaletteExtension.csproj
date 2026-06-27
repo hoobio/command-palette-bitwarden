@@ -12,7 +12,6 @@
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
 
     <PublishProfile>win-$(Platform).pubxml</PublishProfile>
-    <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
@@ -21,56 +20,35 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Assets\SplashScreen.scale-200.png" />
-    <Content Include="Assets\LockScreenLogo.scale-200.png" />
-    <Content Include="Assets\Square150x150Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
-    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <!-- Icons used by the palette (resolved as relative file paths via IconHelpers.FromRelativePath,
+         not MRT resources), so they must be copied as loose files next to the extension exe in the
+         package's Extension\ folder. -->
+    <Content Include="Assets\SplashScreen.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\StoreLogo.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!--
-    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
-    Tools extension to be activated for this project even if the Windows App SDK Nuget
-    package has not yet been restored.
-  -->
-  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <ProjectCapability Include="Msix" />
+  <ItemGroup>
+    <!-- Shared, process-agnostic source linked into both the extension and the companion. One source
+         of truth. The live BitwardenCliService session stays extension-only. -->
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.CommandPalette.Extensions" />
     <PackageReference Include="Microsoft.Windows.CsWinRT" />
     <PackageReference Include="Otp.NET" />
     <PackageReference Include="Shmuelie.WinRTServer" />
     <PackageReference Include="Svg.Skia" />
-
-    <!-- Workaround: Microsoft.Windows.SDK.BuildTools.MSIX net6.0 task DLL depends on
-         System.Security.Permissions v8.0.0.0 but doesn't ship it alongside itself.
-         Restore the package here so Directory.Build.targets can copy it into place. -->
-    <PackageReference Include="System.Security.Permissions">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-
-    <!-- Needed to enable building an MSIX package -->
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
-
-  <!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
-  </PropertyGroup>
 
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
@@ -83,133 +61,39 @@
 
     <!-- When publishing trimmed, make sure to treat trimming warnings as build errors -->
     <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
-
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Debug'">
-    <!-- In Debug builds, trimming is disabled by default, but all the trim & 
-         AOT warnings are enabled. This gives debug builds a tighter inner loop,
-         while at least warning about future trim violations -->
+    <!-- In Debug builds, trimming is disabled by default, but all the trim &
+         AOT warnings are enabled. -->
     <PublishTrimmed>false</PublishTrimmed>
-    
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     <EnableAotAnalyzer>true</EnableAotAnalyzer>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'!='Debug'">
-    <!-- In Release builds, trimming is enabled by default.
-         feel free to disable this if needed -->
     <PublishTrimmed>true</PublishTrimmed>
-
-    <!-- In release, also ignore the aforementioned ILLink warning -->
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
   </PropertyGroup>
 
   <!--
-    Side-by-side channel identity. PackageChannel (Dev | Prerelease | Release) selects a
-    distinct package Identity Name, DisplayName, and COM activation CLSID so all three
-    channels install and run alongside each other (Add/Remove Programs, Command Palette,
-    COM activation). It defaults to Dev for local Debug builds and Release otherwise; CI
-    sets the PackageChannel env var to Prerelease for the release-please pre-release build.
-    The CLSID per channel must stay in lockstep with the [Guid] attribute selected in
-    HoobiBitwardenCommandPaletteExtension.cs (see CHANNEL_* DefineConstants below).
+    Side-by-side channel. PackageChannel (Dev | Prerelease | Release) picks the CHANNEL_* compile
+    constant that selects the matching COM activation CLSID in HoobiBitwardenCommandPaletteExtension.cs.
+    The CLSID must stay in lockstep with the one the companion's Package.appxmanifest declares. Defaults
+    to Dev for local Debug builds, Release otherwise; CI sets PackageChannel for prerelease.
   -->
   <PropertyGroup>
     <PackageChannel Condition="'$(PackageChannel)'=='' and '$(Configuration)'=='Debug'">Dev</PackageChannel>
     <PackageChannel Condition="'$(PackageChannel)'==''">Release</PackageChannel>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(PackageChannel)'=='Dev'">
-    <PackageNameSuffix>.Dev</PackageNameSuffix>
-    <DisplayNameSuffix> (Dev)</DisplayNameSuffix>
-    <ComServerClsid>ef6edc31-9567-4d38-8463-4a59b038148d</ComServerClsid>
     <DefineConstants>$(DefineConstants);CHANNEL_DEV</DefineConstants>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(PackageChannel)'=='Prerelease'">
-    <PackageNameSuffix>.Prerelease</PackageNameSuffix>
-    <DisplayNameSuffix> (Prerelease)</DisplayNameSuffix>
-    <ComServerClsid>e874e604-b64e-42f1-b391-756d4d406c51</ComServerClsid>
     <DefineConstants>$(DefineConstants);CHANNEL_PRERELEASE</DefineConstants>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(PackageChannel)'=='Release'">
-    <PackageNameSuffix></PackageNameSuffix>
-    <DisplayNameSuffix></DisplayNameSuffix>
-    <ComServerClsid>8345c10d-0df8-4116-a767-3f8647adf4df</ComServerClsid>
     <DefineConstants>$(DefineConstants);CHANNEL_RELEASE</DefineConstants>
   </PropertyGroup>
-
-  <Target Name="StampPackageIdentityName" BeforeTargets="Build;_ConvertItems">
-    <PropertyGroup>
-      <AppxManifestPath>$(MSBuildProjectDirectory)\Package.appxmanifest</AppxManifestPath>
-      <VersionTxtPath>$(MSBuildProjectDirectory)\..\version.txt</VersionTxtPath>
-      <BasePackageName>Hoobi.BitwardenCommandPaletteExtension</BasePackageName>
-      <FullPackageName>$(BasePackageName)$(PackageNameSuffix)</FullPackageName>
-      <BaseDisplayName>Command Palette Extension for Bitwarden</BaseDisplayName>
-      <FullDisplayName>$(BaseDisplayName)$(DisplayNameSuffix)</FullDisplayName>
-    </PropertyGroup>
-    <ReadLinesFromFile File="$(VersionTxtPath)" Condition="Exists('$(VersionTxtPath)')">
-      <Output TaskParameter="Lines" ItemName="VersionTxtLines" />
-    </ReadLinesFromFile>
-    <PropertyGroup>
-      <SemVerFromFile>@(VersionTxtLines)</SemVerFromFile>
-      <FourPartVersion Condition="'$(SemVerFromFile)' != ''">$(SemVerFromFile).0</FourPartVersion>
-    </PropertyGroup>
-    <Message Text="Stamping package identity: $(FullPackageName) with display name: $(FullDisplayName) at version: $(FourPartVersion)" Importance="high" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Condition="'$(FourPartVersion)' != ''"
-             Query="/ns:Package/ns:Identity/@Version"
-             Value="$(FourPartVersion)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Identity/@Name"
-             Value="$(FullPackageName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Properties/ns:DisplayName"
-             Value="$(FullDisplayName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Applications/ns:Application/uap:VisualElements/@DisplayName"
-             Value="$(FullDisplayName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Applications/ns:Application/uap:VisualElements/@Description"
-             Value="$(FullDisplayName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/@DisplayName"
-             Value="$(FullDisplayName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/com:Class/@DisplayName"
-             Value="$(FullDisplayName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/@DisplayName"
-             Value="$(FullDisplayName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/@Description"
-             Value="$(FullDisplayName)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
-    <!-- Stamp the per-channel COM activation CLSID. The Command Palette host activates the
-         extension by this class id; each channel needs its own so two channels don't claim
-         the same CLSID and collide. Must match the [Guid] in HoobiBitwardenCommandPaletteExtension.cs. -->
-    <Message Text="Stamping COM server CLSID: $(ComServerClsid)" Importance="high" Condition="'$(ComServerClsid)' != ''" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Condition="'$(ComServerClsid)' != ''"
-             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/com:Extension/com:ComServer/com:ExeServer/com:Class/@Id"
-             Value="$(ComServerClsid)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='com' Uri='http://schemas.microsoft.com/appx/manifest/com/windows10'/&gt;" />
-    <XmlPoke XmlInputPath="$(AppxManifestPath)"
-             Condition="'$(ComServerClsid)' != ''"
-             Query="/ns:Package/ns:Applications/ns:Application/ns:Extensions/uap3:Extension/uap3:AppExtension/uap3:Properties/ns:CmdPalProvider/ns:Activation/ns:CreateInstance/@ClassId"
-             Value="$(ComServerClsid)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;&lt;Namespace Prefix='uap3' Uri='http://schemas.microsoft.com/appx/manifest/uap/windows10/3'/&gt;" />
-  </Target>
-
-
 </Project>

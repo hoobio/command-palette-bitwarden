@@ -28,8 +28,10 @@ permissions:
 env:
   DOTNET_SDK_VERSION: "10.0.x"
   SOLUTION_PATH: HoobiBitwardenCommandPaletteExtension.slnx
-  PROJECT_PATH: HoobiBitwardenCommandPaletteExtension/HoobiBitwardenCommandPaletteExtension.csproj
-  APPXMANIFEST_PATH: HoobiBitwardenCommandPaletteExtension/Package.appxmanifest
+  # The companion WinUI app owns the MSIX (the extension ships as a guest exe inside it), so the
+  # package project + manifest are the companion's.
+  PROJECT_PATH: HoobiBitwardenCompanion/HoobiBitwardenCompanion.csproj
+  APPXMANIFEST_PATH: HoobiBitwardenCompanion/Package.appxmanifest
   WIX_SOURCE_PATH: installer/HoobiBitwardenCommandPaletteExtension.wxs
   ASSET_BASE_NAME: HoobiBitwardenCommandPaletteExtension
   BOM_FILE: sbom.cdx.json

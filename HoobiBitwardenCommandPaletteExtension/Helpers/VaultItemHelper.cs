@@ -32,8 +32,18 @@ internal static partial class VaultItemHelper
 
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null)
   {
-    if (item.Reprompt == 1 && service != null && !RepromptPage.IsWithinGracePeriod(item.Id))
-      return new RepromptPage(service, item.Id, BuildDefaultAction(item), "Open");
+    // Primary action (Enter) opens the WinUI detail/edit window (Phase 1 §3.4). The website,
+    // web vault, and SSH session stay one keystroke away as context actions. Falls back to the
+    // legacy open behaviour when no service (companion) is available.
+    if (service != null)
+    {
+      void OpenDetail() => CompanionLauncher.Launch(service, CompanionLauncher.ModeItem, item.Id);
+
+      if (item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id))
+        return new RepromptPage(service, item.Id, OpenDetail, "Open");
+
+      return Track(item.Id, new AnonymousCommand(OpenDetail) { Name = "Open", Icon = new IconInfo(""), Result = CommandResult.Dismiss() });
+    }
 
     return Track(item.Id, item.Type switch
     {
@@ -43,22 +53,16 @@ internal static partial class VaultItemHelper
     });
   }
 
-  private static Action BuildDefaultAction(BitwardenItem item) => item.Type switch
-  {
-    BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) =>
-      () => Process.Start(new ProcessStartInfo(item.FirstUri) { UseShellExecute = true }),
-    BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
-      () => { try { Process.Start(new ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } },
-    _ => () => Process.Start(new ProcessStartInfo(
-      $"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
-    { UseShellExecute = true }),
-  };
-
   internal static CommandContextItem[] BuildContextItems(BitwardenItem item, BitwardenCliService? service = null)
   {
     var items = new List<CommandContextItem>();
     var id = item.Id;
     var reprompt = item.Reprompt == 1 ? service : null;
+
+    // Companion WinUI actions (Phase 1 §3.4/§3.8): full detail/edit window, and Quick Rotate for
+    // items with a single rotatable secret. Launched out-of-process; the extension drives the vault.
+    if (service != null)
+      AddCompanionContextItems(items, item, id, service);
 
     switch (item.Type)
     {
@@ -86,7 +90,7 @@ internal static partial class VaultItemHelper
     {
       items.Add(new CommandContextItem(Track(id, BuildOpenInWebVaultCommand(id)))
       {
-        Title = "View in Web Vault",
+        Title = "Open in Web Vault",
         Icon = new IconInfo("\uE774"),
         RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.O),
       });
@@ -236,6 +240,31 @@ internal static partial class VaultItemHelper
 
     if (item.Uris.Count > 0 && item.Uris.Any(u => u.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
       tags.Add(new Tag("Insecure URL") { Foreground = ColorHelpers.FromRgb(0xF2, 0x87, 0x79) });
+  }
+
+  private static void AddCompanionContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService service)
+  {
+    // Enter already opens the detail/edit window (GetDefaultCommand). Quick Rotate is added for items
+    // with a rotatable secret: a login password (primary secret, even alongside hidden fields) or a
+    // single hidden field. Cards/identities aren't secret-rotation targets, so exclude them even if
+    // they carry a lone hidden custom field.
+    var hiddenCount = item.CustomFields.Values.Count(f => f.IsHidden);
+    var hasLoginPassword = item.Type == BitwardenItemType.Login && !string.IsNullOrEmpty(item.Password);
+    var rotatableType = item.Type is not (BitwardenItemType.Card or BitwardenItemType.Identity);
+    var canRotate = hasLoginPassword || (hiddenCount == 1 && rotatableType);
+    if (canRotate)
+    {
+      items.Add(new CommandContextItem(new AnonymousCommand(() => CompanionLauncher.Launch(service, CompanionLauncher.ModeRotate, id))
+      {
+        Name = "Quick Rotate",
+        Result = CommandResult.Dismiss(),
+      })
+      {
+        Title = "Quick Rotate",
+        Icon = new IconInfo(""),
+        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.R),
+      });
+    }
   }
 
   private static void AddLoginContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
@@ -498,20 +527,25 @@ internal static partial class VaultItemHelper
     if (string.IsNullOrEmpty(host))
       return new IconInfo("\uE774");
 
-    var serverUrl = BitwardenCliService.ServerUrl;
-    var iconsUrl = BitwardenCliService.IconsUrl;
-    string iconBase;
-    if (!string.IsNullOrEmpty(iconsUrl))
-      iconBase = iconsUrl;
-    else if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
-      iconBase = "https://icons.bitwarden.net";
-    else if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
-      iconBase = "https://vault.bitwarden.eu/icons";
-    else
-      iconBase = serverUrl + "/icons";
-    var iconUrl = $"{iconBase}/{host}/icon.png";
+    var iconUrl = $"{GetIconBaseUrl()}/{host}/icon.png";
 
     return FaviconService.GetOrQueue(host, iconUrl, priority: priority);
+  }
+
+  // Resolves the Bitwarden icon-server base for the configured server (custom icons URL, cloud
+  // com/eu, or a self-hosted /icons path). Shared with the companion, which is handed this base at
+  // launch so its item windows show the same favicons.
+  internal static string GetIconBaseUrl()
+  {
+    var serverUrl = BitwardenCliService.ServerUrl;
+    var iconsUrl = BitwardenCliService.IconsUrl;
+    if (!string.IsNullOrEmpty(iconsUrl))
+      return iconsUrl;
+    if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+      return "https://icons.bitwarden.net";
+    if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+      return "https://vault.bitwarden.eu/icons";
+    return serverUrl + "/icons";
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>

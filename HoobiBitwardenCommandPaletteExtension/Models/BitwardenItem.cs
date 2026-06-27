@@ -47,6 +47,10 @@ internal sealed class BitwardenItem
   public string Id { get; init; } = string.Empty;
   public string Name { get; init; } = string.Empty;
   public BitwardenItemType Type { get; init; }
+
+  // The full decrypted item JSON this was parsed from (from `bw list items`/`sync`). Retained so the
+  // companion's edit round-trip can be served from the cache without a fresh `bw get item` spawn.
+  public string? RawJson { get; set; }
   public string? Notes { get; init; }
   public DateTime RevisionDate { get; init; }
   public bool Favorite { get; init; }
