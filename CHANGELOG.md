@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.11.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.1...v1.11.2) (2026-08-07)
+
+
+### Bug Fixes
+
+* stop self-hosted vaults requesting icons from Bitwarden cloud ([#198](https://github.com/hoobio/command-palette-bitwarden/issues/198)) ([f76824f](https://github.com/hoobio/command-palette-bitwarden/commit/f76824f1cf4fdbcafe56f44773357bac228831a9))
+* use full https://vault.bitwarden.eu URL for the EU preset ([#199](https://github.com/hoobio/command-palette-bitwarden/issues/199)) ([d302f52](https://github.com/hoobio/command-palette-bitwarden/commit/d302f52a4ef438ba12f7e7d13bea733a14931768))
+
+
+### Build System
+
+* **deps:** bump actions/setup-dotnet from 5 to 6 ([#192](https://github.com/hoobio/command-palette-bitwarden/issues/192)) ([a14e69a](https://github.com/hoobio/command-palette-bitwarden/commit/a14e69afc1795f0708df52031a90ea58c2cf2664))
+* **deps:** bump actions/stale from 10 to 11 ([#196](https://github.com/hoobio/command-palette-bitwarden/issues/196)) ([b02f70a](https://github.com/hoobio/command-palette-bitwarden/commit/b02f70a303a655a27347c1e5e495c07241443305))
+* **deps:** bump actions/stale from 9 to 10 ([#190](https://github.com/hoobio/command-palette-bitwarden/issues/190)) ([1eaddb8](https://github.com/hoobio/command-palette-bitwarden/commit/1eaddb8d7e09d563eedcec1c493e18db3693a3c3))
+* **deps:** bump github/codeql-action from 4 to 4.37.3 ([#195](https://github.com/hoobio/command-palette-bitwarden/issues/195)) ([0c70fcd](https://github.com/hoobio/command-palette-bitwarden/commit/0c70fcd8c85e2aa3534d023ff12d75ff60c67274))
+* **deps:** bump microsoft/microsoft-store-apppublisher from 1.3 to 1.4 ([#193](https://github.com/hoobio/command-palette-bitwarden/issues/193)) ([847bd57](https://github.com/hoobio/command-palette-bitwarden/commit/847bd57f52298e359c8aba356ca912733118b65b))
+
+
+### Continuous Integration
+
+* add stale bot for inactive issues and PRs ([#189](https://github.com/hoobio/command-palette-bitwarden/issues/189)) ([ba7bc6e](https://github.com/hoobio/command-palette-bitwarden/commit/ba7bc6e0d76491d8c0aa80682b6d8eb24cb1c947))
+* build msixbundle in the pipeline and attach to draft release ([#187](https://github.com/hoobio/command-palette-bitwarden/issues/187)) ([274fa3b](https://github.com/hoobio/command-palette-bitwarden/commit/274fa3ba39bf60ed1fc2b8a3d1615d9df5cb1e70))
+
 ## [1.11.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.0...v1.11.1) (2026-06-24)
 
 
