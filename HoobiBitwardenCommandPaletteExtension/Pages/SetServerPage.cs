@@ -87,12 +87,13 @@ internal sealed partial class SetServerPage : DynamicListPage
       cloudItem.Tags = [new Tag("Current") { Background = ColorHelpers.FromRgb(0x3E, 0x7C, 0xCF) }];
     items.Add(cloudItem);
 
-    // EU preset
-    var euItem = new ListItem(new AnonymousCommand(() => _onSubmit?.Invoke(new ServerConfig("bitwarden.eu")))
+    // EU preset. The CLI only special-cases "bitwarden.com" (resets to the US region); any other
+    // value is passed through as a self-hosted base URL, so the EU host needs its full URL.
+    var euItem = new ListItem(new AnonymousCommand(() => _onSubmit?.Invoke(new ServerConfig("https://vault.bitwarden.eu")))
     { Name = "Select", Result = CommandResult.GoBack() })
     {
       Title = "Bitwarden EU",
-      Subtitle = "bitwarden.eu",
+      Subtitle = "vault.bitwarden.eu",
       Icon = new IconInfo("\uE774"),
     };
     if (preset == "bitwarden.eu")
