@@ -458,6 +458,26 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task SetServerUrl_MarksServerUrlResolved()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
+    BitwardenCliService.ResetStaticState();
+    Assert.False(BitwardenCliService.ServerUrlResolved);
+    await svc.SetServerUrlAsync(new ServerConfig("https://vault.example.com"));
+    Assert.True(BitwardenCliService.ServerUrlResolved);
+  }
+
+  [Fact]
+  public void ResetStaticState_ClearsServerUrlResolved()
+  {
+    BitwardenCliService.ResetStaticState();
+    Assert.False(BitwardenCliService.ServerUrlResolved);
+    Assert.Null(BitwardenCliService.ServerUrl);
+    Assert.Null(BitwardenCliService.IconsUrl);
+  }
+
+  [Fact]
   public async Task SetServerUrl_SetsStatusToUnauthenticated()
   {
     var (svc, factory) = CreateService();
