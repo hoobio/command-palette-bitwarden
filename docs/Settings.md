@@ -18,7 +18,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Download and display website favicons for login items. Icons are fetched from `icons.bitwarden.net` (cloud) or your self-hosted server's `/icons/` endpoint, then cached locally for 7 days. Disable for privacy; a generic icon will be shown instead. See [Bitwarden's website icon documentation](https://bitwarden.com/help/website-icons/) for more details. |
+| **Description** | Download and display website favicons for login items. Icons are fetched from `icons.bitwarden.net` (cloud) or your self-hosted server's `/icons/` endpoint, then cached locally for 7 days. Disable for privacy; a generic icon will be shown instead. Right after the vault unlocks, items show a generic icon until the extension has confirmed which server the vault is on, so a self-hosted vault never requests icons from Bitwarden's cloud. See [Bitwarden's website icon documentation](https://bitwarden.com/help/website-icons/) for more details. |
 
 ### Auto-Lock Timeout
 

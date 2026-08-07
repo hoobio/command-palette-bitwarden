@@ -69,10 +69,17 @@ internal sealed partial class BitwardenCliService
   internal static string? ServerUrl { get; private set; }
   internal static string? IconsUrl { get; private set; }
 
+  // False until `bw status` has reported which server the vault is on. A null
+  // ServerUrl means "Bitwarden cloud" once resolved, but "not known yet" before
+  // that, and callers that pick a host must not conflate the two - guessing
+  // cloud sends self-hosted vault hostnames to icons.bitwarden.net (issue #194).
+  internal static bool ServerUrlResolved { get; private set; }
+
   internal static void ResetStaticState()
   {
     ServerUrl = null;
     IconsUrl = null;
+    ServerUrlResolved = false;
   }
 
   // Resolution order: the user's explicit override always wins (even if broken,
@@ -511,6 +518,7 @@ internal sealed partial class BitwardenCliService
       var json = JsonNode.Parse(output);
       var rawServerUrl = json?["serverUrl"]?.GetValue<string>()?.TrimEnd('/');
       ServerUrl ??= rawServerUrl;
+      ServerUrlResolved = true;
       var status = json?["status"]?.GetValue<string>();
       var result = status == "unauthenticated" ? VaultStatus.Unauthenticated : VaultStatus.Locked;
       var safeServer = SanitizeServerUrl(rawServerUrl);
@@ -736,7 +744,7 @@ internal sealed partial class BitwardenCliService
 
   private async Task FetchServerUrlAsync()
   {
-    if (ServerUrl != null)
+    if (ServerUrlResolved)
       return;
 
     try
@@ -745,6 +753,11 @@ internal sealed partial class BitwardenCliService
       var url = JsonNode.Parse(output)?["serverUrl"]?.GetValue<string>()?.TrimEnd('/');
       if (!string.IsNullOrWhiteSpace(url))
         ServerUrl = url;
+      ServerUrlResolved = true;
+
+      // Items rendered while the server was still unknown show a generic icon.
+      // Re-raise so the list rebuilds and queues icons against the right host.
+      StatusChanged?.Invoke();
     }
     catch (Exception ex)
     {
@@ -1067,6 +1080,7 @@ internal sealed partial class BitwardenCliService
           try { process.Kill(true); } catch { }
           ServerUrl = config.BaseUrl.TrimEnd('/');
           IconsUrl = config.IconsUrl?.TrimEnd('/');
+          ServerUrlResolved = true;
           SetStatus(VaultStatus.Unauthenticated);
           StatusChanged?.Invoke();
           return null;
