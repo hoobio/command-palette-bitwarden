@@ -881,7 +881,7 @@ jobs:
           path: bundle
 
       - name: Setup Microsoft Store CLI
-        uses: microsoft/microsoft-store-apppublisher@v1.3
+        uses: microsoft/microsoft-store-apppublisher@v1.4
 
       - name: Configure Store credentials
         shell: pwsh
