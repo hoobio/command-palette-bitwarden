@@ -482,6 +482,9 @@ internal static partial class VaultItemHelper
 
   internal static IconInfo GetCardBrandIcon(string brand, int priority = int.MaxValue)
   {
+    if (!BitwardenCliService.ServerUrlResolved)
+      return new IconInfo("\uE8C7");
+
     var isDark = IsDarkTheme();
     var slug = SanitizeBrandSlug(brand);
     var theme = isDark ? "dark" : "light";
@@ -500,6 +503,14 @@ internal static partial class VaultItemHelper
 
     var serverUrl = BitwardenCliService.ServerUrl;
     var iconsUrl = BitwardenCliService.IconsUrl;
+
+    // Until `bw status` has resolved the server, an empty ServerUrl is unknown
+    // rather than cloud. Show a generic icon instead of guessing: on a
+    // self-hosted vault, guessing leaks hostnames to icons.bitwarden.net.
+    // FetchServerUrlAsync re-raises StatusChanged, which rebuilds the list.
+    if (string.IsNullOrEmpty(iconsUrl) && !BitwardenCliService.ServerUrlResolved)
+      return new IconInfo("\uE774");
+
     string iconBase;
     if (!string.IsNullOrEmpty(iconsUrl))
       iconBase = iconsUrl;

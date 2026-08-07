@@ -5,6 +5,9 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
+// Shares BitwardenCliService's static server-resolution state with the other
+// collection members, so these must not run in parallel with them.
+[Collection("SessionStore")]
 public class VaultItemHelperTests
 {
   [Theory]
@@ -41,6 +44,31 @@ public class VaultItemHelperTests
   {
     var item = new BitwardenItem { Type = BitwardenItemType.Card, CardBrand = "Visa" };
     var icon = VaultItemHelper.GetIcon(item, showWebsiteIcons: false);
+    Assert.Equal("\uE8C7", icon.Dark.Icon);
+  }
+
+  // Issue #194: before `bw status` resolves the server, a self-hosted vault must
+  // not fall back to Bitwarden's cloud icon hosts. A glyph here proves no icon
+  // was queued - a queued icon returns the empty-string fallback instead.
+  [Fact]
+  public void GetIcon_Login_ServerUnresolved_ReturnsGlobeGlyphWithoutQueueing()
+  {
+    BitwardenCliService.ResetStaticState();
+    var item = new BitwardenItem
+    {
+      Type = BitwardenItemType.Login,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var icon = VaultItemHelper.GetIcon(item, showWebsiteIcons: true);
+    Assert.Equal("\uE774", icon.Dark.Icon);
+  }
+
+  [Fact]
+  public void GetIcon_Card_ServerUnresolved_ReturnsCardGlyphWithoutQueueing()
+  {
+    BitwardenCliService.ResetStaticState();
+    var item = new BitwardenItem { Type = BitwardenItemType.Card, CardBrand = "Visa" };
+    var icon = VaultItemHelper.GetIcon(item, showWebsiteIcons: true);
     Assert.Equal("\uE8C7", icon.Dark.Icon);
   }
 
