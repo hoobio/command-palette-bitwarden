@@ -50,7 +50,7 @@ internal static partial class VaultItemHelper
     BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
       () => { try { Process.Start(new ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } },
     _ => () => Process.Start(new ProcessStartInfo(
-      $"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
+      $"{GetVaultBaseUrl()}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
     { UseShellExecute = true }),
   };
 
@@ -515,7 +515,7 @@ internal static partial class VaultItemHelper
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>
-    new($"{BitwardenCliService.ServerUrl}/#/vault?itemId={Uri.EscapeDataString(itemId)}")
+    new($"{GetVaultBaseUrl()}/#/vault?itemId={Uri.EscapeDataString(itemId)}")
     {
       Name = "View in Web Vault",
     };

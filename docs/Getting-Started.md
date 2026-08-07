@@ -40,4 +40,4 @@ dotnet build -c Debug -p:Platform=x64
 
 ## Setting Your Server
 
-If you use a self-hosted Bitwarden server, select **Set Bitwarden Server** from the vault browser and enter your server URL. The default is `https://vault.bitwarden.com`.
+Select **Set Bitwarden Server** from the vault browser to pick a preset (**Bitwarden Cloud** for `bitwarden.com`, **Bitwarden EU** for `https://vault.bitwarden.eu`) or type a self-hosted server URL. The default is `https://vault.bitwarden.com`.
