@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.3](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.2...v1.11.3) (2026-10-14)
+
+
+### Build System
+
+* **deps:** bump github/codeql-action from 4.37.3 to 4.37.6 ([#200](https://github.com/hoobio/command-palette-bitwarden/issues/200)) ([689832b](https://github.com/hoobio/command-palette-bitwarden/commit/689832bc8ab3dcc60012cbd268195805d6ab5d04))
+* **deps:** bump github/codeql-action from 4.37.6 to 4.37.8 ([#202](https://github.com/hoobio/command-palette-bitwarden/issues/202)) ([49589bf](https://github.com/hoobio/command-palette-bitwarden/commit/49589bf1ab48797cfa9d9e4d2a4a15f469c934a1))
+* **deps:** bump github/codeql-action from 4.37.8 to 4.38.0 ([#204](https://github.com/hoobio/command-palette-bitwarden/issues/204)) ([67eba89](https://github.com/hoobio/command-palette-bitwarden/commit/67eba894f2989797b1ef9c068ee33eabcc5bda6b))
+* **deps:** bump github/codeql-action from 4.38.0 to 4.38.1 ([#205](https://github.com/hoobio/command-palette-bitwarden/issues/205)) ([4714684](https://github.com/hoobio/command-palette-bitwarden/commit/47146849c2f57bed83acd2eac7498506b9d60f51))
+* **deps:** bump github/codeql-action from 4.38.1 to 4.38.2 ([#207](https://github.com/hoobio/command-palette-bitwarden/issues/207)) ([c2a9157](https://github.com/hoobio/command-palette-bitwarden/commit/c2a9157cb4ad444d3f41b436aa509e1d01f738c7))
+* **deps:** bump hoobio/pipeline-tools from 2.3.1 to 2.3.2 ([#206](https://github.com/hoobio/command-palette-bitwarden/issues/206)) ([95836ad](https://github.com/hoobio/command-palette-bitwarden/commit/95836ad3e6a54ebf05ec7c06534d511766d6768e))
+
 ## [1.11.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.1...v1.11.2) (2026-08-07)
 
 
