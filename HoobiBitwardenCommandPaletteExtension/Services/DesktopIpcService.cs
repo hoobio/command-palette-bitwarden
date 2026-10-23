@@ -43,32 +43,9 @@ internal static partial class DesktopIpcService
 
     DebugLogService.Log("Biometric", $"Attempting biometric unlock for user {userId[..Math.Min(8, userId.Length)]}...");
 
-    using var client = new IpcClient();
     try
     {
-      onStatus?.Invoke("Connecting to Bitwarden Desktop app...");
-      await client.ConnectAsync(userId, onStatus);
-
-      onStatus?.Invoke("Checking biometrics availability...");
-      var status = await client.GetBiometricsStatusForUserAsync(userId);
-      if (status != BiometricsStatus.Available)
-      {
-        DebugLogService.Log("Biometric", $"Biometrics not available: {status}");
-        var reason = status switch
-        {
-          BiometricsStatus.UnlockNeeded => "Bitwarden Desktop app is locked - unlock it first",
-          BiometricsStatus.HardwareUnavailable => "Windows Hello hardware not available",
-          BiometricsStatus.AutoSetupNeeded or BiometricsStatus.ManualSetupNeeded => "Biometrics not set up in Bitwarden Desktop app",
-          BiometricsStatus.NotEnabledLocally or BiometricsStatus.NotEnabledInConnectedDesktopApp => "Enable 'Unlock with biometrics' in Bitwarden Desktop settings",
-          BiometricsStatus.DesktopDisconnected => "Bitwarden Desktop app disconnected",
-          _ => $"Biometrics unavailable (status: {status})",
-        };
-        throw new InvalidOperationException(reason);
-      }
-
-      DebugLogService.Log("Biometric", "Requesting Windows Hello prompt from Desktop app...");
-      onStatus?.Invoke("Waiting for Windows Hello...");
-      var userKeyB64 = await client.UnlockWithBiometricsForUserAsync(userId);
+      var userKeyB64 = await PromptBiometricsAsync(userId, onStatus);
       if (userKeyB64 == null)
       {
         DebugLogService.Log("Biometric", "Biometric unlock denied or failed");
@@ -107,6 +84,13 @@ internal static partial class DesktopIpcService
 
     DebugLogService.Log("Biometric", $"Attempting biometric verify for user {userId[..Math.Min(8, userId.Length)]}...");
 
+    var success = !string.IsNullOrEmpty(await PromptBiometricsAsync(userId, onStatus));
+    DebugLogService.Log("Biometric", success ? "Biometric verify successful" : "Biometric verify denied or failed");
+    return success;
+  }
+
+  private static async Task<string?> PromptBiometricsAsync(string userId, Action<string>? onStatus)
+  {
     using var client = new IpcClient();
     onStatus?.Invoke("Connecting to Bitwarden Desktop app...");
     await client.ConnectAsync(userId, onStatus);
@@ -128,30 +112,9 @@ internal static partial class DesktopIpcService
       throw new InvalidOperationException(reason);
     }
 
-    DebugLogService.Log("Biometric", "Requesting Windows Hello prompt for verify...");
+    DebugLogService.Log("Biometric", "Requesting Windows Hello prompt from Desktop app...");
     onStatus?.Invoke("Waiting for Windows Hello...");
-    var userKeyB64 = await client.UnlockWithBiometricsForUserAsync(userId);
-    var success = !string.IsNullOrEmpty(userKeyB64);
-    DebugLogService.Log("Biometric", success ? "Biometric verify successful" : "Biometric verify denied or failed");
-    return success;
-  }
-
-  public static async Task<bool> IsBiometricsAvailableAsync(string? dataDirectory)
-  {
-    var userId = GetActiveUserId(dataDirectory);
-    if (userId == null) return false;
-
-    using var client = new IpcClient();
-    try
-    {
-      await client.ConnectAsync(userId);
-      var status = await client.GetBiometricsStatusForUserAsync(userId);
-      return status == BiometricsStatus.Available;
-    }
-    catch
-    {
-      return false;
-    }
+    return await client.UnlockWithBiometricsForUserAsync(userId);
   }
 
   private static string GenerateSessionKey() =>
@@ -197,33 +160,17 @@ internal static partial class DesktopIpcService
     if (keyBytes.Length != 64)
       throw new ArgumentException("Session key must be 64 bytes when decoded", nameof(sessionKey));
 
-    ReadOnlySpan<byte> encKey = keyBytes.AsSpan(0, 32);
-    ReadOnlySpan<byte> macKey = keyBytes.AsSpan(32, 32);
+    var (iv, ciphertext, mac) = EncryptAesCbcHmac(keyBytes, data);
+    return Convert.ToBase64String([2, .. iv, .. mac, .. ciphertext]);
+  }
 
+  private static (byte[] Iv, byte[] Ciphertext, byte[] Mac) EncryptAesCbcHmac(byte[] key, byte[] plaintext)
+  {
     var iv = RandomNumberGenerator.GetBytes(16);
-
-    byte[] ciphertext;
-    using (var aes = Aes.Create())
-    {
-      aes.Key = encKey.ToArray();
-      aes.IV = iv;
-      aes.Mode = CipherMode.CBC;
-      aes.Padding = PaddingMode.PKCS7;
-      using var enc = aes.CreateEncryptor();
-      ciphertext = enc.TransformFinalBlock(data, 0, data.Length);
-    }
-
-    using var hmac = new HMACSHA256(macKey.ToArray());
-    hmac.TransformBlock(iv, 0, iv.Length, null, 0);
-    hmac.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
-    var mac = hmac.Hash!;
-
-    var result = new byte[1 + 16 + 32 + ciphertext.Length];
-    result[0] = 2; // EncryptionType = AesCbc256_HmacSha256_B64
-    Buffer.BlockCopy(iv, 0, result, 1, 16);
-    Buffer.BlockCopy(mac, 0, result, 17, 32);
-    Buffer.BlockCopy(ciphertext, 0, result, 49, ciphertext.Length);
-    return Convert.ToBase64String(result);
+    using var aes = Aes.Create();
+    aes.Key = key[..32];
+    var ciphertext = aes.EncryptCbc(plaintext, iv);
+    return (iv, ciphertext, HMACSHA256.HashData(key.AsSpan(32, 32), [.. iv, .. ciphertext]));
   }
 
   private static string? GetActiveUserId(string? dataDirectory)
@@ -444,29 +391,7 @@ internal static partial class DesktopIpcService
 
     private JsonObject EncryptMessage(JsonObject message)
     {
-      var secret = _sharedSecret!;
-      ReadOnlySpan<byte> encKey = secret.AsSpan(0, 32);
-      ReadOnlySpan<byte> macKey = secret.AsSpan(32, 32);
-
-      var json = message.ToJsonString();
-      var plaintext = Encoding.UTF8.GetBytes(json);
-      var iv = RandomNumberGenerator.GetBytes(16);
-
-      byte[] ciphertext;
-      using (var aes = Aes.Create())
-      {
-        aes.Key = encKey.ToArray();
-        aes.IV = iv;
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
-        using var enc = aes.CreateEncryptor();
-        ciphertext = enc.TransformFinalBlock(plaintext, 0, plaintext.Length);
-      }
-
-      using var hmac = new HMACSHA256(macKey.ToArray());
-      hmac.TransformBlock(iv, 0, iv.Length, null, 0);
-      hmac.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
-      var mac = hmac.Hash!;
+      var (iv, ciphertext, mac) = EncryptAesCbcHmac(_sharedSecret!, Encoding.UTF8.GetBytes(message.ToJsonString()));
 
       return new JsonObject
       {
@@ -485,29 +410,16 @@ internal static partial class DesktopIpcService
 
       try
       {
-        ReadOnlySpan<byte> encKey = secret.AsSpan(0, 32);
-        ReadOnlySpan<byte> macKey = secret.AsSpan(32, 32);
-
         var iv = Convert.FromBase64String(encrypted["iv"]!.GetValue<string>());
         var data = Convert.FromBase64String(encrypted["data"]!.GetValue<string>());
         var mac = Convert.FromBase64String(encrypted["mac"]!.GetValue<string>());
 
-        // Verify HMAC
-        using var hmac = new HMACSHA256(macKey.ToArray());
-        hmac.TransformBlock(iv, 0, iv.Length, null, 0);
-        hmac.TransformFinalBlock(data, 0, data.Length);
-        var expectedMac = hmac.Hash!;
-        if (!CryptographicOperations.FixedTimeEquals(mac, expectedMac))
+        if (!CryptographicOperations.FixedTimeEquals(mac, HMACSHA256.HashData(secret.AsSpan(32, 32), [.. iv, .. data])))
           throw new CryptographicException("IPC message MAC verification failed");
 
-        // Decrypt
         using var aes = Aes.Create();
-        aes.Key = encKey.ToArray();
-        aes.IV = iv;
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
-        using var dec = aes.CreateDecryptor();
-        var decrypted = dec.TransformFinalBlock(data, 0, data.Length);
+        aes.Key = secret[..32];
+        var decrypted = aes.DecryptCbc(data, iv);
 
         return JsonNode.Parse(Encoding.UTF8.GetString(decrypted))?.AsObject();
       }
@@ -568,10 +480,14 @@ internal static partial class DesktopIpcService
       }
 
       // Connection lost: reject all pending
-      var disconnectErr = new IOException("Disconnected from Bitwarden Desktop app");
+      FailAll(new IOException("Disconnected from Bitwarden Desktop app"));
+    }
+
+    private void FailAll(Exception error)
+    {
+      _encryptionReady?.TrySetException(error);
       foreach (var key in _pending.Keys)
-        if (_pending.TryRemove(key, out var tcs)) tcs.TrySetException(disconnectErr);
-      _encryptionReady?.TrySetException(disconnectErr);
+        if (_pending.TryRemove(key, out var tcs)) tcs.TrySetException(error);
     }
 
     private static string SummarizeIpcMessage(JsonObject msg)
@@ -633,18 +549,12 @@ internal static partial class DesktopIpcService
 
         case "invalidateEncryption":
           if (appId != AppId) return;
-          var invalidErr = new InvalidOperationException("IPC encryption invalidated by Desktop app");
-          _encryptionReady?.TrySetException(invalidErr);
-          foreach (var key in _pending.Keys)
-            if (_pending.TryRemove(key, out var tcs)) tcs.TrySetException(invalidErr);
+          FailAll(new InvalidOperationException("IPC encryption invalidated by Desktop app"));
           break;
 
         case "wrongUserId":
           if (appId != AppId) return;
-          var wrongUserErr = new InvalidOperationException("Account mismatch: CLI and Desktop app are logged into different accounts");
-          _encryptionReady?.TrySetException(wrongUserErr);
-          foreach (var key in _pending.Keys)
-            if (_pending.TryRemove(key, out var tcs)) tcs.TrySetException(wrongUserErr);
+          FailAll(new InvalidOperationException("Account mismatch: CLI and Desktop app are logged into different accounts"));
           break;
 
         case "verifyDesktopIPCFingerprint":
