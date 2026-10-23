@@ -479,11 +479,23 @@ internal static partial class VaultItemHelper
   private static string GetVaultBaseUrl()
   {
     var serverUrl = BitwardenCliService.ServerUrl;
-    if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+    if (string.IsNullOrEmpty(serverUrl) || IsCloudHost(serverUrl, "bitwarden.com"))
       return "https://vault.bitwarden.com";
-    if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+    if (IsCloudHost(serverUrl, "bitwarden.eu"))
       return "https://vault.bitwarden.eu";
     return serverUrl;
+  }
+
+  internal static bool IsCloudHost(string? serverUrl, string domain)
+  {
+    if (string.IsNullOrWhiteSpace(serverUrl))
+      return false;
+    var candidate = serverUrl.Contains("://", StringComparison.Ordinal) ? serverUrl.Trim() : "https://" + serverUrl.Trim();
+    if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
+      return false;
+    var host = uri.IdnHost.TrimEnd('.');
+    return host.Equals(domain, StringComparison.OrdinalIgnoreCase)
+      || host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase);
   }
 
   internal static string SanitizeBrandSlug(string brand) =>
@@ -530,9 +542,9 @@ internal static partial class VaultItemHelper
     string iconBase;
     if (!string.IsNullOrEmpty(iconsUrl))
       iconBase = iconsUrl;
-    else if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+    else if (string.IsNullOrEmpty(serverUrl) || IsCloudHost(serverUrl, "bitwarden.com"))
       iconBase = "https://icons.bitwarden.net";
-    else if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+    else if (IsCloudHost(serverUrl, "bitwarden.eu"))
       iconBase = "https://vault.bitwarden.eu/icons";
     else
       iconBase = serverUrl + "/icons";

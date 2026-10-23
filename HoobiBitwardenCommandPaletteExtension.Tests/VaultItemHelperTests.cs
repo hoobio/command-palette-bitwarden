@@ -478,6 +478,21 @@ public class VaultItemHelperTests
     Assert.Null(VaultItemHelper.ToSafeWebUrl(input));
   }
 
+  [Theory]
+  [InlineData("bitwarden.com", "bitwarden.com", true)]
+  [InlineData("https://vault.bitwarden.com", "bitwarden.com", true)]
+  [InlineData("https://VAULT.BITWARDEN.EU/", "bitwarden.eu", true)]
+  [InlineData("https://bitwarden.company.org", "bitwarden.com", false)]
+  [InlineData("https://bitwarden.com.evil.org", "bitwarden.com", false)]
+  [InlineData("https://notbitwarden.com", "bitwarden.com", false)]
+  [InlineData("https://vault.example.com/bitwarden.com", "bitwarden.com", false)]
+  [InlineData("https://bitwarden.eu.internal", "bitwarden.eu", false)]
+  [InlineData(null, "bitwarden.com", false)]
+  public void IsCloudHost_MatchesExactHostOrSubdomain(string? serverUrl, string domain, bool expected)
+  {
+    Assert.Equal(expected, VaultItemHelper.IsCloudHost(serverUrl, domain));
+  }
+
   [Fact]
   public void ToSafeWebUrl_UncPath_DoesNotKeepFileScheme()
   {

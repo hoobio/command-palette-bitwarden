@@ -2,6 +2,7 @@ using System;
 using System.Text.Json.Nodes;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -31,9 +32,9 @@ internal sealed partial class SetServerPage : DynamicListPage
 
   private static string DetectPreset(string? serverUrl)
   {
-    if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+    if (string.IsNullOrEmpty(serverUrl) || VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.com"))
       return "bitwarden.com";
-    if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+    if (VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.eu"))
       return "bitwarden.eu";
     return "self-hosted";
   }
