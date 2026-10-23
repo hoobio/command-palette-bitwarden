@@ -38,5 +38,13 @@
   {
     "pattern": "UiaInterop\\.cs$",
     "reason": "UI Automation COM interface declarations and CoCreateInstance factory, needs a live UIA host"
+  },
+  {
+    "pattern": "SecureClipboardService\\.cs$",
+    "reason": "Win32 clipboard interop"
+  },
+  {
+    "pattern": "DesktopIpcService\\.cs$",
+    "reason": "Named-pipe IPC to a live Bitwarden Desktop process"
   }
 ]
