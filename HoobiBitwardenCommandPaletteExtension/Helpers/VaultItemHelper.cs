@@ -37,16 +37,27 @@ internal static partial class VaultItemHelper
 
     return Track(item.Id, item.Type switch
     {
-      BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) => new OpenUrlCommand(item.FirstUri),
+      BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url => new OpenUrlCommand(url),
       BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) => BuildSshCommand(item.SshHost!),
       _ => BuildOpenInWebVaultCommand(item.Id),
     });
   }
 
+  internal static string? ToSafeWebUrl(string? uri)
+  {
+    if (string.IsNullOrWhiteSpace(uri))
+      return null;
+    var trimmed = uri.Trim();
+    var candidate = trimmed.Contains("://", StringComparison.Ordinal) ? trimmed : "https://" + trimmed;
+    if (!Uri.TryCreate(candidate, UriKind.Absolute, out var parsed))
+      return null;
+    return parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps ? parsed.AbsoluteUri : null;
+  }
+
   private static Action BuildDefaultAction(BitwardenItem item) => item.Type switch
   {
-    BitwardenItemType.Login when !string.IsNullOrEmpty(item.FirstUri) =>
-      () => Process.Start(new ProcessStartInfo(item.FirstUri) { UseShellExecute = true }),
+    BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url =>
+      () => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }),
     BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
       () => { try { Process.Start(new ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } },
     _ => () => Process.Start(new ProcessStartInfo(
@@ -270,9 +281,9 @@ internal static partial class VaultItemHelper
       });
     }
 
-    if (!string.IsNullOrEmpty(item.FirstUri))
+    if (ToSafeWebUrl(item.FirstUri) is { } url)
     {
-      items.Add(new CommandContextItem(Track(id, new OpenUrlCommand(item.FirstUri)))
+      items.Add(new CommandContextItem(Track(id, new OpenUrlCommand(url)))
       {
         Title = "Open in Browser",
         Icon = new IconInfo("\uE774"),

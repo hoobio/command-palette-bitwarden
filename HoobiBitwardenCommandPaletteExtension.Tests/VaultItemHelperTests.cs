@@ -452,6 +452,52 @@ public class VaultItemHelperTests
     RepromptPage.ClearGracePeriod();
   }
 
+  [Theory]
+  [InlineData("https://example.com/a?b=1", "https://example.com/a?b=1")]
+  [InlineData("http://example.com", "http://example.com/")]
+  [InlineData("github.com", "https://github.com/")]
+  [InlineData("  localhost:3000/x ", "https://localhost:3000/x")]
+  [InlineData("HTTPS://Example.com", "https://example.com/")]
+  public void ToSafeWebUrl_AllowsHttpAndHttps(string input, string expected)
+  {
+    Assert.Equal(expected, VaultItemHelper.ToSafeWebUrl(input));
+  }
+
+  [Theory]
+  [InlineData(null)]
+  [InlineData("")]
+  [InlineData("   ")]
+  [InlineData("file:///C:/Windows/System32/calc.exe")]
+  [InlineData("ftp://example.com")]
+  [InlineData("ms-officecmd://x")]
+  [InlineData("search-ms:query=x")]
+  [InlineData("C:\\Windows\\calc.exe")]
+  [InlineData("javascript://alert(1)")]
+  public void ToSafeWebUrl_RejectsOtherSchemes(string? input)
+  {
+    Assert.Null(VaultItemHelper.ToSafeWebUrl(input));
+  }
+
+  [Fact]
+  public void ToSafeWebUrl_UncPath_DoesNotKeepFileScheme()
+  {
+    var result = VaultItemHelper.ToSafeWebUrl("\\\\host\\share\\x.exe");
+    Assert.True(result is null || result.StartsWith("https://", StringComparison.Ordinal));
+  }
+
+  [Fact]
+  public void BuildContextItems_Login_UnsafeUri_OmitsOpenInBrowser()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "unsafe-uri",
+      Type = BitwardenItemType.Login,
+      Uris = [new ItemUri("file:///C:/x.exe", UriMatchType.Default)],
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    Assert.DoesNotContain(contextItems, c => c.Title == "Open in Browser");
+  }
+
   [Fact]
   public void BuildBaseTags_ExcludesTotp()
   {
