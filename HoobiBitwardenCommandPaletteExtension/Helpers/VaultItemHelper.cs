@@ -37,7 +37,7 @@ internal static partial class VaultItemHelper
     return Track(item.Id, item.Type switch
     {
       BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url => new OpenUrlCommand(url),
-      BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) => BuildSshCommand(item.SshHost!),
+      BitwardenItemType.SshKey when HasSshHost(item) => BuildSshCommand(item),
       _ => BuildOpenInWebVaultCommand(item.Id),
     });
   }
@@ -57,8 +57,7 @@ internal static partial class VaultItemHelper
   {
     BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url =>
       () => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }),
-    BitwardenItemType.SshKey when IsValidSshHost(item.SshHost) =>
-      () => { try { Process.Start(new ProcessStartInfo("ssh", item.SshHost!) { UseShellExecute = false }); } catch { } },
+    BitwardenItemType.SshKey when HasSshHost(item) => () => StartSsh(item),
     _ => () => Process.Start(new ProcessStartInfo(
       $"{GetVaultBaseUrl()}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
     { UseShellExecute = true }),
@@ -210,22 +209,19 @@ internal static partial class VaultItemHelper
     return sb.ToString();
   }
 
-  internal static Tag? BuildTotpTag(ProtectedSecret totpSecret) => GetLiveTotpTag(totpSecret);
-
   internal static Tag? BuildTotpTag(BitwardenItem item) =>
     item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id)
       ? GetStaticTotpTag()
-      : GetLiveTotpTag(item.TotpSecret!);
+      : BuildTotpTag(item.TotpSecret!);
 
   private static Tag GetStaticTotpTag() =>
     new Tag("2FA") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };
 
-  private static Tag? GetLiveTotpTag(ProtectedSecret totpSecret)
+  internal static Tag? BuildTotpTag(ProtectedSecret totpSecret)
   {
     try
     {
       var (code, remaining) = CopyOtpCommand.ComputeCode(totpSecret);
-
       return new Tag($"{code} ({remaining}s)") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };
     }
     catch
@@ -255,35 +251,11 @@ internal static partial class VaultItemHelper
 
   private static void AddLoginContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
   {
-    if (!string.IsNullOrEmpty(item.Username))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.Username!, "Username", reprompt))
-      {
-        Title = "Copy Username",
-        Icon = new IconInfo("\uE77B"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (item.Password is { } password)
-    {
-      items.Add(new CommandContextItem(CopySecretCommand(id, password, "Password", reprompt))
-      {
-        Title = "Copy Password",
-        Icon = new IconInfo("\uE72E"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
-      });
-    }
+    AddCopy(items, id, reprompt, item.Username, "Username", "\uE77B", Chord(VirtualKey.C));
+    AddCopy(items, id, reprompt, item.Password, "Password", "\uE72E", Chord(VirtualKey.C, shift: true));
 
     if (item.HasTotp)
-    {
-      items.Add(new CommandContextItem(SensitiveCommand(id, () => CopyOtpCommand.CopyToClipboard(item.TotpSecret!), "OTP", reprompt))
-      {
-        Title = "Copy OTP",
-        Icon = new IconInfo("\uE916"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, alt: true, vkey: VirtualKey.C),
-      });
-    }
+      AddCopyItem(items, CopyCommand(id, "OTP", reprompt, () => CopyOtpCommand.CopyToClipboard(item.TotpSecret!)), "OTP", "\uE916", Chord(VirtualKey.C, alt: true));
 
     if (ToSafeWebUrl(item.FirstUri) is { } url)
     {
@@ -298,138 +270,34 @@ internal static partial class VaultItemHelper
 
   private static void AddNoteContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
   {
-    if (item.Notes is { } notes)
-    {
-      items.Add(new CommandContextItem(CopySecretCommand(id, notes, "Notes", reprompt))
-      {
-        Title = "Copy Notes",
-        Icon = new IconInfo("\uE70B"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
-      });
-    }
+    AddCopy(items, id, reprompt, item.Notes, "Notes", "\uE70B", Chord(VirtualKey.C));
   }
 
   private static void AddCardContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
   {
-    if (item.CardNumber is { } cardNumber)
-    {
-      items.Add(new CommandContextItem(CopySecretCommand(id, cardNumber, "Card Number", reprompt))
-      {
-        Title = "Copy Card Number",
-        Icon = new IconInfo("\uE8C7"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (item.CardCode is { } cardCode)
-    {
-      items.Add(new CommandContextItem(CopySecretCommand(id, cardCode, "Security Code", reprompt))
-      {
-        Title = "Copy Security Code",
-        Icon = new IconInfo("\uE72E"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (!string.IsNullOrEmpty(item.CardholderName))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.CardholderName!, "Cardholder Name", reprompt))
-      {
-        Title = "Copy Cardholder Name",
-        Icon = new IconInfo("\uE77B"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, alt: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (!string.IsNullOrEmpty(item.CardExpiration))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.CardExpiration!, "Expiration", reprompt))
-      {
-        Title = "Copy Expiration",
-        Icon = new IconInfo("\uE787"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.E),
-      });
-    }
+    AddCopy(items, id, reprompt, item.CardNumber, "Card Number", "\uE8C7", Chord(VirtualKey.C));
+    AddCopy(items, id, reprompt, item.CardCode, "Security Code", "\uE72E", Chord(VirtualKey.C, shift: true));
+    AddCopy(items, id, reprompt, item.CardholderName, "Cardholder Name", "\uE77B", Chord(VirtualKey.C, alt: true));
+    AddCopy(items, id, reprompt, item.CardExpiration, "Expiration", "\uE787", Chord(VirtualKey.E));
   }
 
   private static void AddIdentityContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
   {
-    if (!string.IsNullOrEmpty(item.IdentityEmail))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.IdentityEmail!, "Email", reprompt))
-      {
-        Title = "Copy Email",
-        Icon = new IconInfo("\uE715"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (!string.IsNullOrEmpty(item.IdentityFullName))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.IdentityFullName!, "Name", reprompt))
-      {
-        Title = "Copy Name",
-        Icon = new IconInfo("\uE77B"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (!string.IsNullOrEmpty(item.IdentityPhone))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.IdentityPhone!, "Phone", reprompt))
-      {
-        Title = "Copy Phone",
-        Icon = new IconInfo("\uE717"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, alt: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (!string.IsNullOrEmpty(item.IdentityUsername))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.IdentityUsername!, "Username", reprompt))
-      {
-        Title = "Copy Username",
-        Icon = new IconInfo("\uE77B"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.U),
-      });
-    }
-
-    if (!string.IsNullOrEmpty(item.IdentityAddress))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.IdentityAddress!, "Address", reprompt))
-      {
-        Title = "Copy Address",
-        Icon = new IconInfo("\uE80F"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.A),
-      });
-    }
+    AddCopy(items, id, reprompt, item.IdentityEmail, "Email", "\uE715", Chord(VirtualKey.C));
+    AddCopy(items, id, reprompt, item.IdentityFullName, "Name", "\uE77B", Chord(VirtualKey.C, shift: true));
+    AddCopy(items, id, reprompt, item.IdentityPhone, "Phone", "\uE717", Chord(VirtualKey.C, alt: true));
+    AddCopy(items, id, reprompt, item.IdentityUsername, "Username", "\uE77B", Chord(VirtualKey.U));
+    AddCopy(items, id, reprompt, item.IdentityAddress, "Address", "\uE80F", Chord(VirtualKey.A, shift: true));
   }
 
   private static void AddSshKeyContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
   {
-    if (!string.IsNullOrEmpty(item.SshPublicKey))
-    {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.SshPublicKey!, "Public Key", reprompt))
-      {
-        Title = "Copy Public Key",
-        Icon = new IconInfo("\uE8D7"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, vkey: VirtualKey.C),
-      });
-    }
+    AddCopy(items, id, reprompt, item.SshPublicKey, "Public Key", "\uE8D7", Chord(VirtualKey.C));
+    AddCopy(items, id, reprompt, item.SshFingerprint, "Fingerprint", "\uE928", Chord(VirtualKey.C, shift: true));
 
-    if (!string.IsNullOrEmpty(item.SshFingerprint))
+    if (HasSshHost(item))
     {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.SshFingerprint!, "Fingerprint", reprompt))
-      {
-        Title = "Copy Fingerprint",
-        Icon = new IconInfo("\uE928"),
-        RequestedShortcut = KeyChordHelpers.FromModifiers(ctrl: true, shift: true, vkey: VirtualKey.C),
-      });
-    }
-
-    if (IsValidSshHost(item.SshHost))
-    {
-      items.Add(new CommandContextItem(Track(id, BuildSshCommand(item.SshHost!)))
+      items.Add(new CommandContextItem(Track(id, BuildSshCommand(item)))
       {
         Title = "Open SSH Session",
         Icon = new IconInfo("\uE756"),
@@ -560,13 +428,22 @@ internal static partial class VaultItemHelper
       Name = "View in Web Vault",
     };
 
-  private static AnonymousCommand BuildSshCommand(string host) => new(() =>
+  private static bool HasSshHost(BitwardenItem item) => IsValidSshHost(item.RevealSshHost());
+
+  private static void StartSsh(BitwardenItem item)
   {
-    try { Process.Start(new ProcessStartInfo("ssh", host) { UseShellExecute = false }); }
+    try
+    {
+      var host = item.RevealSshHost();
+      if (IsValidSshHost(host))
+        Process.Start(new ProcessStartInfo("ssh", host!) { UseShellExecute = false });
+    }
     catch { }
-  })
+  }
+
+  private static AnonymousCommand BuildSshCommand(BitwardenItem item) => new(() => StartSsh(item))
   {
-    Name = $"SSH to {host}",
+    Name = item.IsSshHostHidden ? "SSH Session" : $"SSH to {item.SshHost}",
     Result = CommandResult.Dismiss(),
   };
 
@@ -579,28 +456,40 @@ internal static partial class VaultItemHelper
   [GeneratedRegex(@"[^a-z0-9_]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex UnsafeSlugChars();
 
-  private static AnonymousCommand CopyNonSensitive(string text, string label) => new(() =>
-      SecureClipboardService.CopyNonSensitive(text))
-  {
-    Name = $"Copy {label}",
-    Result = CommandResult.ShowToast($"Copied {label} to clipboard"),
-  };
+  private static KeyChord Chord(VirtualKey key, bool shift = false, bool alt = false) =>
+    KeyChordHelpers.FromModifiers(ctrl: true, shift: shift, alt: alt, vkey: key);
 
-  private static ICommand CopyFieldCommand(string itemId, string text, string label, BitwardenCliService? reprompt)
+  private static void AddCopy(List<CommandContextItem> items, string id, BitwardenCliService? reprompt, string? text, string label, string glyph, KeyChord shortcut)
   {
-    if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
-      return new RepromptPage(reprompt, itemId, () => SecureClipboardService.CopySensitive(text), label);
-    return Track(itemId, CopyNonSensitive(text, label));
+    if (!string.IsNullOrEmpty(text))
+      AddCopyItem(items, CopyFieldCommand(id, text, label, reprompt), label, glyph, shortcut);
   }
 
-  private static ICommand CopySecretCommand(string itemId, ProtectedSecret secret, string label, BitwardenCliService? reprompt) =>
-    SensitiveCommand(itemId, () => SecureClipboardService.CopySensitive(secret), label, reprompt);
+  private static void AddCopy(List<CommandContextItem> items, string id, BitwardenCliService? reprompt, ProtectedSecret? secret, string label, string glyph, KeyChord shortcut)
+  {
+    if (secret != null)
+      AddCopyItem(items, CopySecretCommand(id, secret, label, reprompt), label, glyph, shortcut);
+  }
 
-  private static ICommand SensitiveCommand(string itemId, Action action, string label, BitwardenCliService? reprompt)
+  private static void AddCopyItem(List<CommandContextItem> items, ICommand command, string label, string glyph, KeyChord shortcut) =>
+    items.Add(new CommandContextItem(command)
+    {
+      Title = "Copy " + label,
+      Icon = new IconInfo(glyph),
+      RequestedShortcut = shortcut,
+    });
+
+  private static ICommand CopyFieldCommand(string itemId, string text, string label, BitwardenCliService? reprompt) =>
+    CopyCommand(itemId, label, reprompt, () => SecureClipboardService.CopySensitive(text), () => SecureClipboardService.CopyNonSensitive(text));
+
+  private static ICommand CopySecretCommand(string itemId, ProtectedSecret secret, string label, BitwardenCliService? reprompt) =>
+    CopyCommand(itemId, label, reprompt, () => SecureClipboardService.CopySensitive(secret));
+
+  private static ICommand CopyCommand(string itemId, string label, BitwardenCliService? reprompt, Action sensitiveCopy, Action? plainCopy = null)
   {
     if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
-      return new RepromptPage(reprompt, itemId, action, label);
-    return Track(itemId, new AnonymousCommand(action) { Name = $"Copy {label}", Result = CommandResult.ShowToast($"Copied {label} to clipboard") });
+      return new RepromptPage(reprompt, itemId, sensitiveCopy, label);
+    return Track(itemId, new AnonymousCommand(plainCopy ?? sensitiveCopy) { Name = $"Copy {label}", Result = CommandResult.ShowToast($"Copied {label} to clipboard") });
   }
 
   private static TrackedInvokable Track(string itemId, InvokableCommand inner) => new(inner, itemId);

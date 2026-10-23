@@ -95,6 +95,8 @@ internal sealed class BitwardenItem
   // Custom fields
   public Dictionary<string, CustomField> CustomFields { get; init; } = [];
   public string? SshHost => CustomFields.TryGetValue("host", out var h) ? h.Value : null;
+  internal string? RevealSshHost() => CustomFields.TryGetValue("host", out var h) ? h.Value ?? h.Secret?.Reveal() : null;
+  internal bool IsSshHostHidden => CustomFields.TryGetValue("host", out var h) && h.IsHidden;
 
   internal void DisposeSecrets()
   {

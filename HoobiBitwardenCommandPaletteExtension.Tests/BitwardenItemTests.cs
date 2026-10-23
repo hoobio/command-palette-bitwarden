@@ -119,6 +119,22 @@ public class BitwardenItemTests
   }
 
   [Fact]
+  public void RevealSshHost_DecryptsHiddenHostField()
+  {
+    var item = new BitwardenItem
+    {
+      Type = BitwardenItemType.SshKey,
+      CustomFields = new Dictionary<string, CustomField>
+      {
+        ["host"] = new CustomField(null, ProtectedSecret.From("user@server.com"))
+      }
+    };
+    Assert.Null(item.SshHost);
+    Assert.True(item.IsSshHostHidden);
+    Assert.Equal("user@server.com", item.RevealSshHost());
+  }
+
+  [Fact]
   public void SshHost_Null_WhenNoHostField()
   {
     var item = new BitwardenItem { Type = BitwardenItemType.SshKey };

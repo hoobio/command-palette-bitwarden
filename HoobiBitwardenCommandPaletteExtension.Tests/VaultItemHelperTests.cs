@@ -189,6 +189,24 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void BuildContextItems_SshKey_HiddenHost_OffersSshSessionWithoutExposingHost()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-ssh",
+      Type = BitwardenItemType.SshKey,
+      CustomFields = new Dictionary<string, CustomField>
+      {
+        ["host"] = new CustomField(null, ProtectedSecret.From("user@server.com"))
+      },
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    var ssh = Assert.Single(contextItems, ci => ci.Title == "Open SSH Session");
+    Assert.DoesNotContain("server.com", ssh.Command?.Name);
+    Assert.DoesNotContain(contextItems, ci => ci.Title.Contains("host"));
+  }
+
+  [Fact]
   public void BuildContextItems_Login_Reprompt_AllFieldsProtected()
   {
     RepromptPage.ClearGracePeriod();
