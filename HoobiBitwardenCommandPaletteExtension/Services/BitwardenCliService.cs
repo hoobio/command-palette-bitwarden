@@ -39,6 +39,7 @@ internal sealed partial class BitwardenCliService
   private int _sessionGeneration;
   private DateTime _lastRefresh;
   private int _refreshing;
+  private int _refreshPending;
   private readonly Lock _statusLock = new();
   private Task<VaultStatus>? _statusCheckInFlight;
   private TimeSpan RefreshInterval
@@ -1334,7 +1335,8 @@ internal sealed partial class BitwardenCliService
     }
     if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0)
     {
-      DebugLogService.Log("Cache", "RefreshCacheAsync skipped: already refreshing");
+      Interlocked.Exchange(ref _refreshPending, 1);
+      DebugLogService.Log("Cache", "RefreshCacheAsync queued: already refreshing");
       return;
     }
 
@@ -1378,6 +1380,10 @@ internal sealed partial class BitwardenCliService
     finally
     {
       Interlocked.Exchange(ref _refreshing, 0);
+      bool sameSession;
+      lock (_cacheLock) sameSession = generation == _sessionGeneration;
+      if (Interlocked.Exchange(ref _refreshPending, 0) == 1 && sameSession)
+        await RefreshCacheAsync();
     }
   }
 

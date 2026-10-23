@@ -621,7 +621,7 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
-  public async Task SyncVault_RefreshInFlight_DoesNotStartSecondRefresh()
+  public async Task SyncVault_RefreshInFlight_RefreshesAgainWhenInFlightFinishes()
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
@@ -632,6 +632,9 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0, id: 204));
     await svc.SyncVaultAsync();
 
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 205));
+    factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Synced\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0, id: 206));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 207));
     foreach (var p in held)
     {
       p.StdoutStream.Enqueue("[]\n");
@@ -639,7 +642,31 @@ public class BitwardenCliServiceMockedTests
       p.StderrStream.Complete();
     }
     await refresh;
-    Assert.True(svc.IsCacheLoaded);
+
+    Assert.Equal("Synced", Assert.Single(svc.SearchCached()).Name);
+  }
+
+  [Fact]
+  public async Task RefreshQueued_VaultLocksBeforeInFlightFinishes_DoesNotRefreshAgain()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 211), new FakeCliProcess(exitCode: 0, id: 212), new FakeCliProcess(exitCode: 0, id: 213) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refresh = svc.RefreshCacheAsync();
+    await svc.RefreshCacheAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 214));
+    await svc.LockAsync();
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.False(svc.IsCacheLoaded);
   }
 
   [Fact]
