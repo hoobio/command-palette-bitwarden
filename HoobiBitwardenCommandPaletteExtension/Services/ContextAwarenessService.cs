@@ -86,8 +86,7 @@ internal static partial class ContextAwarenessService
   }
 
   private static bool IsCommandPaletteProcess(string processName) =>
-      processName.Equals("PowerToys.CmdPal", StringComparison.OrdinalIgnoreCase)
-      || processName.Contains("CmdPal", StringComparison.OrdinalIgnoreCase);
+      processName.Contains("CmdPal", StringComparison.OrdinalIgnoreCase);
 
   internal static string? ExtractUrlFromTitle(string? title)
   {
@@ -237,14 +236,8 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  internal static bool NamesSimilar(string a, string b)
-  {
-    if (a.Equals(b, StringComparison.OrdinalIgnoreCase))
-      return true;
-    if (a.StartsWith(b, StringComparison.OrdinalIgnoreCase) || b.StartsWith(a, StringComparison.OrdinalIgnoreCase))
-      return true;
-    return false;
-  }
+  internal static bool NamesSimilar(string a, string b) =>
+      a.StartsWith(b, StringComparison.OrdinalIgnoreCase) || b.StartsWith(a, StringComparison.OrdinalIgnoreCase);
 
   internal static bool ContainsWholeWord(string text, string word)
   {
@@ -260,34 +253,15 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  internal static string? ExtractHost(string url)
-  {
-    try
-    {
-      if (!url.Contains("://"))
-        url = "https://" + url;
-      var host = new Uri(url).Host;
-      if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
-        host = host[4..];
-      return host;
-    }
-    catch { return null; }
-  }
+  internal static string? ExtractHost(string url) => Models.ItemUri.ExtractHost(url);
 
   // Suffix-based subdomain matching (not true eTLD+1). Can false-positive on public suffixes
   // like .co.uk, but true eTLD+1 requires a public suffix list dependency. Acceptable since
   // this only affects context boosting priority, not authentication or access control.
-  internal static bool HostsMatch(string a, string b)
-  {
-    if (a.Equals(b, StringComparison.OrdinalIgnoreCase))
-      return true;
-
-    if (a.EndsWith("." + b, StringComparison.OrdinalIgnoreCase)
-        || b.EndsWith("." + a, StringComparison.OrdinalIgnoreCase))
-      return true;
-
-    return false;
-  }
+  internal static bool HostsMatch(string a, string b) =>
+      a.Equals(b, StringComparison.OrdinalIgnoreCase)
+      || a.EndsWith("." + b, StringComparison.OrdinalIgnoreCase)
+      || b.EndsWith("." + a, StringComparison.OrdinalIgnoreCase);
 
   private static string? GetProcessNameForPid(uint pid)
   {
@@ -314,18 +288,8 @@ internal static partial class ContextAwarenessService
     "chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "arc", "thorium", "waterfox", "librewolf"
   ];
 
-  internal static bool IsBrowserProcess(string? processName)
-  {
-    if (string.IsNullOrEmpty(processName))
-      return false;
-
-    foreach (var browser in BrowserProcessNames)
-    {
-      if (processName.Equals(browser, StringComparison.OrdinalIgnoreCase))
-        return true;
-    }
-    return false;
-  }
+  internal static bool IsBrowserProcess(string? processName) =>
+      processName != null && BrowserProcessNames.Contains(processName, StringComparer.OrdinalIgnoreCase);
 
   [LibraryImport("user32.dll")]
   private static partial nint GetForegroundWindow();
