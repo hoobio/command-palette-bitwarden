@@ -703,7 +703,7 @@ internal static partial class DesktopIpcService
     public void Dispose()
     {
       _readCts?.Cancel();
-      try { _readLoop?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+      try { ((IAsyncResult?)_readLoop)?.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(2)); } catch { }
       _readCts?.Dispose();
       _pipe?.Dispose();
       _rsa?.Dispose();

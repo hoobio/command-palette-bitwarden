@@ -1413,16 +1413,15 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  private Task _warmupTask = Task.CompletedTask;
-  public Task WarmupTask => _warmupTask;
+  public Task WarmupTask { get; private set; } = Task.CompletedTask;
 
   public Task WarmCacheAsync()
   {
-    // Set _warmupTask synchronously so InitializeAsync always awaits the real task,
+    // Set WarmupTask synchronously so InitializeAsync always awaits the real task,
     // but run the actual CLI work on ThreadPool to avoid blocking the COM activation thread.
-    _warmupTask = Task.Run(RunWarmupAsync);
+    WarmupTask = Task.Run(RunWarmupAsync);
     _ = Task.Run(() => { try { LogEnvironmentInfo(); } catch (Exception ex) { DebugLogService.Log("Env", $"Environment info logging failed: {ex.GetType().Name}: {ex.Message}"); } });
-    return _warmupTask;
+    return WarmupTask;
   }
 
   private static void LogEnvironmentInfo()
