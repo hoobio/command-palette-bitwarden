@@ -146,6 +146,9 @@ internal static class CopyOtpCommand
         symbols++;
     }
 
+    if (symbols * 5 / 8 == 0)
+      throw new ArgumentException("TOTP secret is empty", nameof(text));
+
     var key = new byte[symbols * 5 / 8];
     int buffer = 0, bits = 0, count = 0;
     foreach (var c in text)

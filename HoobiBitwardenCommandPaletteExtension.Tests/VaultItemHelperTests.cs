@@ -595,6 +595,12 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void BuildTotpTag_EmptyKey_ReturnsErrorTag()
+  {
+    Assert.Equal("TOTP", VaultItemHelper.BuildTotpTag(ProtectedSecret.From("==")!)!.Text);
+  }
+
+  [Fact]
   public void BuildTotpTag_ReturnsLiveTag()
   {
     var tag = VaultItemHelper.BuildTotpTag(ProtectedSecret.From("JBSWY3DPEHPK3PXP")!);

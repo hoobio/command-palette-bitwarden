@@ -227,4 +227,15 @@ public class CopyOtpCommandTests
   {
     Assert.Throws<ArgumentException>(() => CopyOtpCommand.ParseTotpSecret("JBSW!3DP"));
   }
+
+  [Theory]
+  [InlineData("-")]
+  [InlineData("==")]
+  [InlineData(" ")]
+  [InlineData("otpauth://totp/x?secret=")]
+  [InlineData("steam://")]
+  public void ComputeCode_EmptyKey_Throws(string secret)
+  {
+    Assert.Throws<ArgumentException>(() => CopyOtpCommand.ComputeCode(secret));
+  }
 }
