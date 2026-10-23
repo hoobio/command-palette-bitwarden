@@ -1,4 +1,5 @@
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
@@ -38,6 +39,22 @@ public class BitwardenFallbackItemTests
     fallback.UpdateQuery("github");
 
     Assert.Equal("GitHub", fallback.Title);
+  }
+
+  [Fact]
+  public async Task UpdateQuery_RepromptItem_DefaultCommandRequiresReprompt()
+  {
+    RepromptPage.ClearGracePeriod();
+    var factory = new FakeProcessFactory();
+    var svc = new BitwardenCliService(processFactory: factory.Create);
+    factory.Enqueue(new FakeCliProcess(stdout: "session_key\n", exitCode: 0));
+    await svc.UnlockAsync("pw");
+    svc.LoadTestData([new BitwardenItem { Id = "1", Name = "GitHub", Type = BitwardenItemType.Login, Reprompt = 1, Uris = [new ItemUri("https://github.com", UriMatchType.Default)] }], []);
+    using var fallback = new BitwardenFallbackItem(svc);
+
+    fallback.UpdateQuery("github");
+
+    Assert.IsType<RepromptPage>(fallback.Command);
   }
 
   [Fact]
