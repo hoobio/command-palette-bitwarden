@@ -45,7 +45,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CommandPalette.Extensions" />
     <PackageReference Include="Microsoft.Windows.CsWinRT" />
-    <PackageReference Include="Otp.NET" />
     <PackageReference Include="Shmuelie.WinRTServer" />
     <PackageReference Include="Svg.Skia" />
 

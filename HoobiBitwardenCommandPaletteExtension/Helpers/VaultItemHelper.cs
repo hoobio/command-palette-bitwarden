@@ -12,7 +12,6 @@ using HoobiBitwardenCommandPaletteExtension.Commands;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
-using OtpNet;
 
 namespace HoobiBitwardenCommandPaletteExtension.Helpers;
 

@@ -6,7 +6,7 @@
 - **Microsoft.CommandPalette.Extensions SDK** - WinRT-based extension API for PowerToys Command Palette
 - **Win32 P/Invoke** via `LibraryImport` - clipboard APIs, window management
 - **UI Automation COM Interop** - browser address bar URL extraction
-- **OtpNet** - TOTP code generation
+- **System.Security.Cryptography** - TOTP code generation (RFC 6238 HMAC)
 - **Svg.Skia / SkiaSharp** - SVG rasterization (converts SVG favicons to PNG for display)
 - **Bitwarden CLI** (`bw`) - vault operations (login, unlock, list, sync)
 - **Windows Credential Manager** - session key persistence

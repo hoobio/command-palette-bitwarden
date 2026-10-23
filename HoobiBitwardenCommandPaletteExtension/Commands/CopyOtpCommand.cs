@@ -2,37 +2,12 @@ using System;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using Microsoft.CommandPalette.Extensions;
-using Microsoft.CommandPalette.Extensions.Toolkit;
-using OtpNet;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Commands;
 
-internal sealed partial class CopyOtpCommand : InvokableCommand
+internal static class CopyOtpCommand
 {
-  private readonly ProtectedSecret _totpSecret;
-
-  public CopyOtpCommand(ProtectedSecret totpSecret)
-  {
-    _totpSecret = totpSecret;
-    Name = "Copy OTP";
-    Icon = new IconInfo("\uEC92");
-  }
-
-  public override ICommandResult Invoke()
-  {
-    try
-    {
-      CopyToClipboard(_totpSecret);
-      return CommandResult.ShowToast("Copied TOTP to clipboard");
-    }
-    catch
-    {
-      return CommandResult.ShowToast("Failed to compute OTP");
-    }
-  }
-
   internal static void CopyToClipboard(ProtectedSecret totpSecret)
   {
     var (code, _) = ComputeCode(totpSecret);
@@ -49,7 +24,7 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
   {
     var steam = IsSteamSecret(totpSecret);
     var (key, digits, period, mode) = steam
-      ? (DecodeBase32(totpSecret[8..]), 5, 30, OtpHashMode.Sha1)
+      ? (DecodeBase32(totpSecret[8..]), 5, 30, HashAlgorithmName.SHA1)
       : ParseTotpSecret(totpSecret);
     try
     {
@@ -71,16 +46,16 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
   private static string FormatDigits(int code, int digits) =>
     (code % (long)Math.Pow(10, digits)).ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(digits, '0');
 
-  private static int ComputeHotp(ReadOnlySpan<byte> key, long counter, OtpHashMode mode)
+  private static int ComputeHotp(ReadOnlySpan<byte> key, long counter, HashAlgorithmName mode)
   {
     Span<byte> counterBytes = stackalloc byte[sizeof(long)];
     BinaryPrimitives.WriteInt64BigEndian(counterBytes, counter);
     Span<byte> hash = stackalloc byte[HMACSHA512.HashSizeInBytes];
 #pragma warning disable CA5350 // HMAC-SHA1 is required by the TOTP specification
-    var length = mode switch
+    var length = mode.Name switch
     {
-      OtpHashMode.Sha256 => HMACSHA256.HashData(key, counterBytes, hash),
-      OtpHashMode.Sha512 => HMACSHA512.HashData(key, counterBytes, hash),
+      "SHA256" => HMACSHA256.HashData(key, counterBytes, hash),
+      "SHA512" => HMACSHA512.HashData(key, counterBytes, hash),
       _ => HMACSHA1.HashData(key, counterBytes, hash),
     };
 #pragma warning restore CA5350
@@ -93,7 +68,7 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
 
   internal static string ComputeSteamCode(byte[] key, long unixSeconds)
   {
-    var code = ComputeHotp(key, unixSeconds / 30, OtpHashMode.Sha1);
+    var code = ComputeHotp(key, unixSeconds / 30, HashAlgorithmName.SHA1);
 
     return string.Create(5, code, static (span, val) =>
     {
@@ -105,10 +80,10 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
     });
   }
 
-  internal static (byte[] Key, int Digits, int Period, OtpHashMode Mode) ParseTotpSecret(ReadOnlySpan<char> secret)
+  internal static (byte[] Key, int Digits, int Period, HashAlgorithmName Mode) ParseTotpSecret(ReadOnlySpan<char> secret)
   {
     if (!secret.StartsWith("otpauth://", StringComparison.OrdinalIgnoreCase))
-      return (DecodeBase32(secret), 6, 30, OtpHashMode.Sha1);
+      return (DecodeBase32(secret), 6, 30, HashAlgorithmName.SHA1);
 
     var query = secret[(secret.IndexOf('?') + 1)..];
     var fragment = query.IndexOf('#');
@@ -137,9 +112,9 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
     _ = int.TryParse(periodText, System.Globalization.CultureInfo.InvariantCulture, out var period);
     var mode = algorithm switch
     {
-      "SHA256" => OtpHashMode.Sha256,
-      "SHA512" => OtpHashMode.Sha512,
-      _ => OtpHashMode.Sha1,
+      "SHA256" => HashAlgorithmName.SHA256,
+      "SHA512" => HashAlgorithmName.SHA512,
+      _ => HashAlgorithmName.SHA1,
     };
 
     return (DecodeEscapedBase32(rawSecret), digits > 0 ? digits : 6, period > 0 ? period : 30, mode);

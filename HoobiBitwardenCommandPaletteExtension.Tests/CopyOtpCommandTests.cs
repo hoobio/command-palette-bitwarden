@@ -91,7 +91,7 @@ public class CopyOtpCommandTests
   [InlineData("Sha512", "1234567890123456789012345678901234567890123456789012345678901234", "90693936")]
   public void ComputeCode_OtpAuthAlgorithm_MatchesRfc6238Vectors(string algorithm, string seed, string expected)
   {
-    var secret = OtpNet.Base32Encoding.ToString(System.Text.Encoding.ASCII.GetBytes(seed)).TrimEnd('=');
+    var secret = ToBase32(System.Text.Encoding.ASCII.GetBytes(seed));
     var uri = $"otpauth://totp/Test?secret={secret}&algorithm={algorithm}&digits=8&period=30";
     var (code, remaining) = CopyOtpCommand.ComputeCode(uri, DateTimeOffset.FromUnixTimeSeconds(59));
     Assert.Equal(expected, code);
@@ -102,7 +102,27 @@ public class CopyOtpCommandTests
   public void ParseTotpSecret_UnknownAlgorithm_DefaultsToSha1()
   {
     var (_, _, _, mode) = CopyOtpCommand.ParseTotpSecret("otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP&algorithm=MD5");
-    Assert.Equal(OtpNet.OtpHashMode.Sha1, mode);
+    Assert.Equal(System.Security.Cryptography.HashAlgorithmName.SHA1, mode);
+  }
+
+  private static string ToBase32(byte[] data)
+  {
+    const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    var result = new System.Text.StringBuilder();
+    int buffer = 0, bits = 0;
+    foreach (var b in data)
+    {
+      buffer = (buffer << 8) | b;
+      bits += 8;
+      while (bits >= 5)
+      {
+        bits -= 5;
+        result.Append(alphabet[(buffer >> bits) & 31]);
+      }
+    }
+    if (bits > 0)
+      result.Append(alphabet[(buffer << (5 - bits)) & 31]);
+    return result.ToString();
   }
 
   [Fact]
@@ -126,7 +146,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_ProducesFiveCharacterCode()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     Assert.Equal(5, code.Length);
     Assert.All(code.ToCharArray(), c => Assert.Contains(c, "23456789BCDFGHJKMNPQRTVWXY"));
@@ -135,7 +155,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_IsDeterministic()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code1 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     Assert.Equal(code1, code2);
@@ -144,7 +164,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_DifferentTimeSteps_ProduceDifferentCodes()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code1 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000030);
     Assert.NotEqual(code1, code2);
@@ -153,7 +173,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_SameTimeStep_ProducesSameCode()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code1 = CopyOtpCommand.ComputeSteamCode(key, 999999990);
     var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000009);
     Assert.Equal(code1, code2);
