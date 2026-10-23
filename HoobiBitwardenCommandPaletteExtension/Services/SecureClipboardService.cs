@@ -7,7 +7,7 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 internal static partial class SecureClipboardService
 {
   private static Timer? _clearTimer;
-  private static string? _lastCopiedText;
+  private static ProtectedSecret? _lastCopied;
   private static readonly Lock _lock = new();
   private static int _clearDelaySeconds = 30;
 
@@ -19,22 +19,33 @@ internal static partial class SecureClipboardService
     set => _clearDelaySeconds = value > 0 ? value : 30;
   }
 
-  internal static void CopySensitive(string text)
+  internal static void CopySensitive(string text) => WriteSensitive(text);
+
+  internal static void CopySensitive(ProtectedSecret secret) => secret.Use(static text => WriteSensitive(text));
+
+  private static bool WriteSensitive(ReadOnlySpan<char> text)
   {
     lock (_lock)
     {
-      _lastCopiedText = text;
+      ReplaceLastCopied(ProtectedSecret.From(text));
       SetClipboardExcludedFromHistory(text);
       if (AutoClearEnabled)
         ScheduleClear();
     }
+    return true;
+  }
+
+  private static void ReplaceLastCopied(ProtectedSecret? secret)
+  {
+    _lastCopied?.Dispose();
+    _lastCopied = secret;
   }
 
   internal static void CopyNonSensitive(string text)
   {
     lock (_lock)
     {
-      _lastCopiedText = null;
+      ReplaceLastCopied(null);
       _clearTimer?.Dispose();
       _clearTimer = null;
     }
@@ -51,13 +62,13 @@ internal static partial class SecureClipboardService
   {
     lock (_lock)
     {
-      if (_lastCopiedText == null)
+      if (_lastCopied == null)
         return;
 
       _clearTimer?.Dispose();
       _clearTimer = null;
 
-      if (!TryClearIfUnchanged(_lastCopiedText))
+      if (!_lastCopied.Use(static expected => TryClearIfUnchanged(expected)))
       {
         if (state != ClearRetried)
         {
@@ -67,7 +78,7 @@ internal static partial class SecureClipboardService
         DebugLogService.Log("Clipboard", "Could not open the clipboard to clear copied secret");
       }
 
-      _lastCopiedText = null;
+      ReplaceLastCopied(null);
     }
   }
 
@@ -83,14 +94,14 @@ internal static partial class SecureClipboardService
     }
   }
 
-  private static bool TryClearIfUnchanged(string expected)
+  private static bool TryClearIfUnchanged(ReadOnlySpan<char> expected)
   {
     if (!RetryOpen(() => OpenClipboard(nint.Zero), OpenAttempts, OpenRetryDelayMs))
       return false;
 
     try
     {
-      if (ReadClipboardText() == expected)
+      if (ClipboardTextEquals(expected))
         EmptyClipboard();
       return true;
     }
@@ -100,7 +111,7 @@ internal static partial class SecureClipboardService
     }
   }
 
-  private static void SetClipboardExcludedFromHistory(string text)
+  private static unsafe void SetClipboardExcludedFromHistory(ReadOnlySpan<char> text)
   {
     if (!OpenClipboard(nint.Zero))
       return;
@@ -109,8 +120,8 @@ internal static partial class SecureClipboardService
     {
       EmptyClipboard();
 
-      var bytes = System.Text.Encoding.Unicode.GetBytes(text + "\0");
-      var hGlobal = GlobalAlloc(GMEM_MOVEABLE, (nuint)bytes.Length);
+      var size = (text.Length + 1) * sizeof(char);
+      var hGlobal = GlobalAlloc(GMEM_MOVEABLE, (nuint)size);
       if (hGlobal == nint.Zero)
         return;
 
@@ -121,7 +132,9 @@ internal static partial class SecureClipboardService
         return;
       }
 
-      Marshal.Copy(bytes, 0, ptr, bytes.Length);
+      var destination = new Span<char>((void*)ptr, text.Length + 1);
+      text.CopyTo(destination);
+      destination[^1] = '\0';
       GlobalUnlock(hGlobal);
 
       if (SetClipboardData(CF_UNICODETEXT, hGlobal) == nint.Zero)
@@ -154,19 +167,19 @@ internal static partial class SecureClipboardService
     }
   }
 
-  private static string? ReadClipboardText()
+  private static unsafe bool ClipboardTextEquals(ReadOnlySpan<char> expected)
   {
     var hData = GetClipboardData(CF_UNICODETEXT);
     if (hData == nint.Zero)
-      return null;
+      return false;
 
     var ptr = GlobalLock(hData);
     if (ptr == nint.Zero)
-      return null;
+      return false;
 
     try
     {
-      return Marshal.PtrToStringUni(ptr);
+      return MemoryMarshal.CreateReadOnlySpanFromNullTerminated((char*)ptr).SequenceEqual(expected);
     }
     finally
     {

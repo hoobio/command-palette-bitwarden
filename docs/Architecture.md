@@ -38,6 +38,7 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── ContextAwarenessService.cs     # Window detection, URL extraction, context scoring
 │   ├── FaviconService.cs              # Favicon download, disk/memory cache, icon refresh events
 │   ├── ICliProcess.cs                 # Process abstraction for unit testing
+│   ├── ProtectedSecret.cs             # In-memory encryption for secrets (CryptProtectMemory)
 │   ├── SecureClipboardService.cs      # Clipboard security + auto-clear
 │   ├── SessionStore.cs               # Windows Credential Manager wrapper
 │   └── SvgRasterizer.cs              # SVG to PNG conversion via SkiaSharp
@@ -73,6 +74,10 @@ User selects an action
 | `AccessTracker` | Static | Tracks item access times (persisted to JSON) and recent-copy state (5-min in-memory timer) |
 | `BitwardenSettingsManager` | Instance | Manages user-configurable settings via Command Palette settings UI |
 | `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; fires `IconCached` to refresh the list UI |
+
+## In-Memory Secret Protection
+
+Passwords, TOTP secrets, notes, card numbers, card security codes, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory`, with a key that only this process can use, and decrypts it into a pinned buffer only while a copy, search or TOTP calculation runs. The buffer is zeroed after use, and the cached secrets are erased when the vault locks or logs out. This protection applies only to the copies that the extension keeps: plaintext still passes through the `bw` CLI output, the Command Palette form input, the clipboard and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
 
 ## Extension Registration
 

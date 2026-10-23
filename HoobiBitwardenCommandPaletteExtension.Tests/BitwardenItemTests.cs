@@ -1,4 +1,5 @@
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
@@ -25,7 +26,7 @@ public class BitwardenItemTests
     {
       Type = BitwardenItemType.Card,
       CardBrand = "Visa",
-      CardNumber = "4111111111111234"
+      CardNumber = ProtectedSecret.From("4111111111111234")
     };
     Assert.Equal("Visa ····1234", item.Subtitle);
   }
@@ -41,7 +42,7 @@ public class BitwardenItemTests
   public void Subtitle_SecureNote_TruncatesLongNotes()
   {
     var longNote = new string('x', 100);
-    var item = new BitwardenItem { Type = BitwardenItemType.SecureNote, Notes = longNote };
+    var item = new BitwardenItem { Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From(longNote) };
     Assert.True(item.Subtitle.Length <= 61);
     Assert.EndsWith("\u2026", item.Subtitle, StringComparison.Ordinal);
   }
@@ -75,14 +76,14 @@ public class BitwardenItemTests
   [Fact]
   public void CardLast4_ExtractsLastFourDigits()
   {
-    var item = new BitwardenItem { CardNumber = "4111111111111234" };
+    var item = new BitwardenItem { CardNumber = ProtectedSecret.From("4111111111111234") };
     Assert.Equal("1234", item.CardLast4);
   }
 
   [Fact]
   public void CardLast4_Null_WhenShortNumber()
   {
-    var item = new BitwardenItem { CardNumber = "12" };
+    var item = new BitwardenItem { CardNumber = ProtectedSecret.From("12") };
     Assert.Null(item.CardLast4);
   }
 
@@ -111,7 +112,7 @@ public class BitwardenItemTests
       Type = BitwardenItemType.SshKey,
       CustomFields = new Dictionary<string, CustomField>
       {
-        ["host"] = new CustomField("user@server.com", false)
+        ["host"] = new CustomField("user@server.com")
       }
     };
     Assert.Equal("user@server.com", item.SshHost);
@@ -132,7 +133,7 @@ public class BitwardenItemTests
     var item = new BitwardenItem
     {
       Type = BitwardenItemType.SecureNote,
-      Notes = "Secret content that should be hidden",
+      Notes = ProtectedSecret.From("Secret content that should be hidden"),
       Reprompt = 1,
     };
     Assert.Equal("Protected", item.Subtitle);
@@ -144,7 +145,7 @@ public class BitwardenItemTests
     var item = new BitwardenItem
     {
       Type = BitwardenItemType.SecureNote,
-      Notes = "Visible content",
+      Notes = ProtectedSecret.From("Visible content"),
       Reprompt = 0,
     };
     Assert.Equal("Visible content", item.Subtitle);
@@ -180,7 +181,7 @@ public class BitwardenItemTests
     {
       Type = BitwardenItemType.Card,
       CardBrand = "Visa",
-      CardNumber = "4111111111111234",
+      CardNumber = ProtectedSecret.From("4111111111111234"),
       Reprompt = 1,
     };
     Assert.Equal("Visa \u00B7\u00B7\u00B7\u00B71234", item.Subtitle);

@@ -211,7 +211,7 @@ internal static partial class VaultItemHelper
     return sb.ToString();
   }
 
-  internal static Tag? BuildTotpTag(string totpSecret) => GetLiveTotpTag(totpSecret);
+  internal static Tag? BuildTotpTag(ProtectedSecret totpSecret) => GetLiveTotpTag(totpSecret);
 
   internal static Tag? BuildTotpTag(BitwardenItem item) =>
     item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id)
@@ -221,7 +221,7 @@ internal static partial class VaultItemHelper
   private static Tag GetStaticTotpTag() =>
     new Tag("2FA") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };
 
-  private static Tag? GetLiveTotpTag(string totpSecret)
+  private static Tag? GetLiveTotpTag(ProtectedSecret totpSecret)
   {
     try
     {
@@ -240,9 +240,9 @@ internal static partial class VaultItemHelper
     if (item.Type != BitwardenItemType.Login)
       return;
 
-    if (!string.IsNullOrEmpty(item.Password))
+    if (item.Password != null)
     {
-      if (item.Password.Length < 8)
+      if (item.HasWeakPassword)
         tags.Add(new Tag("Weak") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) });
 
       var lastChanged = item.PasswordRevisionDate ?? item.RevisionDate;
@@ -266,9 +266,9 @@ internal static partial class VaultItemHelper
       });
     }
 
-    if (!string.IsNullOrEmpty(item.Password))
+    if (item.Password is { } password)
     {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.Password!, "Password", reprompt, isSensitive: true))
+      items.Add(new CommandContextItem(CopySecretCommand(id, password, "Password", reprompt))
       {
         Title = "Copy Password",
         Icon = new IconInfo("\uE72E"),
@@ -299,9 +299,9 @@ internal static partial class VaultItemHelper
 
   private static void AddNoteContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
   {
-    if (!string.IsNullOrEmpty(item.Notes))
+    if (item.Notes is { } notes)
     {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.Notes!, "Notes", reprompt, isSensitive: true))
+      items.Add(new CommandContextItem(CopySecretCommand(id, notes, "Notes", reprompt))
       {
         Title = "Copy Notes",
         Icon = new IconInfo("\uE70B"),
@@ -312,9 +312,9 @@ internal static partial class VaultItemHelper
 
   private static void AddCardContextItems(List<CommandContextItem> items, BitwardenItem item, string id, BitwardenCliService? reprompt = null)
   {
-    if (!string.IsNullOrEmpty(item.CardNumber))
+    if (item.CardNumber is { } cardNumber)
     {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.CardNumber!, "Card Number", reprompt, isSensitive: true))
+      items.Add(new CommandContextItem(CopySecretCommand(id, cardNumber, "Card Number", reprompt))
       {
         Title = "Copy Card Number",
         Icon = new IconInfo("\uE8C7"),
@@ -322,9 +322,9 @@ internal static partial class VaultItemHelper
       });
     }
 
-    if (!string.IsNullOrEmpty(item.CardCode))
+    if (item.CardCode is { } cardCode)
     {
-      items.Add(new CommandContextItem(CopyFieldCommand(id, item.CardCode!, "Security Code", reprompt, isSensitive: true))
+      items.Add(new CommandContextItem(CopySecretCommand(id, cardCode, "Security Code", reprompt))
       {
         Title = "Copy Security Code",
         Icon = new IconInfo("\uE72E"),
@@ -446,14 +446,16 @@ internal static partial class VaultItemHelper
 
     foreach (var (fieldName, field) in item.CustomFields)
     {
-      if (string.IsNullOrEmpty(field.Value))
+      if (string.IsNullOrEmpty(field.Value) && field.Secret == null)
         continue;
 
       // Skip the 'host' custom field as it's handled by SSH context items
       if (item.Type == BitwardenItemType.SshKey && fieldName.Equals("host", StringComparison.OrdinalIgnoreCase))
         continue;
 
-      ICommand copyCmd = CopyFieldCommand(id, field.Value, fieldName, reprompt, isSensitive: field.IsHidden);
+      var copyCmd = field.Secret is { } secret
+        ? CopySecretCommand(id, secret, fieldName, reprompt)
+        : CopyFieldCommand(id, field.Value!, fieldName, reprompt);
 
       items.Add(new CommandContextItem(copyCmd)
       {
@@ -578,13 +580,6 @@ internal static partial class VaultItemHelper
   [GeneratedRegex(@"[^a-z0-9_]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex UnsafeSlugChars();
 
-  private static AnonymousCommand CopySensitive(string text, string label) => new(() =>
-      SecureClipboardService.CopySensitive(text))
-  {
-    Name = $"Copy {label}",
-    Result = CommandResult.ShowToast($"Copied {label} to clipboard"),
-  };
-
   private static AnonymousCommand CopyNonSensitive(string text, string label) => new(() =>
       SecureClipboardService.CopyNonSensitive(text))
   {
@@ -592,14 +587,15 @@ internal static partial class VaultItemHelper
     Result = CommandResult.ShowToast($"Copied {label} to clipboard"),
   };
 
-  private static ICommand CopyFieldCommand(string itemId, string text, string label, BitwardenCliService? reprompt, bool isSensitive = false)
+  private static ICommand CopyFieldCommand(string itemId, string text, string label, BitwardenCliService? reprompt)
   {
     if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
       return new RepromptPage(reprompt, itemId, () => SecureClipboardService.CopySensitive(text), label);
-    return Track(itemId, isSensitive
-      ? CopySensitive(text, label)
-      : CopyNonSensitive(text, label));
+    return Track(itemId, CopyNonSensitive(text, label));
   }
+
+  private static ICommand CopySecretCommand(string itemId, ProtectedSecret secret, string label, BitwardenCliService? reprompt) =>
+    SensitiveCommand(itemId, () => SecureClipboardService.CopySensitive(secret), label, reprompt);
 
   private static ICommand SensitiveCommand(string itemId, Action action, string label, BitwardenCliService? reprompt)
   {

@@ -257,7 +257,7 @@ public class BitwardenCliServiceTests
   [Fact]
   public void Matches_ByNotes()
   {
-    var item = new BitwardenItem { Name = "Test", Type = BitwardenItemType.SecureNote, Notes = "my secret note" };
+    var item = new BitwardenItem { Name = "Test", Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("my secret note") };
     Assert.True(BitwardenCliService.Matches(item, "secret"));
   }
 
@@ -338,7 +338,7 @@ public class BitwardenCliServiceTests
       Type = BitwardenItemType.SshKey,
       CustomFields = new Dictionary<string, CustomField>(StringComparer.OrdinalIgnoreCase)
       {
-        ["host"] = new("user@server.com", false)
+        ["host"] = new("user@server.com")
       }
     };
     Assert.True(BitwardenCliService.Matches(item, "server"));
@@ -422,7 +422,7 @@ public class BitwardenCliServiceTests
     Assert.Equal("GitHub", item.Name);
     Assert.Equal(BitwardenItemType.Login, item.Type);
     Assert.Equal("octocat", item.Username);
-    Assert.Equal("pass123", item.Password);
+    Assert.Equal("pass123", item.Password!.Reveal());
     Assert.True(item.Favorite);
     Assert.Equal("folder-1", item.FolderId);
     Assert.Single(item.Uris);
@@ -458,10 +458,10 @@ public class BitwardenCliServiceTests
     Assert.Equal(BitwardenItemType.Card, item.Type);
     Assert.Equal("John Doe", item.CardholderName);
     Assert.Equal("Visa", item.CardBrand);
-    Assert.Equal("4111111111111111", item.CardNumber);
+    Assert.Equal("4111111111111111", item.CardNumber!.Reveal());
     Assert.Equal("12", item.CardExpMonth);
     Assert.Equal("2025", item.CardExpYear);
-    Assert.Equal("123", item.CardCode);
+    Assert.Equal("123", item.CardCode!.Reveal());
   }
 
   [Fact]
@@ -554,7 +554,7 @@ public class BitwardenCliServiceTests
     var items = BitwardenCliService.ParseItems(json);
     Assert.Single(items);
     Assert.Equal(BitwardenItemType.SecureNote, items[0].Type);
-    Assert.Equal("Secret content here", items[0].Notes);
+    Assert.Equal("Secret content here", items[0].Notes!.Reveal());
   }
 
   [Fact]
@@ -597,7 +597,7 @@ public class BitwardenCliServiceTests
 
     var items = BitwardenCliService.ParseItems(json);
     Assert.True(items[0].HasTotp);
-    Assert.Equal("JBSWY3DPEHPK3PXP", items[0].TotpSecret);
+    Assert.Equal("JBSWY3DPEHPK3PXP", items[0].TotpSecret!.Reveal());
   }
 
   [Fact]
@@ -883,6 +883,8 @@ public class BitwardenCliServiceTests
     Assert.False(result["Visible"].IsHidden);
     Assert.True(result["Hidden"].IsHidden);
     Assert.Equal("v1", result["Visible"].Value);
+    Assert.Null(result["Hidden"].Value);
+    Assert.Equal("v2", result["Hidden"].Secret!.Reveal());
   }
 
   [Fact]
@@ -965,15 +967,15 @@ public class BitwardenCliServiceTests
     new()
     {
       Id = "login-1", Name = "GitHub", Type = BitwardenItemType.Login,
-      Username = "octocat", Password = "strongpass123!", HasTotp = true, TotpSecret = "JBSWY3DPEHPK3PXP",
-      HasPasskey = true, Favorite = true, FolderId = "f-work", Notes = "dev account",
+      Username = "octocat", Password = ProtectedSecret.From("strongpass123!"), HasTotp = true, TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
+      HasPasskey = true, Favorite = true, FolderId = "f-work", Notes = ProtectedSecret.From("dev account"),
       OrganizationId = "org-1", RevisionDate = DateTime.UtcNow,
       Uris = [new ItemUri("https://github.com", UriMatchType.Default)],
     },
     new()
     {
       Id = "login-2", Name = "Example HTTP", Type = BitwardenItemType.Login,
-      Password = "short", FolderId = "f-personal",
+      Password = ProtectedSecret.From("short"), FolderId = "f-personal",
       RevisionDate = DateTime.UtcNow - TimeSpan.FromDays(400),
       PasswordRevisionDate = DateTime.UtcNow - TimeSpan.FromDays(400),
       Uris = [new ItemUri("http://example.com", UriMatchType.Default)],
@@ -981,12 +983,12 @@ public class BitwardenCliServiceTests
     new()
     {
       Id = "card-1", Name = "My Visa", Type = BitwardenItemType.Card,
-      CardBrand = "Visa", CardNumber = "4111", RevisionDate = DateTime.UtcNow,
+      CardBrand = "Visa", CardNumber = ProtectedSecret.From("4111"), RevisionDate = DateTime.UtcNow,
     },
     new()
     {
       Id = "note-1", Name = "Secret", Type = BitwardenItemType.SecureNote,
-      Notes = "confidential", RevisionDate = DateTime.UtcNow,
+      Notes = ProtectedSecret.From("confidential"), RevisionDate = DateTime.UtcNow,
     },
     new()
     {
@@ -1011,7 +1013,7 @@ public class BitwardenCliServiceTests
     new()
     {
       Id = "login-reprompt", Name = "Protected Login", Type = BitwardenItemType.Login,
-      Password = "Str0ngPassw0rd!", Reprompt = 1, Uris = [], RevisionDate = DateTime.UtcNow,
+      Password = ProtectedSecret.From("Str0ngPassw0rd!"), Reprompt = 1, Uris = [], RevisionDate = DateTime.UtcNow,
     },
   ];
 
@@ -1373,8 +1375,8 @@ public class BitwardenCliServiceTests
     var svc = CreateServiceWithFolders();
     var items = new List<BitwardenItem>
     {
-      new() { Id = "card", Name = "Card", Type = BitwardenItemType.Card, Password = "abc" },
-      new() { Id = "login", Name = "Login", Type = BitwardenItemType.Login, Password = "abc", Uris = [] },
+      new() { Id = "card", Name = "Card", Type = BitwardenItemType.Card, Password = ProtectedSecret.From("abc") },
+      new() { Id = "login", Name = "Login", Type = BitwardenItemType.Login, Password = ProtectedSecret.From("abc"), Uris = [] },
     };
     var result = svc.ApplyFilter(items, ("is", "weak")).ToList();
     Assert.Single(result);
@@ -1481,6 +1483,35 @@ public class BitwardenCliServiceTests
   }
 
   [Fact]
+  public void ClearSession_DisposesCachedSecrets()
+  {
+    var svc = new BitwardenCliService();
+    svc.SetSession("key");
+    var password = ProtectedSecret.From("hunter2")!;
+    var hidden = ProtectedSecret.From("token")!;
+    svc.LoadTestData([new()
+    {
+      Id = "x", Name = "X", Type = BitwardenItemType.Login, Password = password, Uris = [],
+      CustomFields = new Dictionary<string, CustomField> { ["api"] = new(null, hidden) },
+    }], []);
+
+    svc.ClearSession();
+
+    Assert.Throws<ObjectDisposedException>(password.Reveal);
+    Assert.Throws<ObjectDisposedException>(hidden.Reveal);
+  }
+
+  [Theory]
+  [InlineData("1234567", true)]
+  [InlineData("12345678", false)]
+  [InlineData(null, false)]
+  public void HasWeakPassword_UsesLengthOnly(string? password, bool expected)
+  {
+    var item = new BitwardenItem { Type = BitwardenItemType.Login, Password = ProtectedSecret.From(password) };
+    Assert.Equal(expected, item.HasWeakPassword);
+  }
+
+  [Fact]
   public void ParseItems_UnicodeCharactersPreserved()
   {
     var json = """
@@ -1508,7 +1539,7 @@ public class BitwardenCliServiceTests
     Assert.Contains("Китай", item.Name, StringComparison.Ordinal);
     Assert.Contains("סִין", item.Name, StringComparison.Ordinal);
     Assert.Equal("café@naïve.com", item.Username);
-    Assert.Equal("pässwörd", item.Password);
+    Assert.Equal("pässwörd", item.Password!.Reveal());
   }
 
   [Fact]

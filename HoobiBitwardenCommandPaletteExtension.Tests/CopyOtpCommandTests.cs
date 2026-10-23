@@ -1,4 +1,5 @@
 using HoobiBitwardenCommandPaletteExtension.Commands;
+using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
@@ -174,5 +175,36 @@ public class CopyOtpCommandTests
     Assert.Equal(6, code.Length);
     Assert.All(code.ToCharArray(), c => Assert.True(char.IsDigit(c)));
     Assert.InRange(remaining, 1, 30);
+  }
+
+  [Fact]
+  public void ComputeCode_ProtectedSecret_ReturnsSixDigitCode()
+  {
+    using var secret = ProtectedSecret.From("JBSWY3DPEHPK3PXP")!;
+    var (code, remaining) = CopyOtpCommand.ComputeCode(secret);
+    Assert.Equal(6, code.Length);
+    Assert.InRange(remaining, 1, 30);
+  }
+
+  [Fact]
+  public void ParseTotpSecret_PercentEscapedSecret_MatchesPlain()
+  {
+    var (plain, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
+    var (escaped, _, _, _) = CopyOtpCommand.ParseTotpSecret("otpauth://totp/Test?secret=JBSWY3DP%45HPK3PXP#frag");
+    Assert.Equal(plain, escaped);
+  }
+
+  [Fact]
+  public void ParseTotpSecret_LowercaseAndPadding_MatchesUppercase()
+  {
+    var (upper, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
+    var (lower, _, _, _) = CopyOtpCommand.ParseTotpSecret("jbswy3dpehpk3pxp==");
+    Assert.Equal(upper, lower);
+  }
+
+  [Fact]
+  public void ParseTotpSecret_InvalidCharacter_Throws()
+  {
+    Assert.Throws<ArgumentException>(() => CopyOtpCommand.ParseTotpSecret("JBSW!3DP"));
   }
 }

@@ -19,7 +19,7 @@ internal sealed partial class BitwardenCliService
 {
   private readonly BitwardenSettingsManager? _settings;
   private readonly CliProcessFactory _processFactory;
-  private volatile string? _sessionKey;
+  private volatile ProtectedSecret? _sessionKey;
   private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (ICliProcess Process, string Args)> _runningProcesses = new();
   private ICliProcess? _pendingDeviceVerificationProcess;
   private CancellationTokenSource? _pendingDeviceVerificationCts;
@@ -144,10 +144,23 @@ internal sealed partial class BitwardenCliService
     _settings?.UsePortableDataDirectory.Value ?? false,
     _settings?.CliDataDirectoryOverride.Value);
 
+  private void ReplaceSessionKey(string? sessionKey) =>
+    Interlocked.Exchange(ref _sessionKey, ProtectedSecret.From(sessionKey))?.Dispose();
+
+  private string? RevealSessionKey()
+  {
+    while (_sessionKey is { } session)
+    {
+      try { return session.Reveal(); }
+      catch (ObjectDisposedException) when (!ReferenceEquals(session, _sessionKey)) { }
+    }
+    return null;
+  }
+
   private void ApplyEnvironment(ProcessStartInfo psi)
   {
-    if (_sessionKey != null)
-      psi.Environment["BW_SESSION"] = _sessionKey;
+    if (RevealSessionKey() is { } sessionKey)
+      psi.Environment["BW_SESSION"] = sessionKey;
 
     var dataDir = DataDirectory;
     if (dataDir != null)
@@ -245,7 +258,7 @@ internal sealed partial class BitwardenCliService
       // wants the active session to survive the next process restart. Persist
       // the in-memory key now — UnlockWithBiometricsAsync / UnlockAsync only
       // saves when RememberSession was already on at unlock time.
-      var key = _sessionKey;
+      var key = RevealSessionKey();
       if (!string.IsNullOrEmpty(key))
       {
         SessionStore.Save(key);
@@ -263,7 +276,7 @@ internal sealed partial class BitwardenCliService
     DebugLogService.Log("Config", "CLI config changed, resetting all state");
     DisposeDeviceVerificationProcess();
     KillAllRunning();
-    _sessionKey = null;
+    ReplaceSessionKey(null);
     _lastStatus = null;
     // Abandon any in-flight/cached status check so the next GetVaultStatusAsync
     // re-evaluates against the new CLI path instead of coalescing onto a check
@@ -312,11 +325,11 @@ internal sealed partial class BitwardenCliService
     });
   }
 
-  public void SetSession(string sessionKey) => _sessionKey = sessionKey;
+  public void SetSession(string sessionKey) => ReplaceSessionKey(sessionKey);
 
   public void ClearSession()
   {
-    _sessionKey = null;
+    ReplaceSessionKey(null);
     _lastStatus = null;
     InvalidateCache();
   }
@@ -325,6 +338,8 @@ internal sealed partial class BitwardenCliService
   {
     lock (_cacheLock)
     {
+      foreach (var item in _cache)
+        item.DisposeSecrets();
       _cache = [];
       _cacheLoaded = false;
       _sessionGeneration++;
@@ -377,7 +392,7 @@ internal sealed partial class BitwardenCliService
     if (!string.IsNullOrWhiteSpace(envSession))
     {
       DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
-      _sessionKey = envSession;
+      ReplaceSessionKey(envSession);
       if (await VerifySessionAsync())
         return SetStatus(VaultStatus.Unlocked);
       DebugLogService.Log("Status", "BW_SESSION env var verification failed");
@@ -389,7 +404,7 @@ internal sealed partial class BitwardenCliService
       if (!string.IsNullOrEmpty(stored))
       {
         DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
-        _sessionKey = stored;
+        ReplaceSessionKey(stored);
         if (await VerifySessionAsync())
           return SetStatus(VaultStatus.Unlocked);
         // Don't clear the credential here - a single sync failure can be a
@@ -489,7 +504,7 @@ internal sealed partial class BitwardenCliService
       if (!string.Equals(status, "unlocked", StringComparison.OrdinalIgnoreCase))
       {
         DebugLogService.Log("Verify", $"bw status reports '{status ?? "null"}', session not unlocked");
-        _sessionKey = null;
+        ReplaceSessionKey(null);
         return false;
       }
 
@@ -509,7 +524,7 @@ internal sealed partial class BitwardenCliService
     {
       DebugLogService.Log("Verify", $"Session verification exception: {ex.GetType().Name}: {ex.Message}");
     }
-    _sessionKey = null;
+    ReplaceSessionKey(null);
     return false;
   }
 
@@ -553,7 +568,7 @@ internal sealed partial class BitwardenCliService
     if (string.IsNullOrEmpty(stored)) return false;
 
     DebugLogService.Log("Restore", "Attempting silent session restore from Credential Manager");
-    _sessionKey = stored;
+    ReplaceSessionKey(stored);
     if (!await VerifySessionAsync())
     {
       // Same policy as GetVaultStatusCoreAsync: a transient verify failure
@@ -571,7 +586,7 @@ internal sealed partial class BitwardenCliService
     // before SetStatus/RefreshCacheAsync, otherwise IsUnlocked stays false
     // and the cache refresh silently skips, leaving the page stuck on
     // "Retrieving items from vault...".
-    _sessionKey = stored;
+    ReplaceSessionKey(stored);
     SetStatus(VaultStatus.Unlocked);
     StatusChanged?.Invoke();
     try { await RefreshCacheAsync(); }
@@ -588,7 +603,7 @@ internal sealed partial class BitwardenCliService
       if (string.IsNullOrEmpty(sessionKey))
         return (false, "Biometric unlock was cancelled or unavailable");
 
-      _sessionKey = sessionKey;
+      ReplaceSessionKey(sessionKey);
       SetStatus(VaultStatus.Unlocked);
       DebugLogService.Log("Unlock", "Biometric unlock successful, session key obtained");
       BitwardenSettingsManager.RecordBiometricSuccess();
@@ -642,7 +657,7 @@ internal sealed partial class BitwardenCliService
       var key = stdout.Trim();
       if (!string.IsNullOrEmpty(key) && !key.Contains(' '))
       {
-        _sessionKey = key;
+        ReplaceSessionKey(key);
         SetStatus(VaultStatus.Unlocked);
         DebugLogService.Log("Unlock", "Unlock successful, session key obtained");
         if (_settings?.RememberSession.Value == true)
@@ -720,7 +735,7 @@ internal sealed partial class BitwardenCliService
         DebugLogService.Log("Reprompt", $"Password verification: {(valid ? "success" : "failed")}");
         if (valid)
         {
-          _sessionKey = key;
+          ReplaceSessionKey(key);
           if (_settings?.RememberSession.Value == true)
             SessionStore.Save(key);
         }
@@ -741,7 +756,7 @@ internal sealed partial class BitwardenCliService
   private void ResetToLoggedOut()
   {
     DebugLogService.Log("Auth", "ResetToLoggedOut: clearing session and cache");
-    _sessionKey = null;
+    ReplaceSessionKey(null);
     SetStatus(VaultStatus.Unauthenticated);
     InvalidateCache();
     SessionStore.Clear();
@@ -861,7 +876,7 @@ internal sealed partial class BitwardenCliService
 
       if (exitCode == 0 && !string.IsNullOrEmpty(stdout) && !stdout.Contains(' '))
       {
-        _sessionKey = stdout;
+        ReplaceSessionKey(stdout);
         SetStatus(VaultStatus.Unlocked);
         if (_settings?.RememberSession.Value == true)
           SessionStore.Save(stdout);
@@ -970,7 +985,7 @@ internal sealed partial class BitwardenCliService
 
       if (process.ExitCode == 0 && !string.IsNullOrEmpty(stdout) && !stdout.Contains(' '))
       {
-        _sessionKey = stdout;
+        ReplaceSessionKey(stdout);
         SetStatus(VaultStatus.Unlocked);
         if (_settings?.RememberSession.Value == true)
           SessionStore.Save(stdout);
@@ -1011,7 +1026,7 @@ internal sealed partial class BitwardenCliService
     DebugLogService.Log("Auth", "LogoutAsync called");
     DisposeDeviceVerificationProcess();
     KillAllRunning();
-    _sessionKey = null;
+    ReplaceSessionKey(null);
     SetStatus(VaultStatus.Unauthenticated);
     InvalidateCache();
     FaviconService.ClearMemCache();
@@ -1032,7 +1047,7 @@ internal sealed partial class BitwardenCliService
     // explicitly asked us to forget the unlocked state.
     DebugLogService.Log("Lock", userInitiated ? "LockAsync (user-initiated)" : "LockAsync (auto-lock)");
     KillAllRunning(spareSync: true);
-    _sessionKey = null;
+    ReplaceSessionKey(null);
     SetStatus(VaultStatus.Locked);
     InvalidateCache();
     FaviconService.ClearMemCache();
@@ -1288,9 +1303,9 @@ internal sealed partial class BitwardenCliService
     {
       "totp" or "otp" or "2fa" or "mfa" => items.Where(i => i.HasTotp),
       "passkey" or "fido2" or "webauthn" or "passwordless" => items.Where(i => i.HasPasskey),
-      "password" or "pw" => items.Where(i => !string.IsNullOrEmpty(i.Password)),
+      "password" or "pw" => items.Where(i => i.Password != null),
       "url" or "uri" => items.Where(i => i.Uris.Count > 0),
-      "notes" or "note" => items.Where(i => !string.IsNullOrEmpty(i.Notes)),
+      "notes" or "note" => items.Where(i => i.Notes != null),
       "folder" => items.Where(i => i.FolderId != null),
       "attachment" or "attachments" => items, // not tracked yet, pass-through
       _ => items,
@@ -1298,16 +1313,15 @@ internal sealed partial class BitwardenCliService
     "is" => filter.Value switch
     {
       "favorite" or "fav" => items.Where(i => i.Favorite),
-      "weak" => items.Where(i => i.Type == BitwardenItemType.Login
-          && !string.IsNullOrEmpty(i.Password) && i.Password!.Length < 8),
+      "weak" => items.Where(i => i.Type == BitwardenItemType.Login && i.HasWeakPassword),
       "old" or "stale" => items.Where(i => i.Type == BitwardenItemType.Login
-          && !string.IsNullOrEmpty(i.Password)
+          && i.Password != null
           && DateTime.UtcNow - (i.PasswordRevisionDate ?? i.RevisionDate) > TimeSpan.FromDays(365)),
       "insecure" or "http" => items.Where(i => i.Type == BitwardenItemType.Login
           && i.Uris.Any(u => u.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))),
       "watchtower" or "flagged" => items.Where(i => i.Type == BitwardenItemType.Login && (
-          (!string.IsNullOrEmpty(i.Password) && i.Password!.Length < 8)
-          || (!string.IsNullOrEmpty(i.Password) && DateTime.UtcNow - (i.PasswordRevisionDate ?? i.RevisionDate) > TimeSpan.FromDays(365))
+          i.HasWeakPassword
+          || (i.Password != null && DateTime.UtcNow - (i.PasswordRevisionDate ?? i.RevisionDate) > TimeSpan.FromDays(365))
           || i.Uris.Any(u => u.Uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))),
       "protected" or "locked" or "reprompt" => items.Where(i => i.Reprompt == 1),
       _ => items,
@@ -1356,6 +1370,8 @@ internal sealed partial class BitwardenCliService
         if (generation != _sessionGeneration)
         {
           DebugLogService.Log("Cache", "RefreshCacheAsync dropped: vault locked or logged out during refresh");
+          foreach (var item in items)
+            item.DisposeSecrets();
           return;
         }
         DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations");
@@ -1464,7 +1480,7 @@ internal sealed partial class BitwardenCliService
       if (!string.IsNullOrEmpty(stored))
       {
         DebugLogService.Log("Warmup", "Fast session restore: loading items with stored credential");
-        _sessionKey = stored;
+        ReplaceSessionKey(stored);
         _lastStatus = VaultStatus.Unlocked;
         try
         {
@@ -1518,7 +1534,7 @@ internal sealed partial class BitwardenCliService
   {
     if (item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
     var secretsHidden = item.Reprompt == 1 && !Pages.RepromptPage.IsWithinGracePeriod(item.Id);
-    if (!secretsHidden && item.Notes?.Contains(query, StringComparison.OrdinalIgnoreCase) == true) return true;
+    if (!secretsHidden && item.Notes?.Use(notes => notes.Contains(query, StringComparison.OrdinalIgnoreCase)) == true) return true;
 
     return item.Type switch
     {
@@ -1798,7 +1814,7 @@ internal sealed partial class BitwardenCliService
     DebugLogService.Log("Session", rememberSession
       ? "HandleInvalidSession: clearing session and cache (preserving stored credential, rememberSession=True)"
       : "HandleInvalidSession: clearing session, cache, and locking vault");
-    _sessionKey = null;
+    ReplaceSessionKey(null);
     if (!rememberSession)
       SessionStore.Clear();
     InvalidateCache();
@@ -1844,7 +1860,7 @@ internal sealed partial class BitwardenCliService
     var type = (BitwardenItemType)typeInt;
     var id = node["id"]?.GetValue<string>() ?? string.Empty;
     var name = node["name"]?.GetValue<string>() ?? string.Empty;
-    var notes = node["notes"]?.GetValue<string>();
+    var notes = ProtectedSecret.From(node["notes"]?.GetValue<string>());
     var revisionDate = DateTime.TryParse(node["revisionDate"]?.GetValue<string>(), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue;
     var customFields = ParseCustomFields(node["fields"]);
     var favorite = node["favorite"]?.GetValue<bool>() ?? false;
@@ -1863,7 +1879,7 @@ internal sealed partial class BitwardenCliService
     };
   }
 
-  private static BitwardenItem ParseLogin(JsonNode? login, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)
+  private static BitwardenItem ParseLogin(JsonNode? login, string id, string name, ProtectedSecret? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)
   {
     var uris = login?["uris"]?.AsArray()
         ?.Select(u =>
@@ -1881,6 +1897,7 @@ internal sealed partial class BitwardenCliService
         .ToList() ?? [];
 
     var passwordRevision = DateTime.TryParse(login?["passwordRevisionDate"]?.GetValue<string>(), out var prd) ? (DateTime?)prd.ToUniversalTime() : null;
+    var totp = ProtectedSecret.From(login?["totp"]?.GetValue<string>());
 
     return new BitwardenItem
     {
@@ -1895,16 +1912,16 @@ internal sealed partial class BitwardenCliService
       OrganizationId = organizationId,
       Reprompt = reprompt,
       Username = login?["username"]?.GetValue<string>(),
-      Password = login?["password"]?.GetValue<string>(),
-      HasTotp = !string.IsNullOrEmpty(login?["totp"]?.GetValue<string>()),
-      TotpSecret = login?["totp"]?.GetValue<string>(),
+      Password = ProtectedSecret.From(login?["password"]?.GetValue<string>()),
+      HasTotp = totp != null,
+      TotpSecret = totp,
       HasPasskey = login?["fido2Credentials"] is JsonArray fido && fido.Count > 0,
       Uris = uris,
       PasswordRevisionDate = passwordRevision,
     };
   }
 
-  private static BitwardenItem ParseCard(JsonNode? card, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt) => new()
+  private static BitwardenItem ParseCard(JsonNode? card, string id, string name, ProtectedSecret? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt) => new()
   {
     Id = id,
     Name = name,
@@ -1918,13 +1935,13 @@ internal sealed partial class BitwardenCliService
     Reprompt = reprompt,
     CardholderName = card?["cardholderName"]?.GetValue<string>(),
     CardBrand = card?["brand"]?.GetValue<string>(),
-    CardNumber = card?["number"]?.GetValue<string>(),
+    CardNumber = ProtectedSecret.From(card?["number"]?.GetValue<string>()),
     CardExpMonth = card?["expMonth"]?.GetValue<string>(),
     CardExpYear = card?["expYear"]?.GetValue<string>(),
-    CardCode = card?["code"]?.GetValue<string>(),
+    CardCode = ProtectedSecret.From(card?["code"]?.GetValue<string>()),
   };
 
-  private static BitwardenItem ParseIdentity(JsonNode? id_node, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)
+  private static BitwardenItem ParseIdentity(JsonNode? id_node, string id, string name, ProtectedSecret? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt)
   {
     var parts = new[] { id_node?["firstName"]?.GetValue<string>(), id_node?["middleName"]?.GetValue<string>(), id_node?["lastName"]?.GetValue<string>() };
     var fullName = string.Join(" ", parts.Where(p => !string.IsNullOrEmpty(p)));
@@ -1954,13 +1971,10 @@ internal sealed partial class BitwardenCliService
       IdentityUsername = id_node?["username"]?.GetValue<string>(),
       IdentityCompany = id_node?["company"]?.GetValue<string>(),
       IdentityAddress = string.IsNullOrEmpty(address) ? null : address,
-      IdentitySsn = id_node?["ssn"]?.GetValue<string>(),
-      IdentityPassportNumber = id_node?["passportNumber"]?.GetValue<string>(),
-      IdentityLicenseNumber = id_node?["licenseNumber"]?.GetValue<string>(),
     };
   }
 
-  private static BitwardenItem ParseSshKey(JsonNode? ssh, string id, string name, string? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt) => new()
+  private static BitwardenItem ParseSshKey(JsonNode? ssh, string id, string name, ProtectedSecret? notes, DateTime revisionDate, Dictionary<string, CustomField> customFields, bool favorite, string? folderId, string? organizationId, int reprompt) => new()
   {
     Id = id,
     Name = name,
@@ -1974,7 +1988,6 @@ internal sealed partial class BitwardenCliService
     Reprompt = reprompt,
     SshPublicKey = ssh?["publicKey"]?.GetValue<string>(),
     SshFingerprint = ssh?["keyFingerprint"]?.GetValue<string>(),
-    SshPrivateKey = ssh?["privateKey"]?.GetValue<string>(),
   };
 
   internal static Dictionary<string, CustomField> ParseCustomFields(JsonNode? fields)
@@ -1988,7 +2001,7 @@ internal sealed partial class BitwardenCliService
       var fieldValue = field?["value"]?.GetValue<string>();
       var fieldType = field?["type"]?.GetValue<int>() ?? 0;
       if (!string.IsNullOrEmpty(fieldName) && fieldValue != null)
-        result.TryAdd(fieldName, new CustomField(fieldValue, fieldType == 1));
+        result.TryAdd(fieldName, fieldType == 1 ? new CustomField(null, ProtectedSecret.From(fieldValue)) : new CustomField(fieldValue));
     }
 
     return result;

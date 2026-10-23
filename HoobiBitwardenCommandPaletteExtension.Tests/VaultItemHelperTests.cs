@@ -155,7 +155,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.SshKey,
       CustomFields = new Dictionary<string, CustomField>
       {
-        ["host"] = new CustomField("git@github.com", IsHidden: false),
+        ["host"] = new CustomField("git@github.com"),
       },
     };
 
@@ -179,8 +179,8 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 0,
       Username = "user@test.com",
-      Password = "secret",
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      Password = ProtectedSecret.From("secret"),
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
@@ -199,7 +199,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 1,
       Username = "user@test.com",
-      Password = "secret",
+      Password = ProtectedSecret.From("secret"),
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var contextItems = VaultItemHelper.BuildContextItems(item, svc);
@@ -218,7 +218,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 0,
       Username = "user@test.com",
-      Password = "secret",
+      Password = ProtectedSecret.From("secret"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
     var usernameItem = contextItems.First(c => c.Title == "Copy Username");
@@ -236,8 +236,8 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Card,
       Reprompt = 1,
       CardholderName = "John Doe",
-      CardNumber = "4111111111111111",
-      CardCode = "123",
+      CardNumber = ProtectedSecret.From("4111111111111111"),
+      CardCode = ProtectedSecret.From("123"),
       CardExpMonth = "12",
       CardExpYear = "2025",
     };
@@ -257,7 +257,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Card,
       Reprompt = 0,
       CardholderName = "John Doe",
-      CardNumber = "4111111111111111",
+      CardNumber = ProtectedSecret.From("4111111111111111"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
     var holderItem = contextItems.First(c => c.Title == "Copy Cardholder Name");
@@ -317,8 +317,8 @@ public class VaultItemHelperTests
       Reprompt = 1,
       CustomFields = new Dictionary<string, CustomField>
       {
-        ["apiKey"] = new("abc123", false),
-        ["secret"] = new("hidden", true),
+        ["apiKey"] = new("abc123"),
+        ["secret"] = new(null, ProtectedSecret.From("hidden")),
       },
     };
     var contextItems = VaultItemHelper.BuildContextItems(item, svc);
@@ -422,7 +422,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 1,
       Username = "user@test.com",
-      Password = "secret",
+      Password = ProtectedSecret.From("secret"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item, svc);
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
@@ -521,7 +521,7 @@ public class VaultItemHelperTests
       Id = "totp-1",
       Type = BitwardenItemType.Login,
       Favorite = true,
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
     };
     var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false);
     Assert.Single(baseTags);
@@ -536,7 +536,7 @@ public class VaultItemHelperTests
       Id = "totp-2",
       Type = BitwardenItemType.Login,
       HasTotp = true,
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
     };
     var tags = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live");
     Assert.Single(tags);
@@ -554,7 +554,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 1,
       HasTotp = true,
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
     };
 
     var hidden = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live", showProtectedTag: false);
@@ -569,7 +569,7 @@ public class VaultItemHelperTests
   [Fact]
   public void BuildTotpTag_ReturnsLiveTag()
   {
-    var tag = VaultItemHelper.BuildTotpTag("JBSWY3DPEHPK3PXP");
+    var tag = VaultItemHelper.BuildTotpTag(ProtectedSecret.From("JBSWY3DPEHPK3PXP")!);
     Assert.NotNull(tag);
     Assert.Contains("s)", tag!.Text, StringComparison.Ordinal);
   }
@@ -583,7 +583,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Favorite = true,
       HasTotp = true,
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
     };
     var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false);
     var fullTags = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live");

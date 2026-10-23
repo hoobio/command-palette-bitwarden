@@ -1,4 +1,5 @@
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
@@ -57,7 +58,7 @@ public class BitwardenItemDetailTests
   [Fact]
   public void Subtitle_SecureNote_FirstLineOnly()
   {
-    var item = new BitwardenItem { Type = BitwardenItemType.SecureNote, Notes = "Line one\nLine two" };
+    var item = new BitwardenItem { Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("Line one\nLine two") };
     Assert.Equal("Line one", item.Subtitle);
   }
 
@@ -105,7 +106,7 @@ public class BitwardenItemDetailTests
     {
       CustomFields = new Dictionary<string, CustomField>(StringComparer.OrdinalIgnoreCase)
       {
-        ["Host"] = new("user@server.com", false)
+        ["Host"] = new("user@server.com")
       }
     };
     Assert.Equal("user@server.com", item.SshHost);

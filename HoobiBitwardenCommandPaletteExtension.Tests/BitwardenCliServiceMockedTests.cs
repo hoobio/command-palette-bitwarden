@@ -704,7 +704,7 @@ public class BitwardenCliServiceMockedTests
   {
     RepromptPage.GracePeriodSeconds = 60;
     RepromptPage.ClearGracePeriod();
-    var item = new BitwardenItem { Id = "rp-1", Name = "Bank", Type = BitwardenItemType.SecureNote, Notes = "pin 4321", Reprompt = 1 };
+    var item = new BitwardenItem { Id = "rp-1", Name = "Bank", Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("pin 4321"), Reprompt = 1 };
 
     Assert.False(BitwardenCliService.Matches(item, "4321"));
     Assert.True(BitwardenCliService.Matches(item, "bank"));

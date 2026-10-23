@@ -25,7 +25,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private string _currentSearchText = string.Empty;
     private string? _errorMessage;
     private string? _pendingEmail;
-    private string? _pendingPassword;
+    private ProtectedSecret? _pendingPassword;
     private int? _pendingTwoFactorMethod;
     private bool _twoFactorRequired;
     private bool _deviceVerificationRequired;
@@ -678,7 +678,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _twoFactorRequired = false;
         _deviceVerificationRequired = false;
         _pendingEmail = null;
-        _pendingPassword = null;
+        ReplacePendingPassword(null);
         _pendingTwoFactorMethod = null;
         _errorMessage = null;
         _currentItems = BuildUnauthenticatedItems();
@@ -948,7 +948,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _twoFactorRequired = false;
         _deviceVerificationRequired = false;
         _pendingEmail = null;
-        _pendingPassword = null;
+        ReplacePendingPassword(null);
         _pendingTwoFactorMethod = null;
         _errorMessage = null;
         IsLoading = true;
@@ -1341,6 +1341,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         });
     }
 
+    private void ReplacePendingPassword(string? password) =>
+        Interlocked.Exchange(ref _pendingPassword, ProtectedSecret.From(password))?.Dispose();
+
     private void OnLoginSubmitted(string email, string password, int? twoFactorMethod)
     {
         DebugLogService.Log("Action", $"Login submitted by user (2FA method: {(twoFactorMethod?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "auto")})");
@@ -1350,7 +1353,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _twoFactorRequired = false;
         _deviceVerificationRequired = false;
         _pendingEmail = null;
-        _pendingPassword = null;
+        ReplacePendingPassword(null);
         _pendingTwoFactorMethod = null;
         _currentItems = [];
         IsLoading = true;
@@ -1371,7 +1374,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     {
                         _twoFactorRequired = true;
                         _pendingEmail = email;
-                        _pendingPassword = password;
+                        ReplacePendingPassword(password);
                         _pendingTwoFactorMethod = twoFactorMethod;
                         _errorMessage = null;
                     }
@@ -1379,7 +1382,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     {
                         _deviceVerificationRequired = true;
                         _pendingEmail = email;
-                        _pendingPassword = password;
+                        ReplacePendingPassword(password);
                         _errorMessage = null;
                     }
                     else
@@ -1415,7 +1418,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _handlingAction = true;
         ClearSearchText();
         var email = _pendingEmail;
-        var password = _pendingPassword;
+        var password = _pendingPassword?.Reveal();
         _errorMessage = null;
         _currentItems = [];
         IsLoading = true;
@@ -1439,7 +1442,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
                 _twoFactorRequired = false;
                 _pendingEmail = null;
-                _pendingPassword = null;
+                ReplacePendingPassword(null);
                 _pendingTwoFactorMethod = null;
                 PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
@@ -1485,7 +1488,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
                 _deviceVerificationRequired = false;
                 _pendingEmail = null;
-                _pendingPassword = null;
+                ReplacePendingPassword(null);
                 PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
