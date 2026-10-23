@@ -64,6 +64,8 @@ internal static unsafe partial class EnterKeySubmitService
     PeekMessageW(out _, 0, WM_USER, WM_USER, PM_NOREMOVE); // creates the queue before other threads post to it
     _pumpReady.Set();
 
+    var winEventHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, 0, &WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+
     while (GetMessageW(out var msg, 0, 0, 0) > 0)
     {
       switch (msg.message)
@@ -86,6 +88,22 @@ internal static unsafe partial class EnterKeySubmitService
     }
 
     RemoveKeyboardHook();
+    if (winEventHook != 0)
+      UnhookWinEvent(winEventHook);
+  }
+
+  [UnmanagedCallersOnly]
+  private static void WinEventProc(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint idEventThread, uint dwmsEventTime)
+  {
+    try
+    {
+      if (_keyboardHook != 0 && !IsCommandPaletteWindow(hwnd))
+      {
+        _armedButtonName = null;
+        RemoveKeyboardHook();
+      }
+    }
+    catch { }
   }
 
   private static void RemoveKeyboardHook()
@@ -242,6 +260,8 @@ internal static unsafe partial class EnterKeySubmitService
   private const uint VK_RETURN = 0x0D;
   private const int WH_KEYBOARD_LL = 13;
   private const uint PM_NOREMOVE = 0;
+  private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+  private const uint WINEVENT_OUTOFCONTEXT = 0;
 
   [StructLayout(LayoutKind.Sequential)]
   private struct MSG
@@ -288,6 +308,13 @@ internal static unsafe partial class EnterKeySubmitService
   [LibraryImport("user32.dll")]
   [return: MarshalAs(UnmanagedType.Bool)]
   private static partial bool PostThreadMessageW(uint idThread, uint msg, nuint wParam, nint lParam);
+
+  [LibraryImport("user32.dll")]
+  private static partial nint SetWinEventHook(uint eventMin, uint eventMax, nint hmodWinEventProc, delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> pfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+  [LibraryImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool UnhookWinEvent(nint hWinEventHook);
 
   [LibraryImport("kernel32.dll")]
   private static partial uint GetCurrentThreadId();

@@ -36,7 +36,7 @@ Built as an alternative to 1Password Quick Access after their unjustified price 
 
 ## Prerequisites
 
-- **Windows 10 (19041+)** with [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/) enabled
+- **Windows 10 (19041+)** with [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/) enabled (PowerToys 0.101 or later for Enter to submit the login email field)
 - **[Bitwarden CLI](https://bitwarden.com/help/cli/)** (`bw`) on your `PATH`
 
 ## Installation
