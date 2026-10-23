@@ -336,7 +336,8 @@ internal static partial class DesktopIpcService
       }
 
       // ponytail: log-only, Store (MSIX) and portable Desktop signers are unverified; block once they are known
-      _ = IsPipeServerBitwarden(_pipe);
+      var pipe = _pipe;
+      _ = Task.Run(() => IsPipeServerBitwarden(pipe));
       DebugLogService.Log("Biometric", "Pipe connected, initiating encrypted handshake");
       onStatus?.Invoke("Establishing secure channel with Bitwarden Desktop...");
 
