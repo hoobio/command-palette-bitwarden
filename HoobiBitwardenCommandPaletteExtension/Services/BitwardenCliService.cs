@@ -20,7 +20,7 @@ internal sealed partial class BitwardenCliService
   private readonly BitwardenSettingsManager? _settings;
   private readonly CliProcessFactory _processFactory;
   private volatile string? _sessionKey;
-  private readonly System.Collections.Concurrent.ConcurrentDictionary<int, ICliProcess> _runningProcesses = new();
+  private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (ICliProcess Process, string Args)> _runningProcesses = new();
   private ICliProcess? _pendingDeviceVerificationProcess;
   private CancellationTokenSource? _pendingDeviceVerificationCts;
   private Task<(string Content, bool Detected)>? _pendingStdoutTask;
@@ -1030,7 +1030,7 @@ internal sealed partial class BitwardenCliService
     // on process restart (warmup); once a lock event has fired the user has
     // explicitly asked us to forget the unlocked state.
     DebugLogService.Log("Lock", userInitiated ? "LockAsync (user-initiated)" : "LockAsync (auto-lock)");
-    KillAllRunning();
+    KillAllRunning(spareSync: true);
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
     InvalidateCache();
@@ -1553,17 +1553,19 @@ internal sealed partial class BitwardenCliService
 
     var process = _processFactory(psi);
     process.StandardInput.Close();
-    _runningProcesses[process.Id] = process;
+    _runningProcesses[process.Id] = (process, args);
     process.Exited += (_, _) => _runningProcesses.TryRemove(process.Id, out _);
     process.EnableRaisingEvents = true;
     return process;
   }
 
-  private void KillAllRunning()
+  private void KillAllRunning(bool spareSync = false)
   {
     foreach (var kvp in _runningProcesses)
     {
-      try { kvp.Value.Kill(true); } catch { }
+      if (spareSync && kvp.Value.Args == "sync")
+        continue;
+      try { kvp.Value.Process.Kill(true); } catch { }
       _runningProcesses.TryRemove(kvp.Key, out _);
     }
   }

@@ -643,6 +643,25 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task Lock_AfterSyncDetached_DoesNotKillSync()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var sync = new FakeCliProcess(exitCode: 0, id: 301);
+    sync.StdoutStream.Enqueue("Syncing complete.\n");
+    factory.Enqueue(sync);
+    for (var i = 0; i < 3; i++) factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 302 + i));
+    await svc.SyncVaultAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 310));
+    await svc.LockAsync();
+
+    Assert.False(sync.Killed);
+    sync.StdoutStream.Complete();
+    sync.StderrStream.Complete();
+  }
+
+  [Fact]
   public void Matches_RepromptNoteOutsideGrace_SkipsNotes()
   {
     RepromptPage.GracePeriodSeconds = 60;
