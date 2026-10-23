@@ -14,16 +14,31 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 [SupportedOSPlatform("windows")]
 internal static partial class SignatureVerifier
 {
-  // Subjects Bitwarden has shipped the CLI under. Matched case-insensitively as a
-  // substring of the signing certificate's subject.
-  private static readonly string[] TrustedPublishers =
-  [
-    "Bitwarden",
-    "8bit Solutions",
-  ];
+  private const string BitwardenSigner = "Bitwarden Inc.";
+  private const string OrganizationOid = "2.5.4.10";
+  private const string CommonNameOid = "2.5.4.3";
 
   public static bool IsTrustedBitwardenBinary(string filePath) =>
       IsAuthenticodeValid(filePath) && IsBitwardenPublisher(filePath);
+
+  internal static bool IsBitwardenSubject(X500DistinguishedName subject)
+  {
+    var hasOrganization = false;
+    var hasCommonName = false;
+    foreach (var rdn in subject.EnumerateRelativeDistinguishedNames())
+    {
+      if (rdn.HasMultipleElements)
+        return false;
+      var type = rdn.GetSingleElementType().Value;
+      if (type is not (OrganizationOid or CommonNameOid))
+        continue;
+      if (rdn.GetSingleElementValue() != BitwardenSigner)
+        return false;
+      hasOrganization |= type == OrganizationOid;
+      hasCommonName |= type == CommonNameOid;
+    }
+    return hasOrganization && hasCommonName;
+  }
 
   private static bool IsBitwardenPublisher(string filePath)
   {
@@ -32,13 +47,9 @@ internal static partial class SignatureVerifier
 #pragma warning disable SYSLIB0057 // CreateFromSignedFile is the supported way to read the Authenticode signer
       using var cert = new X509Certificate2(X509Certificate.CreateFromSignedFile(filePath));
 #pragma warning restore SYSLIB0057
-      var subject = cert.Subject;
-      foreach (var publisher in TrustedPublishers)
-      {
-        if (subject.Contains(publisher, StringComparison.OrdinalIgnoreCase))
-          return true;
-      }
-      DebugLogService.Log("Installer", $"Downloaded binary signer not trusted: {subject}");
+      if (IsBitwardenSubject(cert.SubjectName))
+        return true;
+      DebugLogService.Log("Installer", $"Downloaded binary signer not trusted: {cert.Subject}");
       return false;
     }
     catch (Exception ex)
@@ -49,6 +60,26 @@ internal static partial class SignatureVerifier
   }
 
   private static bool IsAuthenticodeValid(string filePath)
+  {
+    var result = VerifyTrust(filePath, WTD_REVOKE_WHOLECHAIN);
+    if (result == 0)
+      return true;
+
+    if (IsRevocationUnknown(result))
+    {
+      DebugLogService.Log("Installer", $"Revocation status unavailable (0x{result:X8}), verifying without revocation");
+      result = VerifyTrust(filePath, WTD_REVOKE_NONE);
+    }
+
+    if (result != 0)
+      DebugLogService.Log("Installer", $"WinVerifyTrust rejected download (0x{result:X8})");
+    return result == 0;
+  }
+
+  internal static bool IsRevocationUnknown(int result) =>
+      result is CERT_E_REVOCATION_FAILURE or CRYPT_E_REVOCATION_OFFLINE or CRYPT_E_NO_REVOCATION_CHECK;
+
+  private static int VerifyTrust(string filePath, uint revocationChecks)
   {
     var pathPtr = Marshal.StringToHGlobalUni(filePath);
     var fileInfo = new WinTrustFileInfo
@@ -63,7 +94,7 @@ internal static partial class SignatureVerifier
       {
         cbStruct = (uint)Unsafe.SizeOf<WinTrustData>(),
         dwUIChoice = WTD_UI_NONE,
-        fdwRevocationChecks = WTD_REVOKE_NONE,
+        fdwRevocationChecks = revocationChecks,
         dwUnionChoice = WTD_CHOICE_FILE,
         dwStateAction = WTD_STATEACTION_VERIFY,
         pFile = fileHandle.AddrOfPinnedObject(),
@@ -73,15 +104,12 @@ internal static partial class SignatureVerifier
 
       data.dwStateAction = WTD_STATEACTION_CLOSE;
       _ = WinVerifyTrust(IntPtr.Zero, ref action, ref data);
-
-      if (result != 0)
-        DebugLogService.Log("Installer", $"WinVerifyTrust rejected download (0x{result:X8})");
-      return result == 0;
+      return result;
     }
     catch (Exception ex)
     {
       DebugLogService.Log("Installer", $"WinVerifyTrust failed: {ex.GetType().Name}: {ex.Message}");
-      return false;
+      return -1;
     }
     finally
     {
@@ -92,6 +120,10 @@ internal static partial class SignatureVerifier
 
   private const uint WTD_UI_NONE = 2;
   private const uint WTD_REVOKE_NONE = 0;
+  private const uint WTD_REVOKE_WHOLECHAIN = 1;
+  private const int CERT_E_REVOCATION_FAILURE = unchecked((int)0x800B010E);
+  private const int CRYPT_E_REVOCATION_OFFLINE = unchecked((int)0x80092013);
+  private const int CRYPT_E_NO_REVOCATION_CHECK = unchecked((int)0x80092012);
   private const uint WTD_CHOICE_FILE = 1;
   private const uint WTD_STATEACTION_VERIFY = 1;
   private const uint WTD_STATEACTION_CLOSE = 2;
