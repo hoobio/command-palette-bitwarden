@@ -54,13 +54,49 @@ internal static partial class SecureClipboardService
       if (_lastCopiedText == null)
         return;
 
-      var current = GetClipboardText();
-      if (current != null && current == _lastCopiedText)
-        ClearClipboard();
-
-      _lastCopiedText = null;
       _clearTimer?.Dispose();
       _clearTimer = null;
+
+      if (!TryClearIfUnchanged(_lastCopiedText))
+      {
+        if (state != ClearRetried)
+        {
+          _clearTimer = new Timer(OnTimerElapsed, ClearRetried, ClearRetryDelayMs, Timeout.Infinite);
+          return;
+        }
+        DebugLogService.Log("Clipboard", "Could not open the clipboard to clear copied secret");
+      }
+
+      _lastCopiedText = null;
+    }
+  }
+
+  internal static bool RetryOpen(Func<bool> open, int attempts, int delayMs)
+  {
+    for (var attempt = 1; ; attempt++)
+    {
+      if (open())
+        return true;
+      if (attempt >= attempts)
+        return false;
+      Thread.Sleep(delayMs);
+    }
+  }
+
+  private static bool TryClearIfUnchanged(string expected)
+  {
+    if (!RetryOpen(() => OpenClipboard(nint.Zero), OpenAttempts, OpenRetryDelayMs))
+      return false;
+
+    try
+    {
+      if (ReadClipboardText() == expected)
+        EmptyClipboard();
+      return true;
+    }
+    finally
+    {
+      CloseClipboard();
     }
   }
 
@@ -118,51 +154,30 @@ internal static partial class SecureClipboardService
     }
   }
 
-  private static string? GetClipboardText()
+  private static string? ReadClipboardText()
   {
-    if (!OpenClipboard(nint.Zero))
+    var hData = GetClipboardData(CF_UNICODETEXT);
+    if (hData == nint.Zero)
+      return null;
+
+    var ptr = GlobalLock(hData);
+    if (ptr == nint.Zero)
       return null;
 
     try
     {
-      var hData = GetClipboardData(CF_UNICODETEXT);
-      if (hData == nint.Zero)
-        return null;
-
-      var ptr = GlobalLock(hData);
-      if (ptr == nint.Zero)
-        return null;
-
-      try
-      {
-        return Marshal.PtrToStringUni(ptr);
-      }
-      finally
-      {
-        GlobalUnlock(hData);
-      }
+      return Marshal.PtrToStringUni(ptr);
     }
     finally
     {
-      CloseClipboard();
+      GlobalUnlock(hData);
     }
   }
 
-  private static void ClearClipboard()
-  {
-    if (!OpenClipboard(nint.Zero))
-      return;
-
-    try
-    {
-      EmptyClipboard();
-    }
-    finally
-    {
-      CloseClipboard();
-    }
-  }
-
+  private const int OpenAttempts = 5;
+  private const int OpenRetryDelayMs = 50;
+  private const int ClearRetryDelayMs = 2000;
+  private static readonly object ClearRetried = new();
   private const uint CF_UNICODETEXT = 13;
   private const uint GMEM_MOVEABLE = 0x0002;
 
