@@ -1264,6 +1264,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }
+            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+            {
+                RecoverFromFailedRefresh(ex);
+            }
             finally
             {
                 // Defensive: ensure flags are cleared on any exit path.
@@ -1312,6 +1316,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 await _service.RefreshCacheAsync();
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
+            }
+            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+            {
+                RecoverFromFailedRefresh(ex);
             }
             finally
             {
@@ -1377,6 +1385,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }
+            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+            {
+                RecoverFromFailedRefresh(ex);
+            }
             finally
             {
                 _handlingAction = false;
@@ -1423,6 +1435,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }
+            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+            {
+                RecoverFromFailedRefresh(ex);
+            }
             finally
             {
                 _handlingAction = false;
@@ -1464,12 +1480,24 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(Search(_currentSearchText));
                 RaiseItemsChanged();
             }
+            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+            {
+                RecoverFromFailedRefresh(ex);
+            }
             finally
             {
                 _handlingAction = false;
                 IsLoading = false;
             }
         });
+    }
+
+    private void RecoverFromFailedRefresh(Exception ex)
+    {
+        DebugLogService.Log("Page", $"Post-unlock refresh failed: {ex.GetType().Name}: {ex.Message}");
+        _handlingAction = false;
+        IsLoading = false;
+        RebuildForCurrentStatus();
     }
 
     private void ShowLoadingStatus(string title, string command)
