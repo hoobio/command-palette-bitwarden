@@ -1692,11 +1692,11 @@ internal sealed partial class BitwardenCliService
       DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms): {(fallbackStr.Length > 200 ? fallbackStr[..200] + "..." : fallbackStr)}");
       return fallbackStr;
     }
-    catch (OperationCanceledException)
+    catch (OperationCanceledException ex)
     {
       DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {args} after {timeoutMs / 1000}s");
       try { lease.Process.Kill(); } catch { }
-      throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}");
+      throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}", ex);
     }
   }
 
