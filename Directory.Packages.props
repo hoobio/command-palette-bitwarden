@@ -8,7 +8,7 @@
     <PackageVersion Include="Microsoft.Windows.SDK.BuildTools.MSIX" Version="1.7.261008100" />
     <PackageVersion Include="Otp.NET" Version="1.4.1" />
     <PackageVersion Include="Shmuelie.WinRTServer" Version="2.2.1" />
-    <PackageVersion Include="Svg.Skia" Version="4.5.0" />
+    <PackageVersion Include="Svg.Skia" Version="5.2.3" />
     <PackageVersion Include="Meziantou.Analyzer" Version="3.0.316" />
     <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.12.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
