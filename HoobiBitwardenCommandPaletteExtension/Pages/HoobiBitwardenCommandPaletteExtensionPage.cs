@@ -829,7 +829,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
                 var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, iconPriority++, organizationName, organizationTagStyle);
                 list.Add(listItem);
-                if (totpTagStyle == "live" && item.HasTotp && !IsTotpHidden(item))
+                if (totpTagStyle == "live" && item.HasTotp)
                 {
                     var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
                     totpTracked.Add((listItem, item, baseTags));
@@ -929,13 +929,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         foreach (var (listItem, vaultItem, baseTags) in items)
         {
-            var totpTag = IsTotpHidden(vaultItem) ? null : VaultItemHelper.BuildTotpTag(vaultItem.TotpSecret!);
+            var totpTag = VaultItemHelper.BuildTotpTag(vaultItem);
             listItem.Tags = totpTag != null ? [.. baseTags, totpTag] : baseTags;
         }
     }
-
-    private static bool IsTotpHidden(BitwardenItem item) =>
-        item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id);
 
     private void OnAutoLocking()
     {
