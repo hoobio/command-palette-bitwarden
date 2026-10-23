@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Xml;
 using SkiaSharp;
 using Svg.Skia;
 
@@ -11,6 +12,9 @@ internal static class SvgRasterizer
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "SVG rasterization is a best-effort favicon enhancement. SKSvg.Load uses trim-unsafe paths internally, but failures are caught below and the caller falls back to the raw bytes.")]
     internal static byte[]? TryRasterize(byte[] svgBytes, int size = 64)
     {
+        if (!IsSelfContained(svgBytes))
+            return null;
+
         try
         {
             using var svg = new SKSvg();
@@ -45,6 +49,34 @@ internal static class SvgRasterizer
         catch
         {
             return null;
+        }
+    }
+
+    internal static bool IsSelfContained(byte[] svgBytes)
+    {
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+        try
+        {
+            using var reader = XmlReader.Create(new MemoryStream(svgBytes), settings);
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element || !reader.MoveToFirstAttribute())
+                    continue;
+                do
+                {
+                    var value = reader.Value.TrimStart();
+                    if (reader.LocalName is "href" or "src"
+                        && !value.StartsWith('#')
+                        && !value.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+                while (reader.MoveToNextAttribute());
+            }
+            return true;
+        }
+        catch (XmlException)
+        {
+            return false;
         }
     }
 }

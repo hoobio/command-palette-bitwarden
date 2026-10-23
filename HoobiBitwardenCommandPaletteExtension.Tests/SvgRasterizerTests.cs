@@ -120,4 +120,38 @@ public class SvgRasterizerTests
 
         Assert.Null(result);
     }
+
+    [Theory]
+    [InlineData("<image href=\"http://127.0.0.1:1/x.png\"/>")]
+    [InlineData("<image xmlns:xlink=\"http://www.w3.org/1999/xlink\" xlink:href=\"https://example.com/x.png\"/>")]
+    [InlineData("<use xmlns:xlink=\"http://www.w3.org/1999/xlink\" xlink:href=\"\\\\host\\share\\x.svg#a\"/>")]
+    [InlineData("<image href=\"file:///C:/x.png\"/>")]
+    [InlineData("<script src=\"http://example.com/x.js\"/>")]
+    public void TryRasterize_ExternalReference_ReturnsNull(string element)
+    {
+        var svg = Svg("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\">" + element + "</svg>");
+
+        Assert.False(SvgRasterizer.IsSelfContained(svg));
+        Assert.Null(SvgRasterizer.TryRasterize(svg));
+    }
+
+    [Fact]
+    public void TryRasterize_Doctype_ReturnsNull()
+    {
+        var svg = Svg("<!DOCTYPE svg [<!ENTITY x SYSTEM \"http://example.com/x\">]><svg xmlns=\"http://www.w3.org/2000/svg\">&x;</svg>");
+
+        Assert.False(SvgRasterizer.IsSelfContained(svg));
+        Assert.Null(SvgRasterizer.TryRasterize(svg));
+    }
+
+    [Fact]
+    public void IsSelfContained_InternalAndDataReferences_ReturnsTrue()
+    {
+        var svg = Svg(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"10\" height=\"10\">" +
+            "<defs><rect id=\"r\" width=\"10\" height=\"10\"/></defs>" +
+            "<use xlink:href=\"#r\"/><image href=\"data:image/png;base64,AAAA\"/></svg>");
+
+        Assert.True(SvgRasterizer.IsSelfContained(svg));
+    }
 }
