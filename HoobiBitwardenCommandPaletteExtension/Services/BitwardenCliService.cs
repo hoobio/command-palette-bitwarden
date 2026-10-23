@@ -623,13 +623,20 @@ internal sealed partial class BitwardenCliService
       psi.Environment["BW_NOINTERACTION"] = "true";
 
       using var process = _processFactory(psi);
-      process.StandardInput.Close();
-      using var cts = new CancellationTokenSource(CliTimeoutMs);
-      var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
-      var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
-      var stdout = await stdoutTask;
-      var stderr = await stderrTask;
-      try { process.Kill(true); } catch { }
+      string stdout, stderr;
+      try
+      {
+        process.StandardInput.Close();
+        using var cts = new CancellationTokenSource(CliTimeoutMs);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+        stdout = await stdoutTask;
+        stderr = await stderrTask;
+      }
+      finally
+      {
+        try { process.Kill(true); } catch { }
+      }
 
       var key = stdout.Trim();
       if (!string.IsNullOrEmpty(key) && !key.Contains(' '))
@@ -775,6 +782,9 @@ internal sealed partial class BitwardenCliService
   {
     DebugLogService.Log("Auth", "LoginAsync started");
     DisposeDeviceVerificationProcess();
+    ICliProcess? process = null;
+    CancellationTokenSource? cts = null;
+    var pending = false;
     try
     {
       var sanitizedEmail = email.Replace("\"", "");
@@ -815,8 +825,8 @@ internal sealed partial class BitwardenCliService
       psi.Environment["BW_MP"] = password;
       ApplyEnvironment(psi);
 
-      var process = _processFactory(psi);
-      var cts = new CancellationTokenSource(CliTimeoutMs);
+      process = _processFactory(psi);
+      cts = new CancellationTokenSource(CliTimeoutMs);
 
       var allPrompts = new[] { "device verification", "Two-step" };
       var stdoutTask = ReadStreamWithPromptDetectionAsync(process.StandardOutput, allPrompts, cts.Token);
@@ -824,6 +834,8 @@ internal sealed partial class BitwardenCliService
 
       var completed = await Task.WhenAny(stdoutTask, stderrTask);
       var result = await completed;
+      if (!result.Detected)
+        result = await (completed == stdoutTask ? stderrTask : stdoutTask);
 
       if (result.Detected)
       {
@@ -833,30 +845,9 @@ internal sealed partial class BitwardenCliService
           _pendingDeviceVerificationCts = cts;
           _pendingStdoutTask = stdoutTask;
           _pendingStderrTask = stderrTask;
+          pending = true;
           return (false, "New device verification required - enter OTP sent to your email", false, true);
         }
-        try { process.Kill(); } catch { }
-        process.Dispose();
-        cts.Dispose();
-        return (false, "Two-factor authentication required - enter your 2FA code", true, false);
-      }
-
-      // Neither prompt detected during streaming: check the other stream too
-      var otherTask = completed == stdoutTask ? stderrTask : stdoutTask;
-      var other = await otherTask;
-      if (other.Detected)
-      {
-        if (other.Content.Contains("device verification", StringComparison.OrdinalIgnoreCase))
-        {
-          _pendingDeviceVerificationProcess = process;
-          _pendingDeviceVerificationCts = cts;
-          _pendingStdoutTask = stdoutTask;
-          _pendingStderrTask = stderrTask;
-          return (false, "New device verification required - enter OTP sent to your email", false, true);
-        }
-        try { process.Kill(); } catch { }
-        process.Dispose();
-        cts.Dispose();
         return (false, "Two-factor authentication required - enter your 2FA code", true, false);
       }
 
@@ -866,9 +857,6 @@ internal sealed partial class BitwardenCliService
       var stdout = (await stdoutTask).Content.Trim();
       var stderr = (await stderrTask).Content.Trim();
       var exitCode = process.ExitCode;
-
-      process.Dispose();
-      cts.Dispose();
 
       if (exitCode == 0 && !string.IsNullOrEmpty(stdout) && !stdout.Contains(' '))
       {
@@ -905,6 +893,15 @@ internal sealed partial class BitwardenCliService
     {
       DisposeDeviceVerificationProcess();
       return (false, ex.Message, false, false);
+    }
+    finally
+    {
+      if (!pending)
+      {
+        try { process?.Kill(true); } catch { }
+        process?.Dispose();
+        cts?.Dispose();
+      }
     }
   }
 

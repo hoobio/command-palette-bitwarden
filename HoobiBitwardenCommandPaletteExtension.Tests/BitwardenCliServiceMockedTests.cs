@@ -126,6 +126,37 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task Unlock_ReadFails_KillsProcess()
+  {
+    var (svc, factory) = CreateService();
+    var process = new FakeCliProcess(exitCode: 0, id: 301);
+    process.StdoutStream.Fail(new IOException("pipe broken"));
+    process.StderrStream.Complete();
+    factory.Enqueue(process);
+
+    var (success, _) = await svc.UnlockAsync("masterpass");
+
+    Assert.False(success);
+    Assert.True(process.Killed);
+  }
+
+  [Fact]
+  public async Task Login_ReadFails_KillsAndDisposesProcess()
+  {
+    var (svc, factory) = CreateService();
+    var process = new FakeCliProcess(exitCode: 0, id: 301);
+    process.StdoutStream.Fail(new IOException("pipe broken"));
+    process.StderrStream.Complete();
+    factory.Enqueue(process);
+
+    var (success, _, _, _) = await svc.LoginAsync("user@test.com", "pass");
+
+    Assert.False(success);
+    Assert.True(process.Killed);
+    Assert.True(process.Disposed);
+  }
+
+  [Fact]
   public async Task Unlock_NotLoggedIn_ResetsToLoggedOut()
   {
     var (svc, factory) = CreateService();
