@@ -10,12 +10,12 @@ internal sealed partial class UnlockVaultPage : ContentPage
 {
   private readonly UnlockForm _form;
 
-  public UnlockVaultPage(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string>? onSubmit = null, Action? onBiometricUnlock = null)
+  public UnlockVaultPage(BitwardenSettingsManager? settings = null, Action<string>? onSubmit = null, Action? onBiometricUnlock = null)
   {
     Name = "Unlock";
     Title = "Unlock Bitwarden Vault";
     Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
-    _form = new UnlockForm(service, settings, onSubmit, onBiometricUnlock);
+    _form = new UnlockForm(settings, onSubmit, onBiometricUnlock);
   }
 
   public override IContent[] GetContent()
@@ -29,7 +29,6 @@ internal sealed partial class UnlockForm : FormContent
 {
   internal const string SubmitButtonTitle = "Unlock";
 
-  private readonly BitwardenCliService _service;
   private readonly BitwardenSettingsManager? _settings;
   private readonly Action<string>? _onSubmit;
   private readonly Action? _onBiometricUnlock;
@@ -93,9 +92,8 @@ internal sealed partial class UnlockForm : FormContent
     """;
   }
 
-  public UnlockForm(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string>? onSubmit = null, Action? onBiometricUnlock = null)
+  public UnlockForm(BitwardenSettingsManager? settings = null, Action<string>? onSubmit = null, Action? onBiometricUnlock = null)
   {
-    _service = service;
     _settings = settings;
     _onSubmit = onSubmit;
     _onBiometricUnlock = onBiometricUnlock;

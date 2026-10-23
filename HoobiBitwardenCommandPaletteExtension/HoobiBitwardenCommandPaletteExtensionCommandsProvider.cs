@@ -29,13 +29,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         _commands = [
             new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(_service, _settingsManager))
             {
-#if CHANNEL_DEV
-                Title = "Bitwarden (Dev)",
-#elif CHANNEL_PRERELEASE
-                Title = "Bitwarden (Prerelease)",
-#else
-                Title = "Bitwarden",
-#endif
+                Title = DisplayName,
                 Subtitle = "Search your vault",
             },
         ];

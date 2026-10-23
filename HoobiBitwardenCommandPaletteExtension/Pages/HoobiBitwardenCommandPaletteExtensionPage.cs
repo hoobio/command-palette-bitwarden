@@ -630,7 +630,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
 
-        var item = new ListItem(new Pages.LoginPage(_service, _settings, OnLoginSubmitted))
+        var item = new ListItem(new Pages.LoginPage(_settings, OnLoginSubmitted))
         {
             Title = "Login to Bitwarden",
             Subtitle = _errorMessage ?? "Sign in with your email and master password",
@@ -694,7 +694,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true && _settings?.AutoBiometricUnlock.Value == true;
         ICommand command = biometricEnabled && !_biometricClickFailed
             ? new AnonymousCommand(OnBiometricUnlockRequested) { Name = "Unlock with Windows Hello", Result = CommandResult.KeepOpen() }
-            : new Pages.UnlockVaultPage(_service, _settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
+            : new Pages.UnlockVaultPage(_settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
 
         var item = new ListItem(command)
         {
@@ -709,7 +709,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return item;
     }
 
-    private ListItem BuildSetServerItem() => new(new Pages.SetServerPage(_service, OnSetServerSubmitted))
+    private ListItem BuildSetServerItem() => new(new Pages.SetServerPage(OnSetServerSubmitted))
     {
         Title = "Set Bitwarden Server",
         Subtitle = BitwardenCliService.ServerUrl ?? "bitwarden.com",

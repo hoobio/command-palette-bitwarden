@@ -66,6 +66,16 @@ public class FingerprintHelperTests
     Assert.All(words, w => Assert.Contains(w, EFFWordList.Words));
   }
 
+  [Theory]
+  [InlineData("test-app-id", 0, "postcard-etching-neglector-mushiness-delusion")]
+  [InlineData("bitwarden", 7, "illusion-jarring-tanning-ember-anaerobic")]
+  [InlineData("", 200, "library-footgear-ruse-carton-hurler")]
+  public void ComputeFingerprint_MatchesGoldenOutput(string appId, int seed, string expected)
+  {
+    var publicKeyDer = Enumerable.Range(0, 64).Select(i => (byte)(i * 3 + seed)).ToArray();
+    Assert.Equal(expected, FingerprintHelper.ComputeFingerprint(appId, publicKeyDer));
+  }
+
   [Fact]
   public void EFFWordList_Has7776Words()
   {

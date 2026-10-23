@@ -10,12 +10,12 @@ internal sealed partial class LoginPage : ContentPage
 {
   private readonly LoginForm _form;
 
-  public LoginPage(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
+  public LoginPage(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
   {
     Name = "Login";
     Title = "Login to Bitwarden";
     Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
-    _form = new LoginForm(service, settings, onSubmit);
+    _form = new LoginForm(settings, onSubmit);
   }
 
   public override IContent[] GetContent()
@@ -34,7 +34,6 @@ internal sealed partial class LoginForm : FormContent
   // (libs/common/src/auth/enums/two-factor-provider-type.ts in bitwarden/clients).
   private const string NoMethodValue = "none";
 
-  private readonly BitwardenCliService _service;
   private readonly BitwardenSettingsManager? _settings;
   private readonly Action<string, string, int?>? _onSubmit;
 
@@ -124,9 +123,8 @@ internal sealed partial class LoginForm : FormContent
     """;
   }
 
-  public LoginForm(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
+  public LoginForm(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
   {
-    _service = service;
     _settings = settings;
     _onSubmit = onSubmit;
     TemplateJson = BuildTemplate();

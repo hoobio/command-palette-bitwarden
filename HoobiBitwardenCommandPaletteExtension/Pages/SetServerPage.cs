@@ -13,9 +13,8 @@ internal sealed partial class SetServerPage : DynamicListPage
   private readonly Action<ServerConfig>? _onSubmit;
   private string _searchText = string.Empty;
 
-  public SetServerPage(BitwardenCliService service, Action<ServerConfig>? onSubmit = null)
+  public SetServerPage(Action<ServerConfig>? onSubmit = null)
   {
-    _ = service;
     _onSubmit = onSubmit;
     Name = "Set Server";
     Title = "Set Bitwarden Server";
