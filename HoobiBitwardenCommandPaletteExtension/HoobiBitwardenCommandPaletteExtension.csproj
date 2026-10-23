@@ -134,7 +134,7 @@
     <DefineConstants>$(DefineConstants);CHANNEL_RELEASE</DefineConstants>
   </PropertyGroup>
 
-  <Target Name="StampPackageIdentityName" BeforeTargets="Build;_ConvertItems">
+  <Target Name="StampPackageIdentityName" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <AppxManifestPath>$(MSBuildProjectDirectory)\Package.appxmanifest</AppxManifestPath>
       <VersionTxtPath>$(MSBuildProjectDirectory)\..\version.txt</VersionTxtPath>

@@ -45,19 +45,9 @@ $p = Get-AppxPackage -Name 'Hoobi.BitwardenCommandPaletteExtension.Dev'
 
 If `Name` has no `.Dev` suffix, or `InstallLocation` is not your worktree, the deploy is wrong - do not stop there.
 
-### Release-build trap (this is the one that bites)
+Stamping note: the per-channel identity and version are stamped into `Package.appxmanifest` before `PrepareForBuild`, so every build (including Debug after Release) generates the output `AppxManifest.xml` with its own channel. Check the output before registering: `Select-String -Path "$out\AppxManifest.xml" -Pattern '<Identity Name'` must show `...Extension.Dev`.
 
-The per-channel identity is stamped into `Package.appxmanifest` at build time, and the stamp is **incremental**. If you run a `-c Release` build first (e.g. for lint/test parity) and then a `-c Debug` build in the same checkout, the Debug build can skip regenerating the output `AppxManifest.xml`, leaving it stamped with the **Release** identity. Registering that loose layout installs the *production* channel from your Debug bin - exactly the "I deployed but nothing changed / wrong channel" symptom.
-
-Guard against it: when deploying from a worktree, do a clean Debug build with the channel pinned explicitly, and check the output manifest before registering:
-
-```powershell
-Remove-Item -Recurse -Force "<worktree>\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug" -ErrorAction SilentlyContinue
-dotnet build .\HoobiBitwardenCommandPaletteExtension\HoobiBitwardenCommandPaletteExtension.csproj -c Debug /p:Platform=x64 /p:PackageChannel=Dev
-Select-String -Path "$out\AppxManifest.xml" -Pattern '<Identity Name'   # must show ...Extension.Dev
-```
-
-Stamping note: a Debug build rewrites the tracked `Package.appxmanifest` to the Dev identity as a side effect. **Don't commit that change** - `git checkout -- HoobiBitwardenCommandPaletteExtension/Package.appxmanifest` before committing.
+Commit note: a Debug build rewrites the tracked `Package.appxmanifest` to the Dev identity as a side effect. **Don't commit that change** - `git checkout -- HoobiBitwardenCommandPaletteExtension/Package.appxmanifest` before committing.
 
 ## Git Commit Message Format
 
