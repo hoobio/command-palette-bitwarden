@@ -160,13 +160,24 @@ internal static partial class ContextAwarenessService
       Models.UriMatchType.Host =>
           browserHost != null && itemHost != null && browserHost.Equals(itemHost, StringComparison.OrdinalIgnoreCase),
 
-      // Vault URI used as regex pattern (set by vault owner, not external input). 100ms timeout mitigates ReDoS.
       Models.UriMatchType.RegularExpression =>
-          !string.IsNullOrEmpty(browserUrl) && System.Text.RegularExpressions.Regex.IsMatch(browserUrl, entry.Uri, System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100)),
+          !string.IsNullOrEmpty(browserUrl) && SafeRegexMatch(browserUrl, entry.Uri),
 
       _ => // Default and Domain: subdomain-inclusive host matching
           browserHost != null && itemHost != null && HostsMatch(browserHost, itemHost),
     };
+  }
+
+  private static bool SafeRegexMatch(string input, string pattern)
+  {
+    try
+    {
+      return System.Text.RegularExpressions.Regex.IsMatch(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+    }
+    catch (Exception ex) when (ex is ArgumentException or System.Text.RegularExpressions.RegexMatchTimeoutException)
+    {
+      return false;
+    }
   }
 
   internal static string NormalizeUrl(string url)

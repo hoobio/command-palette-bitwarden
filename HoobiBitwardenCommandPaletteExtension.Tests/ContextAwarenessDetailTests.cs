@@ -168,6 +168,13 @@ public class ContextAwarenessDetailTests
   }
 
   [Fact]
+  public void UriMatch_RegularExpression_InvalidPattern_ReturnsFalse()
+  {
+    var entry = new ItemUri("*.example.com", UriMatchType.RegularExpression);
+    Assert.False(ContextAwarenessService.UriMatchesBrowserContext(entry, "https://sub.example.com", "sub.example.com"));
+  }
+
+  [Fact]
   public void UriMatch_Never_NeverMatches()
   {
     var item = new BitwardenItem
