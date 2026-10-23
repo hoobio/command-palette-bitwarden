@@ -13,8 +13,9 @@ jobs:
     steps:
       - name: Validate PR title
         id: validate
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
           echo "Validating PR title: $PR_TITLE"
           
           # Conventional commits pattern
