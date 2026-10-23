@@ -396,7 +396,18 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
     var statusChanged = false;
     svc.StatusChanged += () => statusChanged = true;
-    await svc.LogoutAsync();
+    var realIconDir = FaviconService.CacheDir;
+    var tempIconDir = Path.Combine(Path.GetTempPath(), $"bw-icons-{Guid.NewGuid():N}");
+    FaviconService.CacheDir = tempIconDir;
+    try
+    {
+      await svc.LogoutAsync();
+    }
+    finally
+    {
+      FaviconService.CacheDir = realIconDir;
+      if (Directory.Exists(tempIconDir)) Directory.Delete(tempIconDir, recursive: true);
+    }
     Assert.False(svc.IsUnlocked);
     Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
     Assert.True(statusChanged);

@@ -15,7 +15,7 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal static partial class FaviconService
 {
-    private static readonly string CacheDir = Path.Combine(
+    internal static string CacheDir { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "HoobiBitwardenCommandPalette", "Icons");
 
