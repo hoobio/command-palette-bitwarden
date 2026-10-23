@@ -858,6 +858,7 @@ internal sealed partial class BitwardenCliService
       return Task.FromResult("");
     var alreadyCompleted = existing.IsCompleted;
     return existing.ContinueWith(
+      // A reader that finished without detecting a prompt consumed the whole stream, so a new read returns empty.
       t => alreadyCompleted && t.Result.Detected ? readRemainder(token) : Task.FromResult(t.Result.Content),
       token, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default).Unwrap();
   }
@@ -1473,6 +1474,7 @@ internal sealed partial class BitwardenCliService
       var reader = lease.Process.StandardOutput;
       var buffer = new char[4096];
       var accum = new System.Text.StringBuilder();
+      // Node pkg does not flush stdout, so ReadLineAsync blocks until bw exits (~3s); chunked ReadAsync with brace tracking instead.
       int depth = 0;
       int jsonStartIdx = -1;
       bool inJsonString = false;

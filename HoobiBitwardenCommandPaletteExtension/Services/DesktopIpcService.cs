@@ -316,12 +316,14 @@ internal static partial class DesktopIpcService
 
       SendRaw(setupMsg);
 
+      // Desktop can show a fingerprint dialog without notifying the client.
       _ = Task.Delay(2000).ContinueWith(_ =>
       {
         if (_encryptionReady is { Task.IsCompleted: false })
           _onStatus?.Invoke("Check Bitwarden Desktop app - you may need to approve the connection");
       }, TaskScheduler.Default);
 
+      // The x6 timeout leaves time for fingerprint approval.
       using var cts = new CancellationTokenSource(ProtocolTimeoutMs * 6);
       cts.Token.Register(() => _encryptionReady.TrySetException(new TimeoutException("IPC key exchange timed out - check Bitwarden Desktop app is running with 'Allow browser integration' enabled")));
 #pragma warning disable VSTHRD003 // _encryptionReady is a ThreadPool-based TCS; awaiter is on Task.Run thread

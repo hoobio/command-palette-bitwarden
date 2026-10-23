@@ -16,6 +16,7 @@ internal sealed record CliInstallResult(bool Success, CliInstallMethod Method, s
 
 internal sealed class BitwardenCliInstaller
 {
+  // The Store does not allow a packaged app to install other software unprompted.
   public const string ManualDownloadUrl = "https://bitwarden.com/download/?app=cli&platform=windows";
   internal const string WingetInstallArgs =
       "install --id Bitwarden.CLI --exact --silent --scope user --accept-package-agreements --accept-source-agreements";
