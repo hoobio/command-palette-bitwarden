@@ -5,9 +5,7 @@ using System.Threading;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
-// Workaround for https://github.com/microsoft/PowerToys/issues/46003: PowerToys 0.101+ submits Enter
-// in a single-line TextBox but not in a PasswordBox, so Enter in a password field invokes the submit button via UIA.
-// If PowerToys runs elevated and this extension does not, UIPI blocks the hook and UIA, and Enter does nothing.
+// Workaround for https://github.com/microsoft/PowerToys/issues/46003: PowerToys 0.101+ does not submit Enter in a PasswordBox; UIPI blocks this when PowerToys is elevated and the extension is not.
 internal static unsafe partial class EnterKeySubmitService
 {
   private static volatile string? _armedButtonName;
@@ -143,7 +141,6 @@ internal static unsafe partial class EnterKeySubmitService
     return CallNextHookEx(0, nCode, wParam, lParam);
   }
 
-  // Debounces our own invokes against key auto-repeat.
   private static bool TryClaimInvoke()
   {
     var now = Stopwatch.GetTimestamp();

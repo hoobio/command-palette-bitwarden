@@ -33,10 +33,7 @@ env:
   WIX_SOURCE_PATH: installer/HoobiBitwardenCommandPaletteExtension.wxs
   ASSET_BASE_NAME: HoobiBitwardenCommandPaletteExtension
   BOM_FILE: sbom.cdx.json
-  # NOTE: GitHub Actions does not allow expressions in `uses:` refs, so the
-  # pipeline-tools pin is repeated in each `uses:` line below. Bump in lockstep.
-  # Current pin: hoobio/pipeline-tools @ v1.6.0 (adds App-token auth to
-  # publish-github-release so `release: published` fires downstream workflows).
+  # GitHub Actions disallows expressions in `uses:` refs, so the pipeline-tools pin is repeated in each `uses:` line: bump in lockstep.
 
 jobs:
   detect-changes:
@@ -105,10 +102,7 @@ jobs:
       - name: Lint (build with TreatWarningsAsErrors)
         run: dotnet build -c Release -p:Platform=x64 --no-restore
 
-      # The xUnit suite is occasionally flaky on hosted runners (intermittent
-      # SignalR/HTTP timeouts in Watchtower / VaultItemHelper tests). Retry up
-      # to 3 times before failing the job; clean the coverage dir between
-      # attempts so ReportGenerator only aggregates the successful run.
+      # xUnit is flaky on hosted runners (intermittent SignalR/HTTP timeouts): retry 3 times, clearing the coverage dir so ReportGenerator only sees the successful run
       - name: Test with coverage
         shell: pwsh
         run: |
@@ -164,7 +158,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Patterns excluded from threshold; defined in .github/coverage-exclusions.json
           $exclusions = Get-Content "${{ github.workspace }}/.github/coverage-exclusions.json" | ConvertFrom-Json
           $excludeFromThreshold = $exclusions | Select-Object -ExpandProperty pattern
 
@@ -257,10 +250,7 @@ jobs:
   build-msix:
     name: Build MSIX (${{ matrix.platform }})
     needs: [detect-changes]
-    # Always run so the required check posts a status even on non-code PRs.
-    # Heavy steps gate on env.SHOULD_BUILD; the no-op path posts a notice and
-    # exits 0. Use Linux for the skip path (sub-10s spin-up) and Windows only
-    # when there's an actual MSIX to produce.
+    # Always runs so the required check posts a status on non-code PRs; the skip path uses Linux, the build path Windows
     if: always() && needs.detect-changes.result != 'cancelled' && needs.detect-changes.result != 'failure'
     runs-on: ${{ (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true') && 'windows-latest' || 'ubuntu-latest' }}
     strategy:
@@ -268,15 +258,10 @@ jobs:
       matrix:
         platform: [x64, ARM64]
     env:
-      # True for code-bearing PRs and for non-pull_request events (push/workflow_dispatch/release).
       SHOULD_BUILD: ${{ needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true' }}
-      # Sign on release-please PRs and on main pushes; PRs from contributors stay unsigned.
       SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
-      # Side-by-side package identity. The release-please pre-release PR builds the Prerelease
-      # channel (its own Identity Name, DisplayName, and COM CLSID); every other shipped build
-      # is Release. MSBuild promotes this env var to the $(PackageChannel) property the .csproj
-      # reads. Local Debug builds default to the Dev channel.
+      # MSBuild promotes this env var to the $(PackageChannel) property the .csproj reads
       PackageChannel: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') && 'Prerelease' || 'Release' }}
     steps:
       - name: Skip notice (no code changes)
@@ -311,11 +296,7 @@ jobs:
           manifest-path: ${{ env.APPXMANIFEST_PATH }}
           version: ${{ steps.version.outputs.version }}
 
-      # Unsigned (PR / contributor) builds can only be installed via
-      # `Add-AppxPackage -AllowUnsigned` when the publisher sits in the reserved
-      # unsigned namespace (the OID below). Windows also guarantees this identity
-      # never collides with the signed/Store build, so it's safe to diverge here.
-      # Signed builds skip this and keep the certificate-matching publisher.
+      # Add-AppxPackage -AllowUnsigned only installs packages whose publisher is in the reserved unsigned namespace (the OID below)
       - name: Use unsigned-namespace publisher (unsigned builds only)
         if: env.SHOULD_BUILD == 'true' && (env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true')
         shell: pwsh
@@ -339,10 +320,6 @@ jobs:
           platform: ${{ matrix.platform }}
           output-dir: ${{ github.workspace }}\AppPackages
 
-      # `dotnet publish` lands the MSIX nested under
-      # AppPackages\<pkg>_<v>.<rev>_<plat>_Test\<pkg>_<v>.<rev>_<plat>.msix.
-      # Stage it to a flat directory under a consistent name so the signing step,
-      # artifact upload, and release attachment all see a clean path.
       - name: Stage MSIX
         if: env.SHOULD_BUILD == 'true'
         shell: pwsh
@@ -384,14 +361,7 @@ jobs:
 
   build-msi:
     name: Build MSI (${{ matrix.platform }})
-    # MSI is a thin wrapper around the signed MSIX (it ships only the .msix
-    # plus the publisher .cer and registers them via custom actions), so it
-    # has to wait for build-msix to produce the artifact for the same platform.
-    #
-    # Only build the MSI when the MSIX would be signed: an unsigned wrapped
-    # .msix can't be Add-AppxPackage'd on a normal user machine, so producing
-    # a contributor-PR MSI artifact would just be misleading. The condition
-    # here mirrors SHOULD_SIGN below (release-please PRs + main pushes).
+    # Only built when the MSIX is signed (mirrors SHOULD_SIGN): an unsigned wrapped .msix cannot be installed with Add-AppxPackage on a normal machine
     needs: [detect-changes, build-msix]
     if: >-
       always()
@@ -407,12 +377,6 @@ jobs:
       matrix:
         platform: [x64, ARM64]
     env:
-      # The job-level `if:` already gates on the same conditions as SHOULD_SIGN,
-      # so by the time we reach this env block SHOULD_SIGN is always true. We
-      # keep the variable for symmetry with build-msix and so a future
-      # relaxation of the gate (e.g. allow unsigned MSI builds for testing)
-      # only needs to touch the `if:`.
-      SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
     steps:
       - uses: actions/checkout@v7
@@ -441,28 +405,19 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path $env:PAYLOAD_DIR -Force | Out-Null
 
-          # The build-msix job uploads `${ASSET_BASE_NAME}-<ver>-<plat>.msix`.
-          # WiX expects a fixed filename so it can reference the File Id without
-          # baking the version into the .wxs. Rename on stage.
+          # WiX references a fixed filename, so the versioned .msix is renamed on stage
           $msix = Get-ChildItem -LiteralPath $env:MSIX_DOWNLOAD -Filter *.msix -ErrorAction Stop | Select-Object -First 1
           if (-not $msix) { throw "No .msix in $env:MSIX_DOWNLOAD" }
           Copy-Item -LiteralPath $msix.FullName `
                     -Destination "$env:PAYLOAD_DIR\HoobiBitwardenCommandPaletteExtension.msix" `
                     -Force
 
-          # Publisher cert from the repo root - the same .cer the README tells
-          # users to import manually for raw .msix sideloads. The MSI's
-          # ImportCert custom action drops it into Cert:\CurrentUser\TrustedPeople
-          # so the bundled .msix's signature chains to a trusted root.
           Copy-Item -LiteralPath "${{ github.workspace }}\HoobiBitwardenCommandPaletteExtension.cer" `
                     -Destination "$env:PAYLOAD_DIR\HoobiBitwardenCommandPaletteExtension.cer" `
                     -Force
 
           Get-ChildItem $env:PAYLOAD_DIR | Format-Table Name, Length
 
-      # The build-msi-wix action emits `<wxs-base-name>-<version>-<platform>.msi`,
-      # which (because the .wxs filename matches ASSET_BASE_NAME) is already the
-      # final asset name we want for upload + release.
       - name: Build MSI
         uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v2.4.0
         with:
@@ -471,13 +426,11 @@ jobs:
           platform: ${{ matrix.platform }}
           payload-dir: ${{ github.workspace }}\staging\msi-payload-${{ matrix.platform }}
           output-dir: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}
-          # Pin extensions to 5.x; the unversioned form pulls the latest (currently
-          # 7.0.0), which fails with "Could not find expected package root folder
-          # wixext5. Ensure WixToolset.UI.wixext/7.0.0 is compatible with WiX v5."
+          # Pinned to 5.x: the unversioned form pulls 7.0.0, which fails with "Could not find expected package root folder wixext5"
           extensions: "WixToolset.UI.wixext/5.0.2,WixToolset.Util.wixext/5.0.2"
 
       - name: Sign MSI
-        if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
+        if: env.HAS_SIGNING_CERT == 'true'
         uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v2.4.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
@@ -486,9 +439,9 @@ jobs:
           packages-path: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}
 
       - name: Skip-sign notice
-        if: env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true'
+        if: env.HAS_SIGNING_CERT != 'true'
         shell: bash
-        run: echo "::warning::MSI produced unsigned (SHOULD_SIGN=$SHOULD_SIGN, HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
+        run: echo "::warning::MSI produced unsigned (HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v7
@@ -499,10 +452,6 @@ jobs:
 
   bundle:
     name: Bundle MSIX (all platforms)
-    # Combine the per-arch .msix into one signed .msixbundle - the Store artifact
-    # (the msstore CLI uploads exactly one package per submission) and an extra
-    # release asset. Same gate as build-msi: signed paths only (release-please
-    # PRs + main pushes), so the per-arch .msix it consumes are signed.
     needs: [detect-changes, build-msix]
     if: >-
       always()
@@ -525,7 +474,6 @@ jobs:
           $ver = (Get-Content version.txt -Raw).Trim()
           "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
 
-      # Both per-arch artifacts land in the same folder so makeappx bundles them together.
       - name: Download MSIX (x64)
         uses: actions/download-artifact@v8
         with:
@@ -547,7 +495,6 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          # Newest x64 makeappx + signtool from the Windows SDK.
           $kit = 'C:\Program Files (x86)\Windows Kits\10\bin'
           function Resolve-SdkTool($name) {
             Get-ChildItem $kit -Recurse -Filter $name -ErrorAction SilentlyContinue |
@@ -566,8 +513,6 @@ jobs:
           & $makeappx bundle /d "$env:GITHUB_WORKSPACE\staging\bundle-input" /p $bundle /bv "$env:VERSION.0" /o
           if ($LASTEXITCODE -ne 0) { throw "makeappx bundle failed ($LASTEXITCODE)" }
 
-          # Sign the bundle (sideloaded from the release; the Store re-signs but
-          # accepts a signed bundle). Mirrors the per-arch sign-msix step.
           if ($env:HAS_SIGNING_CERT -eq 'true') {
             $pfx = Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString('N') + '.pfx')
             [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
@@ -645,11 +590,6 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
-      # Channel routing for the Backstage hierarchy in Dependency-Track (v2):
-      #   release event              -> channel=release,    mark-latest=true,  no prune
-      #   release-please PR (prerelease tag is cut by pre-release job)
-      #                              -> channel=prerelease, mark-latest=false, prune
-      #   push / dispatch / other PR -> channel=ci + sub-channel=<branch>, mark-latest=false, prune
       - name: Read version
         id: version
         shell: pwsh
@@ -671,9 +611,6 @@ jobs:
           $isRelease = $env:EVENT_NAME -eq 'release'
           $isPrerelease = $env:EVENT_NAME -eq 'pull_request' -and $env:HEAD_REF -eq 'release-please--branches--main'
 
-          # v2 Backstage hierarchy: feature/CI builds nest under a shared "ci"
-          # channel with the branch as the sub-channel (channel=ci, sub-channel=<branch>).
-          # release / prerelease sit directly under the component (no sub-channel).
           $subChannel = ''
           if ($isRelease) {
             $channel = 'release'
@@ -834,21 +771,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # release-please leaves the release as a draft; the REST endpoint
-          # /releases/tags/{tag} returns 404 for drafts (the tag isn't created
-          # until publish). `gh release view` lists drafts and matches by name,
-          # so we use it to read the current body and `gh release edit` to
-          # rewrite it. The draft flip-to-published happens in the next step.
+          # /releases/tags/{tag} returns 404 for the draft release-please leaves, so read the body with `gh release view`
           TAG="${{ needs.release-please.outputs.tag_name }}"
           BODY=$(gh release view "$TAG" --repo "${{ github.repository }}" --json body --jq '.body // ""')
           TRUST=$'\n\n---\n> ✅ WACK certified (x64, ARM64) · \U0001F512 [CodeQL scanned](https://github.com/${{ github.repository }}/actions/workflows/codeql.yml)'
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${TRUST}"
 
-      # Publish via the release-please App (not GITHUB_TOKEN) so the resulting
-      # `release: published` event triggers the SBOM job again with
-      # channel=release. GITHUB_TOKEN-driven publishes are silently dropped
-      # from follow-up workflow triggers, which is why v1.9.1 only uploaded to
-      # Dependency-Track under channel=ci/main.
+      # Published via the release-please App, not GITHUB_TOKEN: GITHUB_TOKEN publishes trigger no follow-up workflows (v1.9.1 only reached Dependency-Track under channel=ci/main)
       - name: Publish draft release
         uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v2.4.0
         with:
@@ -858,9 +787,7 @@ jobs:
 
   store-publish:
     name: Publish to Microsoft Store
-    # Real releases only. Takes the prebuilt .msixbundle artifact and submits it to
-    # the Store with the WHATS_NEW.md release notes. msstore uploads one package per
-    # submission and matches by extension, hence a single bundle (not two .msix).
+    # msstore uploads one package per submission and matches by extension, hence a single bundle (not two .msix)
     needs: [release-please, bundle, release]
     if: >-
       always()
@@ -872,7 +799,7 @@ jobs:
       STORE_PRODUCT_ID: 9P5KS8T80MV3
       WHATS_NEW_PATH: HoobiBitwardenCommandPaletteExtension/Assets/WHATS_NEW.md
     steps:
-      - uses: actions/checkout@v7 # for WHATS_NEW.md
+      - uses: actions/checkout@v7
 
       - name: Download MSIX bundle
         uses: actions/download-artifact@v8
@@ -901,17 +828,13 @@ jobs:
           $bundle = (Get-ChildItem bundle -Filter *.msixbundle | Select-Object -First 1).FullName
           if (-not $bundle) { throw 'No .msixbundle artifact found' }
 
-          # Clear any leftover pending draft so publish starts from the live submission.
           msstore submission delete $env:PRODUCT_ID --no-confirm 2>$null
           $global:LASTEXITCODE = 0
 
-          # Clone the live submission, upload the bundle, hold the commit.
           msstore publish $bundle -id $env:PRODUCT_ID --noCommit
           if ($LASTEXITCODE -ne 0) { throw "msstore publish failed ($LASTEXITCODE)" }
 
-          # Splice in WHATS_NEW.md, and retire any non-bundle (loose .msix) packages
-          # the clone carried over. The PendingDelete loop auto-handles the one-time
-          # .msix -> .msixbundle migration and is a no-op after that (bundle -> bundle).
+          # The PendingDelete loop handles the one-time .msix -> .msixbundle migration and is a no-op after that
           $out = msstore submission get $env:PRODUCT_ID | Out-String
           $s = $out.IndexOf('{'); $e = $out.LastIndexOf('}')
           if ($s -lt 0 -or $e -le $s) { throw 'Could not parse submission JSON from msstore output' }
@@ -962,7 +885,6 @@ jobs:
         id: notes
         run: |
           VERSION_PREFIX="v${{ steps.version.outputs.version }}-pre."
-          # Find the most recent pre-release tag for this version, or fall back to last stable tag
           PREV_TAG=$(git tag --sort=-version:refname | grep -m1 "^${VERSION_PREFIX}" || true)
           if [ -z "$PREV_TAG" ]; then
             PREV_TAG=$(git tag --sort=-version:refname | grep -m1 '^v[0-9]' || true)
@@ -1005,12 +927,7 @@ jobs:
           name: msixbundle
           path: release/bundle
 
-      # Create as a draft so action-gh-release can attach assets. On repos
-      # with "immutable releases" enabled, publishing a release locks its
-      # asset list, and softprops/action-gh-release publishes before
-      # uploading - so non-draft prereleases fail with "Cannot upload asset
-      # ... to an immutable release". Keeping it as a draft lets the upload
-      # complete; the next step flips it to a published prerelease.
+      # Draft first: with immutable releases, softprops/action-gh-release publishes before uploading and fails with "Cannot upload asset ... to an immutable release"
       - name: Create pre-release (draft)
         uses: softprops/action-gh-release@v3
         with:

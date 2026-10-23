@@ -2,6 +2,7 @@ using System;
 using System.Text.Json.Nodes;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -12,9 +13,8 @@ internal sealed partial class SetServerPage : DynamicListPage
   private readonly Action<ServerConfig>? _onSubmit;
   private string _searchText = string.Empty;
 
-  public SetServerPage(BitwardenCliService service, Action<ServerConfig>? onSubmit = null)
+  public SetServerPage(Action<ServerConfig>? onSubmit = null)
   {
-    _ = service;
     _onSubmit = onSubmit;
     Name = "Set Server";
     Title = "Set Bitwarden Server";
@@ -31,9 +31,9 @@ internal sealed partial class SetServerPage : DynamicListPage
 
   private static string DetectPreset(string? serverUrl)
   {
-    if (string.IsNullOrEmpty(serverUrl) || serverUrl.Contains("bitwarden.com", StringComparison.OrdinalIgnoreCase))
+    if (string.IsNullOrEmpty(serverUrl) || VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.com"))
       return "bitwarden.com";
-    if (serverUrl.Contains("bitwarden.eu", StringComparison.OrdinalIgnoreCase))
+    if (VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.eu"))
       return "bitwarden.eu";
     return "self-hosted";
   }
@@ -45,7 +45,6 @@ internal sealed partial class SetServerPage : DynamicListPage
     var typed = _searchText.Trim();
     var items = new System.Collections.Generic.List<IListItem>();
 
-    // If the user typed something that looks like a URL, show "use this URL" + "advanced" items.
     if (typed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         typed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
     {
@@ -75,7 +74,6 @@ internal sealed partial class SetServerPage : DynamicListPage
       }
     }
 
-    // Cloud preset
     var cloudItem = new ListItem(new AnonymousCommand(() => _onSubmit?.Invoke(new ServerConfig("bitwarden.com")))
     { Name = "Select", Result = CommandResult.GoBack() })
     {
@@ -87,8 +85,7 @@ internal sealed partial class SetServerPage : DynamicListPage
       cloudItem.Tags = [new Tag("Current") { Background = ColorHelpers.FromRgb(0x3E, 0x7C, 0xCF) }];
     items.Add(cloudItem);
 
-    // EU preset. The CLI only special-cases "bitwarden.com" (resets to the US region); any other
-    // value is passed through as a self-hosted base URL, so the EU host needs its full URL.
+    // The CLI only special-cases "bitwarden.com"; any other value is a self-hosted base URL, so EU needs its full URL.
     var euItem = new ListItem(new AnonymousCommand(() => _onSubmit?.Invoke(new ServerConfig("https://vault.bitwarden.eu")))
     { Name = "Select", Result = CommandResult.GoBack() })
     {
@@ -100,7 +97,6 @@ internal sealed partial class SetServerPage : DynamicListPage
       euItem.Tags = [new Tag("Current") { Background = ColorHelpers.FromRgb(0x3E, 0x7C, 0xCF) }];
     items.Add(euItem);
 
-    // Self-hosted hint (shown when not typing a URL)
     if (!typed.StartsWith("http", StringComparison.OrdinalIgnoreCase))
     {
       var hintSubtitle = preset == "self-hosted"
@@ -129,7 +125,7 @@ internal sealed partial class SelfHostedAdvancedPage : ContentPage
     Title = "Advanced URL Overrides";
     Icon = new IconInfo("\uE713");
     var form = new SelfHostedAdvancedForm(baseUrl, onSubmit);
-    _ = form; // assigned via GetContent
+    _ = form;
     _form = form;
   }
 

@@ -6,7 +6,7 @@
 - **Microsoft.CommandPalette.Extensions SDK** - WinRT-based extension API for PowerToys Command Palette
 - **Win32 P/Invoke** via `LibraryImport` - clipboard APIs, window management
 - **UI Automation COM Interop** - browser address bar URL extraction
-- **OtpNet** - TOTP code generation
+- **System.Security.Cryptography** - TOTP code generation (RFC 6238 HMAC)
 - **Svg.Skia / SkiaSharp** - SVG rasterization (converts SVG favicons to PNG for display)
 - **Bitwarden CLI** (`bw`) - vault operations (login, unlock, list, sync)
 - **Windows Credential Manager** - session key persistence
@@ -38,6 +38,7 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── ContextAwarenessService.cs     # Window detection, URL extraction, context scoring
 │   ├── FaviconService.cs              # Favicon download, disk/memory cache, icon refresh events
 │   ├── ICliProcess.cs                 # Process abstraction for unit testing
+│   ├── ProtectedSecret.cs             # In-memory encryption for secrets (CryptProtectMemory)
 │   ├── SecureClipboardService.cs      # Clipboard security + auto-clear
 │   ├── SessionStore.cs               # Windows Credential Manager wrapper
 │   └── SvgRasterizer.cs              # SVG to PNG conversion via SkiaSharp
@@ -73,6 +74,10 @@ User selects an action
 | `AccessTracker` | Static | Tracks item access times (persisted to JSON) and recent-copy state (5-min in-memory timer) |
 | `BitwardenSettingsManager` | Instance | Manages user-configurable settings via Command Palette settings UI |
 | `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; fires `IconCached` to refresh the list UI |
+
+## In-Memory Secret Protection
+
+Passwords, TOTP secrets, notes, card numbers, card security codes, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
 
 ## Extension Registration
 

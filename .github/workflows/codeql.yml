@@ -69,11 +69,11 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           $prNumber = "${{ github.event.pull_request.number }}"
-          $ref = "${{ github.event.pull_request.head.ref }}"
+          $ref = $env:HEAD_REF
 
-          # Query code scanning alerts for this PR's ref
           $alerts = gh api "repos/${{ github.repository }}/code-scanning/alerts?ref=$ref&state=open&per_page=100" 2>$null | ConvertFrom-Json
           if (-not $alerts) { $alerts = @() }
 

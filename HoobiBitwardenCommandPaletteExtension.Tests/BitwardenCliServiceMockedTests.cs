@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json.Nodes;
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
@@ -15,8 +16,6 @@ public class BitwardenCliServiceMockedTests
     return (svc, factory);
   }
 
-  // --- IsCliAvailable / GetVaultStatusAsync ---
-
   [Fact]
   public async Task GetVaultStatus_CliNotAvailable_ReturnsCliNotFound()
   {
@@ -30,9 +29,7 @@ public class BitwardenCliServiceMockedTests
   public async Task GetVaultStatus_CliAvailable_NoSession_FetchesStatus_Unauthenticated()
   {
     var (svc, factory) = CreateService();
-    // IsCliAvailable check → returns version
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
-    // FetchStatusAsync → RunCliAsync("status") → returns JSON
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unauthenticated\",\"serverUrl\":\"https://vault.bitwarden.com\"}\n", exitCode: 0));
     var result = await svc.GetVaultStatusAsync();
     Assert.Equal(VaultStatus.Unauthenticated, result);
@@ -53,13 +50,9 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("test-session-key");
-    // IsCliAvailable
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
-    // VerifySessionAsync → status gate → "unlocked"
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unlocked\"}\n", exitCode: 0));
-    // VerifySessionAsync → sync → "Syncing complete."
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    // VerifySessionAsync → list folders → empty JSON array proves decryption worked
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     var result = await svc.GetVaultStatusAsync();
     Assert.Equal(VaultStatus.Unlocked, result);
@@ -70,11 +63,8 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("bad-session");
-    // IsCliAvailable
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
-    // VerifySessionAsync → status gate reports locked → short-circuit, no sync/list
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
-    // FetchStatusAsync → RunCliAsync("status")
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
     var result = await svc.GetVaultStatusAsync();
     Assert.Equal(VaultStatus.Locked, result);
@@ -83,25 +73,17 @@ public class BitwardenCliServiceMockedTests
   [Fact]
   public async Task GetVaultStatus_WithSession_StatusUnlockedButDecryptFails_FallsToFetchStatus()
   {
-    // Stale-key case: status reports unlocked, but the key can't actually decrypt
-    // (e.g. after a server-side key rotation), so the list-folders confirmation fails.
+    // Status reports unlocked but the key cannot decrypt (e.g. after a server-side key rotation), so only the list-folders step fails.
     var (svc, factory) = CreateService();
     svc.SetSession("stale-session");
-    // IsCliAvailable
     factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
-    // VerifySessionAsync → status gate passes
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unlocked\"}\n", exitCode: 0));
-    // VerifySessionAsync → sync succeeds (sync only needs auth, not unlock)
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    // VerifySessionAsync → list folders fails because the key is stale → HandleInvalidSession + throw
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Vault is locked.\n", exitCode: 1));
-    // FetchStatusAsync → RunCliAsync("status")
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
     var result = await svc.GetVaultStatusAsync();
     Assert.Equal(VaultStatus.Locked, result);
   }
-
-  // --- UnlockAsync ---
 
   [Fact]
   public async Task Unlock_Success_SetsSessionAndUnlocked()
@@ -126,6 +108,37 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task Unlock_ReadFails_KillsProcess()
+  {
+    var (svc, factory) = CreateService();
+    var process = new FakeCliProcess(exitCode: 0, id: 301);
+    process.StdoutStream.Fail(new IOException("pipe broken"));
+    process.StderrStream.Complete();
+    factory.Enqueue(process);
+
+    var (success, _) = await svc.UnlockAsync("masterpass");
+
+    Assert.False(success);
+    Assert.True(process.Killed);
+  }
+
+  [Fact]
+  public async Task Login_ReadFails_KillsAndDisposesProcess()
+  {
+    var (svc, factory) = CreateService();
+    var process = new FakeCliProcess(exitCode: 0, id: 301);
+    process.StdoutStream.Fail(new IOException("pipe broken"));
+    process.StderrStream.Complete();
+    factory.Enqueue(process);
+
+    var (success, _, _, _) = await svc.LoginAsync("user@test.com", "pass");
+
+    Assert.False(success);
+    Assert.True(process.Killed);
+    Assert.True(process.Disposed);
+  }
+
+  [Fact]
   public async Task Unlock_NotLoggedIn_ResetsToLoggedOut()
   {
     var (svc, factory) = CreateService();
@@ -147,8 +160,6 @@ public class BitwardenCliServiceMockedTests
     await svc.UnlockAsync("my_secret_pass");
     Assert.Equal("my_secret_pass", factory.LastPsi?.Environment["BW_MP"]);
   }
-
-  // --- LoginAsync ---
 
   [Fact]
   public async Task Login_Success_SetsSessionKey()
@@ -178,11 +189,9 @@ public class BitwardenCliServiceMockedTests
   public async Task Login_DeviceVerification_DetectedViaStderr()
   {
     var (svc, factory) = CreateService();
-    // Interactive process: stderr has "device verification", stdout stays open
     var process = new FakeCliProcess(exitCode: 0, id: 10);
     process.StderrStream.Enqueue("? A login request was made from a device verification...\n");
     process.StderrStream.Complete();
-    // Don't complete stdout yet (simulates waiting for OTP)
     factory.Enqueue(process);
 
     var (success, error, twoFa, deviceVerification) = await svc.LoginAsync("user@test.com", "pass");
@@ -218,8 +227,7 @@ public class BitwardenCliServiceMockedTests
   [Fact]
   public async Task Login_WithTwoFactorCode_DefaultsToTotpMethod()
   {
-    // Regression: self-hosted servers were returning email as the default 2FA
-    // method when --method was omitted, causing valid TOTP codes to be rejected.
+    // Regression: self-hosted servers returned email as the default 2FA method when --method was omitted, rejecting valid TOTP codes.
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
     await svc.LoginAsync("user@test.com", "pass", "123456");
@@ -238,8 +246,6 @@ public class BitwardenCliServiceMockedTests
   [Fact]
   public async Task Login_WithExplicitNullMethod_OmitsMethodFlag()
   {
-    // Escape hatch: callers can opt out of the TOTP safety net to let the CLI
-    // auto-select the 2FA method (matches the "None" choice in the login form).
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "session123\n", stderr: "", exitCode: 0));
     await svc.LoginAsync("user@test.com", "pass", "123456", twoFactorMethod: null);
@@ -248,12 +254,11 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Theory]
-  [InlineData(0)]   // Authenticator/TOTP
-  [InlineData(3)]   // YubiKey OTP
+  [InlineData(0)]
+  [InlineData(3)]
   public async Task Login_NonEmailMethodWithoutCode_OmitsMethodFlag(int method)
   {
-    // For non-Email methods we don't pass --method on the first attempt (no code):
-    // a self-hosted server picking the wrong default would reject a valid code (#139/#158).
+    // Non-Email methods omit --method on the first attempt: a self-hosted server picking the wrong default would reject a valid code (#139/#158).
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Two-step login is required.\n", exitCode: 1));
     await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: method);
@@ -264,8 +269,7 @@ public class BitwardenCliServiceMockedTests
   [Fact]
   public async Task Login_EmailMethodWithoutCode_PassesMethodToTriggerSend()
   {
-    // Email is the exception: the CLI only emails a code when --method 1 is passed
-    // (it calls send-email-login), so we trigger it on the first attempt (#157).
+    // The CLI only emails a code when --method 1 is passed (it calls send-email-login), so Email sends it on the first attempt (#157).
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Two-step login is required.\n", exitCode: 1));
     await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: 1);
@@ -276,8 +280,7 @@ public class BitwardenCliServiceMockedTests
   [Fact]
   public async Task Login_EmailMethod_ServerRejectsWith422_ReturnsUseAnotherMethodError()
   {
-    // vaultwarden without the #7225 fix 422s send-email-login. Rather than prompt
-    // for a code that never arrives, surface a clear "use another method" error.
+    // vaultwarden without the #7225 fix 422s send-email-login, so no code arrives and a "use another method" error is surfaced.
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "{\"response\":null,\"statusCode\":422}\n", stderr: "", exitCode: 1));
     var (success, error, twoFa, deviceVerification) = await svc.LoginAsync("user@test.com", "pass", twoFactorCode: null, twoFactorMethod: 1);
@@ -296,8 +299,6 @@ public class BitwardenCliServiceMockedTests
     Assert.DoesNotContain("\"@", factory.LastPsi!.Arguments, StringComparison.Ordinal);
   }
 
-  // --- SubmitDeviceVerificationAsync ---
-
   [Fact]
   public async Task SubmitDeviceVerification_NoPendingProcess_ReturnsError()
   {
@@ -312,7 +313,6 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
 
-    // Step 1: Login detects device verification
     var loginProcess = new FakeCliProcess(exitCode: 0, id: 20);
     loginProcess.StderrStream.Enqueue("? A login request was made... device verification required\n");
     loginProcess.StderrStream.Complete();
@@ -321,11 +321,9 @@ public class BitwardenCliServiceMockedTests
     var (_, _, _, deviceVerification) = await svc.LoginAsync("user@test.com", "pass");
     Assert.True(deviceVerification);
 
-    // Step 2: Inject session key and complete stdout (simulates post-OTP output)
     loginProcess.StdoutStream.Enqueue("session_key_otp_verified\n");
     loginProcess.StdoutStream.Complete();
 
-    // Step 3: Submit OTP
     var submitTask = svc.SubmitDeviceVerificationAsync("123456");
     var (success, error) = await submitTask;
     Assert.True(success);
@@ -345,7 +343,6 @@ public class BitwardenCliServiceMockedTests
 
     await svc.LoginAsync("user@test.com", "pass");
 
-    // Provide empty stdout and error stderr
     loginProcess.StdoutStream.Enqueue("");
     loginProcess.StdoutStream.Complete();
 
@@ -353,24 +350,30 @@ public class BitwardenCliServiceMockedTests
     Assert.False(success);
   }
 
-  // --- LogoutAsync ---
-
   [Fact]
   public async Task Logout_ClearsSessionAndStatus()
   {
     var (svc, factory) = CreateService();
     svc.SetSession("session-key");
-    // RunCliAsync("logout") → early exit on "You have logged out."
     factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
     var statusChanged = false;
     svc.StatusChanged += () => statusChanged = true;
-    await svc.LogoutAsync();
+    var realIconDir = FaviconService.CacheDir;
+    var tempIconDir = Path.Combine(Path.GetTempPath(), $"bw-icons-{Guid.NewGuid():N}");
+    FaviconService.CacheDir = tempIconDir;
+    try
+    {
+      await svc.LogoutAsync();
+    }
+    finally
+    {
+      FaviconService.CacheDir = realIconDir;
+      if (Directory.Exists(tempIconDir)) Directory.Delete(tempIconDir, recursive: true);
+    }
     Assert.False(svc.IsUnlocked);
     Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
     Assert.True(statusChanged);
   }
-
-  // --- LockAsync ---
 
   [Fact]
   public async Task Lock_ClearsSessionAndSetsLocked()
@@ -386,7 +389,36 @@ public class BitwardenCliServiceMockedTests
     Assert.True(statusChanged);
   }
 
-  // --- SetServerUrlAsync ---
+  [Fact]
+  public async Task Lock_DuringRefresh_KillsProcessesAndDropsResult()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("session-key");
+    var folders = new FakeCliProcess(exitCode: 0, id: 101);
+    var items = new FakeCliProcess(exitCode: 0, id: 102);
+    var orgs = new FakeCliProcess(exitCode: 0, id: 103);
+    factory.Enqueue(folders);
+    factory.Enqueue(items);
+    factory.Enqueue(orgs);
+    var cacheUpdated = false;
+    svc.CacheUpdated += () => cacheUpdated = true;
+
+    var refresh = svc.RefreshCacheAsync();
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 104));
+    await svc.LockAsync();
+
+    foreach (var p in new[] { folders, items, orgs })
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.True(items.Killed);
+    Assert.False(svc.IsCacheLoaded);
+    Assert.False(cacheUpdated);
+  }
 
   [Fact]
   public async Task SetServerUrl_Success_SetsUrlAndReturnsNull()
@@ -487,8 +519,6 @@ public class BitwardenCliServiceMockedTests
     Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
   }
 
-  // --- RefreshCacheAsync ---
-
   [Fact]
   public async Task RefreshCache_LoadsItemsAndFolders()
   {
@@ -530,7 +560,6 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("bad-key");
-    // RunCliAsync detects session invalid via stderr
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Your vault is locked.\n", exitCode: 1));
 
     var statusChanged = false;
@@ -539,16 +568,61 @@ public class BitwardenCliServiceMockedTests
     Assert.True(statusChanged);
   }
 
-  // --- SyncVaultAsync ---
+  [Fact]
+  public async Task RefreshCache_InFlight_ReportsRefreshingUntilDone()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 301), new FakeCliProcess(exitCode: 0, id: 302), new FakeCliProcess(exitCode: 0, id: 303) };
+    foreach (var p in held) factory.Enqueue(p);
+    var statusChanged = false;
+    svc.StatusChanged += () => statusChanged = true;
+
+    var refresh = svc.RefreshCacheAsync();
+    Assert.True(svc.IsRefreshing);
+
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.False(svc.IsRefreshing);
+    Assert.True(svc.IsCacheLoaded);
+    Assert.False(statusChanged);
+  }
+
+  [Fact]
+  public async Task RefreshCache_FailsWithNoCache_RaisesStatusChangedAfterRefreshEnds()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 311), new FakeCliProcess(exitCode: 0, id: 312), new FakeCliProcess(exitCode: 0, id: 313) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refreshingWhenRaised = (bool?)null;
+    svc.StatusChanged += () => refreshingWhenRaised = svc.IsRefreshing;
+
+    var refresh = svc.RefreshCacheAsync();
+    foreach (var p in held)
+    {
+      p.StdoutStream.Fail(new IOException("pipe broken"));
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.False(svc.IsCacheLoaded);
+    Assert.False(refreshingWhenRaised);
+  }
 
   [Fact]
   public async Task SyncVault_RunsSyncThenRefreshesCache()
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
-    // sync
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    // RefreshCacheAsync → folders, items, organizations (parallel, dequeued in invocation order)
+    // Folders, items and organizations are fetched in parallel and dequeued in invocation order.
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
@@ -557,7 +631,116 @@ public class BitwardenCliServiceMockedTests
     Assert.True(svc.IsCacheLoaded);
   }
 
-  // --- RunCliAsync internal behavior ---
+  [Fact]
+  public async Task SyncVault_RefreshInFlight_RefreshesAgainWhenInFlightFinishes()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 201), new FakeCliProcess(exitCode: 0, id: 202), new FakeCliProcess(exitCode: 0, id: 203) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refresh = svc.RefreshCacheAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0, id: 204));
+    await svc.SyncVaultAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 205));
+    factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Synced\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0, id: 206));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 207));
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.Equal("Synced", Assert.Single(svc.SearchCached()).Name);
+  }
+
+  [Fact]
+  public async Task RefreshQueued_VaultLocksBeforeInFlightFinishes_DoesNotRefreshAgain()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 211), new FakeCliProcess(exitCode: 0, id: 212), new FakeCliProcess(exitCode: 0, id: 213) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refresh = svc.RefreshCacheAsync();
+    await svc.RefreshCacheAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 214));
+    await svc.LockAsync();
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.False(svc.IsCacheLoaded);
+  }
+
+  [Fact]
+  public async Task RefreshQueued_VaultLocksAndSessionRestored_RunsQueuedRefresh()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 221), new FakeCliProcess(exitCode: 0, id: 222), new FakeCliProcess(exitCode: 0, id: 223) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refresh = svc.RefreshCacheAsync();
+    await svc.RefreshCacheAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 224));
+    await svc.LockAsync();
+    svc.SetSession("restored-key");
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 225));
+    factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Restored\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0, id: 226));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 227));
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.True(svc.IsCacheLoaded);
+    Assert.Equal("Restored", Assert.Single(svc.SearchCached()).Name);
+  }
+
+  [Fact]
+  public async Task Lock_AfterSyncDetached_DoesNotKillSync()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var sync = new FakeCliProcess(exitCode: 0, id: 301);
+    sync.StdoutStream.Enqueue("Syncing complete.\n");
+    factory.Enqueue(sync);
+    for (var i = 0; i < 3; i++) factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 302 + i));
+    await svc.SyncVaultAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 310));
+    await svc.LockAsync();
+
+    Assert.False(sync.Killed);
+    sync.StdoutStream.Complete();
+    sync.StderrStream.Complete();
+  }
+
+  [Fact]
+  public void Matches_RepromptNoteOutsideGrace_SkipsNotes()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+    var item = new BitwardenItem { Id = "rp-1", Name = "Bank", Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("pin 4321"), Reprompt = 1 };
+
+    Assert.False(BitwardenCliService.Matches(item, "4321"));
+    Assert.True(BitwardenCliService.Matches(item, "bank"));
+
+    RepromptPage.RecordVerification("rp-1");
+    Assert.True(BitwardenCliService.Matches(item, "4321"));
+    RepromptPage.ClearGracePeriod();
+  }
 
   [Fact]
   public async Task RunCliAsync_SessionExpired_HandlesInvalidSession()
@@ -578,11 +761,8 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
-    // folders query (runs first)
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
-    // items query
     factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Item\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0));
-    // organizations query
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
 
     await svc.RefreshCacheAsync();
@@ -590,14 +770,11 @@ public class BitwardenCliServiceMockedTests
     Assert.Single(results);
   }
 
-  // --- Multiple Login flows ---
-
   [Fact]
   public async Task Login_DisposePreviousDeviceVerification_OnNewLogin()
   {
     var (svc, factory) = CreateService();
 
-    // First login triggers device verification
     var process1 = new FakeCliProcess(exitCode: 0, id: 30);
     process1.StderrStream.Enqueue("device verification required\n");
     process1.StderrStream.Complete();
@@ -606,17 +783,13 @@ public class BitwardenCliServiceMockedTests
     var (_, _, _, dv1) = await svc.LoginAsync("user@test.com", "pass");
     Assert.True(dv1);
 
-    // Complete stdout so it doesn't block
     process1.StdoutStream.Complete();
 
-    // Second login should dispose the first pending process
     factory.Enqueue(new FakeCliProcess(stdout: "session_new\n", stderr: "", exitCode: 0));
     var (success, _, _, _) = await svc.LoginAsync("user@test.com", "pass");
     Assert.True(success);
     Assert.True(process1.Disposed);
   }
-
-  // --- Context + Search with text query and context ---
 
   [Fact]
   public void SearchCached_ContextPinning_NoRecentItem_ReturnsContextFirst()
@@ -670,8 +843,6 @@ public class BitwardenCliServiceMockedTests
     Assert.Equal(2, result.Count);
   }
 
-  // --- FetchServerUrlAsync ---
-
   [Fact]
   public async Task GetVaultStatus_SetsServerUrlFromStatusJson()
   {
@@ -682,8 +853,6 @@ public class BitwardenCliServiceMockedTests
     await svc.GetVaultStatusAsync();
     Assert.Equal("https://custom.vault.com", BitwardenCliService.ServerUrl);
   }
-
-  // --- RememberSession toggle-off locks vault ---
 
   [Fact]
   public async Task DisablingRememberSession_ClearsSessionAndLocksVault()
@@ -700,17 +869,15 @@ public class BitwardenCliServiceMockedTests
       SessionStore.Save("some-session-key");
       Assert.True(svc.IsUnlocked);
 
-      // LockAsync will call RunCliAsync("lock") — provide a fake process for it
       factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0));
 
       settings.RememberSession.Value = false;
-      // Raise the Settings.SettingsChanged event (internal method in the SDK)
+      // Settings.SettingsChanged can only be raised through an internal SDK method.
       var raiseMethod = settings.Settings.GetType().GetMethod(
           "RaiseSettingsChanged",
           System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
       raiseMethod.Invoke(settings.Settings, null);
 
-      // Allow the fire-and-forget LockAsync to complete
       await Task.Delay(200, TestContext.Current.CancellationToken);
 
       Assert.False(svc.IsUnlocked);
@@ -737,8 +904,6 @@ public class BitwardenCliServiceMockedTests
     Assert.Equal(System.Text.Encoding.UTF8, factory.LastPsi!.StandardOutputEncoding);
     Assert.Equal(System.Text.Encoding.UTF8, factory.LastPsi!.StandardErrorEncoding);
   }
-
-  // --- VerifyMasterPasswordAsync ---
 
   [Fact]
   public async Task VerifyMasterPassword_CorrectPassword_ReturnsTrue()
@@ -784,10 +949,7 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "different_session\n", stderr: "", exitCode: 0));
     await svc.VerifyMasterPasswordAsync("pass");
     Assert.True(svc.IsUnlocked);
-    // Session key should be updated to the new key returned by bw unlock
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "", exitCode: 0));
-    // Verify the new key is used by checking ApplyEnvironment sets BW_SESSION
-    // (indirectly confirmed by the session being accepted)
   }
 
   [Fact]

@@ -5,8 +5,7 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
-// Shares BitwardenCliService's static server-resolution state with the other
-// collection members, so these must not run in parallel with them.
+// Shares BitwardenCliService's static server-resolution state with the other collection members, so these must not run in parallel with them.
 [Collection("SessionStore")]
 public class VaultItemHelperTests
 {
@@ -47,9 +46,7 @@ public class VaultItemHelperTests
     Assert.Equal("\uE8C7", icon.Dark.Icon);
   }
 
-  // Issue #194: before `bw status` resolves the server, a self-hosted vault must
-  // not fall back to Bitwarden's cloud icon hosts. A glyph here proves no icon
-  // was queued - a queued icon returns the empty-string fallback instead.
+  // Issue #194: before `bw status` resolves the server, a self-hosted vault must not fall back to Bitwarden's cloud icon hosts.
   [Fact]
   public void GetIcon_Login_ServerUnresolved_ReturnsGlobeGlyphWithoutQueueing()
   {
@@ -135,10 +132,7 @@ public class VaultItemHelperTests
     Assert.IsNotType<RepromptPage>(cmd);
   }
 
-  // Regression test: PowerToys 0.99 gates right-click context menus on
-  // Command.Name being non-empty. The TrackedInvokable wrapper used to drop
-  // the inner command's Name, which silently disabled right-click on every
-  // vault item. See https://github.com/hoobio/command-palette-bitwarden/issues/140.
+  // PowerToys 0.99 gates right-click context menus on a non-empty Command.Name: https://github.com/hoobio/command-palette-bitwarden/issues/140
   [Fact]
   public void GetDefaultCommand_NoReprompt_ForwardsInnerCommandName()
   {
@@ -155,7 +149,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.SshKey,
       CustomFields = new Dictionary<string, CustomField>
       {
-        ["host"] = new CustomField("git@github.com", IsHidden: false),
+        ["host"] = new CustomField("git@github.com"),
       },
     };
 
@@ -179,13 +173,48 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 0,
       Username = "user@test.com",
-      Password = "secret",
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      Password = ProtectedSecret.From("secret"),
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
     foreach (var ci in contextItems)
       Assert.False(string.IsNullOrEmpty(ci.Command?.Name), $"Context item '{ci.Title}' had empty Command.Name");
+  }
+
+  [Fact]
+  public void CopyCommands_AfterSecretsDisposed_DoNotThrow()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-disposed",
+      Type = BitwardenItemType.Login,
+      HasTotp = true,
+      Password = ProtectedSecret.From("secret"),
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    item.DisposeSecrets();
+    foreach (var ci in contextItems.Where(ci => ci.Title is "Copy Password" or "Copy OTP"))
+      ((Microsoft.CommandPalette.Extensions.IInvokableCommand)ci.Command!).Invoke(null!);
+  }
+
+  [Fact]
+  public void BuildContextItems_SshKey_HiddenHost_OffersSshSessionWithoutExposingHost()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-ssh",
+      Type = BitwardenItemType.SshKey,
+      CustomFields = new Dictionary<string, CustomField>
+      {
+        ["host"] = new CustomField(null, ProtectedSecret.From("user@server.com"))
+      },
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    var ssh = Assert.Single(contextItems, ci => ci.Title == "Open SSH Session");
+    Assert.DoesNotContain("server.com", ssh.Command?.Name);
+    Assert.DoesNotContain(contextItems, ci => ci.Title.Contains("host"));
   }
 
   [Fact]
@@ -199,7 +228,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 1,
       Username = "user@test.com",
-      Password = "secret",
+      Password = ProtectedSecret.From("secret"),
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var contextItems = VaultItemHelper.BuildContextItems(item, svc);
@@ -218,7 +247,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 0,
       Username = "user@test.com",
-      Password = "secret",
+      Password = ProtectedSecret.From("secret"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
     var usernameItem = contextItems.First(c => c.Title == "Copy Username");
@@ -236,8 +265,8 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Card,
       Reprompt = 1,
       CardholderName = "John Doe",
-      CardNumber = "4111111111111111",
-      CardCode = "123",
+      CardNumber = ProtectedSecret.From("4111111111111111"),
+      CardCode = ProtectedSecret.From("123"),
       CardExpMonth = "12",
       CardExpYear = "2025",
     };
@@ -257,7 +286,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Card,
       Reprompt = 0,
       CardholderName = "John Doe",
-      CardNumber = "4111111111111111",
+      CardNumber = ProtectedSecret.From("4111111111111111"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
     var holderItem = contextItems.First(c => c.Title == "Copy Cardholder Name");
@@ -317,8 +346,8 @@ public class VaultItemHelperTests
       Reprompt = 1,
       CustomFields = new Dictionary<string, CustomField>
       {
-        ["apiKey"] = new("abc123", false),
-        ["secret"] = new("hidden", true),
+        ["apiKey"] = new("abc123"),
+        ["secret"] = new(null, ProtectedSecret.From("hidden")),
       },
     };
     var contextItems = VaultItemHelper.BuildContextItems(item, svc);
@@ -422,7 +451,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Reprompt = 1,
       Username = "user@test.com",
-      Password = "secret",
+      Password = ProtectedSecret.From("secret"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item, svc);
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
@@ -438,8 +467,7 @@ public class VaultItemHelperTests
     RepromptPage.GracePeriodSeconds = 60;
     RepromptPage.ClearGracePeriod();
 
-    // Start from a clean slate: a stale grace.json from an older build (which
-    // did persist) must not make this regression test pass or fail spuriously.
+    // A stale grace.json from an older build (which did persist) must not make this test pass or fail spuriously.
     var graceFile = Path.Combine(
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
       "HoobiBitwardenCommandPalette", "grace.json");
@@ -452,6 +480,67 @@ public class VaultItemHelperTests
     RepromptPage.ClearGracePeriod();
   }
 
+  [Theory]
+  [InlineData("https://example.com/a?b=1", "https://example.com/a?b=1")]
+  [InlineData("http://example.com", "http://example.com/")]
+  [InlineData("github.com", "https://github.com/")]
+  [InlineData("  localhost:3000/x ", "https://localhost:3000/x")]
+  [InlineData("HTTPS://Example.com", "https://example.com/")]
+  public void ToSafeWebUrl_AllowsHttpAndHttps(string input, string expected)
+  {
+    Assert.Equal(expected, VaultItemHelper.ToSafeWebUrl(input));
+  }
+
+  [Theory]
+  [InlineData(null)]
+  [InlineData("")]
+  [InlineData("   ")]
+  [InlineData("file:///C:/Windows/System32/calc.exe")]
+  [InlineData("ftp://example.com")]
+  [InlineData("ms-officecmd://x")]
+  [InlineData("search-ms:query=x")]
+  [InlineData("C:\\Windows\\calc.exe")]
+  [InlineData("javascript://alert(1)")]
+  public void ToSafeWebUrl_RejectsOtherSchemes(string? input)
+  {
+    Assert.Null(VaultItemHelper.ToSafeWebUrl(input));
+  }
+
+  [Theory]
+  [InlineData("bitwarden.com", "bitwarden.com", true)]
+  [InlineData("https://vault.bitwarden.com", "bitwarden.com", true)]
+  [InlineData("https://VAULT.BITWARDEN.EU/", "bitwarden.eu", true)]
+  [InlineData("https://bitwarden.company.org", "bitwarden.com", false)]
+  [InlineData("https://bitwarden.com.evil.org", "bitwarden.com", false)]
+  [InlineData("https://notbitwarden.com", "bitwarden.com", false)]
+  [InlineData("https://vault.example.com/bitwarden.com", "bitwarden.com", false)]
+  [InlineData("https://bitwarden.eu.internal", "bitwarden.eu", false)]
+  [InlineData(null, "bitwarden.com", false)]
+  public void IsCloudHost_MatchesExactHostOrSubdomain(string? serverUrl, string domain, bool expected)
+  {
+    Assert.Equal(expected, VaultItemHelper.IsCloudHost(serverUrl, domain));
+  }
+
+  [Fact]
+  public void ToSafeWebUrl_UncPath_DoesNotKeepFileScheme()
+  {
+    var result = VaultItemHelper.ToSafeWebUrl("\\\\host\\share\\x.exe");
+    Assert.True(result is null || result.StartsWith("https://", StringComparison.Ordinal));
+  }
+
+  [Fact]
+  public void BuildContextItems_Login_UnsafeUri_OmitsOpenInBrowser()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "unsafe-uri",
+      Type = BitwardenItemType.Login,
+      Uris = [new ItemUri("file:///C:/x.exe", UriMatchType.Default)],
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    Assert.DoesNotContain(contextItems, c => c.Title == "Open in Browser");
+  }
+
   [Fact]
   public void BuildBaseTags_ExcludesTotp()
   {
@@ -460,7 +549,7 @@ public class VaultItemHelperTests
       Id = "totp-1",
       Type = BitwardenItemType.Login,
       Favorite = true,
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
     };
     var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false);
     Assert.Single(baseTags);
@@ -475,7 +564,7 @@ public class VaultItemHelperTests
       Id = "totp-2",
       Type = BitwardenItemType.Login,
       HasTotp = true,
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
     };
     var tags = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live");
     Assert.Single(tags);
@@ -483,9 +572,38 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void BuildTags_Live_RepromptItem_HidesCodeUntilGrace()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+    var item = new BitwardenItem
+    {
+      Id = "totp-reprompt",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      HasTotp = true,
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
+    };
+
+    var hidden = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live", showProtectedTag: false);
+    Assert.Equal("2FA", Assert.Single(hidden).Text);
+    Assert.Equal("2FA", VaultItemHelper.BuildTotpTag(item)!.Text);
+
+    RepromptPage.RecordVerification("totp-reprompt");
+    Assert.Contains("s)", VaultItemHelper.BuildTotpTag(item)!.Text, StringComparison.Ordinal);
+    RepromptPage.ClearGracePeriod();
+  }
+
+  [Fact]
+  public void BuildTotpTag_EmptyKey_ReturnsErrorTag()
+  {
+    Assert.Equal("TOTP", VaultItemHelper.BuildTotpTag(ProtectedSecret.From("==")!)!.Text);
+  }
+
+  [Fact]
   public void BuildTotpTag_ReturnsLiveTag()
   {
-    var tag = VaultItemHelper.BuildTotpTag("JBSWY3DPEHPK3PXP");
+    var tag = VaultItemHelper.BuildTotpTag(ProtectedSecret.From("JBSWY3DPEHPK3PXP")!);
     Assert.NotNull(tag);
     Assert.Contains("s)", tag!.Text, StringComparison.Ordinal);
   }
@@ -499,7 +617,7 @@ public class VaultItemHelperTests
       Type = BitwardenItemType.Login,
       Favorite = true,
       HasTotp = true,
-      TotpSecret = "JBSWY3DPEHPK3PXP",
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
     };
     var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false);
     var fullTags = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live");
@@ -614,7 +732,6 @@ public class VaultItemHelperTests
       .Select(c => (c.Color.R, c.Color.G, c.Color.B))
       .Distinct()
       .Count();
-    // 8 distinct GUIDs should hit at least 3 distinct palette entries (loose lower bound).
     Assert.True(distinctColors >= 3, $"Expected colour spread, got {distinctColors} distinct colours");
   }
 }

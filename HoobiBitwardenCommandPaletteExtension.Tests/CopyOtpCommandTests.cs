@@ -1,4 +1,5 @@
 using HoobiBitwardenCommandPaletteExtension.Commands;
+using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
@@ -7,7 +8,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ParseTotpSecret_RawBase32_ReturnsDefaults()
   {
-    var (key, digits, period) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
+    var (key, digits, period, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
     Assert.NotEmpty(key);
     Assert.Equal(6, digits);
     Assert.Equal(30, period);
@@ -16,16 +17,16 @@ public class CopyOtpCommandTests
   [Fact]
   public void ParseTotpSecret_Base32WithSpaces_Strips()
   {
-    var (key1, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
-    var (key2, _, _) = CopyOtpCommand.ParseTotpSecret("JBSW Y3DP EHPK 3PXP");
+    var (key1, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
+    var (key2, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSW Y3DP EHPK 3PXP");
     Assert.Equal(key1, key2);
   }
 
   [Fact]
   public void ParseTotpSecret_Base32WithDashes_Strips()
   {
-    var (key1, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
-    var (key2, _, _) = CopyOtpCommand.ParseTotpSecret("JBSW-Y3DP-EHPK-3PXP");
+    var (key1, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
+    var (key2, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSW-Y3DP-EHPK-3PXP");
     Assert.Equal(key1, key2);
   }
 
@@ -33,7 +34,7 @@ public class CopyOtpCommandTests
   public void ParseTotpSecret_OtpAuthUri_ExtractsParameters()
   {
     var uri = "otpauth://totp/Test:user@example.com?secret=JBSWY3DPEHPK3PXP&digits=8&period=60";
-    var (key, digits, period) = CopyOtpCommand.ParseTotpSecret(uri);
+    var (key, digits, period, _) = CopyOtpCommand.ParseTotpSecret(uri);
     Assert.NotEmpty(key);
     Assert.Equal(8, digits);
     Assert.Equal(60, period);
@@ -43,7 +44,7 @@ public class CopyOtpCommandTests
   public void ParseTotpSecret_OtpAuthUri_DefaultsWhenMissing()
   {
     var uri = "otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP";
-    var (key, digits, period) = CopyOtpCommand.ParseTotpSecret(uri);
+    var (key, digits, period, _) = CopyOtpCommand.ParseTotpSecret(uri);
     Assert.NotEmpty(key);
     Assert.Equal(6, digits);
     Assert.Equal(30, period);
@@ -53,7 +54,7 @@ public class CopyOtpCommandTests
   public void ParseTotpSecret_OtpAuthUri_CaseInsensitive()
   {
     var uri = "OTPAUTH://totp/Test?SECRET=JBSWY3DPEHPK3PXP&DIGITS=7&PERIOD=45";
-    var (_, digits, period) = CopyOtpCommand.ParseTotpSecret(uri);
+    var (_, digits, period, _) = CopyOtpCommand.ParseTotpSecret(uri);
     Assert.Equal(7, digits);
     Assert.Equal(45, period);
   }
@@ -62,7 +63,7 @@ public class CopyOtpCommandTests
   public void ParseTotpSecret_OtpAuthUri_UrlEncodedSecret()
   {
     var uri = "otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP&issuer=My%20App";
-    var (key, digits, period) = CopyOtpCommand.ParseTotpSecret(uri);
+    var (key, digits, period, _) = CopyOtpCommand.ParseTotpSecret(uri);
     Assert.NotEmpty(key);
     Assert.Equal(6, digits);
     Assert.Equal(30, period);
@@ -72,7 +73,7 @@ public class CopyOtpCommandTests
   public void ParseTotpSecret_OtpAuthUri_InvalidDigits_FallsBackToDefault()
   {
     var uri = "otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP&digits=abc";
-    var (_, digits, _) = CopyOtpCommand.ParseTotpSecret(uri);
+    var (_, digits, _, _) = CopyOtpCommand.ParseTotpSecret(uri);
     Assert.Equal(6, digits);
   }
 
@@ -80,8 +81,57 @@ public class CopyOtpCommandTests
   public void ParseTotpSecret_OtpAuthUri_ZeroPeriod_FallsBackToDefault()
   {
     var uri = "otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP&period=0";
-    var (_, _, period) = CopyOtpCommand.ParseTotpSecret(uri);
+    var (_, _, period, _) = CopyOtpCommand.ParseTotpSecret(uri);
     Assert.Equal(30, period);
+  }
+
+  [Theory]
+  [InlineData("SHA1", "12345678901234567890", "94287082")]
+  [InlineData("sha256", "12345678901234567890123456789012", "46119246")]
+  [InlineData("Sha512", "1234567890123456789012345678901234567890123456789012345678901234", "90693936")]
+  public void ComputeCode_OtpAuthAlgorithm_MatchesRfc6238Vectors(string algorithm, string seed, string expected)
+  {
+    var secret = ToBase32(System.Text.Encoding.ASCII.GetBytes(seed));
+    var uri = $"otpauth://totp/Test?secret={secret}&algorithm={algorithm}&digits=8&period=30";
+    var (code, remaining) = CopyOtpCommand.ComputeCode(uri, DateTimeOffset.FromUnixTimeSeconds(59));
+    Assert.Equal(expected, code);
+    Assert.Equal(1, remaining);
+  }
+
+  [Fact]
+  public void ParseTotpSecret_UnknownAlgorithm_DefaultsToSha1()
+  {
+    var (_, _, _, mode) = CopyOtpCommand.ParseTotpSecret("otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP&algorithm=MD5");
+    Assert.Equal(System.Security.Cryptography.HashAlgorithmName.SHA1, mode);
+  }
+
+  private static string ToBase32(byte[] data)
+  {
+    const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    var result = new System.Text.StringBuilder();
+    int buffer = 0, bits = 0;
+    foreach (var b in data)
+    {
+      buffer = (buffer << 8) | b;
+      bits += 8;
+      while (bits >= 5)
+      {
+        bits -= 5;
+        result.Append(alphabet[(buffer >> bits) & 31]);
+      }
+    }
+    if (bits > 0)
+      result.Append(alphabet[(buffer << (5 - bits)) & 31]);
+    return result.ToString();
+  }
+
+  [Fact]
+  public void ComputeCode_OtpAuthPeriod_IsHonoured()
+  {
+    var (_, remaining) = CopyOtpCommand.ComputeCode("otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP&period=60", DateTimeOffset.FromUnixTimeSeconds(59));
+    Assert.Equal(1, remaining);
+    var (_, remaining2) = CopyOtpCommand.ComputeCode("otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP&period=60", DateTimeOffset.FromUnixTimeSeconds(61));
+    Assert.Equal(59, remaining2);
   }
 
   [Fact]
@@ -96,7 +146,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_ProducesFiveCharacterCode()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     Assert.Equal(5, code.Length);
     Assert.All(code.ToCharArray(), c => Assert.Contains(c, "23456789BCDFGHJKMNPQRTVWXY"));
@@ -105,7 +155,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_IsDeterministic()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code1 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     Assert.Equal(code1, code2);
@@ -114,7 +164,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_DifferentTimeSteps_ProduceDifferentCodes()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code1 = CopyOtpCommand.ComputeSteamCode(key, 1000000000);
     var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000030);
     Assert.NotEqual(code1, code2);
@@ -123,7 +173,7 @@ public class CopyOtpCommandTests
   [Fact]
   public void ComputeSteamCode_SameTimeStep_ProducesSameCode()
   {
-    var key = OtpNet.Base32Encoding.ToBytes("JBSWY3DPEHPK3PXP");
+    var key = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP").Key;
     var code1 = CopyOtpCommand.ComputeSteamCode(key, 999999990);
     var code2 = CopyOtpCommand.ComputeSteamCode(key, 1000000009);
     Assert.Equal(code1, code2);
@@ -145,5 +195,47 @@ public class CopyOtpCommandTests
     Assert.Equal(6, code.Length);
     Assert.All(code.ToCharArray(), c => Assert.True(char.IsDigit(c)));
     Assert.InRange(remaining, 1, 30);
+  }
+
+  [Fact]
+  public void ComputeCode_ProtectedSecret_ReturnsSixDigitCode()
+  {
+    using var secret = ProtectedSecret.From("JBSWY3DPEHPK3PXP")!;
+    var (code, remaining) = CopyOtpCommand.ComputeCode(secret);
+    Assert.Equal(6, code.Length);
+    Assert.InRange(remaining, 1, 30);
+  }
+
+  [Fact]
+  public void ParseTotpSecret_PercentEscapedSecret_MatchesPlain()
+  {
+    var (plain, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
+    var (escaped, _, _, _) = CopyOtpCommand.ParseTotpSecret("otpauth://totp/Test?secret=JBSWY3DP%45HPK3PXP#frag");
+    Assert.Equal(plain, escaped);
+  }
+
+  [Fact]
+  public void ParseTotpSecret_LowercaseAndPadding_MatchesUppercase()
+  {
+    var (upper, _, _, _) = CopyOtpCommand.ParseTotpSecret("JBSWY3DPEHPK3PXP");
+    var (lower, _, _, _) = CopyOtpCommand.ParseTotpSecret("jbswy3dpehpk3pxp==");
+    Assert.Equal(upper, lower);
+  }
+
+  [Fact]
+  public void ParseTotpSecret_InvalidCharacter_Throws()
+  {
+    Assert.Throws<ArgumentException>(() => CopyOtpCommand.ParseTotpSecret("JBSW!3DP"));
+  }
+
+  [Theory]
+  [InlineData("-")]
+  [InlineData("==")]
+  [InlineData(" ")]
+  [InlineData("otpauth://totp/x?secret=")]
+  [InlineData("steam://")]
+  public void ComputeCode_EmptyKey_Throws(string secret)
+  {
+    Assert.Throws<ArgumentException>(() => CopyOtpCommand.ComputeCode(secret));
   }
 }

@@ -29,16 +29,14 @@ public class TwoFactorMethodDescriptorTests
     var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(3);
     Assert.Contains("YubiKey", d.Placeholder, StringComparison.Ordinal);
     Assert.Equal("YubiKey OTP", d.TypedNoun);
-    // 44-char modhex-style OTP
     Assert.True(d.Validator("cccccccbcdefghijklnrtuv1234567890abcdefghijk"));
-    // Numeric TOTP code should be rejected for YubiKey
     Assert.False(d.Validator("123456"));
   }
 
   [Theory]
   [InlineData(null)]
-  [InlineData(2)]   // Duo (not in dropdown)
-  [InlineData(99)]  // Unknown
+  [InlineData(2)]
+  [InlineData(99)]
   public void Describe_UnknownOrNull_FallsBackToGenericNumeric(int? method)
   {
     var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(method);
@@ -48,11 +46,11 @@ public class TwoFactorMethodDescriptorTests
   }
 
   [Theory]
-  [InlineData("12345")]      // too short
-  [InlineData("123456789")]  // too long
-  [InlineData("12 3456")]    // whitespace
-  [InlineData("-123456")]    // signed
-  [InlineData("12.3456")]    // not integer
+  [InlineData("12345")]
+  [InlineData("123456789")]
+  [InlineData("12 3456")]
+  [InlineData("-123456")]
+  [InlineData("12.3456")]
   [InlineData("")]
   public void NumericValidator_RejectsInvalidShapes(string raw)
   {
@@ -61,8 +59,8 @@ public class TwoFactorMethodDescriptorTests
   }
 
   [Theory]
-  [InlineData("short")]                                                       // too short
-  [InlineData("with space inside the otp xxxxxxxxxxxxxxxxxxx")]               // non-alphanumeric
+  [InlineData("short")]
+  [InlineData("with space inside the otp xxxxxxxxxxxxxxxxxxx")]
   [InlineData("")]
   public void YubikeyValidator_RejectsInvalidShapes(string raw)
   {

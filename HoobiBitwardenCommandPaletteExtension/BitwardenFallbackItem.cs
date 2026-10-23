@@ -45,7 +45,7 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
       return;
     }
 
-    if (_service.IsCacheLoaded)
+    if (_service.IsCacheLoaded && _service.LastStatus == VaultStatus.Unlocked)
     {
       var items = _service.SearchCached(query);
       HandleResults(items, query, ct);
@@ -69,6 +69,11 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
         await _service.RefreshCacheAsync();
         if (ct.IsCancellationRequested)
           return;
+        if (_service.LastStatus != VaultStatus.Unlocked)
+        {
+          ClearResult(ct);
+          return;
+        }
 
         var items = _service.SearchCached(query);
         HandleResults(items, query, ct);
@@ -117,7 +122,7 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
       Title = item.Name;
       Subtitle = item.Subtitle;
       Icon = VaultItemHelper.GetIcon(item, _settings?.ShowWebsiteIcons.Value != false);
-      Command = VaultItemHelper.GetDefaultCommand(item);
+      Command = VaultItemHelper.GetDefaultCommand(item, _service);
       MoreCommands = VaultItemHelper.BuildContextItems(item, _service);
     }
   }

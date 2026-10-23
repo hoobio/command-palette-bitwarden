@@ -16,9 +16,6 @@ internal sealed partial class RepromptPage : ContentPage
 {
   internal static int GracePeriodSeconds { get; set; } = 60;
 
-  // Per-item grace timestamps (Stopwatch ticks). In-memory only: verification
-  // never persists across process restarts, and a verified item only grants
-  // grace for that specific item, not for the vault as a whole.
   private static readonly ConcurrentDictionary<string, long> _verifiedItems = new();
   private static int _failureCount;
   private static long _cooldownUntilTicks;
@@ -108,31 +105,6 @@ internal sealed partial class RepromptForm : FormContent
     TemplateJson = BuildTemplate();
   }
 
-  private static string EscapeJsonString(string value)
-  {
-    var sb = new System.Text.StringBuilder(value.Length);
-    foreach (var c in value)
-    {
-      switch (c)
-      {
-        case '"': sb.Append("\\\""); break;
-        case '\\': sb.Append("\\\\"); break;
-        case '\b': sb.Append("\\b"); break;
-        case '\f': sb.Append("\\f"); break;
-        case '\n': sb.Append("\\n"); break;
-        case '\r': sb.Append("\\r"); break;
-        case '\t': sb.Append("\\t"); break;
-        default:
-          if (c < 0x20)
-            sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"\\u{(int)c:x4}");
-          else
-            sb.Append(c);
-          break;
-      }
-    }
-    return sb.ToString();
-  }
-
   private string BuildTemplate()
   {
     var biometricEnabled = _service.Settings?.UseDesktopIntegration.Value == true;
@@ -188,7 +160,7 @@ internal sealed partial class RepromptForm : FormContent
 """ + (_errorText != null ? $$"""
             ,{
                 "type": "TextBlock",
-                "text": "{{EscapeJsonString(_errorText)}}",
+                "text": "{{System.Text.Json.JsonEncodedText.Encode(_errorText)}}",
                 "color": "Attention",
                 "wrap": true,
                 "size": "small"
@@ -219,11 +191,7 @@ internal sealed partial class RepromptForm : FormContent
     };
   }
 
-  // Biometric verify is handled by the parent page so the WinHello prompt
-  // can come to the foreground. Doing it inline on the form leaves the
-  // adaptive-card UI mounted, and the WinHello prompt z-orders behind it
-  // (the prompt only becomes visible after the palette closes, by which
-  // time it has already been treated as cancelled).
+  // Inline on the form, the WinHello prompt z-orders behind the mounted adaptive card and is cancelled before it shows, so the parent page runs it.
   private CommandResult HandleBiometric()
   {
     EnterKeySubmitService.Disarm();

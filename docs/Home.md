@@ -23,6 +23,7 @@ A free, open-source replacement for 1Password Quick Access, built for the [Power
 | Vault search | Search all vault items directly from the Command Palette |
 | Fallback search | Bitwarden results appear as fallback suggestions when typing anywhere |
 | Secure clipboard | Passwords excluded from clipboard history, auto-cleared on a timer |
+| Encrypted memory | Cached secrets and the session key are encrypted in memory while the vault is unlocked (see [Architecture](Architecture)) |
 | Favorites | Star tag and priority sorting for favorite items |
 | TOTP display | Live TOTP codes with countdown timers shown as tags |
 | SSH quick connect | Copy public keys, fingerprints, and quick-connect via `ssh` |

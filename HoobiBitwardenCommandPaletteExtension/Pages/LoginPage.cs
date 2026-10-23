@@ -10,12 +10,12 @@ internal sealed partial class LoginPage : ContentPage
 {
   private readonly LoginForm _form;
 
-  public LoginPage(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
+  public LoginPage(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
   {
     Name = "Login";
     Title = "Login to Bitwarden";
     Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
-    _form = new LoginForm(service, settings, onSubmit);
+    _form = new LoginForm(settings, onSubmit);
   }
 
   public override IContent[] GetContent()
@@ -29,12 +29,8 @@ internal sealed partial class LoginForm : FormContent
 {
   internal const string SubmitButtonTitle = "Login";
 
-  // Sentinel value in the ChoiceSet for "don't pass --method to bw login".
-  // Numeric values match Bitwarden's TwoFactorProviderType enum
-  // (libs/common/src/auth/enums/two-factor-provider-type.ts in bitwarden/clients).
   private const string NoMethodValue = "none";
 
-  private readonly BitwardenCliService _service;
   private readonly BitwardenSettingsManager? _settings;
   private readonly Action<string, string, int?>? _onSubmit;
 
@@ -124,9 +120,8 @@ internal sealed partial class LoginForm : FormContent
     """;
   }
 
-  public LoginForm(BitwardenCliService service, BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
+  public LoginForm(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
   {
-    _service = service;
     _settings = settings;
     _onSubmit = onSubmit;
     TemplateJson = BuildTemplate();
@@ -138,8 +133,7 @@ internal sealed partial class LoginForm : FormContent
     var email = formInput?["Email"]?.GetValue<string>()?.Trim();
     var password = formInput?["MasterPassword"]?.GetValue<string>();
 
-    // Keep the form armed on an empty submit (KeepOpen leaves it open), else a
-    // single Enter on an empty field would disable Enter for the form's life.
+    // Stay armed on an empty submit: disarming here would disable Enter for the rest of the form's life.
     if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();
 

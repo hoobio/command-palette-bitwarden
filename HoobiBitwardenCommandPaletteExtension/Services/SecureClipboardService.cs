@@ -7,7 +7,7 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 internal static partial class SecureClipboardService
 {
   private static Timer? _clearTimer;
-  private static string? _lastCopiedText;
+  private static ProtectedSecret? _lastCopied;
   private static readonly Lock _lock = new();
   private static int _clearDelaySeconds = 30;
 
@@ -19,22 +19,33 @@ internal static partial class SecureClipboardService
     set => _clearDelaySeconds = value > 0 ? value : 30;
   }
 
-  internal static void CopySensitive(string text)
+  internal static void CopySensitive(string text) => WriteSensitive(text);
+
+  internal static void CopySensitive(ProtectedSecret secret) => secret.Use(static text => WriteSensitive(text));
+
+  private static bool WriteSensitive(ReadOnlySpan<char> text)
   {
     lock (_lock)
     {
-      _lastCopiedText = text;
+      ReplaceLastCopied(ProtectedSecret.From(text));
       SetClipboardExcludedFromHistory(text);
       if (AutoClearEnabled)
         ScheduleClear();
     }
+    return true;
+  }
+
+  private static void ReplaceLastCopied(ProtectedSecret? secret)
+  {
+    _lastCopied?.Dispose();
+    _lastCopied = secret;
   }
 
   internal static void CopyNonSensitive(string text)
   {
     lock (_lock)
     {
-      _lastCopiedText = null;
+      ReplaceLastCopied(null);
       _clearTimer?.Dispose();
       _clearTimer = null;
     }
@@ -51,20 +62,56 @@ internal static partial class SecureClipboardService
   {
     lock (_lock)
     {
-      if (_lastCopiedText == null)
+      if (_lastCopied == null)
         return;
 
-      var current = GetClipboardText();
-      if (current != null && current == _lastCopiedText)
-        ClearClipboard();
-
-      _lastCopiedText = null;
       _clearTimer?.Dispose();
       _clearTimer = null;
+
+      if (!_lastCopied.Use(static expected => TryClearIfUnchanged(expected)))
+      {
+        if (state != ClearRetried)
+        {
+          _clearTimer = new Timer(OnTimerElapsed, ClearRetried, ClearRetryDelayMs, Timeout.Infinite);
+          return;
+        }
+        DebugLogService.Log("Clipboard", "Could not open the clipboard to clear copied secret");
+      }
+
+      ReplaceLastCopied(null);
     }
   }
 
-  private static void SetClipboardExcludedFromHistory(string text)
+  internal static bool RetryOpen(Func<bool> open, int attempts, int delayMs)
+  {
+    for (var attempt = 1; ; attempt++)
+    {
+      if (open())
+        return true;
+      if (attempt >= attempts)
+        return false;
+      Thread.Sleep(delayMs);
+    }
+  }
+
+  private static bool TryClearIfUnchanged(ReadOnlySpan<char> expected)
+  {
+    if (!RetryOpen(() => OpenClipboard(nint.Zero), OpenAttempts, OpenRetryDelayMs))
+      return false;
+
+    try
+    {
+      if (ClipboardTextEquals(expected))
+        EmptyClipboard();
+      return true;
+    }
+    finally
+    {
+      CloseClipboard();
+    }
+  }
+
+  private static unsafe void SetClipboardExcludedFromHistory(ReadOnlySpan<char> text)
   {
     if (!OpenClipboard(nint.Zero))
       return;
@@ -73,8 +120,8 @@ internal static partial class SecureClipboardService
     {
       EmptyClipboard();
 
-      var bytes = System.Text.Encoding.Unicode.GetBytes(text + "\0");
-      var hGlobal = GlobalAlloc(GMEM_MOVEABLE, (nuint)bytes.Length);
+      var size = (text.Length + 1) * sizeof(char);
+      var hGlobal = GlobalAlloc(GMEM_MOVEABLE, (nuint)size);
       if (hGlobal == nint.Zero)
         return;
 
@@ -85,7 +132,9 @@ internal static partial class SecureClipboardService
         return;
       }
 
-      Marshal.Copy(bytes, 0, ptr, bytes.Length);
+      var destination = new Span<char>((void*)ptr, text.Length + 1);
+      text.CopyTo(destination);
+      destination[^1] = '\0';
       GlobalUnlock(hGlobal);
 
       if (SetClipboardData(CF_UNICODETEXT, hGlobal) == nint.Zero)
@@ -118,51 +167,30 @@ internal static partial class SecureClipboardService
     }
   }
 
-  private static string? GetClipboardText()
+  private static unsafe bool ClipboardTextEquals(ReadOnlySpan<char> expected)
   {
-    if (!OpenClipboard(nint.Zero))
-      return null;
+    var hData = GetClipboardData(CF_UNICODETEXT);
+    if (hData == nint.Zero)
+      return false;
+
+    var ptr = GlobalLock(hData);
+    if (ptr == nint.Zero)
+      return false;
 
     try
     {
-      var hData = GetClipboardData(CF_UNICODETEXT);
-      if (hData == nint.Zero)
-        return null;
-
-      var ptr = GlobalLock(hData);
-      if (ptr == nint.Zero)
-        return null;
-
-      try
-      {
-        return Marshal.PtrToStringUni(ptr);
-      }
-      finally
-      {
-        GlobalUnlock(hData);
-      }
+      return MemoryMarshal.CreateReadOnlySpanFromNullTerminated((char*)ptr).SequenceEqual(expected);
     }
     finally
     {
-      CloseClipboard();
+      GlobalUnlock(hData);
     }
   }
 
-  private static void ClearClipboard()
-  {
-    if (!OpenClipboard(nint.Zero))
-      return;
-
-    try
-    {
-      EmptyClipboard();
-    }
-    finally
-    {
-      CloseClipboard();
-    }
-  }
-
+  private const int OpenAttempts = 5;
+  private const int OpenRetryDelayMs = 50;
+  private const int ClearRetryDelayMs = 2000;
+  private static readonly object ClearRetried = new();
   private const uint CF_UNICODETEXT = 13;
   private const uint GMEM_MOVEABLE = 0x0002;
 

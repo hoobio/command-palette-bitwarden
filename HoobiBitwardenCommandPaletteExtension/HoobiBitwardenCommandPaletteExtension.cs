@@ -9,9 +9,7 @@ using Microsoft.CommandPalette.Extensions;
 
 namespace HoobiBitwardenCommandPaletteExtension;
 
-// COM activation CLSID, one per side-by-side channel so Dev/Prerelease/Release can run
-// concurrently without fighting over the same class id. Must match the CLSID stamped into
-// Package.appxmanifest by the build (driven by PackageChannel in the .csproj).
+// One CLSID per channel so side-by-side installs do not collide; must match the CLSID stamped into Package.appxmanifest.
 #if CHANNEL_DEV
 [Guid("ef6edc31-9567-4d38-8463-4a59b038148d")]
 #elif CHANNEL_PRERELEASE

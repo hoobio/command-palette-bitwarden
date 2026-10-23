@@ -75,6 +75,7 @@ internal sealed class ChannelStream : Stream
 
   public void Enqueue(string text) => _channel.Writer.TryWrite(System.Text.Encoding.UTF8.GetBytes(text));
   public void Complete() => _channel.Writer.Complete();
+  public void Fail(Exception ex) => _channel.Writer.Complete(ex);
 
   public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
   {
