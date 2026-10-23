@@ -54,7 +54,7 @@ public class BitwardenCliInstallerTests
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "", exitCode: 1));
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
 
-    await installer.InstallViaWingetAsync();
+    await installer.InstallViaWingetAsync(ct: TestContext.Current.CancellationToken);
 
     Assert.Contains("install", factory.LastPsi!.Arguments, StringComparison.Ordinal);
     Assert.Contains("--id Bitwarden.CLI", factory.LastPsi!.Arguments, StringComparison.Ordinal);
@@ -70,7 +70,7 @@ public class BitwardenCliInstallerTests
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "0x8a15000f", exitCode: 1));
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
 
-    var result = await installer.InstallViaWingetAsync();
+    var result = await installer.InstallViaWingetAsync(ct: TestContext.Current.CancellationToken);
 
     Assert.False(result.Success);
     Assert.Equal(CliInstallMethod.Winget, result.Method);
@@ -84,7 +84,7 @@ public class BitwardenCliInstallerTests
   {
     var installer = new BitwardenCliInstaller(httpClientFactory: () => new HttpClient(new ThrowingHandler()));
 
-    var result = await installer.InstallViaDownloadAsync();
+    var result = await installer.InstallViaDownloadAsync(ct: TestContext.Current.CancellationToken);
 
     Assert.False(result.Success);
     Assert.Equal(CliInstallMethod.Download, result.Method);
