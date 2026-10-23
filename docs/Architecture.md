@@ -77,7 +77,7 @@ User selects an action
 
 ## In-Memory Secret Protection
 
-Passwords, TOTP secrets, notes, card numbers, card security codes, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory`, with a key that only this process can use, and decrypts it into a pinned buffer only while a copy, search or TOTP calculation runs. The buffer is zeroed after use, and the cached secrets are erased when the vault locks or logs out. This protection applies only to the copies that the extension keeps: plaintext still passes through the `bw` CLI output, the Command Palette form input, the clipboard and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
+Passwords, TOTP secrets, notes, card numbers, card security codes, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
 
 ## Extension Registration
 
