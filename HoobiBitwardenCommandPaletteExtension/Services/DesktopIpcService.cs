@@ -1,13 +1,16 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -256,6 +259,35 @@ internal static partial class DesktopIpcService
     return $"{hashB64}.s.bw";
   }
 
+  internal static bool IsPipeServerBitwarden(PipeStream pipe)
+  {
+    try
+    {
+      if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid))
+      {
+        DebugLogService.Log("Biometric", $"Could not read pipe server process id (Win32 error {Marshal.GetLastPInvokeError()})");
+        return false;
+      }
+
+      using var process = Process.GetProcessById((int)pid);
+      var path = process.MainModule?.FileName;
+      var trusted = path != null && SignatureVerifier.IsTrustedBitwardenBinary(path);
+      DebugLogService.Log("Biometric", trusted
+        ? $"Pipe server pid {pid} is signed by Bitwarden"
+        : $"Pipe server pid {pid} ({path}) is not a Bitwarden-signed binary");
+      return trusted;
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Biometric", $"Pipe server check failed: {ex.GetType().Name}: {ex.Message}");
+      return false;
+    }
+  }
+
+  [LibraryImport("kernel32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
+
   // IpcClient: connection, encryption handshake, and command dispatch
 
   private sealed partial class IpcClient : IDisposable
@@ -303,6 +335,8 @@ internal static partial class DesktopIpcService
         throw new IOException("Bitwarden Desktop app is not running or 'Allow browser integration' is disabled", ex);
       }
 
+      // ponytail: log-only, Store (MSIX) and portable Desktop signers are unverified; block once they are known
+      _ = IsPipeServerBitwarden(_pipe);
       DebugLogService.Log("Biometric", "Pipe connected, initiating encrypted handshake");
       onStatus?.Invoke("Establishing secure channel with Bitwarden Desktop...");
 
@@ -653,14 +687,13 @@ internal static partial class DesktopIpcService
 
     private void HandleEncryptedResponse(JsonObject rawMsg)
     {
-      JsonObject? decrypted;
+      if (rawMsg["encryptionType"] == null && rawMsg["encryptedString"] == null)
+      {
+        DebugLogService.Log("Biometric", "Dropping unencrypted IPC command response");
+        return;
+      }
 
-      // Check if it's an encrypted message or plain JSON
-      if (rawMsg["encryptionType"] != null || rawMsg["encryptedString"] != null)
-        decrypted = DecryptMessage(rawMsg);
-      else
-        decrypted = rawMsg;
-
+      var decrypted = DecryptMessage(rawMsg);
       if (decrypted == null) return;
 
       // Timestamp check (10-second validity window)

@@ -26,6 +26,26 @@ public class DesktopIpcServiceTests
     Assert.Equal(name1, name2);
   }
 
+  [Fact]
+  public async Task IsPipeServerBitwarden_NonBitwardenServer_ReturnsFalse()
+  {
+    var name = $"bw-test-{Guid.NewGuid():N}";
+    using var server = new System.IO.Pipes.NamedPipeServerStream(name, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+    using var client = new System.IO.Pipes.NamedPipeClientStream(".", name, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous);
+    var accept = server.WaitForConnectionAsync();
+    await client.ConnectAsync(5000);
+    await accept;
+
+    Assert.False(DesktopIpcService.IsPipeServerBitwarden(client));
+  }
+
+  [Fact]
+  public void IsPipeServerBitwarden_UnconnectedPipe_ReturnsFalse()
+  {
+    using var client = new System.IO.Pipes.NamedPipeClientStream(".", $"bw-test-{Guid.NewGuid():N}");
+    Assert.False(DesktopIpcService.IsPipeServerBitwarden(client));
+  }
+
   // --- EncryptWithSessionKey ---
 
   [Fact]
