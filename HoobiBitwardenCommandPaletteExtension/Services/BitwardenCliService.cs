@@ -1510,7 +1510,8 @@ internal sealed partial class BitwardenCliService
   internal static bool Matches(BitwardenItem item, string query)
   {
     if (item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
-    if (item.Notes?.Contains(query, StringComparison.OrdinalIgnoreCase) == true) return true;
+    var secretsHidden = item.Reprompt == 1 && !Pages.RepromptPage.IsWithinGracePeriod(item.Id);
+    if (!secretsHidden && item.Notes?.Contains(query, StringComparison.OrdinalIgnoreCase) == true) return true;
 
     return item.Type switch
     {
@@ -1527,7 +1528,7 @@ internal sealed partial class BitwardenCliService
           || (item.IdentityCompany?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false),
       BitwardenItemType.SshKey =>
           (item.SshFingerprint?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-          || (item.SshHost?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false),
+          || (!secretsHidden && (item.SshHost?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)),
       _ => false,
     };
   }

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json.Nodes;
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
@@ -639,6 +640,21 @@ public class BitwardenCliServiceMockedTests
     }
     await refresh;
     Assert.True(svc.IsCacheLoaded);
+  }
+
+  [Fact]
+  public void Matches_RepromptNoteOutsideGrace_SkipsNotes()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+    var item = new BitwardenItem { Id = "rp-1", Name = "Bank", Type = BitwardenItemType.SecureNote, Notes = "pin 4321", Reprompt = 1 };
+
+    Assert.False(BitwardenCliService.Matches(item, "4321"));
+    Assert.True(BitwardenCliService.Matches(item, "bank"));
+
+    RepromptPage.RecordVerification("rp-1");
+    Assert.True(BitwardenCliService.Matches(item, "4321"));
+    RepromptPage.ClearGracePeriod();
   }
 
   // --- RunCliAsync internal behavior ---
