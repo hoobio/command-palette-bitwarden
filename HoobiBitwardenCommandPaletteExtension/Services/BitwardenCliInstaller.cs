@@ -24,7 +24,6 @@ internal sealed record CliInstallResult(bool Success, CliInstallMethod Method, s
 internal sealed class BitwardenCliInstaller
 {
   public const string ManualDownloadUrl = "https://bitwarden.com/download/?app=cli&platform=windows";
-  internal const string WingetPackageId = "Bitwarden.CLI";
   internal const string WingetInstallArgs =
       "install --id Bitwarden.CLI --exact --silent --scope user --accept-package-agreements --accept-source-agreements";
 
@@ -57,7 +56,7 @@ internal sealed class BitwardenCliInstaller
       return new CliInstallResult(true, CliInstallMethod.AlreadyPresent, existing, null);
     }
 
-    if (IsWingetAvailable())
+    if (await IsWingetAvailableAsync(ct))
     {
       DebugLogService.Log("Installer", "winget available; attempting install");
       var winget = await InstallViaWingetAsync(progress, ct);
@@ -76,28 +75,54 @@ internal sealed class BitwardenCliInstaller
         : new CliInstallResult(false, CliInstallMethod.None, null, download.Error ?? "Automatic installation failed");
   }
 
-  public bool IsWingetAvailable()
+  public async Task<bool> IsWingetAvailableAsync(CancellationToken ct = default)
   {
+    ICliProcess? process = null;
     try
     {
-      using var process = _processFactory(WingetStartInfo("--version"));
-      var line = process.StandardOutput.ReadLine();
-      try { process.Kill(true); } catch { }
-      return !string.IsNullOrWhiteSpace(line);
+      process = _processFactory(WingetStartInfo("--version"));
+      using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+      cts.CancelAfter(WingetVersionTimeoutMs);
+
+      var read = process.StandardOutput.ReadLineAsync(cts.Token).AsTask();
+      if (await Task.WhenAny(read, Task.Delay(Timeout.Infinite, cts.Token)) != read)
+      {
+        DebugLogService.Log("Installer", "winget availability check timed out or was cancelled");
+        return false;
+      }
+      return !string.IsNullOrWhiteSpace(await read);
     }
     catch (Exception ex)
     {
       DebugLogService.Log("Installer", $"winget availability check failed: {ex.GetType().Name}: {ex.Message}");
       return false;
     }
+    finally
+    {
+      KillTree(process);
+      process?.Dispose();
+    }
+  }
+
+  private static void KillTree(ICliProcess? process)
+  {
+    try
+    {
+      process?.Kill(true);
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Installer", $"winget kill failed: {ex.GetType().Name}: {ex.Message}");
+    }
   }
 
   public async Task<CliInstallResult> InstallViaWingetAsync(IProgress<string>? progress = null, CancellationToken ct = default)
   {
     progress?.Report("Installing Bitwarden CLI via winget...");
+    ICliProcess? process = null;
     try
     {
-      using var process = _processFactory(WingetStartInfo(WingetInstallArgs));
+      process = _processFactory(WingetStartInfo(WingetInstallArgs));
       using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
       cts.CancelAfter(WingetInstallTimeoutMs);
 
@@ -116,11 +141,17 @@ internal sealed class BitwardenCliInstaller
     }
     catch (OperationCanceledException)
     {
-      return new CliInstallResult(false, CliInstallMethod.Winget, null, "winget install timed out");
+      KillTree(process);
+      return new CliInstallResult(false, CliInstallMethod.Winget, null,
+          ct.IsCancellationRequested ? "winget install cancelled" : "winget install timed out");
     }
     catch (Exception ex)
     {
       return new CliInstallResult(false, CliInstallMethod.Winget, null, ex.Message);
+    }
+    finally
+    {
+      process?.Dispose();
     }
   }
 

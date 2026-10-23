@@ -18,30 +18,61 @@ public class BitwardenCliInstallerTests
   // --- winget availability ---
 
   [Fact]
-  public void IsWingetAvailable_VersionPrinted_ReturnsTrue()
+  public async Task IsWingetAvailable_VersionPrinted_ReturnsTrue()
   {
     var factory = new FakeProcessFactory();
-    factory.Enqueue(new FakeCliProcess(stdout: "v1.7.10561\n", exitCode: 0));
+    var process = new FakeCliProcess(stdout: "v1.7.10561\n", exitCode: 0);
+    factory.Enqueue(process);
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
-    Assert.True(installer.IsWingetAvailable());
+    Assert.True(await installer.IsWingetAvailableAsync());
+    Assert.True(process.Disposed);
   }
 
   [Fact]
-  public void IsWingetAvailable_NoOutput_ReturnsFalse()
+  public async Task IsWingetAvailable_NoOutput_ReturnsFalse()
   {
     var factory = new FakeProcessFactory();
     factory.Enqueue(new FakeCliProcess(stdout: "", exitCode: 1));
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
-    Assert.False(installer.IsWingetAvailable());
+    Assert.False(await installer.IsWingetAvailableAsync());
   }
 
   [Fact]
-  public void IsWingetAvailable_FactoryThrows_ReturnsFalse()
+  public async Task IsWingetAvailable_FactoryThrows_ReturnsFalse()
   {
     // Empty queue makes the factory throw (winget.exe not launchable).
     var factory = new FakeProcessFactory();
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
-    Assert.False(installer.IsWingetAvailable());
+    Assert.False(await installer.IsWingetAvailableAsync());
+  }
+
+  [Fact]
+  public async Task IsWingetAvailable_NoLineBeforeCancel_KillsAndReturnsFalse()
+  {
+    var factory = new FakeProcessFactory();
+    var hung = new FakeCliProcess(0);
+    factory.Enqueue(hung);
+    var installer = new BitwardenCliInstaller(processFactory: factory.Create);
+    using var cts = new CancellationTokenSource(50);
+
+    Assert.False(await installer.IsWingetAvailableAsync(cts.Token));
+    Assert.True(hung.Killed);
+  }
+
+  [Fact]
+  public async Task InstallViaWinget_Cancelled_KillsProcessTree()
+  {
+    var factory = new FakeProcessFactory();
+    var hung = new FakeCliProcess(0);
+    factory.Enqueue(hung);
+    var installer = new BitwardenCliInstaller(processFactory: factory.Create);
+    using var cts = new CancellationTokenSource(50);
+
+    var result = await installer.InstallViaWingetAsync(ct: cts.Token);
+
+    Assert.False(result.Success);
+    Assert.Equal("winget install cancelled", result.Error);
+    Assert.True(hung.Killed);
   }
 
   // --- winget install ---
