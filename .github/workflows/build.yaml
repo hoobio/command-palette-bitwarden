@@ -407,12 +407,6 @@ jobs:
       matrix:
         platform: [x64, ARM64]
     env:
-      # The job-level `if:` already gates on the same conditions as SHOULD_SIGN,
-      # so by the time we reach this env block SHOULD_SIGN is always true. We
-      # keep the variable for symmetry with build-msix and so a future
-      # relaxation of the gate (e.g. allow unsigned MSI builds for testing)
-      # only needs to touch the `if:`.
-      SHOULD_SIGN: ${{ (github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
     steps:
       - uses: actions/checkout@v7
@@ -477,7 +471,7 @@ jobs:
           extensions: "WixToolset.UI.wixext/5.0.2,WixToolset.Util.wixext/5.0.2"
 
       - name: Sign MSI
-        if: env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
+        if: env.HAS_SIGNING_CERT == 'true'
         uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v2.4.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
@@ -486,9 +480,9 @@ jobs:
           packages-path: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}
 
       - name: Skip-sign notice
-        if: env.SHOULD_SIGN != 'true' || env.HAS_SIGNING_CERT != 'true'
+        if: env.HAS_SIGNING_CERT != 'true'
         shell: bash
-        run: echo "::warning::MSI produced unsigned (SHOULD_SIGN=$SHOULD_SIGN, HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
+        run: echo "::warning::MSI produced unsigned (HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
 
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v7
