@@ -37,20 +37,23 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
     SecureClipboardService.CopySensitive(code);
   }
 
-  internal static (string Code, int RemainingSeconds) ComputeCode(string totpSecret)
+  internal static (string Code, int RemainingSeconds) ComputeCode(string totpSecret) =>
+    ComputeCode(totpSecret, DateTimeOffset.UtcNow);
+
+  internal static (string Code, int RemainingSeconds) ComputeCode(string totpSecret, DateTimeOffset at)
   {
     if (IsSteamSecret(totpSecret))
     {
       var key = ParseSteamKey(totpSecret);
-      var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+      var now = at.ToUnixTimeSeconds();
       var code = ComputeSteamCode(key, now);
       var remaining = (int)(30 - now % 30);
       return (code, remaining);
     }
 
-    var (keyBytes, digits, period) = ParseTotpSecret(totpSecret);
-    var totp = new Totp(keyBytes, step: period, totpSize: digits);
-    return (totp.ComputeTotp(), totp.RemainingSeconds());
+    var (keyBytes, digits, period, mode) = ParseTotpSecret(totpSecret);
+    var totp = new Totp(keyBytes, step: period, mode: mode, totpSize: digits);
+    return (totp.ComputeTotp(at.UtcDateTime), totp.RemainingSeconds(at.UtcDateTime));
   }
 
   internal static bool IsSteamSecret(string secret) =>
@@ -87,7 +90,7 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
     });
   }
 
-  internal static (byte[] Key, int Digits, int Period) ParseTotpSecret(string secret)
+  internal static (byte[] Key, int Digits, int Period, OtpHashMode Mode) ParseTotpSecret(string secret)
   {
     if (secret.StartsWith("otpauth://", StringComparison.OrdinalIgnoreCase))
     {
@@ -107,9 +110,16 @@ internal sealed partial class CopyOtpCommand : InvokableCommand
       _ = int.TryParse(parameters.TryGetValue("digits", out var d) ? d : null, out var digits);
       _ = int.TryParse(parameters.TryGetValue("period", out var p) ? p : null, out var period);
 
-      return (key, digits > 0 ? digits : 6, period > 0 ? period : 30);
+      var mode = (parameters.TryGetValue("algorithm", out var a) ? a.ToUpperInvariant() : null) switch
+      {
+        "SHA256" => OtpHashMode.Sha256,
+        "SHA512" => OtpHashMode.Sha512,
+        _ => OtpHashMode.Sha1,
+      };
+
+      return (key, digits > 0 ? digits : 6, period > 0 ? period : 30, mode);
     }
 
-    return (Base32Encoding.ToBytes(secret.Replace(" ", "").Replace("-", "")), 6, 30);
+    return (Base32Encoding.ToBytes(secret.Replace(" ", "").Replace("-", "")), 6, 30, OtpHashMode.Sha1);
   }
 }
