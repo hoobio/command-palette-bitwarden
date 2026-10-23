@@ -1014,6 +1014,7 @@ internal sealed partial class BitwardenCliService
     SetStatus(VaultStatus.Unauthenticated);
     InvalidateCache();
     FaviconService.ClearMemCache();
+    FaviconService.ClearDiskCache();
     SessionStore.Clear();
     StatusChanged?.Invoke();
 

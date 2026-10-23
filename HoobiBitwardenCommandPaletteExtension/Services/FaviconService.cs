@@ -231,6 +231,20 @@ internal static partial class FaviconService
         _memCache.Clear();
     }
 
+    public static void ClearDiskCache()
+    {
+        try
+        {
+            if (Directory.Exists(CacheDir))
+                Directory.Delete(CacheDir, recursive: true);
+            Directory.CreateDirectory(CacheDir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DebugLogService.Log("Favicon", $"ClearDiskCache failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     private static IconInfo CacheAndReturnIcon(string host, byte[] bytes)
     {
         return _iconInfoCache.GetOrAdd(host, _ => MakeIconInfo(bytes));
