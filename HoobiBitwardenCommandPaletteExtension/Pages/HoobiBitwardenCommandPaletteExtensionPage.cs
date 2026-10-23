@@ -223,7 +223,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
-        RebuildVaultList();
+        RebuildVaultListSafely();
+    }
+
+    private void RebuildVaultListSafely()
+    {
+        try { RebuildVaultList(); }
+        catch (Exception ex)
+        {
+            DebugLogService.Log("Page", $"RebuildVaultList failed: {ex.GetType().Name}: {ex.Message}");
+            RebuildForCurrentStatus();
+        }
     }
 
     private void OnCacheUpdated()
@@ -851,7 +861,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
-        RebuildVaultList();
+        RebuildVaultListSafely();
     }
 
     private void OnSyncTimerTick(object? state)

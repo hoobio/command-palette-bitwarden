@@ -35,7 +35,12 @@ internal sealed partial class ProtectedSecret : IDisposable
 
   public static ProtectedSecret? From(ReadOnlySpan<char> plaintext) => plaintext.IsEmpty ? null : new(plaintext);
 
-  public T Use<T>(SecretFunc<T> action)
+  public T Use<T>(SecretFunc<T> action) =>
+    TryUse(action, out var result) ? result : throw new ObjectDisposedException(GetType().FullName);
+
+  public T? UseOrDefault<T>(SecretFunc<T> action) => TryUse(action, out var result) ? result : default;
+
+  public bool TryUse<T>(SecretFunc<T> action, out T result)
   {
     var size = _cipher.Length;
     Span<byte> plain = size <= StackLimit ? stackalloc byte[size] : GC.AllocateUninitializedArray<byte>(size, pinned: true);
@@ -43,12 +48,17 @@ internal sealed partial class ProtectedSecret : IDisposable
     {
       lock (_lock)
       {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_disposed)
+        {
+          result = default!;
+          return false;
+        }
         _cipher.CopyTo(plain);
       }
       if (!CryptUnprotectMemory(ref MemoryMarshal.GetReference(plain), (uint)size, SameProcess))
         throw new CryptographicException(Marshal.GetLastPInvokeError());
-      return action(MemoryMarshal.Cast<byte, char>(plain)[..Length]);
+      result = action(MemoryMarshal.Cast<byte, char>(plain)[..Length]);
+      return true;
     }
     finally
     {

@@ -183,6 +183,23 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void CopyCommands_AfterSecretsDisposed_DoNotThrow()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "test-disposed",
+      Type = BitwardenItemType.Login,
+      HasTotp = true,
+      Password = ProtectedSecret.From("secret"),
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
+    };
+    var contextItems = VaultItemHelper.BuildContextItems(item);
+    item.DisposeSecrets();
+    foreach (var ci in contextItems.Where(ci => ci.Title is "Copy Password" or "Copy OTP"))
+      ((Microsoft.CommandPalette.Extensions.IInvokableCommand)ci.Command!).Invoke(null!);
+  }
+
+  [Fact]
   public void BuildContextItems_SshKey_HiddenHost_OffersSshSessionWithoutExposingHost()
   {
     var item = new BitwardenItem

@@ -485,8 +485,18 @@ internal static partial class VaultItemHelper
   {
     if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
       return new RepromptPage(reprompt, itemId, sensitiveCopy, label);
-    return Track(itemId, new AnonymousCommand(plainCopy ?? sensitiveCopy) { Name = $"Copy {label}", Result = CommandResult.ShowToast($"Copied {label} to clipboard") });
+    return Track(itemId, new AnonymousCommand(GuardLocked(plainCopy ?? sensitiveCopy)) { Name = $"Copy {label}", Result = CommandResult.ShowToast($"Copied {label} to clipboard") });
   }
+
+  internal static Action GuardLocked(Action copy) => () =>
+  {
+    try { copy(); }
+    catch (ObjectDisposedException)
+    {
+      DebugLogService.Log("Copy", "Secret disposed by a vault lock");
+      ExtensionHost.ShowStatus(new StatusMessage { Message = "Vault locked. Unlock and try again.", State = MessageState.Warning }, StatusContext.Page);
+    }
+  };
 
   private static TrackedInvokable Track(string itemId, InvokableCommand inner) => new(inner, itemId);
 

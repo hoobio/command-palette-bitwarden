@@ -1379,7 +1379,7 @@ internal sealed partial class BitwardenCliService
   {
     if (item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
     var secretsHidden = item.Reprompt == 1 && !Pages.RepromptPage.IsWithinGracePeriod(item.Id);
-    if (!secretsHidden && item.Notes?.Use(notes => notes.Contains(query, StringComparison.OrdinalIgnoreCase)) == true) return true;
+    if (!secretsHidden && item.Notes?.UseOrDefault(notes => notes.Contains(query, StringComparison.OrdinalIgnoreCase)) == true) return true;
 
     return item.Type switch
     {

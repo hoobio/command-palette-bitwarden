@@ -67,4 +67,15 @@ public class ProtectedSecretTests
     Assert.Throws<ObjectDisposedException>(secret.Reveal);
     Assert.Throws<ObjectDisposedException>(() => secret.Use(static s => s.Length));
   }
+
+  [Fact]
+  public void TryUse_AfterDispose_ReturnsFalse()
+  {
+    var secret = ProtectedSecret.From("gone")!;
+    Assert.True(secret.TryUse(static s => s.Length, out var length));
+    Assert.Equal(4, length);
+    secret.Dispose();
+    Assert.False(secret.TryUse(static s => s.Length, out _));
+    Assert.Null(secret.UseOrDefault(static s => new string(s)));
+  }
 }

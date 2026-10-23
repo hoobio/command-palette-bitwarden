@@ -76,7 +76,7 @@ internal sealed class BitwardenItem
   public ProtectedSecret? CardCode { get; init; }
   public string? CardExpiration => CardExpMonth != null && CardExpYear != null
       ? $"{CardExpMonth} / {CardExpYear}" : null;
-  public string? CardLast4 => CardNumber?.Length >= 4 ? CardNumber.Use(static n => new string(n[^4..])) : null;
+  public string? CardLast4 => CardNumber?.Length >= 4 ? CardNumber.UseOrDefault(static n => new string(n[^4..])) : null;
 
   public string? IdentityFullName { get; init; }
   public string? IdentityEmail { get; init; }
@@ -90,7 +90,7 @@ internal sealed class BitwardenItem
 
   public Dictionary<string, CustomField> CustomFields { get; init; } = [];
   public string? SshHost => CustomFields.TryGetValue("host", out var h) ? h.Value : null;
-  internal string? RevealSshHost() => CustomFields.TryGetValue("host", out var h) ? h.Value ?? h.Secret?.Reveal() : null;
+  internal string? RevealSshHost() => CustomFields.TryGetValue("host", out var h) ? h.Value ?? h.Secret?.UseOrDefault(static s => new string(s)) : null;
   internal bool IsSshHostHidden => CustomFields.TryGetValue("host", out var h) && h.IsHidden;
 
   internal void DisposeSecrets()
@@ -108,7 +108,7 @@ internal sealed class BitwardenItem
   {
     BitwardenItemType.Login => Username ?? string.Empty,
     BitwardenItemType.SecureNote when Reprompt == 1 => "Protected",
-    BitwardenItemType.SecureNote => Notes?.Use(static n => TruncateLine(n, 60)) ?? "Secure Note",
+    BitwardenItemType.SecureNote => Notes?.UseOrDefault(static n => TruncateLine(n, 60)) ?? "Secure Note",
     BitwardenItemType.Card => CardBrand != null && CardLast4 != null
         ? $"{CardBrand} ····{CardLast4}" : CardBrand ?? "Card",
     BitwardenItemType.Identity => IdentityEmail ?? IdentityFullName ?? "Identity",

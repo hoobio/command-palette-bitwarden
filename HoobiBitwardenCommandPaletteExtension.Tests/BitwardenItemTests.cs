@@ -81,6 +81,22 @@ public class BitwardenItemTests
   }
 
   [Fact]
+  public void DisplayMembers_AfterDisposeSecrets_ReturnEmptyValues()
+  {
+    var card = new BitwardenItem { Type = BitwardenItemType.Card, CardBrand = "Visa", CardNumber = ProtectedSecret.From("4111111111111234") };
+    var note = new BitwardenItem { Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("a note") };
+    var ssh = new BitwardenItem { CustomFields = { ["host"] = new CustomField(null, ProtectedSecret.From("me@host")) } };
+    card.DisposeSecrets();
+    note.DisposeSecrets();
+    ssh.DisposeSecrets();
+
+    Assert.Null(card.CardLast4);
+    Assert.Equal("Visa", card.Subtitle);
+    Assert.Equal("Secure Note", note.Subtitle);
+    Assert.Null(ssh.RevealSshHost());
+  }
+
+  [Fact]
   public void CardLast4_Null_WhenShortNumber()
   {
     var item = new BitwardenItem { CardNumber = ProtectedSecret.From("12") };
