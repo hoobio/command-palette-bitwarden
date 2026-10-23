@@ -93,4 +93,58 @@ public class DesktopIpcServiceTests
     var decrypted = dec.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
     Assert.Equal(plaintext, decrypted);
   }
+
+  private static string NewTempDir()
+  {
+    var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "bwtest-" + Guid.NewGuid().ToString("N"));
+    System.IO.Directory.CreateDirectory(dir);
+    return dir;
+  }
+
+  private static readonly string SessionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+  private static readonly string UserKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+
+  [Fact]
+  public void StoreUserKey_PreservesExistingDataAndAddsKey()
+  {
+    var dir = NewTempDir();
+    var path = System.IO.Path.Combine(dir, "data.json");
+    System.IO.File.WriteAllText(path, "{\"global_account_activeAccountId\":\"u1\",\"other\":42}");
+
+    DesktopIpcService.StoreUserKey(UserKey, "u1", SessionKey, dir);
+
+    var data = System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(path))!.AsObject();
+    Assert.Equal(42, (int)data["other"]!);
+    Assert.NotNull(data["__PROTECTED__u1_user_auto"]);
+    Assert.Single(System.IO.Directory.GetFiles(dir));
+    System.IO.Directory.Delete(dir, true);
+  }
+
+  [Theory]
+  [InlineData("{not json")]
+  [InlineData("[1,2]")]
+  [InlineData("")]
+  public void StoreUserKey_UnreadableFile_ThrowsAndLeavesFileUntouched(string content)
+  {
+    var dir = NewTempDir();
+    var path = System.IO.Path.Combine(dir, "data.json");
+    System.IO.File.WriteAllText(path, content);
+
+    Assert.Throws<InvalidOperationException>(() => DesktopIpcService.StoreUserKey(UserKey, "u1", SessionKey, dir));
+
+    Assert.Equal(content, System.IO.File.ReadAllText(path));
+    Assert.Single(System.IO.Directory.GetFiles(dir));
+    System.IO.Directory.Delete(dir, true);
+  }
+
+  [Fact]
+  public void StoreUserKey_MissingFile_Throws()
+  {
+    var dir = NewTempDir();
+
+    Assert.Throws<InvalidOperationException>(() => DesktopIpcService.StoreUserKey(UserKey, "u1", SessionKey, dir));
+
+    Assert.Empty(System.IO.Directory.GetFiles(dir));
+    System.IO.Directory.Delete(dir, true);
+  }
 }

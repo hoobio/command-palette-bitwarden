@@ -154,7 +154,7 @@ internal static partial class DesktopIpcService
   private static string GenerateSessionKey() =>
     Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
-  private static void StoreUserKey(string userKeyB64, string userId, string sessionKey, string? dataDirectory)
+  internal static void StoreUserKey(string userKeyB64, string userId, string sessionKey, string? dataDirectory)
   {
     var dataPath = GetCliDataPath(dataDirectory);
     var storageKey = $"__PROTECTED__{userId}_user_auto";
@@ -163,19 +163,29 @@ internal static partial class DesktopIpcService
     try
     {
       var content = File.ReadAllText(dataPath, Encoding.UTF8);
-      data = JsonNode.Parse(content)?.AsObject() ?? new JsonObject();
+      data = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("data.json is empty");
     }
-    catch
+    catch (Exception ex)
     {
-      data = new JsonObject();
+      throw new InvalidOperationException($"Cannot read Bitwarden CLI data file, unlock aborted: {ex.Message}", ex);
     }
 
     var userKeyBytes = Convert.FromBase64String(userKeyB64);
     data[storageKey] = EncryptWithSessionKey(userKeyBytes, sessionKey);
 
-    var dir = Path.GetDirectoryName(dataPath)!;
-    Directory.CreateDirectory(dir);
-    File.WriteAllText(dataPath, data.ToJsonString(), Encoding.UTF8);
+    var tempPath = Path.Combine(Path.GetDirectoryName(dataPath)!, $"data.{Guid.NewGuid():N}.tmp");
+    File.WriteAllText(tempPath, data.ToJsonString(), Encoding.UTF8);
+    try
+    {
+      if (File.Exists(dataPath))
+        File.Replace(tempPath, dataPath, null);
+      else
+        File.Move(tempPath, dataPath, overwrite: true);
+    }
+    finally
+    {
+      File.Delete(tempPath);
+    }
   }
 
   internal static string EncryptWithSessionKey(byte[] data, string sessionKey)
