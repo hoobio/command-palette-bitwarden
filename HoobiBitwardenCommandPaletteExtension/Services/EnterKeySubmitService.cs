@@ -243,41 +243,45 @@ internal static unsafe partial class EnterKeySubmitService
     IUIAutomation? automation = null;
     IUIAutomationElement? focused = null;
     IUIAutomationElement? root = null;
-    IUIAutomationCondition? typeCondition = null;
-    IUIAutomationCondition? nameCondition = null;
-    IUIAutomationCondition? condition = null;
+    nint typeCondition = 0;
+    nint nameCondition = 0;
+    nint condition = 0;
     IUIAutomationElement? button = null;
-    object? patternObj = null;
+    IUIAutomationInvokePattern? invoke = null;
+    var nameBstr = Marshal.StringToBSTR(buttonName);
     try
     {
-#pragma warning disable IL2072 // COM activation via CLSID is inherently dynamic
-      automation = (IUIAutomation)Activator.CreateInstance(
-          Type.GetTypeFromCLSID(new Guid("ff48dba4-60ef-4201-aa87-54103eef594e"))!)!;
-#pragma warning restore IL2072
+      automation = UiaInterop.CreateAutomation();
+      if (automation == null)
+        return;
 
-      if (automation.GetFocusedElement(out focused) != 0 || focused == null)
+      if (automation.GetFocusedElement(out var focusedPtr) != 0
+          || (focused = UiaInterop.Wrap<IUIAutomationElement>(focusedPtr)) == null)
         return;
 
       if (!FocusedElementIsOurTextInput(focused, hwnd))
         return;
 
-      if (automation.ElementFromHandle(hwnd, out root) != 0 || root == null)
+      if (automation.ElementFromHandle(hwnd, out var rootPtr) != 0
+          || (root = UiaInterop.Wrap<IUIAutomationElement>(rootPtr)) == null)
         return;
 
-      if (automation.CreatePropertyCondition(UIA_ControlTypePropertyId, UIA_ButtonControlTypeId, out typeCondition) != 0 || typeCondition == null)
+      if (automation.CreatePropertyCondition(UiaInterop.UIA_ControlTypePropertyId, UiaInterop.Variant.FromInt(UiaInterop.UIA_ButtonControlTypeId), out typeCondition) != 0 || typeCondition == 0)
         return;
-      if (automation.CreatePropertyCondition(UIA_NamePropertyId, buttonName, out nameCondition) != 0 || nameCondition == null)
+      if (automation.CreatePropertyCondition(UiaInterop.UIA_NamePropertyId, UiaInterop.Variant.FromBstr(nameBstr), out nameCondition) != 0 || nameCondition == 0)
         return;
-      if (automation.CreateAndCondition(typeCondition, nameCondition, out condition) != 0 || condition == null)
+      if (automation.CreateAndCondition(typeCondition, nameCondition, out condition) != 0 || condition == 0)
         return;
 
-      if (root.FindFirst(TreeScope_Descendants, condition, out button) != 0 || button == null)
+      if (root.FindFirst(UiaInterop.TreeScope_Descendants, condition, out var buttonPtr) != 0
+          || (button = UiaInterop.Wrap<IUIAutomationElement>(buttonPtr)) == null)
       {
         DebugLogService.Log("EnterSubmit", $"Submit button '{buttonName}' not found");
         return;
       }
 
-      if (button.GetCurrentPattern(UIA_InvokePatternId, out patternObj) != 0 || patternObj is not IUIAutomationInvokePattern invoke)
+      if (button.GetCurrentPattern(UiaInterop.UIA_InvokePatternId, out var patternPtr) != 0
+          || (invoke = UiaInterop.Wrap<IUIAutomationInvokePattern>(patternPtr)) == null)
         return;
 
       invoke.Invoke();
@@ -289,14 +293,15 @@ internal static unsafe partial class EnterKeySubmitService
     }
     finally
     {
-      if (patternObj != null) Marshal.ReleaseComObject(patternObj);
-      if (button != null) Marshal.ReleaseComObject(button);
-      if (condition != null) Marshal.ReleaseComObject(condition);
-      if (nameCondition != null) Marshal.ReleaseComObject(nameCondition);
-      if (typeCondition != null) Marshal.ReleaseComObject(typeCondition);
-      if (root != null) Marshal.ReleaseComObject(root);
-      if (focused != null) Marshal.ReleaseComObject(focused);
-      if (automation != null) Marshal.ReleaseComObject(automation);
+      UiaInterop.Release(invoke);
+      UiaInterop.Release(button);
+      UiaInterop.Release(condition);
+      UiaInterop.Release(nameCondition);
+      UiaInterop.Release(typeCondition);
+      UiaInterop.Release(root);
+      UiaInterop.Release(focused);
+      UiaInterop.Release(automation);
+      Marshal.FreeBSTR(nameBstr);
     }
   }
 
@@ -307,18 +312,14 @@ internal static unsafe partial class EnterKeySubmitService
   private static bool FocusedElementIsOurTextInput(IUIAutomationElement focused, nint cmdPalHwnd)
   {
     GetWindowThreadProcessId(cmdPalHwnd, out var cmdPalPid);
-    if (focused.GetCurrentPropertyValue(UIA_ProcessIdPropertyId, out var pidValue) != 0
-        || pidValue is not int focusedPid
-        || focusedPid != (int)cmdPalPid)
+    if (focused.get_CurrentProcessId(out var focusedPid) != 0 || focusedPid != (int)cmdPalPid)
       return false;
 
-    if (focused.GetCurrentPropertyValue(UIA_IsPasswordPropertyId, out var isPassword) == 0
-        && isPassword is bool password && password)
+    if (focused.get_CurrentIsPassword(out var isPassword) == 0 && isPassword != 0)
       return true;
 
-    return focused.GetCurrentPropertyValue(UIA_ControlTypePropertyId, out var controlType) == 0
-        && controlType is int type
-        && type == UIA_EditControlTypeId;
+    return focused.get_CurrentControlType(out var controlType) == 0
+        && controlType == UiaInterop.UIA_EditControlTypeId;
   }
 
   private const uint WM_USER = 0x0400;
@@ -390,106 +391,4 @@ internal static unsafe partial class EnterKeySubmitService
 
   [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
   private static partial nint GetModuleHandleW(string? lpModuleName);
-
-  private const int UIA_ProcessIdPropertyId = 30002;
-  private const int UIA_ControlTypePropertyId = 30003;
-  private const int UIA_NamePropertyId = 30005;
-  private const int UIA_IsPasswordPropertyId = 30019;
-  private const int UIA_ButtonControlTypeId = 50000;
-  private const int UIA_EditControlTypeId = 50004;
-  private const int UIA_InvokePatternId = 10000;
-  private const int TreeScope_Descendants = 4;
-
-  // Minimal COM interface definitions — only the methods we call are properly declared;
-  // unused vtable slots use parameterless void stubs for slot positioning.
-  // (Same pattern as ContextAwarenessService.)
-
-  [ComImport, Guid("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomation
-  {
-    void _ReservedCompareElements();
-    void _ReservedCompareRuntimeIds();
-    void _ReservedGetRootElement();
-
-    [PreserveSig]
-    int ElementFromHandle(nint hwnd, [MarshalAs(UnmanagedType.Interface)] out IUIAutomationElement element);
-
-    void _ReservedElementFromPoint();
-
-    [PreserveSig]
-    int GetFocusedElement([MarshalAs(UnmanagedType.Interface)] out IUIAutomationElement element);
-
-    void _ReservedGetRootElementBuildCache();
-    void _ReservedElementFromHandleBuildCache();
-    void _ReservedElementFromPointBuildCache();
-    void _ReservedGetFocusedElementBuildCache();
-    void _ReservedCreateTreeWalker();
-    void _ReservedControlViewWalker();
-    void _ReservedContentViewWalker();
-    void _ReservedRawViewWalker();
-    void _ReservedRawViewCondition();
-    void _ReservedControlViewCondition();
-    void _ReservedContentViewCondition();
-    void _ReservedCreateCacheRequest();
-    void _ReservedCreateTrueCondition();
-    void _ReservedCreateFalseCondition();
-
-    [PreserveSig]
-    int CreatePropertyCondition(
-        int propertyId,
-        [In, MarshalAs(UnmanagedType.Struct)] object value,
-        [MarshalAs(UnmanagedType.Interface)] out IUIAutomationCondition condition);
-
-    void _ReservedCreatePropertyConditionEx();
-
-    [PreserveSig]
-    int CreateAndCondition(
-        [MarshalAs(UnmanagedType.Interface)] IUIAutomationCondition condition1,
-        [MarshalAs(UnmanagedType.Interface)] IUIAutomationCondition condition2,
-        [MarshalAs(UnmanagedType.Interface)] out IUIAutomationCondition condition);
-  }
-
-  [ComImport, Guid("d22108aa-8ac5-49a5-837b-37bbb3d7591e")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomationElement
-  {
-    void _ReservedSetFocus();
-    void _ReservedGetRuntimeId();
-
-    [PreserveSig]
-    int FindFirst(
-        int scope,
-        [MarshalAs(UnmanagedType.Interface)] IUIAutomationCondition condition,
-        [MarshalAs(UnmanagedType.Interface)] out IUIAutomationElement found);
-
-    void _ReservedFindAll();
-    void _ReservedFindFirstBuildCache();
-    void _ReservedFindAllBuildCache();
-    void _ReservedBuildUpdatedCache();
-
-    [PreserveSig]
-    int GetCurrentPropertyValue(int propertyId, [MarshalAs(UnmanagedType.Struct)] out object value);
-
-    void _ReservedGetCurrentPropertyValueEx();
-    void _ReservedGetCachedPropertyValue();
-    void _ReservedGetCachedPropertyValueEx();
-    void _ReservedGetCurrentPatternAs();
-    void _ReservedGetCachedPatternAs();
-
-    [PreserveSig]
-    int GetCurrentPattern(int patternId, [MarshalAs(UnmanagedType.IUnknown)] out object pattern);
-  }
-
-  [ComImport, Guid("352ffba8-0973-437c-a61f-f64cafd81df9")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomationCondition { }
-
-  [ComImport, Guid("fb377fbe-8ea6-46d5-9c73-6499642d3059")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomationInvokePattern
-  {
-    [PreserveSig]
-    int Invoke();
-  }
 }

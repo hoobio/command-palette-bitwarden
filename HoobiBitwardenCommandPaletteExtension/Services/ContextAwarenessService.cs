@@ -348,44 +348,44 @@ internal static partial class ContextAwarenessService
 
   private const uint GW_HWNDNEXT = 2;
 
-  // --- UI Automation COM interop for browser URL extraction ---
-
   private static string? ExtractBrowserUrl(nint hwnd)
   {
     IUIAutomation? automation = null;
     IUIAutomationElement? element = null;
-    IUIAutomationCondition? condition = null;
+    nint condition = 0;
     IUIAutomationElement? edit = null;
     try
     {
-#pragma warning disable IL2072 // COM activation via CLSID is inherently dynamic
-      automation = (IUIAutomation)Activator.CreateInstance(
-          Type.GetTypeFromCLSID(new Guid("ff48dba4-60ef-4201-aa87-54103eef594e"))!)!;
-#pragma warning restore IL2072
-
-      if (automation.ElementFromHandle(hwnd, out element) != 0 || element == null)
+      automation = UiaInterop.CreateAutomation();
+      if (automation == null)
         return null;
 
-      if (automation.CreatePropertyCondition(UIA_ControlTypePropertyId, UIA_EditControlTypeId, out condition) != 0 || condition == null)
+      if (automation.ElementFromHandle(hwnd, out var elementPtr) != 0
+          || (element = UiaInterop.Wrap<IUIAutomationElement>(elementPtr)) == null)
         return null;
 
-      if (element.FindFirst(TreeScope_Descendants, condition, out edit) != 0 || edit == null)
+      if (automation.CreatePropertyCondition(UiaInterop.UIA_ControlTypePropertyId, UiaInterop.Variant.FromInt(UiaInterop.UIA_EditControlTypeId), out condition) != 0 || condition == 0)
         return null;
 
-      if (edit.GetCurrentPropertyValue(UIA_ValueValuePropertyId, out var value) == 0 && value is string url)
+      if (element.FindFirst(UiaInterop.TreeScope_Descendants, condition, out var editPtr) != 0
+          || (edit = UiaInterop.Wrap<IUIAutomationElement>(editPtr)) == null)
+        return null;
+
+      if (edit.GetCurrentPropertyValue(UiaInterop.UIA_ValueValuePropertyId, out var value) == 0)
       {
-        url = url.Trim();
-        if (LooksLikeUrl(url))
+        var url = value.AsString()?.Trim();
+        UiaInterop.VariantClear(ref value);
+        if (url != null && LooksLikeUrl(url))
           return url;
       }
     }
     catch { }
     finally
     {
-      if (edit != null) Marshal.ReleaseComObject(edit);
-      if (condition != null) Marshal.ReleaseComObject(condition);
-      if (element != null) Marshal.ReleaseComObject(element);
-      if (automation != null) Marshal.ReleaseComObject(automation);
+      UiaInterop.Release(edit);
+      UiaInterop.Release(condition);
+      UiaInterop.Release(element);
+      UiaInterop.Release(automation);
     }
     return null;
   }
@@ -398,73 +398,4 @@ internal static partial class ContextAwarenessService
       return true;
     return value.IndexOf('.') > 0 && !value.Contains(' ');
   }
-
-  private const int UIA_ControlTypePropertyId = 30003;
-  private const int UIA_EditControlTypeId = 50004;
-  private const int UIA_ValueValuePropertyId = 30045;
-  private const int TreeScope_Descendants = 4;
-
-  // Minimal COM interface definitions — only the methods we call are properly declared;
-  // unused vtable slots use parameterless void stubs for slot positioning.
-
-  [ComImport, Guid("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomation
-  {
-    void _ReservedCompareElements();
-    void _ReservedCompareRuntimeIds();
-    void _ReservedGetRootElement();
-
-    [PreserveSig]
-    int ElementFromHandle(nint hwnd, [MarshalAs(UnmanagedType.Interface)] out IUIAutomationElement element);
-
-    void _ReservedElementFromPoint();
-    void _ReservedGetFocusedElement();
-    void _ReservedGetRootElementBuildCache();
-    void _ReservedElementFromHandleBuildCache();
-    void _ReservedElementFromPointBuildCache();
-    void _ReservedGetFocusedElementBuildCache();
-    void _ReservedCreateTreeWalker();
-    void _ReservedControlViewWalker();
-    void _ReservedContentViewWalker();
-    void _ReservedRawViewWalker();
-    void _ReservedRawViewCondition();
-    void _ReservedControlViewCondition();
-    void _ReservedContentViewCondition();
-    void _ReservedCreateCacheRequest();
-    void _ReservedCreateTrueCondition();
-    void _ReservedCreateFalseCondition();
-
-    [PreserveSig]
-    int CreatePropertyCondition(
-        int propertyId,
-        [In, MarshalAs(UnmanagedType.Struct)] object value,
-        [MarshalAs(UnmanagedType.Interface)] out IUIAutomationCondition condition);
-  }
-
-  [ComImport, Guid("d22108aa-8ac5-49a5-837b-37bbb3d7591e")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomationElement
-  {
-    void _ReservedSetFocus();
-    void _ReservedGetRuntimeId();
-
-    [PreserveSig]
-    int FindFirst(
-        int scope,
-        [MarshalAs(UnmanagedType.Interface)] IUIAutomationCondition condition,
-        [MarshalAs(UnmanagedType.Interface)] out IUIAutomationElement found);
-
-    void _ReservedFindAll();
-    void _ReservedFindFirstBuildCache();
-    void _ReservedFindAllBuildCache();
-    void _ReservedBuildUpdatedCache();
-
-    [PreserveSig]
-    int GetCurrentPropertyValue(int propertyId, [MarshalAs(UnmanagedType.Struct)] out object value);
-  }
-
-  [ComImport, Guid("352ffba8-0973-437c-a61f-f64cafd81df9")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomationCondition { }
 }
