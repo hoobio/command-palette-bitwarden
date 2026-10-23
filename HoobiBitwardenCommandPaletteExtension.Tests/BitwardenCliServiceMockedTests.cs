@@ -588,6 +588,28 @@ public class BitwardenCliServiceMockedTests
     Assert.True(svc.IsCacheLoaded);
   }
 
+  [Fact]
+  public async Task SyncVault_RefreshInFlight_DoesNotStartSecondRefresh()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 201), new FakeCliProcess(exitCode: 0, id: 202), new FakeCliProcess(exitCode: 0, id: 203) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refresh = svc.RefreshCacheAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0, id: 204));
+    await svc.SyncVaultAsync();
+
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+    Assert.True(svc.IsCacheLoaded);
+  }
+
   // --- RunCliAsync internal behavior ---
 
   [Fact]

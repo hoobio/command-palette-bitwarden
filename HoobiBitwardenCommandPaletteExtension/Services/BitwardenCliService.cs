@@ -1387,7 +1387,6 @@ internal sealed partial class BitwardenCliService
   {
     DebugLogService.Log("Sync", "SyncVaultAsync started");
     await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
-    Interlocked.Exchange(ref _refreshing, 0);
     if (!IsUnlocked)
     {
       DebugLogService.Log("Sync", "SyncVaultAsync: session lost during sync, skipping cache refresh");
