@@ -3,6 +3,7 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
+[Collection("SessionStore")]
 public class SignatureVerifierTests
 {
   [Fact]

@@ -7,6 +7,7 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
+[Collection("SessionStore")]
 public class BitwardenCliInstallerTests
 {
   private sealed class ThrowingHandler : HttpMessageHandler
