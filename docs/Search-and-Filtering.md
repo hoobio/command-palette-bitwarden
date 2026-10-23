@@ -4,7 +4,9 @@
 
 Type any text in the vault browser to search across item names, usernames, URIs, and notes. Results are ranked by relevance with smart sorting applied on top.
 
-You can also type anywhere in the Command Palette; matching vault items appear as **fallback suggestions** without needing to open the Bitwarden page first.
+You can also type anywhere in the Command Palette; matching vault items appear as **fallback suggestions** without needing to open the Bitwarden page first. Fallback results for items with master password re-prompt require the verification (see [Vault Item Actions](Vault-Item-Actions)).
+
+Notes of items with master password re-prompt are not searched outside the grace period.
 
 ## Search Filters
 

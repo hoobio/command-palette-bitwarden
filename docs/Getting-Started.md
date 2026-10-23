@@ -40,4 +40,10 @@ dotnet build -c Debug -p:Platform=x64
 
 ## Setting Your Server
 
-Select **Set Bitwarden Server** from the vault browser to pick a preset (**Bitwarden Cloud** for `bitwarden.com`, **Bitwarden EU** for `https://vault.bitwarden.eu`) or type a self-hosted server URL. The default is `https://vault.bitwarden.com`.
+Select **Set Bitwarden Server** from the vault browser to pick a preset (**Bitwarden Cloud** for `bitwarden.com`, **Bitwarden EU** for `https://vault.bitwarden.eu`) or type a self-hosted server URL. The default is `https://vault.bitwarden.com`. Only the exact hosts `bitwarden.com` and its subdomains are treated as cloud. A self-hosted server on a host that only contains "bitwarden.com" in its name is treated as self-hosted.
+
+## Sign-in Security
+
+- Pressing Enter in a password field submits the form. Pressing Enter in the login email field needs PowerToys 0.101 or later.
+- When the extension downloads the Bitwarden CLI, it accepts the file only if the Authenticode signature is valid (with a revocation check) and the signer is exactly `Bitwarden Inc.`.
+- For biometric unlock, the extension checks that the pipe server is a Bitwarden-signed binary and writes the result to the debug log. The extension drops unencrypted responses from the pipe.

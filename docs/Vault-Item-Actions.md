@@ -6,7 +6,7 @@ Each vault item type exposes different actions. Select an item to trigger the de
 
 | Action | Description | Clipboard |
 |--------|-------------|----------|
-| Open in Browser | Opens the first URI in the default browser | N/A |
+| Open in Browser | Opens the first URI in the default browser. Only `http` and `https` URIs open. A URI without a scheme (for example `github.com`) opens as `https://github.com`. | N/A |
 | Copy Username | Copies the username | Standard |
 | Copy Password | Copies the password | Secure (excluded + auto-clear) |
 | Copy TOTP Code | Copies the current TOTP code (if configured) | Secure |
@@ -50,6 +50,9 @@ When an item has re-prompt enabled:
 
 - A **🔒** (padlock) tag is shown on the item in the vault list
 - Secure Note subtitles are masked ("Protected")
+- The live TOTP tag is replaced by a static **2FA** tag outside the grace period
+- Search does not match the notes of the item outside the grace period
+- Fallback results in the root Command Palette also require the verification
 - Selecting the item (Enter key) opens a master password verification form before performing the default action
 - **All** copy actions — including normally non-sensitive fields like Username, Cardholder Name, and Email — require verification
 - Non-copy actions (Open in Browser, View in Web Vault) via context menu remain unprotected
@@ -62,3 +65,5 @@ This matches the Bitwarden desktop/web vault behaviour where re-prompt gates acc
 ## Manual Sync
 
 **Sync Vault** triggers a full `bw sync` followed by a cache refresh.
+
+If the vault is unlocked but the item list failed to load, the vault browser shows **Vault items not loaded** with the hint "Run Sync Vault to load them". The Sync Vault, Set Server, Lock and Log out commands stay available.

@@ -10,7 +10,7 @@ Non-sensitive data (usernames, public keys, cardholder names) uses the standard 
 
 ## Auto-Clear
 
-After copying sensitive data, the clipboard is automatically cleared after a configurable delay. Before clearing, the extension checks whether the clipboard contents have been replaced by another application. If the user has already copied something else, the clear is skipped.
+After copying sensitive data, the clipboard is automatically cleared after a configurable delay. Before clearing, the extension checks whether the clipboard contents have been replaced by another application. If the user has already copied something else, the clear is skipped. If another application holds the clipboard open, the extension retries the clear once after 2 seconds.
 
 ### Sensitive vs Non-Sensitive
 
