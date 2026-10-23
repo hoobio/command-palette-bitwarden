@@ -681,6 +681,34 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task RefreshQueued_VaultLocksAndSessionRestored_RunsQueuedRefresh()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 221), new FakeCliProcess(exitCode: 0, id: 222), new FakeCliProcess(exitCode: 0, id: 223) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refresh = svc.RefreshCacheAsync();
+    await svc.RefreshCacheAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 224));
+    await svc.LockAsync();
+    svc.SetSession("restored-key");
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 225));
+    factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Restored\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0, id: 226));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 227));
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.True(svc.IsCacheLoaded);
+    Assert.Equal("Restored", Assert.Single(svc.SearchCached()).Name);
+  }
+
+  [Fact]
   public async Task Lock_AfterSyncDetached_DoesNotKillSync()
   {
     var (svc, factory) = CreateService();

@@ -1251,9 +1251,7 @@ internal sealed partial class BitwardenCliService
     finally
     {
       Interlocked.Exchange(ref _refreshing, 0);
-      bool sameSession;
-      lock (_cacheLock) sameSession = generation == _sessionGeneration;
-      if (Interlocked.Exchange(ref _refreshPending, 0) == 1 && sameSession)
+      if (Interlocked.Exchange(ref _refreshPending, 0) == 1 && IsUnlocked)
         await RefreshCacheAsync();
       else if (failed && !_cacheLoaded)
         StatusChanged?.Invoke();
