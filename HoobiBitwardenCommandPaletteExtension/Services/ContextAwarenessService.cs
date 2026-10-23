@@ -86,8 +86,7 @@ internal static partial class ContextAwarenessService
   }
 
   private static bool IsCommandPaletteProcess(string processName) =>
-      processName.Equals("PowerToys.CmdPal", StringComparison.OrdinalIgnoreCase)
-      || processName.Contains("CmdPal", StringComparison.OrdinalIgnoreCase);
+      processName.Contains("CmdPal", StringComparison.OrdinalIgnoreCase);
 
   internal static string? ExtractUrlFromTitle(string? title)
   {
@@ -161,13 +160,24 @@ internal static partial class ContextAwarenessService
       Models.UriMatchType.Host =>
           browserHost != null && itemHost != null && browserHost.Equals(itemHost, StringComparison.OrdinalIgnoreCase),
 
-      // Vault URI used as regex pattern (set by vault owner, not external input). 100ms timeout mitigates ReDoS.
       Models.UriMatchType.RegularExpression =>
-          !string.IsNullOrEmpty(browserUrl) && System.Text.RegularExpressions.Regex.IsMatch(browserUrl, entry.Uri, System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100)),
+          !string.IsNullOrEmpty(browserUrl) && SafeRegexMatch(browserUrl, entry.Uri),
 
       _ => // Default and Domain: subdomain-inclusive host matching
           browserHost != null && itemHost != null && HostsMatch(browserHost, itemHost),
     };
+  }
+
+  private static bool SafeRegexMatch(string input, string pattern)
+  {
+    try
+    {
+      return System.Text.RegularExpressions.Regex.IsMatch(input, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
+    }
+    catch (Exception ex) when (ex is ArgumentException or System.Text.RegularExpressions.RegexMatchTimeoutException)
+    {
+      return false;
+    }
   }
 
   internal static string NormalizeUrl(string url)
@@ -237,14 +247,8 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  internal static bool NamesSimilar(string a, string b)
-  {
-    if (a.Equals(b, StringComparison.OrdinalIgnoreCase))
-      return true;
-    if (a.StartsWith(b, StringComparison.OrdinalIgnoreCase) || b.StartsWith(a, StringComparison.OrdinalIgnoreCase))
-      return true;
-    return false;
-  }
+  internal static bool NamesSimilar(string a, string b) =>
+      a.StartsWith(b, StringComparison.OrdinalIgnoreCase) || b.StartsWith(a, StringComparison.OrdinalIgnoreCase);
 
   internal static bool ContainsWholeWord(string text, string word)
   {
@@ -260,34 +264,15 @@ internal static partial class ContextAwarenessService
     return false;
   }
 
-  internal static string? ExtractHost(string url)
-  {
-    try
-    {
-      if (!url.Contains("://"))
-        url = "https://" + url;
-      var host = new Uri(url).Host;
-      if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
-        host = host[4..];
-      return host;
-    }
-    catch { return null; }
-  }
+  internal static string? ExtractHost(string url) => Models.ItemUri.ExtractHost(url);
 
   // Suffix-based subdomain matching (not true eTLD+1). Can false-positive on public suffixes
   // like .co.uk, but true eTLD+1 requires a public suffix list dependency. Acceptable since
   // this only affects context boosting priority, not authentication or access control.
-  internal static bool HostsMatch(string a, string b)
-  {
-    if (a.Equals(b, StringComparison.OrdinalIgnoreCase))
-      return true;
-
-    if (a.EndsWith("." + b, StringComparison.OrdinalIgnoreCase)
-        || b.EndsWith("." + a, StringComparison.OrdinalIgnoreCase))
-      return true;
-
-    return false;
-  }
+  internal static bool HostsMatch(string a, string b) =>
+      a.Equals(b, StringComparison.OrdinalIgnoreCase)
+      || a.EndsWith("." + b, StringComparison.OrdinalIgnoreCase)
+      || b.EndsWith("." + a, StringComparison.OrdinalIgnoreCase);
 
   private static string? GetProcessNameForPid(uint pid)
   {
@@ -314,18 +299,8 @@ internal static partial class ContextAwarenessService
     "chrome", "msedge", "firefox", "brave", "opera", "vivaldi", "arc", "thorium", "waterfox", "librewolf"
   ];
 
-  internal static bool IsBrowserProcess(string? processName)
-  {
-    if (string.IsNullOrEmpty(processName))
-      return false;
-
-    foreach (var browser in BrowserProcessNames)
-    {
-      if (processName.Equals(browser, StringComparison.OrdinalIgnoreCase))
-        return true;
-    }
-    return false;
-  }
+  internal static bool IsBrowserProcess(string? processName) =>
+      processName != null && BrowserProcessNames.Contains(processName, StringComparer.OrdinalIgnoreCase);
 
   [LibraryImport("user32.dll")]
   private static partial nint GetForegroundWindow();
@@ -348,44 +323,44 @@ internal static partial class ContextAwarenessService
 
   private const uint GW_HWNDNEXT = 2;
 
-  // --- UI Automation COM interop for browser URL extraction ---
-
   private static string? ExtractBrowserUrl(nint hwnd)
   {
     IUIAutomation? automation = null;
     IUIAutomationElement? element = null;
-    IUIAutomationCondition? condition = null;
+    nint condition = 0;
     IUIAutomationElement? edit = null;
     try
     {
-#pragma warning disable IL2072 // COM activation via CLSID is inherently dynamic
-      automation = (IUIAutomation)Activator.CreateInstance(
-          Type.GetTypeFromCLSID(new Guid("ff48dba4-60ef-4201-aa87-54103eef594e"))!)!;
-#pragma warning restore IL2072
-
-      if (automation.ElementFromHandle(hwnd, out element) != 0 || element == null)
+      automation = UiaInterop.CreateAutomation();
+      if (automation == null)
         return null;
 
-      if (automation.CreatePropertyCondition(UIA_ControlTypePropertyId, UIA_EditControlTypeId, out condition) != 0 || condition == null)
+      if (automation.ElementFromHandle(hwnd, out var elementPtr) != 0
+          || (element = UiaInterop.Wrap<IUIAutomationElement>(elementPtr)) == null)
         return null;
 
-      if (element.FindFirst(TreeScope_Descendants, condition, out edit) != 0 || edit == null)
+      if (automation.CreatePropertyCondition(UiaInterop.UIA_ControlTypePropertyId, UiaInterop.Variant.FromInt(UiaInterop.UIA_EditControlTypeId), out condition) != 0 || condition == 0)
         return null;
 
-      if (edit.GetCurrentPropertyValue(UIA_ValueValuePropertyId, out var value) == 0 && value is string url)
+      if (element.FindFirst(UiaInterop.TreeScope_Descendants, condition, out var editPtr) != 0
+          || (edit = UiaInterop.Wrap<IUIAutomationElement>(editPtr)) == null)
+        return null;
+
+      if (edit.GetCurrentPropertyValue(UiaInterop.UIA_ValueValuePropertyId, out var value) == 0)
       {
-        url = url.Trim();
-        if (LooksLikeUrl(url))
+        var url = value.AsString()?.Trim();
+        UiaInterop.VariantClear(ref value);
+        if (url != null && LooksLikeUrl(url))
           return url;
       }
     }
     catch { }
     finally
     {
-      if (edit != null) Marshal.ReleaseComObject(edit);
-      if (condition != null) Marshal.ReleaseComObject(condition);
-      if (element != null) Marshal.ReleaseComObject(element);
-      if (automation != null) Marshal.ReleaseComObject(automation);
+      UiaInterop.Release(edit);
+      UiaInterop.Release(condition);
+      UiaInterop.Release(element);
+      UiaInterop.Release(automation);
     }
     return null;
   }
@@ -398,73 +373,4 @@ internal static partial class ContextAwarenessService
       return true;
     return value.IndexOf('.') > 0 && !value.Contains(' ');
   }
-
-  private const int UIA_ControlTypePropertyId = 30003;
-  private const int UIA_EditControlTypeId = 50004;
-  private const int UIA_ValueValuePropertyId = 30045;
-  private const int TreeScope_Descendants = 4;
-
-  // Minimal COM interface definitions — only the methods we call are properly declared;
-  // unused vtable slots use parameterless void stubs for slot positioning.
-
-  [ComImport, Guid("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomation
-  {
-    void _ReservedCompareElements();
-    void _ReservedCompareRuntimeIds();
-    void _ReservedGetRootElement();
-
-    [PreserveSig]
-    int ElementFromHandle(nint hwnd, [MarshalAs(UnmanagedType.Interface)] out IUIAutomationElement element);
-
-    void _ReservedElementFromPoint();
-    void _ReservedGetFocusedElement();
-    void _ReservedGetRootElementBuildCache();
-    void _ReservedElementFromHandleBuildCache();
-    void _ReservedElementFromPointBuildCache();
-    void _ReservedGetFocusedElementBuildCache();
-    void _ReservedCreateTreeWalker();
-    void _ReservedControlViewWalker();
-    void _ReservedContentViewWalker();
-    void _ReservedRawViewWalker();
-    void _ReservedRawViewCondition();
-    void _ReservedControlViewCondition();
-    void _ReservedContentViewCondition();
-    void _ReservedCreateCacheRequest();
-    void _ReservedCreateTrueCondition();
-    void _ReservedCreateFalseCondition();
-
-    [PreserveSig]
-    int CreatePropertyCondition(
-        int propertyId,
-        [In, MarshalAs(UnmanagedType.Struct)] object value,
-        [MarshalAs(UnmanagedType.Interface)] out IUIAutomationCondition condition);
-  }
-
-  [ComImport, Guid("d22108aa-8ac5-49a5-837b-37bbb3d7591e")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomationElement
-  {
-    void _ReservedSetFocus();
-    void _ReservedGetRuntimeId();
-
-    [PreserveSig]
-    int FindFirst(
-        int scope,
-        [MarshalAs(UnmanagedType.Interface)] IUIAutomationCondition condition,
-        [MarshalAs(UnmanagedType.Interface)] out IUIAutomationElement found);
-
-    void _ReservedFindAll();
-    void _ReservedFindFirstBuildCache();
-    void _ReservedFindAllBuildCache();
-    void _ReservedBuildUpdatedCache();
-
-    [PreserveSig]
-    int GetCurrentPropertyValue(int propertyId, [MarshalAs(UnmanagedType.Struct)] out object value);
-  }
-
-  [ComImport, Guid("352ffba8-0973-437c-a61f-f64cafd81df9")]
-  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  private interface IUIAutomationCondition { }
 }

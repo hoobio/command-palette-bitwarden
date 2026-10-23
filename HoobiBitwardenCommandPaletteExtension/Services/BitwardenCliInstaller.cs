@@ -141,7 +141,7 @@ internal sealed class BitwardenCliInstaller
 
       progress?.Report("Extracting...");
       Directory.CreateDirectory(tempExtract);
-      ZipFile.ExtractToDirectory(tempZip, tempExtract, overwriteFiles: true);
+      await ZipFile.ExtractToDirectoryAsync(tempZip, tempExtract, overwriteFiles: true, ct);
 
       var extractedBw = Directory.EnumerateFiles(tempExtract, "bw.exe", SearchOption.AllDirectories).FirstOrDefault();
       if (extractedBw == null)

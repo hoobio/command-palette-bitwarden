@@ -4,7 +4,7 @@
     <RootNamespace>HoobiBitwardenCommandPaletteExtension</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
 
-    <WindowsSdkPackageVersion>10.0.26100.84</WindowsSdkPackageVersion>
+    <WindowsSdkPackageVersion>10.0.26100.87</WindowsSdkPackageVersion>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
@@ -48,13 +48,6 @@
     <PackageReference Include="Otp.NET" />
     <PackageReference Include="Shmuelie.WinRTServer" />
     <PackageReference Include="Svg.Skia" />
-
-    <!-- Workaround: Microsoft.Windows.SDK.BuildTools.MSIX net6.0 task DLL depends on
-         System.Security.Permissions v8.0.0.0 but doesn't ship it alongside itself.
-         Restore the package here so Directory.Build.targets can copy it into place. -->
-    <PackageReference Include="System.Security.Permissions">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
 
     <!-- Needed to enable building an MSIX package -->
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX">
@@ -141,7 +134,7 @@
     <DefineConstants>$(DefineConstants);CHANNEL_RELEASE</DefineConstants>
   </PropertyGroup>
 
-  <Target Name="StampPackageIdentityName" BeforeTargets="Build;_ConvertItems">
+  <Target Name="StampPackageIdentityName" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <AppxManifestPath>$(MSBuildProjectDirectory)\Package.appxmanifest</AppxManifestPath>
       <VersionTxtPath>$(MSBuildProjectDirectory)\..\version.txt</VersionTxtPath>

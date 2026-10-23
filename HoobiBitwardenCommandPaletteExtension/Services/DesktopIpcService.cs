@@ -288,9 +288,9 @@ internal static partial class DesktopIpcService
         using var cts = new CancellationTokenSource(ConnectTimeoutMs);
         await _pipe.ConnectAsync(cts.Token);
       }
-      catch (OperationCanceledException)
+      catch (OperationCanceledException ex)
       {
-        throw new IOException("Bitwarden Desktop app is not running or 'Allow browser integration' is disabled");
+        throw new IOException("Bitwarden Desktop app is not running or 'Allow browser integration' is disabled", ex);
       }
 
       DebugLogService.Log("Biometric", "Pipe connected, initiating encrypted handshake");
@@ -703,7 +703,7 @@ internal static partial class DesktopIpcService
     public void Dispose()
     {
       _readCts?.Cancel();
-      try { _readLoop?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+      try { ((IAsyncResult?)_readLoop)?.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(2)); } catch { }
       _readCts?.Dispose();
       _pipe?.Dispose();
       _rsa?.Dispose();

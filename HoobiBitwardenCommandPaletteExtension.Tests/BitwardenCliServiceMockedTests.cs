@@ -711,7 +711,7 @@ public class BitwardenCliServiceMockedTests
       raiseMethod.Invoke(settings.Settings, null);
 
       // Allow the fire-and-forget LockAsync to complete
-      await Task.Delay(200);
+      await Task.Delay(200, TestContext.Current.CancellationToken);
 
       Assert.False(svc.IsUnlocked);
       Assert.Equal(VaultStatus.Locked, svc.LastStatus);

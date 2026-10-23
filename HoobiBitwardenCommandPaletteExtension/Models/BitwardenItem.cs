@@ -28,7 +28,7 @@ internal sealed record ItemUri(string Uri, UriMatchType Match)
 {
   public string? Host { get; } = ExtractHost(Uri);
 
-  private static string? ExtractHost(string uri)
+  internal static string? ExtractHost(string uri)
   {
     try
     {

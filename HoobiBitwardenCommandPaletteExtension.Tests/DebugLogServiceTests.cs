@@ -2,6 +2,9 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
+[CollectionDefinition("SessionStore", DisableParallelization = true)]
+public class SessionStoreTestGroup;
+
 [Collection("SessionStore")]
 public class DebugLogServiceTests : IDisposable
 {
