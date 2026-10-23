@@ -29,9 +29,6 @@ internal sealed partial class LoginForm : FormContent
 {
   internal const string SubmitButtonTitle = "Login";
 
-  // Sentinel value in the ChoiceSet for "don't pass --method to bw login".
-  // Numeric values match Bitwarden's TwoFactorProviderType enum
-  // (libs/common/src/auth/enums/two-factor-provider-type.ts in bitwarden/clients).
   private const string NoMethodValue = "none";
 
   private readonly BitwardenSettingsManager? _settings;
@@ -136,8 +133,7 @@ internal sealed partial class LoginForm : FormContent
     var email = formInput?["Email"]?.GetValue<string>()?.Trim();
     var password = formInput?["MasterPassword"]?.GetValue<string>();
 
-    // Keep the form armed on an empty submit (KeepOpen leaves it open), else a
-    // single Enter on an empty field would disable Enter for the form's life.
+    // Stay armed on an empty submit: disarming here would disable Enter for the rest of the form's life.
     if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();
 

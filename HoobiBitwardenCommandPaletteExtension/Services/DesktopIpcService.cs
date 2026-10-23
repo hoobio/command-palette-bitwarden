@@ -235,8 +235,6 @@ internal static partial class DesktopIpcService
   [return: MarshalAs(UnmanagedType.Bool)]
   private static partial bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
 
-  // IpcClient: connection, encryption handshake, and command dispatch
-
   private sealed partial class IpcClient : IDisposable
   {
     private const int ProtocolTimeoutMs = 10_000;
@@ -318,14 +316,13 @@ internal static partial class DesktopIpcService
 
       SendRaw(setupMsg);
 
-      // Proactively prompt user: Desktop may show a fingerprint dialog without notifying us
       _ = Task.Delay(2000).ContinueWith(_ =>
       {
         if (_encryptionReady is { Task.IsCompleted: false })
           _onStatus?.Invoke("Check Bitwarden Desktop app - you may need to approve the connection");
       }, TaskScheduler.Default);
 
-      using var cts = new CancellationTokenSource(ProtocolTimeoutMs * 6); // allow for fingerprint acceptance
+      using var cts = new CancellationTokenSource(ProtocolTimeoutMs * 6);
       cts.Token.Register(() => _encryptionReady.TrySetException(new TimeoutException("IPC key exchange timed out - check Bitwarden Desktop app is running with 'Allow browser integration' enabled")));
 #pragma warning disable VSTHRD003 // _encryptionReady is a ThreadPool-based TCS; awaiter is on Task.Run thread
       await _encryptionReady.Task.ConfigureAwait(false);
@@ -455,11 +452,10 @@ internal static partial class DesktopIpcService
       {
         while (!ct.IsCancellationRequested && _pipe?.IsConnected == true)
         {
-          // Read 4-byte length prefix
           if (!await ReadExactAsync(lenBuf, 4, ct)) break;
 
           var msgLen = lenBuf[0] | (lenBuf[1] << 8) | (lenBuf[2] << 16) | (lenBuf[3] << 24);
-          if (msgLen <= 0 || msgLen > 1024 * 1024) break; // sanity check
+          if (msgLen <= 0 || msgLen > 1024 * 1024) break;
 
           var msgBuf = new byte[msgLen];
           if (!await ReadExactAsync(msgBuf, msgLen, ct)) break;
@@ -479,7 +475,6 @@ internal static partial class DesktopIpcService
         DebugLogService.Log("Biometric", $"IPC read loop error: {ex.GetType().Name}: {ex.Message}");
       }
 
-      // Connection lost: reject all pending
       FailAll(new IOException("Disconnected from Bitwarden Desktop app"));
     }
 
@@ -532,8 +527,7 @@ internal static partial class DesktopIpcService
       var command = msg["command"]?.GetValue<string>();
       var appId = msg["appId"]?.GetValue<string>();
 
-      // During setupEncryption handshake, also check if this message carries sharedSecret
-      // regardless of command: Desktop may respond with a different structure
+      // Desktop may deliver sharedSecret under a different command structure during the handshake.
       if (_encryptionReady is { Task.IsCompleted: false } && msg["sharedSecret"] != null)
       {
         DebugLogService.Log("Biometric", "Received sharedSecret, completing key exchange");
@@ -571,7 +565,7 @@ internal static partial class DesktopIpcService
           if (innerMsg != null)
             HandleEncryptedResponse(innerMsg);
           else
-            HandleSetupEncryption(msg); // may contain sharedSecret after fingerprint approval
+            HandleSetupEncryption(msg);
           break;
       }
     }
@@ -607,7 +601,6 @@ internal static partial class DesktopIpcService
       var decrypted = DecryptMessage(rawMsg);
       if (decrypted == null) return;
 
-      // Timestamp check (10-second validity window)
       var timestamp = decrypted["timestamp"]?.GetValue<long>() ?? 0;
       if (Math.Abs(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - timestamp) > 10_000)
       {

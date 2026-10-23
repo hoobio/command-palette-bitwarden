@@ -10,8 +10,6 @@ namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
 public class BitwardenCliServiceTests
 {
-  // --- ResolveCliExecutable ---
-
   [Theory]
   [InlineData(null, "bw")]
   [InlineData("", "bw")]
@@ -83,8 +81,6 @@ public class BitwardenCliServiceTests
     Assert.Equal("bw", BitwardenCliService.ResolveCliExecutable(null, missing));
   }
 
-  // --- ResolveDataDirectory ---
-
   [Fact]
   public void ResolveDataDirectory_AllEmpty_ReturnsNull()
   {
@@ -131,8 +127,6 @@ public class BitwardenCliServiceTests
     Assert.Null(BitwardenCliService.ResolveDataDirectory(null, true, null));
   }
 
-  // --- IsKnownFilter ---
-
   [Theory]
   [InlineData("folder", true)]
   [InlineData("url", true)]
@@ -148,8 +142,6 @@ public class BitwardenCliServiceTests
     Assert.Equal(expected, BitwardenCliService.IsKnownFilter(key));
   }
 
-  // --- IsSessionInvalidError ---
-
   [Theory]
   [InlineData("You are not logged in.", true)]
   [InlineData("vault is locked", true)]
@@ -161,8 +153,6 @@ public class BitwardenCliServiceTests
   {
     Assert.Equal(expected, BitwardenCliService.IsSessionInvalidError(error));
   }
-
-  // --- SanitizeServerUrl ---
 
   [Theory]
   [InlineData(null, "(default)")]
@@ -176,8 +166,6 @@ public class BitwardenCliServiceTests
   {
     Assert.Equal(expected, BitwardenCliService.SanitizeServerUrl(url));
   }
-
-  // --- ParseSearchFilters ---
 
   [Fact]
   public void ParseSearchFilters_Null_ReturnsEmptyFiltersAndNullText()
@@ -243,8 +231,6 @@ public class BitwardenCliServiceTests
     Assert.Empty(filters);
     Assert.Equal("unknown:value", text);
   }
-
-  // --- Matches ---
 
   [Fact]
   public void Matches_ByName()
@@ -344,8 +330,6 @@ public class BitwardenCliServiceTests
     Assert.True(BitwardenCliService.Matches(item, "server"));
   }
 
-  // --- Relevance ---
-
   [Fact]
   public void Relevance_ExactMatch_ReturnsZero()
   {
@@ -385,8 +369,6 @@ public class BitwardenCliServiceTests
     var regex = new Regex(@"\bGitHub\b", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
     Assert.Equal(4, BitwardenCliService.Relevance(item, "GitHub", regex));
   }
-
-  // --- ParseItems ---
 
   [Fact]
   public void ParseItems_ValidLoginJson()
@@ -676,8 +658,6 @@ public class BitwardenCliServiceTests
     Assert.False(items[0].CustomFields["Region"].IsHidden);
   }
 
-  // --- ParseFolders ---
-
   [Fact]
   public void ParseFolders_ValidJson()
   {
@@ -853,8 +833,6 @@ public class BitwardenCliServiceTests
     Assert.Single(items);
   }
 
-  // --- ParseCustomFields ---
-
   [Fact]
   public void ParseCustomFields_Null_ReturnsEmptyDictionary()
   {
@@ -928,8 +906,6 @@ public class BitwardenCliServiceTests
     Assert.True(result.ContainsKey("MYKEY"));
   }
 
-  // --- GetFolderName ---
-
   [Fact]
   public void GetFolderName_ExistingFolder_ReturnsName()
   {
@@ -952,8 +928,6 @@ public class BitwardenCliServiceTests
     var svc = new BitwardenCliService();
     Assert.Null(svc.GetFolderName(null));
   }
-
-  // --- ApplyFilter ---
 
   private static BitwardenCliService CreateServiceWithFolders(Dictionary<string, string>? folders = null)
   {
@@ -1415,8 +1389,6 @@ public class BitwardenCliServiceTests
     Assert.Equal(2, result.Count);
   }
 
-  // --- SetSession / ClearSession / IsUnlocked / IsCacheLoaded ---
-
   [Fact]
   public void IsUnlocked_Default_IsFalse()
   {
@@ -1431,8 +1403,6 @@ public class BitwardenCliServiceTests
     svc.SetSession("test-key");
     Assert.True(svc.IsUnlocked);
   }
-
-  // --- is:protected / is:locked / is:reprompt ---
 
   [Fact]
   public void ApplyFilter_Is_Protected_ReturnsRepromptItems()
@@ -1549,8 +1519,6 @@ public class BitwardenCliServiceTests
     Assert.Null(svc.LastStatus);
   }
 
-  // --- WarmCacheAsync / WarmupTask ---
-
   [Fact]
   public void WarmupTask_Initial_IsCompleted()
   {
@@ -1575,8 +1543,6 @@ public class BitwardenCliServiceTests
     Assert.Same(second, svc.WarmupTask);
     Assert.NotSame(first, second);
   }
-
-  // --- SearchCached ---
 
   [Fact]
   public void SearchCached_EmptyCache_ReturnsEmpty()
@@ -1642,7 +1608,6 @@ public class BitwardenCliServiceTests
       new() { Id = "login-2", Name = "GitLab", Type = BitwardenItemType.Login, Uris = [new ItemUri("https://gitlab.com", UriMatchType.Default)], RevisionDate = DateTime.UtcNow },
       new() { Id = "card-1", Name = "GitHub Card", Type = BitwardenItemType.Card, RevisionDate = DateTime.UtcNow },
     ], []);
-    // url:github narrows to login-1 and login-2; text "GitHub" then filters to login-1
     var result = svc.SearchCached("url:github GitHub");
     Assert.Single(result);
     Assert.Equal("login-1", result[0].Id);
@@ -1694,7 +1659,6 @@ public class BitwardenCliServiceTests
     }
     finally
     {
-      // Clear static state so other tests are not affected
       AccessTracker.Record("__clear__");
     }
   }

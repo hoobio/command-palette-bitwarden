@@ -240,10 +240,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         LogConfig("startup");
     }
 
-    // The path a one-click install resolved to. Stored separately from the
-    // user-facing CliDirectoryOverride so an automated install can never overwrite
-    // a path the user set by hand (issue #178). Lives next to settings.json rather
-    // than inside it, since it's internal state and must not surface in the form.
+    // Stored apart from CliDirectoryOverride so an automated install never overwrites a hand-set path (issue #178).
     private string AutoInstalledCliPathFile => Path.Combine(
         Path.GetDirectoryName(FilePath) is { Length: > 0 } dir ? dir : SettingsDir,
         "cli_install_path");
@@ -265,9 +262,6 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         }
     }
 
-    // Records the path resolved by an automated CLI install. Kept out of the
-    // settings form and the user's CliDirectoryOverride; BitwardenCliService falls
-    // back to it only when the user hasn't set an explicit override.
     public void PersistCliPath(string path)
     {
         try

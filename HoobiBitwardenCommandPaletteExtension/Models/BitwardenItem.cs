@@ -15,7 +15,7 @@ internal enum BitwardenItemType
 
 internal enum UriMatchType
 {
-  Default = -1, // null in JSON — behaves like Domain
+  Default = -1, // null in JSON, behaves like Domain
   Domain = 0,
   Host = 1,
   StartsWith = 2,
@@ -57,7 +57,6 @@ internal sealed class BitwardenItem
   public string? OrganizationId { get; init; }
   public int Reprompt { get; init; }
 
-  // Login
   public string? Username { get; init; }
   public ProtectedSecret? Password { get; init; }
   public bool HasWeakPassword => Password?.Length < 8;
@@ -69,7 +68,6 @@ internal sealed class BitwardenItem
   public string? FirstHost => Uris.Count > 0 ? Uris[0].Host : null;
   public DateTime? PasswordRevisionDate { get; init; }
 
-  // Card
   public string? CardholderName { get; init; }
   public string? CardBrand { get; init; }
   public ProtectedSecret? CardNumber { get; init; }
@@ -80,7 +78,6 @@ internal sealed class BitwardenItem
       ? $"{CardExpMonth} / {CardExpYear}" : null;
   public string? CardLast4 => CardNumber?.Length >= 4 ? CardNumber.Use(static n => new string(n[^4..])) : null;
 
-  // Identity
   public string? IdentityFullName { get; init; }
   public string? IdentityEmail { get; init; }
   public string? IdentityPhone { get; init; }
@@ -88,11 +85,9 @@ internal sealed class BitwardenItem
   public string? IdentityCompany { get; init; }
   public string? IdentityAddress { get; init; }
 
-  // SSH Key
   public string? SshPublicKey { get; init; }
   public string? SshFingerprint { get; init; }
 
-  // Custom fields
   public Dictionary<string, CustomField> CustomFields { get; init; } = [];
   public string? SshHost => CustomFields.TryGetValue("host", out var h) ? h.Value : null;
   internal string? RevealSshHost() => CustomFields.TryGetValue("host", out var h) ? h.Value ?? h.Secret?.Reveal() : null;

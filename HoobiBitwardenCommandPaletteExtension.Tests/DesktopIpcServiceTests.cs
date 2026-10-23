@@ -7,8 +7,6 @@ namespace HoobiBitwardenCommandPaletteExtension.Tests;
 [Collection("SessionStore")]
 public class DesktopIpcServiceTests
 {
-  // --- GetWindowsPipeName ---
-
   [Fact]
   public void GetWindowsPipeName_ReturnsExpectedFormat()
   {
@@ -47,8 +45,6 @@ public class DesktopIpcServiceTests
     Assert.False(DesktopIpcService.IsPipeServerBitwarden(client));
   }
 
-  // --- EncryptWithSessionKey ---
-
   [Fact]
   public void EncryptWithSessionKey_Returns_Base64_BinaryType2()
   {
@@ -58,8 +54,8 @@ public class DesktopIpcServiceTests
     var result = DesktopIpcService.EncryptWithSessionKey(data, sessionKey);
     var decoded = Convert.FromBase64String(result);
 
-    Assert.Equal(2, decoded[0]);                    // EncryptionType = 2
-    Assert.True(decoded.Length >= 1 + 16 + 32 + 16); // header + at least one AES block
+    Assert.Equal(2, decoded[0]);
+    Assert.True(decoded.Length >= 1 + 16 + 32 + 16);
   }
 
   [Fact]
@@ -71,13 +67,13 @@ public class DesktopIpcServiceTests
     var result1 = DesktopIpcService.EncryptWithSessionKey(data, sessionKey);
     var result2 = DesktopIpcService.EncryptWithSessionKey(data, sessionKey);
 
-    Assert.NotEqual(result1, result2); // different IVs produce different ciphertext
+    Assert.NotEqual(result1, result2);
   }
 
   [Fact]
   public void EncryptWithSessionKey_ThrowsOnWrongKeyLength()
   {
-    var shortKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)); // only 32 bytes
+    var shortKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
     var data = new byte[] { 1, 2, 3 };
 
     Assert.Throws<ArgumentException>(() => DesktopIpcService.EncryptWithSessionKey(data, shortKey));
@@ -93,18 +89,15 @@ public class DesktopIpcServiceTests
     var result = DesktopIpcService.EncryptWithSessionKey(plaintext, sessionKey);
     var decoded = Convert.FromBase64String(result);
 
-    // Layout: [type(1), iv(16), mac(32), ciphertext]
     var iv = decoded[1..17];
     var mac = decoded[17..49];
     var ciphertext = decoded[49..];
 
-    // Verify HMAC
     using var hmac = new HMACSHA256(keyBytes[32..]);
     hmac.TransformBlock(iv, 0, iv.Length, null, 0);
     hmac.TransformFinalBlock(ciphertext, 0, ciphertext.Length);
     Assert.True(CryptographicOperations.FixedTimeEquals(mac, hmac.Hash));
 
-    // Decrypt
     using var aes = Aes.Create();
     aes.Key = keyBytes[..32];
     aes.IV = iv;

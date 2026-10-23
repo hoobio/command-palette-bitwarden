@@ -16,9 +16,6 @@ internal sealed partial class RepromptPage : ContentPage
 {
   internal static int GracePeriodSeconds { get; set; } = 60;
 
-  // Per-item grace timestamps (Stopwatch ticks). In-memory only: verification
-  // never persists across process restarts, and a verified item only grants
-  // grace for that specific item, not for the vault as a whole.
   private static readonly ConcurrentDictionary<string, long> _verifiedItems = new();
   private static int _failureCount;
   private static long _cooldownUntilTicks;
@@ -194,11 +191,7 @@ internal sealed partial class RepromptForm : FormContent
     };
   }
 
-  // Biometric verify is handled by the parent page so the WinHello prompt
-  // can come to the foreground. Doing it inline on the form leaves the
-  // adaptive-card UI mounted, and the WinHello prompt z-orders behind it
-  // (the prompt only becomes visible after the palette closes, by which
-  // time it has already been treated as cancelled).
+  // Inline on the form, the WinHello prompt z-orders behind the mounted adaptive card and is cancelled before it shows, so the parent page runs it.
   private CommandResult HandleBiometric()
   {
     EnterKeySubmitService.Disarm();

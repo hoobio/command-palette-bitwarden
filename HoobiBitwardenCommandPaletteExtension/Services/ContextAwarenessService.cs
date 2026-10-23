@@ -109,7 +109,7 @@ internal static partial class ContextAwarenessService
     for (var i = 0; i < windows.Count; i++)
     {
       if (WindowMatchesItem(windows[i], item))
-        return MaxWindows - i; // Higher score = closer to front
+        return MaxWindows - i;
     }
     return 0;
   }
@@ -163,7 +163,7 @@ internal static partial class ContextAwarenessService
       Models.UriMatchType.RegularExpression =>
           !string.IsNullOrEmpty(browserUrl) && SafeRegexMatch(browserUrl, entry.Uri),
 
-      _ => // Default and Domain: subdomain-inclusive host matching
+      _ =>
           browserHost != null && itemHost != null && HostsMatch(browserHost, itemHost),
     };
   }
@@ -198,7 +198,6 @@ internal static partial class ContextAwarenessService
     if (string.IsNullOrEmpty(title))
       return null;
 
-    // Browsers append " - Browser Name" or " — Browser Name" to the title
     foreach (var name in BrowserDisplayNames)
     {
       var dashSuffix = " - " + name;
@@ -217,16 +216,13 @@ internal static partial class ContextAwarenessService
     if (string.IsNullOrEmpty(processName) && string.IsNullOrEmpty(windowTitle))
       return false;
 
-    // Match process name ↔ item name via prefix (handles compound names like "steamwebhelper" → "Steam")
     if (!string.IsNullOrEmpty(processName) && item.Name.Length >= 3 && NamesSimilar(processName, item.Name))
       return true;
 
-    // Match window title against item name (whole-word only to avoid partial matches in long titles)
     if (!string.IsNullOrEmpty(windowTitle) && item.Name.Length >= 4
         && ContainsWholeWord(windowTitle, item.Name))
       return true;
 
-    // Match URI host domain base against process name (e.g., process "discord" → host "discord.com")
     if (item.Type == Models.BitwardenItemType.Login && !string.IsNullOrEmpty(processName))
     {
       foreach (var entry in item.Uris)
@@ -266,9 +262,7 @@ internal static partial class ContextAwarenessService
 
   internal static string? ExtractHost(string url) => Models.ItemUri.ExtractHost(url);
 
-  // Suffix-based subdomain matching (not true eTLD+1). Can false-positive on public suffixes
-  // like .co.uk, but true eTLD+1 requires a public suffix list dependency. Acceptable since
-  // this only affects context boosting priority, not authentication or access control.
+  // Suffix match, not eTLD+1 (needs a public suffix list): can false-positive on e.g. .co.uk, acceptable as it only affects context boost order.
   internal static bool HostsMatch(string a, string b) =>
       a.Equals(b, StringComparison.OrdinalIgnoreCase)
       || a.EndsWith("." + b, StringComparison.OrdinalIgnoreCase)

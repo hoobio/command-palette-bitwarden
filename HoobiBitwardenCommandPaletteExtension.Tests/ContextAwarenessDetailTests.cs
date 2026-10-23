@@ -5,8 +5,6 @@ namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
 public class ContextAwarenessDetailTests
 {
-  // --- ExtractHost ---
-
   [Theory]
   [InlineData("https://www.example.com/path", "example.com")]
   [InlineData("https://sub.example.com", "sub.example.com")]
@@ -26,8 +24,6 @@ public class ContextAwarenessDetailTests
     Assert.Null(ContextAwarenessService.ExtractHost(url));
   }
 
-  // --- HostsMatch ---
-
   [Theory]
   [InlineData("example.com", "example.com", true)]
   [InlineData("sub.example.com", "example.com", true)]
@@ -40,8 +36,6 @@ public class ContextAwarenessDetailTests
     Assert.Equal(expected, ContextAwarenessService.HostsMatch(a, b));
   }
 
-  // --- NormalizeUrl ---
-
   [Theory]
   [InlineData("https://example.com/", "https://example.com")]
   [InlineData("example.com", "https://example.com")]
@@ -51,8 +45,6 @@ public class ContextAwarenessDetailTests
   {
     Assert.Equal(expected, ContextAwarenessService.NormalizeUrl(input));
   }
-
-  // --- StripBrowserSuffix ---
 
   [Theory]
   [InlineData("GitHub - Google Chrome", "chrome", "GitHub")]
@@ -65,8 +57,6 @@ public class ContextAwarenessDetailTests
     Assert.Equal(expected, ContextAwarenessService.StripBrowserSuffix(title, process));
   }
 
-  // --- NamesSimilar ---
-
   [Theory]
   [InlineData("discord", "Discord", true)]
   [InlineData("steamwebhelper", "Steam", true)]
@@ -77,8 +67,6 @@ public class ContextAwarenessDetailTests
   {
     Assert.Equal(expected, ContextAwarenessService.NamesSimilar(a, b));
   }
-
-  // --- ContainsWholeWord ---
 
   [Theory]
   [InlineData("Welcome to Discord", "Discord", true)]
@@ -92,8 +80,6 @@ public class ContextAwarenessDetailTests
     Assert.Equal(expected, ContextAwarenessService.ContainsWholeWord(text, word));
   }
 
-  // --- ExtractUrlFromTitle ---
-
   [Theory]
   [InlineData("GitHub - github.com", "github.com")]
   [InlineData("example.com — Google Chrome", "example.com")]
@@ -105,8 +91,6 @@ public class ContextAwarenessDetailTests
     Assert.Equal(expected, ContextAwarenessService.ExtractUrlFromTitle(title));
   }
 
-  // --- LooksLikeUrl ---
-
   [Theory]
   [InlineData("https://example.com", true)]
   [InlineData("example.com", true)]
@@ -117,8 +101,6 @@ public class ContextAwarenessDetailTests
   {
     Assert.Equal(expected, ContextAwarenessService.LooksLikeUrl(value!));
   }
-
-  // --- UriMatchesBrowserContext ---
 
   [Fact]
   public void UriMatch_Exact_MatchesNormalizedUrl()
@@ -193,8 +175,6 @@ public class ContextAwarenessDetailTests
     Assert.Equal(0, ContextAwarenessService.ContextScore(context, item));
   }
 
-  // --- ProcessNameMatchesItem ---
-
   [Fact]
   public void ProcessNameMatchesItem_MatchesByProcessName()
   {
@@ -255,8 +235,6 @@ public class ContextAwarenessDetailTests
     };
     Assert.False(ContextAwarenessService.ProcessNameMatchesItem("discord", "Something", item));
   }
-
-  // --- BrowserContext matching via ContextScore ---
 
   [Fact]
   public void ContextScore_BrowserUrlMatch_Domain()

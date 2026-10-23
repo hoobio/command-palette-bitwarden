@@ -141,8 +141,6 @@ public class BitwardenItemTests
     Assert.Null(item.SshHost);
   }
 
-  // --- Reprompt subtitle masking ---
-
   [Fact]
   public void Subtitle_SecureNote_Reprompt_MasksNotes()
   {

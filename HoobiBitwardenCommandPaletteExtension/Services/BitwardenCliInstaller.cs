@@ -14,13 +14,6 @@ internal enum CliInstallMethod { None, AlreadyPresent, Winget, Download }
 
 internal sealed record CliInstallResult(bool Success, CliInstallMethod Method, string? CliPath, string? Error);
 
-// User-initiated acquisition of the Bitwarden CLI. Order: detect an existing
-// install, then winget (preferred - it verifies its own packages and auto-updates),
-// then a direct download we verify ourselves, and finally the caller falls back to
-// opening the manual download page. Never runs unprompted: the Store frowns on a
-// packaged app installing other software on its own, and a surprise install/UAC is
-// poor UX. After success the caller writes the resolved path into the CLI override
-// rather than relying on PATH, which is a launch-time snapshot for this process.
 internal sealed class BitwardenCliInstaller
 {
   public const string ManualDownloadUrl = "https://bitwarden.com/download/?app=cli&platform=windows";
@@ -204,17 +197,10 @@ internal sealed class BitwardenCliInstaller
     }
   }
 
-  // First existing bw.exe across the package managers' deterministic install
-  // locations and PATH. Probing fixed locations sidesteps the stale-PATH problem:
-  // winget updates the registry PATH, but this process's copy was snapshotted at
-  // launch, so a freshly winget-installed shim wouldn't be visible via PATH alone.
   public static string? ResolveInstalledCliPath() =>
       WingetPackagesCliPath() ?? GetCandidateCliPaths().FirstOrDefault(File.Exists);
 
-  // Prefer the real winget package executable over the Links\bw.exe shim. That
-  // shim is a symlink, and bw (a Node single-file exe) can't locate its bundled
-  // snapshot when launched through it, so `bw --version` fails. The actual exe
-  // under WinGet\Packages\Bitwarden.CLI_*\ runs correctly.
+  // The WinGet\Links\bw.exe symlink shim breaks bw (Node single-file exe cannot find its snapshot), so use the real exe under WinGet\Packages.
   internal static string? WingetPackagesCliPath()
   {
     try
@@ -246,11 +232,7 @@ internal sealed class BitwardenCliInstaller
     if (!string.IsNullOrEmpty(programData))
       yield return Path.Combine(programData, "chocolatey", "bin", "bw.exe");
 
-    // Exclude the WinGet\Links\bw.exe symlink shim everywhere - including when it's
-    // on PATH, which it is for winget users. bw (a Node single-file exe) can't
-    // locate its bundled snapshot when launched through the shim, so `bw --version`
-    // fails; resolving to it is the exact "didn't respond yet" failure.
-    // WingetPackagesCliPath already covers the real winget exe.
+    // Skip the WinGet Links shim even when on PATH: launching bw through it fails (see WingetPackagesCliPath).
     var linksShim = Path.Combine(localAppData, "Microsoft", "WinGet", "Links", "bw.exe");
     foreach (var dir in PathDirectories())
     {
@@ -260,11 +242,7 @@ internal sealed class BitwardenCliInstaller
     }
   }
 
-  // PATH directories from the process snapshot plus the live User/Machine registry
-  // values. The process copy is frozen at launch, so a folder added to PATH after
-  // the host started - the manual-install flow - is only visible via the registry
-  // targets. Reading them is the "reimport" that lets us find a hand-placed bw
-  // without a reboot.
+  // The process PATH is frozen at launch, so a folder added later is only visible via the User/Machine registry values.
   internal static IEnumerable<string> PathDirectories()
   {
     var sources = new List<string?> { Environment.GetEnvironmentVariable("PATH") };

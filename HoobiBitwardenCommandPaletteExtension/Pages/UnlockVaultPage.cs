@@ -117,14 +117,10 @@ internal sealed partial class UnlockForm : FormContent
     {
       EnterKeySubmitService.Disarm();
       _onBiometricUnlock?.Invoke();
-      // Same behavior as the password path: the unlock runs asynchronously
-      // on the parent page (status + items refresh), so the form is done.
       return CommandResult.GoBack();
     }
 
-    // Keep the form armed on an empty submit (form stays open via KeepOpen),
-    // otherwise pressing Enter once with an empty field would disable Enter
-    // for the rest of the form's life. Disarm only when we navigate away.
+    // Stay armed on an empty submit: disarming here would disable Enter for the rest of the form's life.
     var password = formInput?["MasterPassword"]?.GetValue<string>();
     if (string.IsNullOrEmpty(password))
       return CommandResult.KeepOpen();

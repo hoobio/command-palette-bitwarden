@@ -6,12 +6,7 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal static class SessionStore
 {
-  // MSIX scopes Win32 CredWrite/CredRead per package family name. Dev and
-  // Release builds have different identities (.Debug suffix vs not) so they
-  // can't see each other's credentials — and the saved credential from one
-  // looks like a stale orphan to the other. Use a different target name per
-  // build configuration so each owns its own slot, with no surprising
-  // cross-build behavior when switching between them.
+  // MSIX scopes CredWrite/CredRead per package family, so Dev and Release each need their own target name or one sees the other's credential as a stale orphan.
 #if DEBUG
   private const string TargetName = "BitwardenCommandPaletteExtension.Debug/default_sessionToken";
 #else
@@ -99,9 +94,7 @@ internal static class SessionStore
     [MarshalAs(UnmanagedType.LPWStr)] public string? UserName;
   }
 
-  // NOTE: Using legacy [DllImport] instead of [LibraryImport] because the CREDENTIAL struct
-  // has [MarshalAs(UnmanagedType.LPWStr)] fields and ref-struct parameters that require
-  // non-trivial rework to be compatible with the source-generated marshaller.
+  // Legacy [DllImport] on purpose: the CREDENTIAL struct's LPWStr fields do not work with the source-generated [LibraryImport] marshaller.
   [DllImport("advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
   private static extern bool CredWrite(ref CREDENTIAL credential, int flags);
 

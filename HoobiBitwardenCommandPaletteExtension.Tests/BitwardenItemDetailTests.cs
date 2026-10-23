@@ -5,8 +5,6 @@ namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
 public class BitwardenItemDetailTests
 {
-  // --- TruncateLine ---
-
   [Fact]
   public void TruncateLine_ReturnsNull_ForNullInput()
   {
@@ -30,7 +28,7 @@ public class BitwardenItemDetailTests
   {
     var longLine = new string('x', 100);
     var result = BitwardenItem.TruncateLine(longLine, 60);
-    Assert.Equal(61, result!.Length); // 60 chars + ellipsis
+    Assert.Equal(61, result!.Length);
     Assert.EndsWith("\u2026", result, StringComparison.Ordinal);
   }
 
@@ -45,8 +43,6 @@ public class BitwardenItemDetailTests
   {
     Assert.Equal("Trimmed", BitwardenItem.TruncateLine("  Trimmed  ", 60));
   }
-
-  // --- Subtitle edge cases ---
 
   [Fact]
   public void Subtitle_SecureNote_NoNotes_ReturnsDefault()
@@ -97,8 +93,6 @@ public class BitwardenItemDetailTests
     Assert.Equal("Card", item.Subtitle);
   }
 
-  // --- SshHost from CustomFields ---
-
   [Fact]
   public void SshHost_CaseInsensitive()
   {
@@ -111,8 +105,6 @@ public class BitwardenItemDetailTests
     };
     Assert.Equal("user@server.com", item.SshHost);
   }
-
-  // --- CardExpiration edge cases ---
 
   [Fact]
   public void CardExpiration_BothPresent()
@@ -127,8 +119,6 @@ public class BitwardenItemDetailTests
     var item = new BitwardenItem { CardExpYear = "2030" };
     Assert.Null(item.CardExpiration);
   }
-
-  // --- FirstUri ---
 
   [Fact]
   public void FirstUri_WithMultipleUris_ReturnsFirst()

@@ -16,8 +16,6 @@ public class BitwardenCliInstallerTests
         throw new HttpRequestException("network unavailable");
   }
 
-  // --- winget availability ---
-
   [Fact]
   public async Task IsWingetAvailable_VersionPrinted_ReturnsTrue()
   {
@@ -41,7 +39,6 @@ public class BitwardenCliInstallerTests
   [Fact]
   public async Task IsWingetAvailable_FactoryThrows_ReturnsFalse()
   {
-    // Empty queue makes the factory throw (winget.exe not launchable).
     var factory = new FakeProcessFactory();
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
     Assert.False(await installer.IsWingetAvailableAsync(TestContext.Current.CancellationToken));
@@ -76,13 +73,10 @@ public class BitwardenCliInstallerTests
     Assert.True(hung.Killed);
   }
 
-  // --- winget install ---
-
   [Fact]
   public async Task InstallViaWinget_PassesExpectedArgs()
   {
     var factory = new FakeProcessFactory();
-    // Exit 1 short-circuits before the (filesystem) path resolution.
     factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "", exitCode: 1));
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
 
@@ -109,8 +103,6 @@ public class BitwardenCliInstallerTests
     Assert.Null(result.CliPath);
   }
 
-  // --- download fallback ---
-
   [Fact]
   public async Task InstallViaDownload_HttpFails_ReturnsDownloadFailure()
   {
@@ -122,8 +114,6 @@ public class BitwardenCliInstallerTests
     Assert.Equal(CliInstallMethod.Download, result.Method);
     Assert.NotNull(result.Error);
   }
-
-  // --- static helpers ---
 
   [Fact]
   public void GetCandidateCliPaths_IncludesAppDataInstallDir_NotLinksShim()

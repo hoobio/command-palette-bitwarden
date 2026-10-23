@@ -22,24 +22,15 @@ internal static partial class FaviconService
     private static readonly TimeSpan PositiveTtl = TimeSpan.FromDays(7);
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromMinutes(5);
 
-    // Bounded concurrency: 8 in-flight downloads saturates a typical home/office
-    // connection without overwhelming the icons host or HttpClient's default per-host
-    // connection limit. Higher values get head-of-line-blocked by the server anyway
-    // and increase the chance of timeouts on a cold-vault load.
     private const int MaxConcurrentDownloads = 8;
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
-    // Cached icon: raster bytes streamed via COM. null = negative cache (host has no icon); missing key = not yet tried
+    // null value = negative cache (host has no icon); missing key = not yet tried
     private static readonly ConcurrentDictionary<string, byte[]?> _memCache = new();
     private static readonly ConcurrentDictionary<string, IconInfo> _iconInfoCache = new();
 
-    // Priority queue gated by a worker pool of size MaxConcurrentDownloads.
-    // Lower Priority value = downloaded sooner. Callers pass the item's index in the
-    // visible list so head-of-list icons load before tail. When a host is re-enqueued
-    // with a better priority (e.g. it now appears earlier in a new search result),
-    // the old heap entry stays put as a tombstone and is dropped at dequeue time
-    // because its priority no longer matches the current value in _queuedHosts.
+    // A re-enqueued host leaves its old heap entry as a tombstone, dropped at dequeue when its priority no longer matches _queuedHosts.
     private static readonly Lock _queueLock = new();
     private static readonly PriorityQueue<string, int> _queue = new();
     private static readonly Dictionary<string, (string IconUrl, int Priority)> _queuedHosts = [];
@@ -47,7 +38,6 @@ internal static partial class FaviconService
     private static readonly SemaphoreSlim _signal = new(0);
     private static int _workersInitialized;
 
-    /// <summary>Fired on the thread-pool when any new icon is successfully cached.</summary>
     public static event Action? IconCached;
 
     static FaviconService()
@@ -57,12 +47,6 @@ internal static partial class FaviconService
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"HoobiBitwarden/{version}");
     }
 
-    /// <summary>
-    /// Returns an <see cref="IconInfo"/> for the given host. Uses the disk cache when
-    /// available; otherwise returns the fallback icon and schedules a bounded-concurrency
-    /// background download. <paramref name="priority"/> orders pending downloads
-    /// (lower = sooner). Default <see cref="int.MaxValue"/> sends the host to the tail.
-    /// </summary>
     public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null, int priority = int.MaxValue)
     {
         fallback ??= new IconInfo("");
@@ -147,7 +131,6 @@ internal static partial class FaviconService
                     _inFlight.Add(host);
                     return (host, entry.IconUrl);
                 }
-                // Stale entry from a priority bump; skip and try the next.
             }
             return null;
         }
@@ -250,8 +233,7 @@ internal static partial class FaviconService
         return _iconInfoCache.GetOrAdd(host, _ => MakeIconInfo(bytes));
     }
 
-    // Serve icon bytes via IRandomAccessStreamReference so the data is streamed
-    // back through the extension process — works correctly across the COM process boundary.
+    // Icon bytes are served as a stream so they cross the COM process boundary correctly.
     private static IconInfo MakeIconInfo(byte[] bytes)
     {
         var ras = new InMemoryRandomAccessStream();

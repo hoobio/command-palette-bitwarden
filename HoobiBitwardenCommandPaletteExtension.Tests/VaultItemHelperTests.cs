@@ -5,8 +5,7 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
-// Shares BitwardenCliService's static server-resolution state with the other
-// collection members, so these must not run in parallel with them.
+// Shares BitwardenCliService's static server-resolution state with the other collection members, so these must not run in parallel with them.
 [Collection("SessionStore")]
 public class VaultItemHelperTests
 {
@@ -47,9 +46,7 @@ public class VaultItemHelperTests
     Assert.Equal("\uE8C7", icon.Dark.Icon);
   }
 
-  // Issue #194: before `bw status` resolves the server, a self-hosted vault must
-  // not fall back to Bitwarden's cloud icon hosts. A glyph here proves no icon
-  // was queued - a queued icon returns the empty-string fallback instead.
+  // Issue #194: before `bw status` resolves the server, a self-hosted vault must not fall back to Bitwarden's cloud icon hosts.
   [Fact]
   public void GetIcon_Login_ServerUnresolved_ReturnsGlobeGlyphWithoutQueueing()
   {
@@ -135,10 +132,7 @@ public class VaultItemHelperTests
     Assert.IsNotType<RepromptPage>(cmd);
   }
 
-  // Regression test: PowerToys 0.99 gates right-click context menus on
-  // Command.Name being non-empty. The TrackedInvokable wrapper used to drop
-  // the inner command's Name, which silently disabled right-click on every
-  // vault item. See https://github.com/hoobio/command-palette-bitwarden/issues/140.
+  // PowerToys 0.99 gates right-click context menus on a non-empty Command.Name: https://github.com/hoobio/command-palette-bitwarden/issues/140
   [Fact]
   public void GetDefaultCommand_NoReprompt_ForwardsInnerCommandName()
   {
@@ -456,8 +450,7 @@ public class VaultItemHelperTests
     RepromptPage.GracePeriodSeconds = 60;
     RepromptPage.ClearGracePeriod();
 
-    // Start from a clean slate: a stale grace.json from an older build (which
-    // did persist) must not make this regression test pass or fail spuriously.
+    // A stale grace.json from an older build (which did persist) must not make this test pass or fail spuriously.
     var graceFile = Path.Combine(
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
       "HoobiBitwardenCommandPalette", "grace.json");
@@ -716,7 +709,6 @@ public class VaultItemHelperTests
       .Select(c => (c.Color.R, c.Color.G, c.Color.B))
       .Distinct()
       .Count();
-    // 8 distinct GUIDs should hit at least 3 distinct palette entries (loose lower bound).
     Assert.True(distinctColors >= 3, $"Expected colour spread, got {distinctColors} distinct colours");
   }
 }

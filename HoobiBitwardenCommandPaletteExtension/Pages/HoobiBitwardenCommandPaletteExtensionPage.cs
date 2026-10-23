@@ -37,20 +37,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private ListItem? _syncItem;
     private readonly Timer _iconRefreshTimer;
     private readonly Timer _searchDebounceTimer;
-    // Debounce window for the unlocked-vault search rebuild. Each keystroke
-    // resets the timer; the rebuild only runs after the user pauses for this
-    // long. BuildListItems allocates 5-15 commands per result, so doing it
-    // per keystroke (with no debounce) makes typing feel laggy on larger
-    // vaults. 100ms is the sweet spot used by most palette UIs (VS Code,
-    // Spotlight): below the threshold of perceived input delay, but enough
-    // to collapse a typed word into a single rebuild.
+    // BuildListItems allocates 5-15 commands per result, so a per-keystroke rebuild lags on large vaults
     private const int SearchDebounceMs = 100;
-    // IconCached can fire many times per second during a cold vault load (each of
-    // ~580 logins resolves to its own callback). A pure trailing-edge debounce
-    // would defer the rebuild until the entire load finishes, hiding progress for
-    // ~10-30s on a slow connection. Instead, coalesce within IconRefreshDebounceMs,
-    // but force a rebuild every IconRefreshMaxWaitMs so the user sees icons appear
-    // incrementally during a long fetch run.
+    // A pure trailing-edge debounce would hide icon progress for 10-30s on a cold load, so a rebuild is forced every IconRefreshMaxWaitMs
     private const int IconRefreshDebounceMs = 500;
     private const int IconRefreshMaxWaitMs = 2000;
     private DateTime _iconRefreshFirstQueuedAt;
@@ -58,11 +47,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private StatusMessage? _lastBiometricStatus;
     private volatile bool _biometricClickFailed;
     private volatile bool _autoBiometricTriggered;
-    // Latches one authoritative re-check when an unlocked vault renders zero
-    // items with no active search (genuinely empty, or a session that went
-    // stale without erroring). Reset on every status change so a real status
-    // transition re-arms it; set once we've kicked off the re-verify so a
-    // genuinely-empty vault doesn't re-trigger on each rebuild.
     private volatile bool _emptyVaultReverifyArmed = true;
     private volatile bool _cliInstalling;
     private bool _cliInstallFailed;
@@ -123,7 +107,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 CaptureContext(force: true);
                 DebugLogService.Log("Page", $"GetItems: first call, LastStatus={_service.LastStatus}");
 
-                // If warmup already ran, skip async init and show results immediately.
                 if (_service.LastStatus != null)
                 {
                     _initComplete = true;
@@ -137,7 +120,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                             ReverifyIfSuspiciouslyEmpty(loadedResults.Count);
                             break;
                         case VaultStatus.Unlocked:
-                            // Vault open but warmup is still loading the cache.
                             _currentItems = BuildLoadingPlaceholder("Retrieving items from vault...", "bw list items");
                             IsLoading = true;
                             break;
@@ -169,9 +151,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 return _currentItems;
             }
 
-            // Use the throttled capture (default 500ms) so repeated GetItems
-            // calls from the host don't trigger a fresh window enumeration
-            // every time. The first GetItems above already forces a refresh.
             if (CaptureContext() && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
                 _currentItems = BuildListItems(Search(_currentSearchText));
@@ -189,11 +168,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
     {
-        // Don't recapture foreground context here. The user is focused on the
-        // palette while typing, so the context can't have changed since the
-        // last GetItems call. CaptureContext does Win32 window enumeration and
-        // a UIA/COM round-trip per browser window, which adds visible lag to
-        // every keystroke.
+        // CaptureContext does Win32 window enumeration and a UIA/COM round-trip per browser window, which lags every keystroke
         _currentSearchText = newSearch;
 
         if (_service.IsUnlocked)
@@ -216,19 +191,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_service.IsCacheLoaded)
         {
-            // Debounce: each keystroke just (re)arms the timer. The actual
-            // rebuild + RaiseItemsChanged runs once the user pauses typing.
             _searchDebounceTimer.Change(SearchDebounceMs, Timeout.Infinite);
             _service.TriggerBackgroundRefreshIfStale();
         }
         else
         {
-            // Cache isn't loaded yet (cold start / warmup still running). The text
-            // is already recorded in _currentSearchText above; make sure it gets
-            // applied once the cache lands. Relying on the warmup's CacheUpdated
-            // alone is racy - it can rebuild the list a moment before this
-            // keystroke's text is recorded, leaving results unfiltered until the
-            // user types another character.
+            // Relying on the warmup's CacheUpdated alone is racy: it can rebuild before this keystroke is recorded, leaving results unfiltered
             _ = Task.Run(ApplySearchWhenCacheReadyAsync);
         }
     }
@@ -236,8 +204,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private async Task ApplySearchWhenCacheReadyAsync()
     {
         IsLoading = true;
-        // Await the in-flight warmup instead of firing a concurrent `bw list
-        // items`, which can hang the CLI when both run at once.
+        // A concurrent `bw list items` can hang the CLI, so await the in-flight warmup instead
 #pragma warning disable VSTHRD003 // WarmupTask is a ThreadPool task; this runs on ThreadPool via Task.Run
         try { await _service.WarmupTask.ConfigureAwait(false); } catch { }
 #pragma warning restore VSTHRD003
@@ -247,8 +214,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
 
-        // Re-apply whatever has been typed by now (read here, after the cache is
-        // ready, so it reflects the latest keystroke rather than a stale snapshot).
         _currentItems = BuildListItems(Search(_currentSearchText));
         IsLoading = false;
         RaiseItemsChanged();
@@ -256,9 +221,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private void OnSearchDebounceTick(object? _)
     {
-        // Re-check state at fire time: the vault may have locked, an action
-        // may be in flight, or the cache may have been invalidated since the
-        // keystroke that armed the timer.
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
         RebuildVaultList();
@@ -277,11 +239,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         ReverifyIfSuspiciouslyEmpty(results.Count);
     }
 
-    // An unlocked vault that lists zero items with no active search is suspicious:
-    // either genuinely empty, or a session that went stale without erroring (the
-    // "No items found" symptom). Re-check authoritatively, once, in the background.
-    // If it flips to Locked, StatusChanged rebuilds into the unlock prompt; if it
-    // confirms unlocked but still empty, the vault really is empty and we stop.
+    // A session that went stale without erroring lists zero items (the "No items found" symptom)
     private void ReverifyIfSuspiciouslyEmpty(int resultCount)
     {
         if (resultCount > 0) { _emptyVaultReverifyArmed = true; return; }
@@ -371,8 +329,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         RaiseItemsChanged();
 
-        // Re-raise after a short delay in case the first event fired before the SDK 
-        // subscribed to ItemsChanged (before the palette was first opened).
+        // The first event can fire before the SDK subscribes to ItemsChanged, so re-raise after a delay
         _ = Task.Delay(300).ContinueWith(_ => RaiseItemsChanged(), TaskScheduler.Default);
     }
 
@@ -381,8 +338,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         try
         {
             DebugLogService.Log("Page", "InitializeAsync: awaiting warmup");
-            // Await the ongoing warmup instead of firing a concurrent bw status call,
-            // which can cause the CLI to hang when both run simultaneously.
+            // A concurrent bw status call can hang the CLI, so await the ongoing warmup instead
 #pragma warning disable VSTHRD003 // WarmupTask is a ThreadPool task; InitializeAsync is already on ThreadPool via Task.Run
             await _service.WarmupTask.ConfigureAwait(false);
 #pragma warning restore VSTHRD003
@@ -413,8 +369,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     if (_service.IsCacheLoaded)
                         _currentItems = BuildListItems(Search(_currentSearchText));
                     else
-                        // RefreshCacheAsync returned early because warmup held the lock.
-                        // CacheUpdated/WarmupCompleted will fire shortly and show items.
+                        // RefreshCacheAsync returned early because warmup held the lock; CacheUpdated/WarmupCompleted shows items
                         return;
                     break;
             }
@@ -428,8 +383,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         finally
         {
             _initComplete = true;
-            // If awaiting warmup (early-return path), keep IsLoading=true so the spinner
-            // stays visible until CacheUpdated/WarmupCompleted fires.
+            // The early-return path keeps IsLoading=true until CacheUpdated/WarmupCompleted fires
             if (_service.IsCacheLoaded || _service.LastStatus != VaultStatus.Unlocked)
                 IsLoading = false;
         }
@@ -476,8 +430,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return WithDebugLog([install, manual]);
     }
 
-    // Ceilings so the install flow can never leave the user on a spinner:
-    // the install itself, and the post-install wait for the CLI to be detected.
     private const int CliInstallTimeoutMs = 300_000;
     private const int CliDetectTimeoutMs = 60_000;
     private const int CliDetectPollMs = 2_000;
@@ -528,11 +480,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RefreshCliNotFoundItems();
         _service.ApplyInstalledCli(result.CliPath);
 
-        // Watchdog: ApplyInstalledCli also kicks a re-check via CliConfigChanged,
-        // but don't depend on that event reaching us. Poll vault status until it
-        // leaves CliNotFound, then hand off to the normal rebuild. Bail out with a
-        // recovery message if the CLI doesn't respond within the deadline, so the
-        // progress item can never get stuck.
+        // Poll instead of depending on the CliConfigChanged event reaching us, so the progress item can never get stuck
         var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(CliDetectTimeoutMs);
         while (DateTime.UtcNow < deadline)
         {
@@ -573,10 +521,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RefreshCliNotFoundItems();
     }
 
-    // GetItems only rebuilds on demand for the unlocked vault; for every other
-    // state it returns the cached _currentItems. So an in-place state change like
-    // the install progress has to refresh _currentItems itself before raising,
-    // otherwise the list never visibly updates.
+    // GetItems returns the cached _currentItems for every non-unlocked state, so _currentItems must be refreshed before raising
     private void RefreshCliNotFoundItems()
     {
         lock (_itemsLock)
@@ -809,9 +754,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
         else
         {
-            // Item index is passed to FaviconService as the download priority so the
-            // first items in the visible list fetch their icons before the tail. The
-            // command palette host renders results in this exact order.
             var iconPriority = 0;
             foreach (var item in items)
             {
@@ -822,8 +764,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     allowContextTag = isContextMatch && contextTagsUsed < contextLimit;
                     if (allowContextTag) contextTagsUsed++;
                 }
-                // When capContextTags is true, ContextScore was already evaluated above — pass context: null
-                // and showContextTag: allowContextTag to avoid a redundant ContextScore call in BuildTags/BuildBaseTags.
                 var contextForTags = capContextTags ? null : _context;
                 var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
                 var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, iconPriority++, organizationName, organizationTagStyle);
@@ -967,10 +907,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
     }
 
-    // Biometric reprompt is handled here (not in RepromptForm) so the WinHello
-    // prompt can come to the foreground. With the form returned via GoBack
-    // first, the items list is showing -- the same UI state where the unlock
-    // biometric path already prompts visibly.
+    // Handled here, not in RepromptForm, so the WinHello prompt can come to the foreground once the items list is showing
     private void OnRepromptBiometricRequested(BiometricVerificationRequest request)
     {
         DebugLogService.Log("Reprompt", $"Biometric verification requested for item {request.ItemId}");
@@ -1024,7 +961,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             ExtensionHost.ShowStatus(successStatus, StatusContext.Page);
             _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(successStatus); } catch { } }, TaskScheduler.Default);
 
-            // Refresh items so any per-item grace tag updates immediately.
             if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
                 lock (_itemsLock)
@@ -1134,12 +1070,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
             return;
 
-        // Only auto-trigger in the foreground. The startup warmup completes on a
-        // background thread and fires WarmupCompleted -> RebuildForCurrentStatus
-        // before the user has opened the palette; prompting for Windows Hello then
-        // pops a verification dialog the user has no context for. _initialLoadStarted
-        // flips only when the user actually opens the page (GetItems) or changes the
-        // CLI config, so it gates this to genuine foreground interactions.
+        // Startup warmup fires WarmupCompleted before the palette is opened; prompting Windows Hello then shows a dialog with no context
         if (!_initialLoadStarted)
             return;
 
@@ -1154,8 +1085,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         _ = Task.Run(async () =>
         {
-            // Prefer silent restore from the saved credential so RememberSession
-            // actually saves the user a prompt after a soft auto-lock.
             if (rememberSession && await _service.TryRestoreSessionAsync())
             {
                 DebugLogService.Log("Page", "Restored session silently; biometric not needed");
@@ -1169,8 +1098,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             }
             else
             {
-                // RememberSession was on but the stored credential was gone or
-                // invalid; reset so the manual unlock paths work.
                 _autoBiometricTriggered = false;
             }
         });
@@ -1206,8 +1133,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 {
                     _biometricClickFailed = true;
                     _errorMessage = error ?? "Windows Hello unlock failed";
-                    // Settle flags before notifying the host (see comment on
-                    // the success path below).
                     _handlingAction = false;
                     IsLoading = false;
                     _currentItems = BuildLockedItems();
@@ -1227,12 +1152,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 HideBiometricStatus();
                 ShowLoadingStatus("Retrieving items from vault...", "bw list items");
                 await _service.RefreshCacheAsync();
-                // Clear handling/loading flags BEFORE raising ItemsChanged so
-                // the host's GetItems callback sees the fully-settled state.
-                // If we raise first and clear in `finally`, the host fetches
-                // items while _handlingAction/IsLoading are still true and
-                // keeps showing the loading placeholder until the next
-                // hide/show cycle forces a fresh GetItems.
+                // Flags must settle BEFORE RaiseItemsChanged: otherwise the host's GetItems sees _handlingAction/IsLoading still true and keeps the loading placeholder until the next hide/show
                 _handlingAction = false;
                 IsLoading = false;
                 RebuildVaultList();
@@ -1324,9 +1244,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             try
             {
                 ShowLoadingStatus("Logging in...", "bw login");
-                // Pass the chosen method on the first attempt so Email (1) triggers the
-                // CLI's send-email-login call. Non-Email methods stay method-less here
-                // (see LoginAsync); the method is also kept for the second (code) attempt.
+                // The method is passed on the first attempt so Email (1) triggers the CLI's send-email-login call
                 var (success, error, twoFactorRequired, deviceVerificationRequired) = await _service.LoginAsync(email, password, null, twoFactorMethod);
                 if (!success)
                 {
@@ -1463,8 +1381,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RaiseItemsChanged();
     }
 
-    // DynamicListPage.SearchText setter calls SetSearchNoUpdate (no PropertyChanged event).
-    // Call OnPropertyChanged explicitly so the host updates the visible search box.
+    // SetSearchNoUpdate raises no PropertyChanged, so OnPropertyChanged is called explicitly to update the visible search box
     private void ClearSearchText()
     {
         SetSearchNoUpdate(string.Empty);

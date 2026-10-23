@@ -73,10 +73,7 @@ internal sealed partial class BitwardenCliService
   internal static string? ServerUrl { get; private set; }
   internal static string? IconsUrl { get; private set; }
 
-  // False until `bw status` has reported which server the vault is on. A null
-  // ServerUrl means "Bitwarden cloud" once resolved, but "not known yet" before
-  // that, and callers that pick a host must not conflate the two - guessing
-  // cloud sends self-hosted vault hostnames to icons.bitwarden.net (issue #194).
+  // Null ServerUrl means cloud only once resolved; guessing cloud sends self-hosted hostnames to icons.bitwarden.net (issue #194).
   internal static bool ServerUrlResolved { get; private set; }
 
   internal static void ResetStaticState()
@@ -86,12 +83,7 @@ internal sealed partial class BitwardenCliService
     ServerUrlResolved = false;
   }
 
-  // Resolution order: the user's explicit override always wins (even if broken,
-  // so a misconfiguration surfaces a clear error rather than silently falling
-  // back). Otherwise use the path an automated install remembered, but only if
-  // it still exists. Finally fall back to "bw" on PATH. The user override and the
-  // auto-installed path are kept in separate stores so a one-click install can
-  // never overwrite a path the user set by hand (issue #178).
+  // The override wins even if broken and is stored apart from the auto-installed path so an install never overwrites it (issue #178).
   internal static string ResolveCliExecutable(string? pathOverride, string? autoInstalledPath = null)
   {
     var explicitPath = NormalizeCliPath(pathOverride);
@@ -225,12 +217,6 @@ internal sealed partial class BitwardenCliService
     ResetForCliConfigChange();
   }
 
-  // Apply a path produced by BitwardenCliInstaller: remember it as the
-  // auto-installed CLI path (kept separate from the user's CLI Path Override so it
-  // can never clobber a hand-set value) and re-resolve. CheckCliConfigChanged sees
-  // the changed executable and fires ResetForCliConfigChange -> CliConfigChanged,
-  // which the page handles by re-checking vault status against the freshly
-  // installed CLI.
   public void ApplyInstalledCli(string path)
   {
     _settings?.PersistCliPath(path);
@@ -248,10 +234,7 @@ internal sealed partial class BitwardenCliService
     else if (!_lastRememberSession && current)
     {
       _lastRememberSession = true;
-      // Toggling RememberSession on while the vault is unlocked means the user
-      // wants the active session to survive the next process restart. Persist
-      // the in-memory key now — UnlockWithBiometricsAsync / UnlockAsync only
-      // saves when RememberSession was already on at unlock time.
+      // Unlock only saves the key when RememberSession was already on, so persist the active key now.
       var key = RevealSessionKey();
       if (!string.IsNullOrEmpty(key))
       {
@@ -272,9 +255,7 @@ internal sealed partial class BitwardenCliService
     KillAllRunning();
     ReplaceSessionKey(null);
     _lastStatus = null;
-    // Abandon any in-flight/cached status check so the next GetVaultStatusAsync
-    // re-evaluates against the new CLI path instead of coalescing onto a check
-    // that ran against the old one.
+    // Drop the in-flight check so the next status call does not coalesce onto one run against the old CLI path.
     lock (_statusLock) { _statusCheckInFlight = null; }
     ResetStaticState();
     InvalidateCache();
@@ -344,10 +325,7 @@ internal sealed partial class BitwardenCliService
   {
     lock (_statusLock)
     {
-      // Only ride a check that's actually still running. Handing back a completed
-      // or faulted task served a stale "CliNotFound" forever after a CLI install -
-      // the fresh check at the newly-installed path never got to run. A completed,
-      // faulted, or cleared (null) field starts a fresh check instead.
+      // Handing back a completed or faulted task served a stale "CliNotFound" forever after a CLI install.
       if (_statusCheckInFlight is { IsCompleted: false })
       {
         DebugLogService.Log("Status", "GetVaultStatusAsync coalesced with in-flight check");
@@ -360,10 +338,7 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  // No longer nulls _statusCheckInFlight on completion: the completed task is left
-  // in the field and GetVaultStatusAsync's IsCompleted gate starts a fresh one.
-  // That removes the clobber race where a finishing check would null out a newer
-  // in-flight check started after a CLI-config reset.
+  // Completion must not null _statusCheckInFlight: a finishing check would clobber a newer one started after a CLI-config reset.
   private async Task<VaultStatus> GetVaultStatusCoreAsync()
   {
     DebugLogService.Log("Status", "GetVaultStatusAsync started");
@@ -401,10 +376,7 @@ internal sealed partial class BitwardenCliService
         ReplaceSessionKey(stored);
         if (await VerifySessionAsync())
           return SetStatus(VaultStatus.Unlocked);
-        // Don't clear the credential here - a single sync failure can be a
-        // transient network blip or slow CLI startup right after a deploy.
-        // HandleInvalidSession clears it on real CLI errors that confirm the
-        // session is gone.
+        // Keep the credential: one sync failure can be transient; HandleInvalidSession clears it on confirmed errors.
         DebugLogService.Log("Status", "Stored session verification failed (preserving credential for retry)");
       }
       else
@@ -453,10 +425,7 @@ internal sealed partial class BitwardenCliService
       psi.Environment["NO_COLOR"] = "1";
       using var process = _processFactory(psi);
 
-      // A CancellationToken won't interrupt a blocking pipe read, so bound the
-      // call by racing a timer and killing the process on timeout - killing it
-      // closes the pipe and unblocks the read. (bw --version normally returns in
-      // ~1s; this only guards a genuinely wedged process.)
+      // A CancellationToken will not interrupt a blocking pipe read; the timeout kill closes the pipe and unblocks it.
       var readTask = process.StandardOutput.ReadLineAsync();
       var finished = await Task.WhenAny(readTask, Task.Delay(CliVersionTimeoutMs));
       if (finished != readTask)
@@ -484,13 +453,7 @@ internal sealed partial class BitwardenCliService
   {
     try
     {
-      // Authoritative, network-free gate first. `bw status` reflects the active
-      // BW_SESSION and reports "unlocked" only when the session key actually
-      // unlocks the local vault; a locked or expired session reports "locked"
-      // (or "unauthenticated"). Checking this up front means a dead session is
-      // rejected definitively instead of being inferred later from an empty or
-      // failed list - the exact case that surfaced to users as "No items found"
-      // against an apparently-unlocked vault.
+      // `bw status` gates the session first: inferring a dead session from an empty list showed "No items found" on an apparently-unlocked vault.
       DebugLogService.Log("Verify", "Running bw status to gate session");
       var statusJson = await RunCliAsync("status");
       var status = JsonNode.Parse(statusJson)?["status"]?.GetValue<string>();
@@ -501,11 +464,7 @@ internal sealed partial class BitwardenCliService
         return false;
       }
 
-      // status can still report "unlocked" for a session key left stale by a
-      // server-side key rotation, so confirm with a sync (refresh local data)
-      // plus a decryption-requiring list folders. If the key can't decrypt,
-      // RunCliAsync sees "Vault is locked" in stderr, fires HandleInvalidSession
-      // (which clears _sessionKey), and throws - the catch below returns false.
+      // status can still report "unlocked" for a key made stale by server-side key rotation, so confirm with sync plus a decrypting list.
       DebugLogService.Log("Verify", "Running bw sync");
       await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
       DebugLogService.Log("Verify", "Running bw list folders to confirm decryption");
@@ -545,13 +504,6 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  // Reload the saved session credential and verify it still works, transitioning
-  // the vault to Unlocked + refreshing the cache. Used by the page as a backup
-  // path: after a transient warmup failure, after HandleInvalidSession fires on
-  // a real CLI error that turns out to have been transient, etc. Auto-lock and
-  // user-initiated locks now hard-lock (clearing the credential), so this only
-  // succeeds in genuine "the credential is fine, we just lost the in-memory
-  // session" scenarios — exactly the cases where re-prompting would be friction.
   public async Task<bool> TryRestoreSessionAsync()
   {
     if (_settings?.RememberSession.Value != true) return false;
@@ -564,21 +516,12 @@ internal sealed partial class BitwardenCliService
     ReplaceSessionKey(stored);
     if (!await VerifySessionAsync())
     {
-      // Same policy as GetVaultStatusCoreAsync: a transient verify failure
-      // (network blip, slow CLI startup) shouldn't burn the saved credential
-      // here. HandleInvalidSession clears it on real CLI errors that confirm
-      // the session is gone.
+      // Keep the credential: a transient verify failure must not burn it; HandleInvalidSession clears it on confirmed errors.
       DebugLogService.Log("Restore", "Stored session verification failed (preserving credential for retry)");
       return false;
     }
 
-    // The verify takes seconds (sync + list folders). A concurrent
-    // HandleInvalidSession (e.g. an in-flight warmup `bw list` returning
-    // "Vault is locked") may have nulled _sessionKey while we were verifying.
-    // The verify just proved the stored credential is valid, so re-assert it
-    // before SetStatus/RefreshCacheAsync, otherwise IsUnlocked stays false
-    // and the cache refresh silently skips, leaving the page stuck on
-    // "Retrieving items from vault...".
+    // A concurrent HandleInvalidSession may have nulled _sessionKey during verify; without re-asserting it the cache refresh skips and the page sticks on "Retrieving items from vault...".
     ReplaceSessionKey(stored);
     SetStatus(VaultStatus.Unlocked);
     var refresh = RefreshCacheAsync();
@@ -745,8 +688,7 @@ internal sealed partial class BitwardenCliService
         ServerUrl = url;
       ServerUrlResolved = true;
 
-      // Items rendered while the server was still unknown show a generic icon.
-      // Re-raise so the list rebuilds and queues icons against the right host.
+      // Items rendered before the server was known have generic icons; re-raise so the list rebuilds against the right host.
       StatusChanged?.Invoke();
     }
     catch (Exception ex)
@@ -755,13 +697,9 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  // Bitwarden TwoFactorProviderType value for Email 2FA (see two-factor-provider-type.ts).
   internal const int EmailTwoFactorMethod = 1;
 
-  // Default twoFactorMethod is 0 (Authenticator/TOTP). Self-hosted servers can
-  // otherwise return a different default (e.g. email) when --method is omitted,
-  // causing valid TOTP codes to be rejected as invalid (issue #139). Pass an
-  // explicit null to opt out and let the CLI auto-select.
+  // Default method 0 (TOTP): self-hosted servers may default to email when --method is omitted and reject valid TOTP codes (issue #139).
   public async Task<(bool Success, string? Error, bool TwoFactorRequired, bool DeviceVerificationRequired)> LoginAsync(string email, string password, string? twoFactorCode = null, int? twoFactorMethod = 0)
   {
     DebugLogService.Log("Auth", "LoginAsync started");
@@ -773,15 +711,7 @@ internal sealed partial class BitwardenCliService
     {
       var sanitizedEmail = email.Replace("\"", "");
       var args = $"login \"{sanitizedEmail}\" --passwordenv BW_MP";
-      // For non-Email methods we don't pass --method on the first attempt (no code):
-      // letting the CLI report the required provider avoids a self-hosted server
-      // picking the wrong default and rejecting a valid TOTP code (issue #139/#158).
-      // Email is the exception: the CLI only emails a code when it calls
-      // send-email-login, which it does only when --method 1 is supplied. So Email
-      // gets the flag on the first attempt to actually trigger the send. On servers
-      // missing the vaultwarden #7225 fix this 422s (SendEmailLoginData mandates a
-      // deviceIdentifier the CLI never sends); we detect that below and surface a
-      // "use another method" error instead of a dead-end code prompt (issue #157).
+      // No --method on the first attempt except Email: the CLI only sends the email code when --method 1 is given (issues #139/#158/#157).
       if (!string.IsNullOrEmpty(twoFactorCode))
       {
         var sanitizedCode = twoFactorCode.Replace("\"", "");
@@ -837,10 +767,7 @@ internal sealed partial class BitwardenCliService
         return (true, null, false, false);
       }
 
-      // Email 2FA send rejected by the server. vaultwarden before the #7225 fix
-      // 422s send-email-login (its SendEmailLoginData mandates a deviceIdentifier
-      // the bw CLI doesn't send), so the code is never emailed. Surface an
-      // actionable message instead of prompting for a code that will never arrive.
+      // vaultwarden before the #7225 fix 422s send-email-login (it requires a deviceIdentifier the bw CLI never sends), so no code is emailed.
       var combined = stdout + "\n" + stderr;
       if (twoFactorMethod == EmailTwoFactorMethod && string.IsNullOrEmpty(twoFactorCode)
           && combined.Contains("422", StringComparison.Ordinal)
@@ -897,12 +824,6 @@ internal sealed partial class BitwardenCliService
       await process.StandardInput.WriteLineAsync(otpCode.AsMemory(), cts.Token);
       process.StandardInput.Close();
 
-      // For each stream: if its reader already returned having detected a prompt,
-      // create a new ReadToEndAsync to capture post-OTP output (e.g. session key).
-      // If its reader completed without detecting a prompt, use its result directly
-      // (the stream was fully consumed - a new read would return empty).
-      // If its reader is still running (blocked waiting for data), await it -
-      // it will complete once the process exits after processing the OTP.
       var stdoutRead = FinishRead(existingStdoutTask, process.StandardOutput.ReadToEndAsync, cts.Token);
       var stderrRead = FinishRead(existingStderrTask, process.StandardError.ReadToEndAsync, cts.Token);
 
@@ -976,11 +897,7 @@ internal sealed partial class BitwardenCliService
 
   public async Task LockAsync(bool userInitiated = false)
   {
-    // Both auto-lock and user-initiated lock perform a hard lock: clear the
-    // in-memory session, the saved credential, and run `bw lock` against the
-    // CLI. RememberSession only controls whether the credential is restored
-    // on process restart (warmup); once a lock event has fired the user has
-    // explicitly asked us to forget the unlocked state.
+    // Auto-lock and user lock are both hard locks; RememberSession only governs restore at warmup, never after a lock.
     DebugLogService.Log("Lock", userInitiated ? "LockAsync (user-initiated)" : "LockAsync (auto-lock)");
     KillAllRunning(spareSync: true);
     ReplaceSessionKey(null);
@@ -1243,7 +1160,7 @@ internal sealed partial class BitwardenCliService
       "url" or "uri" => items.Where(i => i.Uris.Count > 0),
       "notes" or "note" => items.Where(i => i.Notes != null),
       "folder" => items.Where(i => i.FolderId != null),
-      "attachment" or "attachments" => items, // not tracked yet, pass-through
+      "attachment" or "attachments" => items,
       _ => items,
     },
     "is" => filter.Value switch
@@ -1375,8 +1292,7 @@ internal sealed partial class BitwardenCliService
 
   public Task WarmCacheAsync()
   {
-    // Set WarmupTask synchronously so InitializeAsync always awaits the real task,
-    // but run the actual CLI work on ThreadPool to avoid blocking the COM activation thread.
+    // Run on the ThreadPool so the COM activation thread is not blocked.
     WarmupTask = Task.Run(RunWarmupAsync);
     _ = Task.Run(() => { try { LogEnvironmentInfo(); } catch (Exception ex) { DebugLogService.Log("Env", $"Environment info logging failed: {ex.GetType().Name}: {ex.Message}"); } });
     return WarmupTask;
@@ -1438,23 +1354,12 @@ internal sealed partial class BitwardenCliService
             return;
           }
 
-          // Loaded but empty: a stale session can return an empty `list` with no
-          // error (exit 0), which would render as "No items found" against an
-          // apparently-unlocked vault. Don't trust the fast path here - fall
-          // through to the authoritative status check below, which either
-          // confirms unlocked (and repopulates after its sync) or flips to
-          // Locked. A genuinely empty vault simply pays one slower launch.
+          // A stale session can return an empty `list` with exit 0 ("No items found" on an unlocked-looking vault), so fall through to the status check.
           DebugLogService.Log("Warmup", $"Fast restore cache empty/unloaded (loaded={IsCacheLoaded}, count={CacheCount}); verifying authoritatively");
         }
         catch (InvalidOperationException)
         {
-          // HandleInvalidSession already cleared in-memory state with the
-          // correct RememberSession policy (preserves the stored credential
-          // when RememberSession=True). Don't override that here: a single
-          // "Vault is locked" from the CLI can be transient, and clearing the
-          // credential races with TryRestoreSessionAsync (triggered by the
-          // status change) which has likely already loaded the same credential
-          // and is verifying it in parallel.
+          // Do not clear the credential here: it races with TryRestoreSessionAsync, which may already be verifying the same one.
           DebugLogService.Log("Warmup", "Fast session restore failed (session expired), falling back to status check");
         }
       }
@@ -1559,20 +1464,7 @@ internal sealed partial class BitwardenCliService
   private const int CliTimeoutMs = 30_000;
   private const int CliLogoutTimeoutMs = 3_000;
 
-  // Reads stdout in chunks, using character-level JSON brace matching for early-exit.
-  // ReadLineAsync blocks until the bw CLI process exits (~3s) because Node.js pkg doesn't
-  // flush stdout on write. Chunk-based ReadAsync returns data as soon as the OS buffer has
-  // bytes, then brace tracking detects complete JSON immediately (~1s).
-  // Also matches earlyExitText per-chunk. Falls back to returning all accumulated stdout
-  // if neither is found. Stderr is drained in the background; on empty stdout the error is checked
-  // for session-invalid indicators (BW_NOINTERACTION ensures the CLI never prompts interactively).
-  //
-  // On early-exit (JSON-complete or earlyExitText match) we DETACH the process to a background
-  // drain task instead of killing it. Force-killing `bw sync` mid-flush leaves the CLI's
-  // state-provider writes only partially applied to data.json, which then causes subsequent
-  // `bw list` calls to fail validateUserKey and emit "Vault is locked." even though the session
-  // is fine. Letting the child drain to natural exit (with a backstop kill after 10s) costs us
-  // ~100-500ms of background CPU but eliminates that whole class of post-sync flap.
+  // Early exit detaches the process instead of killing it: killing `bw sync` mid-flush half-writes data.json and later `bw list` emits "Vault is locked."
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
   {
     DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
@@ -1668,12 +1560,6 @@ internal sealed partial class BitwardenCliService
   private CliProcessLease NewCliLease(string args, int timeoutMs) =>
       new(args, StartProcess(args), new CancellationTokenSource(timeoutMs));
 
-  // Bundles the lifecycle of a single bw child process. `using` disposes the process and cts
-  // immediately on the synchronous return path. Calling `Detach()` instead hands ownership to
-  // a background drain+wait task (see DetachForBackgroundExit) and turns Dispose into a no-op,
-  // which is what we use for early-exit success paths so `bw sync` gets time to flush data.json
-  // before exiting. Without that, killing mid-flush makes the next `bw list` emit "Vault is
-  // locked." because validateUserKey reads a half-written user-private-key from disk.
   private sealed partial class CliProcessLease(string args, ICliProcess process, CancellationTokenSource cts) : IDisposable
   {
     private bool _detached;
@@ -1695,10 +1581,6 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  // Hand a CLI process off to a background task that drains both pipes, awaits natural exit,
-  // then disposes. If the child hasn't exited within 10s of detachment (the child's stdout has
-  // closed, so this would be a stuck Node process), force-kill as a zombie backstop. Logging
-  // is best-effort and intentionally not awaited from the caller's hot path.
   private const int DetachExitGraceMs = 10_000;
   private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts)
   {
@@ -1707,8 +1589,6 @@ internal sealed partial class BitwardenCliService
       var sw = System.Diagnostics.Stopwatch.StartNew();
       try
       {
-        // Keep draining stdout so the child can't block on a full pipe buffer. The stderr drain
-        // is already running on the original cts; we observe it so its read can finish on EOF.
         var stdoutDrain = process.StandardOutput.ReadToEndAsync();
 #pragma warning disable VSTHRD003 // stderrTask was started by the caller; safe to await here as both run on the ThreadPool
         try { await Task.WhenAll(stdoutDrain, stderrTask).ConfigureAwait(false); }

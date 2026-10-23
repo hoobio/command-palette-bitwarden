@@ -316,7 +316,6 @@ internal static partial class VaultItemHelper
       if (string.IsNullOrEmpty(field.Value) && field.Secret == null)
         continue;
 
-      // Skip the 'host' custom field as it's handled by SSH context items
       if (item.Type == BitwardenItemType.SshKey && fieldName.Equals("host", StringComparison.OrdinalIgnoreCase))
         continue;
 
@@ -401,10 +400,7 @@ internal static partial class VaultItemHelper
     var serverUrl = BitwardenCliService.ServerUrl;
     var iconsUrl = BitwardenCliService.IconsUrl;
 
-    // Until `bw status` has resolved the server, an empty ServerUrl is unknown
-    // rather than cloud. Show a generic icon instead of guessing: on a
-    // self-hosted vault, guessing leaks hostnames to icons.bitwarden.net.
-    // FetchServerUrlAsync re-raises StatusChanged, which rebuilds the list.
+    // Until the server resolves, an empty ServerUrl is unknown, not cloud: guessing leaks self-hosted hostnames to icons.bitwarden.net.
     if (string.IsNullOrEmpty(iconsUrl) && !BitwardenCliService.ServerUrlResolved)
       return new IconInfo("\uE774");
 
@@ -514,10 +510,7 @@ internal static partial class VaultItemHelper
 
     public override ICommandResult Invoke()
     {
-      // Run the inner action first so the clipboard write and toast result
-      // are returned to the host before the (relatively slow) access-tracker
-      // file write + UI rebuild fires. Tracking is fire-and-forget on a
-      // worker thread to keep the keyboard-shortcut/context-menu path snappy.
+      // Tracking runs on a worker so the slow file write and UI rebuild do not delay the result returned to the host.
       var result = _inner.Invoke();
       var id = _itemId;
       _ = Task.Run(() => AccessTracker.Record(id));

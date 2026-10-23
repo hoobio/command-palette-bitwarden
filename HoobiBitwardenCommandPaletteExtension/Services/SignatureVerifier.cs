@@ -6,11 +6,6 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
-// Authenticode verification for a downloaded executable. Used by the direct-download
-// fallback in BitwardenCliInstaller: a binary we fetch and then execute has to be
-// proven (a) Authenticode-valid against a trusted chain and (b) actually published
-// by Bitwarden, not just any validly-signed exe. winget-installed binaries are
-// verified by winget itself and don't go through here.
 [SupportedOSPlatform("windows")]
 internal static partial class SignatureVerifier
 {
