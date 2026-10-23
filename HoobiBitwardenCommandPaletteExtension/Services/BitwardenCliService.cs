@@ -36,6 +36,7 @@ internal sealed partial class BitwardenCliService
   private string? _lastRegexQuery;
   private Regex? _lastRegex;
   private bool _cacheLoaded;
+  private int _sessionGeneration;
   private DateTime _lastRefresh;
   private int _refreshing;
   private readonly Lock _statusLock = new();
@@ -268,11 +269,7 @@ internal sealed partial class BitwardenCliService
     // that ran against the old one.
     lock (_statusLock) { _statusCheckInFlight = null; }
     ResetStaticState();
-    lock (_cacheLock)
-    {
-      _cache = [];
-      _cacheLoaded = false;
-    }
+    InvalidateCache();
     SessionStore.Clear();
     _autoLockTimer?.Dispose();
     _autoLockTimer = null;
@@ -320,10 +317,16 @@ internal sealed partial class BitwardenCliService
   {
     _sessionKey = null;
     _lastStatus = null;
+    InvalidateCache();
+  }
+
+  private void InvalidateCache()
+  {
     lock (_cacheLock)
     {
       _cache = [];
       _cacheLoaded = false;
+      _sessionGeneration++;
     }
   }
 
@@ -732,11 +735,7 @@ internal sealed partial class BitwardenCliService
     DebugLogService.Log("Auth", "ResetToLoggedOut: clearing session and cache");
     _sessionKey = null;
     SetStatus(VaultStatus.Unauthenticated);
-    lock (_cacheLock)
-    {
-      _cache = [];
-      _cacheLoaded = false;
-    }
+    InvalidateCache();
     SessionStore.Clear();
     Pages.RepromptPage.ClearGracePeriod();
     StatusChanged?.Invoke();
@@ -1016,11 +1015,7 @@ internal sealed partial class BitwardenCliService
     KillAllRunning();
     _sessionKey = null;
     SetStatus(VaultStatus.Unauthenticated);
-    lock (_cacheLock)
-    {
-      _cache = [];
-      _cacheLoaded = false;
-    }
+    InvalidateCache();
     FaviconService.ClearMemCache();
     SessionStore.Clear();
     StatusChanged?.Invoke();
@@ -1037,13 +1032,10 @@ internal sealed partial class BitwardenCliService
     // on process restart (warmup); once a lock event has fired the user has
     // explicitly asked us to forget the unlocked state.
     DebugLogService.Log("Lock", userInitiated ? "LockAsync (user-initiated)" : "LockAsync (auto-lock)");
+    KillAllRunning();
     _sessionKey = null;
     SetStatus(VaultStatus.Locked);
-    lock (_cacheLock)
-    {
-      _cache = [];
-      _cacheLoaded = false;
-    }
+    InvalidateCache();
     FaviconService.ClearMemCache();
     SessionStore.Clear();
     Pages.RepromptPage.ClearGracePeriod();
@@ -1335,6 +1327,8 @@ internal sealed partial class BitwardenCliService
 
   public async Task RefreshCacheAsync()
   {
+    int generation;
+    lock (_cacheLock) generation = _sessionGeneration;
     if (!IsUnlocked)
     {
       DebugLogService.Log("Cache", "RefreshCacheAsync skipped: vault not unlocked");
@@ -1357,9 +1351,14 @@ internal sealed partial class BitwardenCliService
       var folders = ParseFolders(await foldersTask);
       var items = ParseItems(await itemsTask);
       var organizations = ParseOrganizations(await organizationsTask);
-      DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations");
       lock (_cacheLock)
       {
+        if (generation != _sessionGeneration)
+        {
+          DebugLogService.Log("Cache", "RefreshCacheAsync dropped: vault locked or logged out during refresh");
+          return;
+        }
+        DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations");
         _folders = folders;
         _organizations = organizations;
         _cache = items;
@@ -1796,11 +1795,7 @@ internal sealed partial class BitwardenCliService
     _sessionKey = null;
     if (!rememberSession)
       SessionStore.Clear();
-    lock (_cacheLock)
-    {
-      _cache = [];
-      _cacheLoaded = false;
-    }
+    InvalidateCache();
     SetStatus(VaultStatus.Locked);
     StatusChanged?.Invoke();
   }

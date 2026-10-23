@@ -267,7 +267,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private void OnCacheUpdated()
     {
-        if (_handlingAction) return;
+        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked) return;
         CaptureContext();
         var results = Search(_currentSearchText);
         DebugLogService.Log("Page", $"OnCacheUpdated: {results.Count} items");

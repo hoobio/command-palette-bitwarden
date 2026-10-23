@@ -386,6 +386,37 @@ public class BitwardenCliServiceMockedTests
     Assert.True(statusChanged);
   }
 
+  [Fact]
+  public async Task Lock_DuringRefresh_KillsProcessesAndDropsResult()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("session-key");
+    var folders = new FakeCliProcess(exitCode: 0, id: 101);
+    var items = new FakeCliProcess(exitCode: 0, id: 102);
+    var orgs = new FakeCliProcess(exitCode: 0, id: 103);
+    factory.Enqueue(folders);
+    factory.Enqueue(items);
+    factory.Enqueue(orgs);
+    var cacheUpdated = false;
+    svc.CacheUpdated += () => cacheUpdated = true;
+
+    var refresh = svc.RefreshCacheAsync();
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 104));
+    await svc.LockAsync();
+
+    foreach (var p in new[] { folders, items, orgs })
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.True(items.Killed);
+    Assert.False(svc.IsCacheLoaded);
+    Assert.False(cacheUpdated);
+  }
+
   // --- SetServerUrlAsync ---
 
   [Fact]
