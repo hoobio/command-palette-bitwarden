@@ -333,6 +333,21 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(rebuiltResults);
                 ReverifyIfSuspiciouslyEmpty(rebuiltResults.Count);
                 break;
+            case VaultStatus.Unlocked:
+                _currentItems = WithDebugLog(
+                [
+                    new ListItem(new NoOpCommand())
+                    {
+                        Title = "Vault items not loaded",
+                        Subtitle = "Run Sync Vault to load them",
+                        Icon = new IconInfo(""),
+                    },
+                    BuildSyncItem(),
+                    BuildSetServerItem(),
+                    BuildLockItem(),
+                    BuildLogoutItem(),
+                ]);
+                break;
             case VaultStatus.Unauthenticated:
                 _biometricClickFailed = false;
                 _autoBiometricTriggered = false;
