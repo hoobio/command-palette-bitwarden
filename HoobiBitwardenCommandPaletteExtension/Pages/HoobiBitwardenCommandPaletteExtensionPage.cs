@@ -80,7 +80,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.CliConfigChanged += OnCliConfigChanged;
         AccessTracker.ItemAccessed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
-        RepromptPage.GraceStarted += OnRepromptGraceStarted;
+        RepromptPage.GraceStarted += OnItemAccessed;
         RepromptPage.BiometricRequested += OnRepromptBiometricRequested;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         _searchDebounceTimer = new Timer(OnSearchDebounceTick, null, Timeout.Infinite, Timeout.Infinite);
@@ -261,8 +261,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         // keystroke that armed the timer.
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
-        _currentItems = BuildListItems(Search(_currentSearchText));
-        RaiseItemsChanged();
+        RebuildVaultList();
     }
 
     private void OnCacheUpdated()
@@ -679,11 +678,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         DebugLogService.Log("Action", "User returned to login screen from 2FA prompt");
         ClearSearchText();
-        _twoFactorRequired = false;
-        _deviceVerificationRequired = false;
-        _pendingEmail = null;
-        ReplacePendingPassword(null);
-        _pendingTwoFactorMethod = null;
+        ResetPendingLogin();
         _errorMessage = null;
         _currentItems = BuildUnauthenticatedItems();
         RaiseItemsChanged();
@@ -893,7 +888,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.CliConfigChanged -= OnCliConfigChanged;
         AccessTracker.ItemAccessed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
-        RepromptPage.GraceStarted -= OnRepromptGraceStarted;
+        RepromptPage.GraceStarted -= OnItemAccessed;
         RepromptPage.BiometricRequested -= OnRepromptBiometricRequested;
     }
 
@@ -916,8 +911,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
-        _currentItems = BuildListItems(Search(_currentSearchText));
-        RaiseItemsChanged();
+        RebuildVaultList();
     }
 
     private void OnSyncTimerTick(object? state)
@@ -949,11 +943,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _handlingAction = false;
         _initialLoadStarted = true;
         _initComplete = false;
-        _twoFactorRequired = false;
-        _deviceVerificationRequired = false;
-        _pendingEmail = null;
-        ReplacePendingPassword(null);
-        _pendingTwoFactorMethod = null;
+        ResetPendingLogin();
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Checking vault status...", "bw status");
@@ -968,16 +958,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     }
 
     private void OnItemAccessed()
-    {
-        if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
-        {
-            lock (_itemsLock)
-                _currentItems = BuildListItems(Search(_currentSearchText));
-            RaiseItemsChanged();
-        }
-    }
-
-    private void OnRepromptGraceStarted()
     {
         if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
         {
@@ -1062,21 +1042,26 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Locking vault...", "bw lock");
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
-            try
-            {
-                await _service.LockAsync(userInitiated: true);
-                _currentItems = BuildLockedItems();
-                RaiseItemsChanged();
-            }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
-            }
+            await _service.LockAsync(userInitiated: true);
+            _currentItems = BuildLockedItems();
+            RaiseItemsChanged();
         });
     }
+
+    private void RunAction(Func<Task> work) => _ = Task.Run(async () =>
+    {
+        try
+        {
+            await work();
+        }
+        finally
+        {
+            _handlingAction = false;
+            IsLoading = false;
+        }
+    });
 
     private void OnLogoutRequested()
     {
@@ -1086,19 +1071,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Logging out...", "bw logout");
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
-            try
-            {
-                await _service.LogoutAsync();
-                _currentItems = BuildUnauthenticatedItems();
-                RaiseItemsChanged();
-            }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
-            }
+            await _service.LogoutAsync();
+            _currentItems = BuildUnauthenticatedItems();
+            RaiseItemsChanged();
         });
     }
 
@@ -1109,27 +1086,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         ClearSearchText();
         IsLoading = true;
         ShowLoadingStatus("Syncing vault...", "bw sync");
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
             try
             {
                 await _service.SyncVaultAsync();
-                _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
             catch (TimeoutException)
             {
-                _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
             catch (InvalidOperationException)
             {
                 RebuildForCurrentStatus();
-            }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
             }
         });
     }
@@ -1142,32 +1112,20 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Setting server URL...", "bw config server");
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
-            try
+            var status = _service.LastStatus;
+            if (status == Services.VaultStatus.Locked || status == Services.VaultStatus.Unlocked)
             {
-                var status = _service.LastStatus;
-                if (status == Services.VaultStatus.Locked || status == Services.VaultStatus.Unlocked)
-                {
-                    ShowLoadingStatus("Logging out before server change...", "bw logout");
-                    await _service.LogoutAsync();
-                }
-
-                var error = await _service.SetServerUrlAsync(config);
-                if (error != null)
-                {
-                    _errorMessage = error;
-                    RebuildForCurrentStatus();
-                    return;
-                }
-
-                RebuildForCurrentStatus();
+                ShowLoadingStatus("Logging out before server change...", "bw logout");
+                await _service.LogoutAsync();
             }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
-            }
+
+            var error = await _service.SetServerUrlAsync(config);
+            if (error != null)
+                _errorMessage = error;
+
+            RebuildForCurrentStatus();
         });
     }
 
@@ -1237,7 +1195,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         IsLoading = true;
         RaiseItemsChanged();
 
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
             try
             {
@@ -1277,18 +1235,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 // hide/show cycle forces a fresh GetItems.
                 _handlingAction = false;
                 IsLoading = false;
-                _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
             catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
             {
                 RecoverFromFailedRefresh(ex);
-            }
-            finally
-            {
-                // Defensive: ensure flags are cleared on any exit path.
-                _handlingAction = false;
-                IsLoading = false;
             }
         });
     }
@@ -1303,7 +1254,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         IsLoading = true;
         RaiseItemsChanged();
 
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
             try
             {
@@ -1330,17 +1281,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
                 ShowLoadingStatus("Retrieving items from vault...", "bw list items");
                 await _service.RefreshCacheAsync();
-                _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
             catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
             {
                 RecoverFromFailedRefresh(ex);
-            }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
             }
         });
     }
@@ -1348,22 +1293,33 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void ReplacePendingPassword(string? password) =>
         Interlocked.Exchange(ref _pendingPassword, ProtectedSecret.From(password))?.Dispose();
 
+    private void ResetPendingLogin()
+    {
+        _twoFactorRequired = false;
+        _deviceVerificationRequired = false;
+        _pendingEmail = null;
+        ReplacePendingPassword(null);
+        _pendingTwoFactorMethod = null;
+    }
+
+    private void RebuildVaultList()
+    {
+        _currentItems = BuildListItems(Search(_currentSearchText));
+        RaiseItemsChanged();
+    }
+
     private void OnLoginSubmitted(string email, string password, int? twoFactorMethod)
     {
         DebugLogService.Log("Action", $"Login submitted by user (2FA method: {(twoFactorMethod?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "auto")})");
         _handlingAction = true;
         ClearSearchText();
         _errorMessage = null;
-        _twoFactorRequired = false;
-        _deviceVerificationRequired = false;
-        _pendingEmail = null;
-        ReplacePendingPassword(null);
-        _pendingTwoFactorMethod = null;
+        ResetPendingLogin();
         _currentItems = [];
         IsLoading = true;
         RaiseItemsChanged();
 
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
             try
             {
@@ -1401,17 +1357,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
-                _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
             catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
             {
                 RecoverFromFailedRefresh(ex);
-            }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
             }
         });
     }
@@ -1428,7 +1378,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         IsLoading = true;
         RaiseItemsChanged();
 
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
             try
             {
@@ -1451,17 +1401,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
-                _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
             catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
             {
                 RecoverFromFailedRefresh(ex);
-            }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
             }
         });
     }
@@ -1476,7 +1420,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         IsLoading = true;
         RaiseItemsChanged();
 
-        _ = Task.Run(async () =>
+        RunAction(async () =>
         {
             try
             {
@@ -1496,17 +1440,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
-                _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
             catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
             {
                 RecoverFromFailedRefresh(ex);
-            }
-            finally
-            {
-                _handlingAction = false;
-                IsLoading = false;
             }
         });
     }
