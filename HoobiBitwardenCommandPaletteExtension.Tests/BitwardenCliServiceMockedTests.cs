@@ -613,6 +613,54 @@ public class BitwardenCliServiceMockedTests
     Assert.True(statusChanged);
   }
 
+  [Fact]
+  public async Task RefreshCache_InFlight_ReportsRefreshingUntilDone()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 301), new FakeCliProcess(exitCode: 0, id: 302), new FakeCliProcess(exitCode: 0, id: 303) };
+    foreach (var p in held) factory.Enqueue(p);
+    var statusChanged = false;
+    svc.StatusChanged += () => statusChanged = true;
+
+    var refresh = svc.RefreshCacheAsync();
+    Assert.True(svc.IsRefreshing);
+
+    foreach (var p in held)
+    {
+      p.StdoutStream.Enqueue("[]\n");
+      p.StdoutStream.Complete();
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.False(svc.IsRefreshing);
+    Assert.True(svc.IsCacheLoaded);
+    Assert.False(statusChanged);
+  }
+
+  [Fact]
+  public async Task RefreshCache_FailsWithNoCache_RaisesStatusChangedAfterRefreshEnds()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 311), new FakeCliProcess(exitCode: 0, id: 312), new FakeCliProcess(exitCode: 0, id: 313) };
+    foreach (var p in held) factory.Enqueue(p);
+    var refreshingWhenRaised = (bool?)null;
+    svc.StatusChanged += () => refreshingWhenRaised = svc.IsRefreshing;
+
+    var refresh = svc.RefreshCacheAsync();
+    foreach (var p in held)
+    {
+      p.StdoutStream.Fail(new IOException("pipe broken"));
+      p.StderrStream.Complete();
+    }
+    await refresh;
+
+    Assert.False(svc.IsCacheLoaded);
+    Assert.False(refreshingWhenRaised);
+  }
+
   // --- SyncVaultAsync ---
 
   [Fact]

@@ -333,6 +333,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildListItems(rebuiltResults);
                 ReverifyIfSuspiciouslyEmpty(rebuiltResults.Count);
                 break;
+            case VaultStatus.Unlocked when _service.IsRefreshing:
+                IsLoading = true;
+                _currentItems = BuildLoadingPlaceholder("Retrieving items from vault...", "bw list items");
+                break;
             case VaultStatus.Unlocked:
                 _currentItems = WithDebugLog(
                 [

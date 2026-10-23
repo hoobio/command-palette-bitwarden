@@ -64,6 +64,8 @@ internal sealed partial class BitwardenCliService
 
   public bool IsCacheLoaded => _cacheLoaded;
 
+  public bool IsRefreshing => Volatile.Read(ref _refreshing) != 0;
+
   internal int CacheCount { get { lock (_cacheLock) return _cache.Count; } }
 
   public VaultStatus? LastStatus => _lastStatus;
@@ -588,8 +590,9 @@ internal sealed partial class BitwardenCliService
     // "Retrieving items from vault...".
     ReplaceSessionKey(stored);
     SetStatus(VaultStatus.Unlocked);
+    var refresh = RefreshCacheAsync();
     StatusChanged?.Invoke();
-    try { await RefreshCacheAsync(); }
+    try { await refresh; }
     catch (Exception ex) { DebugLogService.Log("Restore", $"RefreshCacheAsync after restore failed: {ex.GetType().Name}: {ex.Message}"); }
     return true;
   }
@@ -1355,6 +1358,7 @@ internal sealed partial class BitwardenCliService
     }
 
     DebugLogService.Log("Cache", "RefreshCacheAsync started");
+    var failed = false;
     try
     {
       var foldersTask = RunCliAsync("list folders");
@@ -1392,6 +1396,7 @@ internal sealed partial class BitwardenCliService
     catch (Exception ex)
     {
       DebugLogService.Log("Cache", $"RefreshCacheAsync failed (keeping existing cache): {ex.GetType().Name}: {ex.Message}");
+      failed = true;
     }
     finally
     {
@@ -1400,6 +1405,8 @@ internal sealed partial class BitwardenCliService
       lock (_cacheLock) sameSession = generation == _sessionGeneration;
       if (Interlocked.Exchange(ref _refreshPending, 0) == 1 && sameSession)
         await RefreshCacheAsync();
+      else if (failed && !_cacheLoaded)
+        StatusChanged?.Invoke();
     }
   }
 
