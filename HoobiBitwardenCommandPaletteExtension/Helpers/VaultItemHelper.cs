@@ -112,7 +112,7 @@ internal static partial class VaultItemHelper
 
     if (totpTagStyle != "off" && item.HasTotp)
     {
-      var totpTag = totpTagStyle == "live" ? GetLiveTotpTag(item.TotpSecret!) : GetStaticTotpTag();
+      var totpTag = totpTagStyle == "live" ? BuildTotpTag(item) : GetStaticTotpTag();
       if (totpTag != null)
         return [.. baseTags, totpTag];
     }
@@ -212,6 +212,11 @@ internal static partial class VaultItemHelper
   }
 
   internal static Tag? BuildTotpTag(string totpSecret) => GetLiveTotpTag(totpSecret);
+
+  internal static Tag? BuildTotpTag(BitwardenItem item) =>
+    item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id)
+      ? GetStaticTotpTag()
+      : GetLiveTotpTag(item.TotpSecret!);
 
   private static Tag GetStaticTotpTag() =>
     new Tag("2FA") { Foreground = ColorHelpers.FromRgb(0x90, 0xE1, 0xC6) };

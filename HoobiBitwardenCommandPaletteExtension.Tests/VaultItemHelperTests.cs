@@ -529,6 +529,29 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void BuildTags_Live_RepromptItem_HidesCodeUntilGrace()
+  {
+    RepromptPage.GracePeriodSeconds = 60;
+    RepromptPage.ClearGracePeriod();
+    var item = new BitwardenItem
+    {
+      Id = "totp-reprompt",
+      Type = BitwardenItemType.Login,
+      Reprompt = 1,
+      HasTotp = true,
+      TotpSecret = "JBSWY3DPEHPK3PXP",
+    };
+
+    var hidden = VaultItemHelper.BuildTags(item, showWatchtowerTags: false, totpTagStyle: "live", showProtectedTag: false);
+    Assert.Equal("2FA", Assert.Single(hidden).Text);
+    Assert.Equal("2FA", VaultItemHelper.BuildTotpTag(item)!.Text);
+
+    RepromptPage.RecordVerification("totp-reprompt");
+    Assert.Contains("s)", VaultItemHelper.BuildTotpTag(item)!.Text, StringComparison.Ordinal);
+    RepromptPage.ClearGracePeriod();
+  }
+
+  [Fact]
   public void BuildTotpTag_ReturnsLiveTag()
   {
     var tag = VaultItemHelper.BuildTotpTag("JBSWY3DPEHPK3PXP");
