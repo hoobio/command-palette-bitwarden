@@ -201,7 +201,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked)
         {
-            DebugLogService.Log("Page", $"UpdateSearchText skipped: handlingAction={_handlingAction}, status={_service.LastStatus}, search='{newSearch}'");
+            DebugLogService.Log("Page", $"UpdateSearchText skipped: handlingAction={_handlingAction}, status={_service.LastStatus}, search length={newSearch.Length}");
         }
 
         if ((_twoFactorRequired || _deviceVerificationRequired) && !_handlingAction)

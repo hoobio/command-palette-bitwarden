@@ -22,6 +22,21 @@ public class DebugLogServiceTests : IDisposable
   }
 
   [Fact]
+  public void ParseItems_UnexpectedOutput_DoesNotLogContent()
+  {
+    BitwardenCliService.ParseItems("{\"login\":{\"password\":\"hunter2\"}}");
+    Assert.DoesNotContain("hunter2", DebugLogService.Export(), StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public void ApplyOrgFilter_DoesNotLogFilterValue()
+  {
+    var svc = new BitwardenCliService();
+    _ = svc.ApplyOrgFilter([], "hunter2").ToList();
+    Assert.DoesNotContain("hunter2", DebugLogService.Export(), StringComparison.Ordinal);
+  }
+
+  [Fact]
   public void Log_WhenDisabled_StillRecordsEntry()
   {
     DebugLogService.Enabled = false;

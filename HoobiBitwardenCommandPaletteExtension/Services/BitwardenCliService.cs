@@ -1253,7 +1253,7 @@ internal sealed partial class BitwardenCliService
 
   internal IEnumerable<BitwardenItem> ApplyOrgFilter(IEnumerable<BitwardenItem> items, string value)
   {
-    DebugLogService.Log("Filter", $"ApplyOrgFilter: value='{value}', orgs cached={Organizations.Count}");
+    DebugLogService.Log("Filter", $"ApplyOrgFilter: value length={value.Length}, orgs cached={Organizations.Count}");
     var matches = 0;
     foreach (var i in items)
     {
@@ -1267,7 +1267,7 @@ internal sealed partial class BitwardenCliService
         yield return i;
       }
     }
-    DebugLogService.Log("Filter", $"ApplyOrgFilter: returned {matches} items for value='{value}'");
+    DebugLogService.Log("Filter", $"ApplyOrgFilter: returned {matches} items");
   }
 
   internal IEnumerable<BitwardenItem> ApplyFilter(IEnumerable<BitwardenItem> items, (string Key, string Value) filter) => filter.Key switch
@@ -1684,7 +1684,7 @@ internal sealed partial class BitwardenCliService
         throw new InvalidOperationException("Session expired - vault is locked");
       }
 
-      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms): {(fallbackStr.Length > 200 ? fallbackStr[..200] + "..." : fallbackStr)}");
+      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms)");
       return fallbackStr;
     }
     catch (OperationCanceledException ex)
@@ -1806,7 +1806,7 @@ internal sealed partial class BitwardenCliService
       var array = JsonNode.Parse(json)?.AsArray();
       if (array == null)
       {
-        DebugLogService.Log("Cache", $"ParseItems: unexpected output (not a JSON array), first 200 chars: {json.Trim()[..Math.Min(200, json.Trim().Length)]}");
+        DebugLogService.Log("Cache", $"ParseItems: unexpected output (not a JSON array), {json.Trim().Length} chars");
         return items;
       }
 
