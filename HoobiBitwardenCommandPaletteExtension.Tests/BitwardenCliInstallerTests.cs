@@ -25,7 +25,7 @@ public class BitwardenCliInstallerTests
     var process = new FakeCliProcess(stdout: "v1.7.10561\n", exitCode: 0);
     factory.Enqueue(process);
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
-    Assert.True(await installer.IsWingetAvailableAsync());
+    Assert.True(await installer.IsWingetAvailableAsync(TestContext.Current.CancellationToken));
     Assert.True(process.Disposed);
   }
 
@@ -35,7 +35,7 @@ public class BitwardenCliInstallerTests
     var factory = new FakeProcessFactory();
     factory.Enqueue(new FakeCliProcess(stdout: "", exitCode: 1));
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
-    Assert.False(await installer.IsWingetAvailableAsync());
+    Assert.False(await installer.IsWingetAvailableAsync(TestContext.Current.CancellationToken));
   }
 
   [Fact]
@@ -44,7 +44,7 @@ public class BitwardenCliInstallerTests
     // Empty queue makes the factory throw (winget.exe not launchable).
     var factory = new FakeProcessFactory();
     var installer = new BitwardenCliInstaller(processFactory: factory.Create);
-    Assert.False(await installer.IsWingetAvailableAsync());
+    Assert.False(await installer.IsWingetAvailableAsync(TestContext.Current.CancellationToken));
   }
 
   [Fact]

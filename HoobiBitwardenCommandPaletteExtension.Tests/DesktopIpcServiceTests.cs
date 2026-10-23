@@ -33,8 +33,8 @@ public class DesktopIpcServiceTests
     var name = $"bw-test-{Guid.NewGuid():N}";
     using var server = new System.IO.Pipes.NamedPipeServerStream(name, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
     using var client = new System.IO.Pipes.NamedPipeClientStream(".", name, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous);
-    var accept = server.WaitForConnectionAsync();
-    await client.ConnectAsync(5000);
+    var accept = server.WaitForConnectionAsync(TestContext.Current.CancellationToken);
+    await client.ConnectAsync(5000, TestContext.Current.CancellationToken);
     await accept;
 
     Assert.False(DesktopIpcService.IsPipeServerBitwarden(client));
