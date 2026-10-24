@@ -36,7 +36,7 @@ internal sealed partial class CompanionOps : IDisposable
   private readonly SemaphoreSlim _extrasGate = new(1, 1);
   private readonly Lock _extrasLock = new();
   private VaultExtras? _extras;
-  private DateTime _extrasStamp;
+  private (DateTime Refresh, int Writes) _extrasStamp;
 
   public CompanionOps(
     BitwardenCliService service,
@@ -84,13 +84,27 @@ internal sealed partial class CompanionOps : IDisposable
           return IpcJson.ToElement(await ListItemsAsync(), IpcJson.Default.ItemListResponse);
         case Ops.ListFilters:
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
+        case Ops.CreateItem:
+          return IpcJson.ToElement(await CreateItemAsync(IpcJson.Read(payload, IpcJson.Default.EditableItem)), IpcJson.Default.SavedResponse);
+        case Ops.UpdateItem:
+          return IpcJson.ToElement(await UpdateItemAsync(IpcJson.Read(payload, IpcJson.Default.EditableItem)), IpcJson.Default.SavedResponse);
+        case Ops.DeleteItem or Ops.RestoreItem or Ops.ArchiveItem or Ops.MoveItem or Ops.SetCollections:
+          return await WriteAsync(op, IpcJson.Read(payload, IpcJson.Default.WriteRequest)) is { } saved ? IpcJson.ToElement(saved, IpcJson.Default.SavedResponse) : null;
         default:
-          return Dispatch(op, payload, null);
+          return await DispatchAsync(op, payload, null);
       }
     }
     catch (ObjectDisposedException ex)
     {
       throw new IpcException(IpcErrors.Locked, ex);
+    }
+    catch (VaultWriteException ex)
+    {
+      throw new IpcException(ex.Error switch { VaultWriteError.Conflict => IpcErrors.Conflict, VaultWriteError.NotFound => IpcErrors.NotFound, _ => IpcErrors.Failed }, ex);
+    }
+    catch (ArgumentException ex)
+    {
+      throw new IpcException(IpcErrors.Invalid, ex);
     }
     catch (Exception ex) when (ex is not IpcException)
     {
@@ -99,7 +113,7 @@ internal sealed partial class CompanionOps : IDisposable
     }
   }
 
-  private JsonElement? Dispatch(string op, JsonElement? payload, string? verifiedId)
+  private async Task<JsonElement?> DispatchAsync(string op, JsonElement? payload, string? verifiedId)
   {
     switch (op)
     {
@@ -111,8 +125,17 @@ internal sealed partial class CompanionOps : IDisposable
         return IpcJson.ToElement(new SecretResponse(Reveal(reveal.Id, reveal.Field, reveal.RevisionDate, IsVerified(reveal.Id, verifiedId))), IpcJson.Default.SecretResponse);
       case Ops.Copy:
         var copy = IpcJson.Read(payload, IpcJson.Default.FieldRequest);
-        Copy(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
+        if (copy.Field?.StartsWith(ItemFields.HistoryPrefix, StringComparison.Ordinal) == true)
+          await CopyPasswordHistoryAsync(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
+        else
+          Copy(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
         return null;
+      case Ops.GetEditableItem:
+        var editable = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
+        return IpcJson.ToElement(await GetEditableItemAsync(editable.Id, IsVerified(editable.Id, verifiedId)), IpcJson.Default.EditableItem);
+      case Ops.GetPasswordHistory:
+        var history = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
+        return IpcJson.ToElement(await GetPasswordHistoryAsync(history.Id, IsVerified(history.Id, verifiedId)), IpcJson.Default.PasswordHistoryResponse);
       case Ops.GetTotp:
         var totp = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
         return IpcJson.ToElement(GetTotp(totp.Id, IsVerified(totp.Id, verifiedId)), IpcJson.Default.TotpResponse);
@@ -145,7 +168,9 @@ internal sealed partial class CompanionOps : IDisposable
       item.CreationDate,
       item.RevisionDate,
       item.PasswordRevisionDate,
-      locked ? [] : MapFields(item));
+      locked ? [] : MapFields(item),
+      item.DeletedDate != null,
+      item.ArchivedDate != null);
   }
 
   internal async Task<ItemListResponse> ListItemsAsync()
@@ -196,7 +221,7 @@ internal sealed partial class CompanionOps : IDisposable
     await _extrasGate.WaitAsync();
     try
     {
-      var stamp = _service.LastRefresh;
+      var stamp = (_service.LastRefresh, _service.WriteVersion);
       lock (_extrasLock)
       {
         if (_extras is { } current && _extrasStamp == stamp)
@@ -352,7 +377,7 @@ internal sealed partial class CompanionOps : IDisposable
       RepromptPage.RecordVerification(item.Id);
     }
 
-    return new RepromptResponse(true, 0, op is null ? null : Dispatch(op, payload, item.Id));
+    return new RepromptResponse(true, 0, op is null ? null : await DispatchAsync(op, payload, item.Id));
   }
 
   private BitwardenItem Find(string? id)

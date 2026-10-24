@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -20,6 +21,15 @@ internal static class Ops
   public const string ListItems = "listItems";
   public const string ListFilters = "listFilters";
   public const string VaultChanged = "vaultChanged";
+  public const string GetEditableItem = "getEditableItem";
+  public const string GetPasswordHistory = "getPasswordHistory";
+  public const string CreateItem = "createItem";
+  public const string UpdateItem = "updateItem";
+  public const string DeleteItem = "deleteItem";
+  public const string RestoreItem = "restoreItem";
+  public const string ArchiveItem = "archiveItem";
+  public const string MoveItem = "moveItem";
+  public const string SetCollections = "setCollections";
 }
 
 internal static class IpcErrors
@@ -30,6 +40,7 @@ internal static class IpcErrors
   public const string Invalid = "invalid";
   public const string Failed = "failed";
   public const string Stale = "stale";
+  public const string Conflict = "conflict";
 }
 
 internal static class MessageTypes
@@ -61,6 +72,34 @@ internal static class ItemFields
   public const string SshFingerprint = "sshFingerprint";
   public const string UriPrefix = "uri:";
   public const string CustomPrefix = "custom:";
+  public const string HistoryPrefix = "history:";
+}
+
+internal static class ItemRules
+{
+  public const int RegexMatch = 4;
+
+  public static readonly IReadOnlyDictionary<int, (int Id, string Label)[]> LinkTargets = new Dictionary<int, (int Id, string Label)[]>
+  {
+    [1] = [(100, "Username"), (101, "Password")],
+    [3] = [(300, "Cardholder name"), (301, "Expiration month"), (302, "Expiration year"), (303, "Security code"), (304, "Brand"), (305, "Number")],
+    [4] =
+    [
+      (400, "Title"), (416, "First name"), (401, "Middle name"), (417, "Last name"), (418, "Full name"), (413, "Username"), (409, "Company"),
+      (412, "National insurance number"), (414, "Passport number"), (415, "Licence number"), (410, "Email"), (411, "Phone"),
+      (402, "Address 1"), (403, "Address 2"), (404, "Address 3"), (405, "City / Town"), (406, "County / State"), (407, "Postcode"), (408, "Country"),
+    ],
+  };
+
+  public static bool IsValidUri(string? uri, int? match) =>
+    !string.IsNullOrWhiteSpace(uri)
+    && (match == RegexMatch || Uri.TryCreate(uri.Contains("://", StringComparison.Ordinal) ? uri : "https://" + uri, UriKind.Absolute, out _));
+
+  public static bool IsValidMonth(string? month) =>
+    string.IsNullOrEmpty(month) || (int.TryParse(month, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var value) && value is >= 1 and <= 12);
+
+  public static bool IsValidLink(int type, int? linkedId) =>
+    linkedId is { } id && LinkTargets.TryGetValue(type, out var targets) && targets.Any(t => t.Id == id);
 }
 
 internal sealed class IpcException : Exception
@@ -104,7 +143,9 @@ internal sealed record ItemDto(
   DateTime? CreationDate,
   DateTime RevisionDate,
   DateTime? PasswordRevisionDate,
-  IReadOnlyList<FieldDto> Fields);
+  IReadOnlyList<FieldDto> Fields,
+  bool Deleted = false,
+  bool Archived = false);
 
 internal sealed record ItemSummary(
   string Id,
@@ -130,6 +171,59 @@ internal sealed record FilterRef(string Id, string Name, string? OrganizationId 
 
 internal sealed record FiltersResponse(IReadOnlyList<FilterRef> Folders, IReadOnlyList<FilterRef> Collections, IReadOnlyList<FilterRef> Organizations);
 
+internal sealed record UriEdit(string Uri, int? Match = null);
+
+internal sealed record CustomFieldEdit(string Name, string? Value, int Type, int? LinkedId = null);
+
+internal sealed record LoginEdit(string? Username, string? Password, string? Totp, IReadOnlyList<UriEdit> Uris);
+
+internal sealed record CardEdit(string? CardholderName, string? Brand, string? Number, string? ExpMonth, string? ExpYear, string? Code);
+
+internal sealed record IdentityEdit(
+  string? Title,
+  string? FirstName,
+  string? MiddleName,
+  string? LastName,
+  string? Address1,
+  string? Address2,
+  string? Address3,
+  string? City,
+  string? State,
+  string? PostalCode,
+  string? Country,
+  string? Company,
+  string? Email,
+  string? Phone,
+  string? Ssn,
+  string? Username,
+  string? PassportNumber,
+  string? LicenseNumber);
+
+internal sealed record SshKeyEdit(string? PrivateKey, string? PublicKey, string? Fingerprint);
+
+internal sealed record EditableItem(
+  string? Id,
+  int Type,
+  string Name,
+  string? FolderId,
+  string? OrganizationId,
+  IReadOnlyList<string> CollectionIds,
+  bool Favorite,
+  bool Reprompt,
+  string? Notes,
+  DateTime? RevisionDate,
+  IReadOnlyList<CustomFieldEdit> Fields,
+  LoginEdit? Login = null,
+  CardEdit? Card = null,
+  IdentityEdit? Identity = null,
+  SshKeyEdit? SshKey = null);
+
+internal sealed record WriteRequest(string Id, DateTime RevisionDate, bool Permanent = false, string? OrganizationId = null, IReadOnlyList<string>? CollectionIds = null);
+
+internal sealed record SavedResponse(string Id, DateTime RevisionDate);
+
+internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(Envelope))]
 [JsonSerializable(typeof(ItemRequest))]
@@ -142,6 +236,10 @@ internal sealed record FiltersResponse(IReadOnlyList<FilterRef> Folders, IReadOn
 [JsonSerializable(typeof(ItemDto))]
 [JsonSerializable(typeof(ItemListResponse))]
 [JsonSerializable(typeof(FiltersResponse))]
+[JsonSerializable(typeof(EditableItem))]
+[JsonSerializable(typeof(WriteRequest))]
+[JsonSerializable(typeof(SavedResponse))]
+[JsonSerializable(typeof(PasswordHistoryResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);

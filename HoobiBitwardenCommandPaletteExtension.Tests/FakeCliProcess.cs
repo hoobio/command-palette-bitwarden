@@ -62,11 +62,7 @@ internal sealed class FakeCliProcess : ICliProcess
 
   public void RaiseExited() { HasExited = true; Exited?.Invoke(this, EventArgs.Empty); }
 
-  public string GetStdinContent()
-  {
-    _stdinBacking.Position = 0;
-    return new StreamReader(_stdinBacking).ReadToEnd();
-  }
+  public string GetStdinContent() => System.Text.Encoding.UTF8.GetString(_stdinBacking.ToArray());
 }
 
 internal sealed class ChannelStream : Stream
