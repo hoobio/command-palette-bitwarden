@@ -94,7 +94,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
         <ContentControl Classes="VaultHeader" Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,0,16,0" />
 
         <Grid x:Name="Toolbar" Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,0,24,4">
@@ -123,6 +123,9 @@
         <StackPanel Grid.Row="2" Margin="0,0,24,0">
             <Border x:Name="ErrorAlert" Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+            </Border>
+            <Border x:Name="StatusAlert" Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock TextWrapping="Wrap" Text="{Binding StatusMessage}" />
             </Border>
             <Border Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding Editor.FormMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
                 <TextBlock x:Name="ValidationText" TextWrapping="Wrap" Text="{Binding Editor.FormMessage, FallbackValue={x:Null}}" />
@@ -264,12 +267,5 @@
         <ScrollViewer x:Name="EditorScroll" Grid.Row="3" IsVisible="{Binding IsEditing}">
             <views:ItemEditView x:Name="EditView" Margin="{StaticResource PageGutter}" DataContext="{Binding Editor}" />
         </ScrollViewer>
-
-        <TextBlock
-            Grid.Row="4"
-            Classes="Caption"
-            Margin="0,0,24,12"
-            Text="{Binding StatusMessage}"
-            IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     </Grid>
 </UserControl>

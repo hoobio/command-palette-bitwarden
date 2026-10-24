@@ -64,6 +64,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Func<Task<string?>>? OpenGenerator { get; set; }
 
+  internal Action<string, bool>? Toast { get; set; }
+
   internal PipeChannel Channel => _channel;
 
   public ObservableCollection<AttachmentViewModel> Attachments { get; } = [];
@@ -392,7 +394,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   }
 
   public Task CopyAsync(FieldViewModel field) =>
-    RunAsync(Ops.Copy, FieldPayload(field.Key), _ => StatusMessage = $"Copied {field.Label}");
+    RunAsync(Ops.Copy, FieldPayload(field.Key), _ => Notify($"Copied {field.Label}"));
 
   public async Task OpenUriAsync(FieldViewModel field)
   {
@@ -496,7 +498,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
     Editor = null;
     await LoadAsync();
-    StatusMessage = "Saved";
+    Notify("Saved");
     Saved?.Invoke();
   }
 
@@ -642,7 +644,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     if (ok)
     {
       await LoadAsync();
-      StatusMessage = "Password replaced and copied";
+      Notify("Password replaced and copied");
       Saved?.Invoke();
       return;
     }
@@ -676,7 +678,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     if (ok)
     {
       await LoadAsync();
-      StatusMessage = $"Attached {Path.GetFileName(path)}";
+      Notify($"Attached {Path.GetFileName(path)}");
     }
     else if (error is IpcErrors.Conflict or IpcErrors.Unknown)
     {
@@ -690,7 +692,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       return;
     var (ok, _, error) = await WriteAsync(Ops.DownloadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id, path), IpcJson.Default.AttachmentRequest));
     if (ok)
-      StatusMessage = $"Saved {attachment.FileName}";
+      Notify($"Saved {attachment.FileName}");
     else if (error == IpcErrors.Stale)
       await ReloadStaleAsync();
     else if (error == IpcErrors.Failed)
@@ -724,7 +726,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     if (repromptFor is { } retry && !(await RetryWithPasswordAsync(Ops.DeleteAttachment, retry)).Ok)
       return;
     await LoadAsync();
-    StatusMessage = $"Deleted {attachment.FileName}";
+    Notify($"Deleted {attachment.FileName}");
   }
 
   [RelayCommand]
@@ -736,7 +738,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       Groups.Remove(existing);
     if (history.LastUsed.Count == 0)
     {
-      StatusMessage = "This item has no password history.";
+      Notify("This item has no password history.", success: false);
       return;
     }
 
@@ -764,6 +766,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       _filters = null;
     }
   }
+
+  private void Notify(string message, bool success = true) => Toast?.Invoke(message, success);
 
   private Task<bool> AskAsync(string title, string message, string primary, string close) =>
     Confirm?.Invoke(title, message, primary, close) ?? Task.FromResult(false);
