@@ -45,7 +45,7 @@ jobs:
     outputs:
       code_changed: ${{ steps.filter.outputs.code_changed }}
     steps:
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
           filters: |
@@ -78,7 +78,7 @@ jobs:
       tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - id: rp
-        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/release-please@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
           app-private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
@@ -88,11 +88,11 @@ jobs:
     if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
@@ -133,7 +133,7 @@ jobs:
           exit 1
 
       - name: Generate coverage report
-        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        uses: danielpalme/ReportGenerator-GitHub-Action@d3ebf1f760f7d8ab92cc44d9bcfee7ad73722a31 # 5
         with:
           reports: ${{ github.workspace }}/coverage/**/coverage.cobertura.xml
           targetdir: ${{ github.workspace }}/coverage/report
@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage-report
           path: ${{ github.workspace }}/coverage/report/
@@ -272,10 +272,10 @@ jobs:
           echo "### 💭 No MSIX build needed (${{ matrix.platform }})" >> "$GITHUB_STEP_SUMMARY"
           echo "Build was skipped because this PR has no code changes. Reporting success so the required check passes." >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: env.SHOULD_BUILD == 'true'
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         if: env.SHOULD_BUILD == 'true'
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
@@ -291,7 +291,7 @@ jobs:
 
       - name: Stamp Package.appxmanifest version
         if: env.SHOULD_BUILD == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/stamp-msix-version@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           manifest-path: ${{ env.APPXMANIFEST_PATH }}
           version: ${{ steps.version.outputs.version }}
@@ -314,7 +314,7 @@ jobs:
 
       - name: Build MSIX
         if: env.SHOULD_BUILD == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msix-dotnet@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           project-path: ${{ env.PROJECT_PATH }}
           platform: ${{ matrix.platform }}
@@ -339,7 +339,7 @@ jobs:
 
       - name: Sign MSIX
         if: env.SHOULD_BUILD == 'true' && env.SHOULD_SIGN == 'true' && env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msix@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -353,7 +353,7 @@ jobs:
 
       - name: Upload MSIX artifact
         if: env.SHOULD_BUILD == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: msix-${{ matrix.platform }}
           path: ${{ github.workspace }}\staging\msix-${{ matrix.platform }}\${{ env.ASSET_BASE_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform }}.msix
@@ -379,7 +379,7 @@ jobs:
     env:
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Read version
         id: version
@@ -390,7 +390,7 @@ jobs:
           "APP_VERSION=$ver" | Out-File -Append $env:GITHUB_ENV
 
       - name: Download MSIX (${{ matrix.platform }})
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-${{ matrix.platform }}
           path: ${{ github.workspace }}\staging\msix-download-${{ matrix.platform }}
@@ -419,7 +419,7 @@ jobs:
           Get-ChildItem $env:PAYLOAD_DIR | Format-Table Name, Length
 
       - name: Build MSI
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-msi-wix@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           wix-source-path: ${{ env.WIX_SOURCE_PATH }}
           version: ${{ steps.version.outputs.version }}
@@ -431,7 +431,7 @@ jobs:
 
       - name: Sign MSI
         if: env.HAS_SIGNING_CERT == 'true'
-        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/sign-msi@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           pfx-base64: ${{ secrets.SIGNING_CERTIFICATE }}
           pfx-password: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
@@ -444,7 +444,7 @@ jobs:
         run: echo "::warning::MSI produced unsigned (HAS_SIGNING_CERT=$HAS_SIGNING_CERT)."
 
       - name: Upload MSI artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: msi-${{ matrix.platform }}
           path: ${{ github.workspace }}\staging\msi-${{ matrix.platform }}\${{ env.ASSET_BASE_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform }}.msi
@@ -465,7 +465,7 @@ jobs:
     env:
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERTIFICATE != '' && vars.SIGNING_CERT_THUMBPRINT != '' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Read version
         id: version
@@ -475,12 +475,12 @@ jobs:
           "version=$ver" | Out-File -Append $env:GITHUB_OUTPUT
 
       - name: Download MSIX (x64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-x64
           path: ${{ github.workspace }}\staging\bundle-input
       - name: Download MSIX (ARM64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-ARM64
           path: ${{ github.workspace }}\staging\bundle-input
@@ -527,7 +527,7 @@ jobs:
           }
 
       - name: Upload bundle artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: msixbundle
           path: ${{ github.workspace }}\staging\bundle\*.msixbundle
@@ -543,19 +543,19 @@ jobs:
       matrix:
         platform: [x64, ARM64]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           sparse-checkout: .github/wack-exclusions.json
           sparse-checkout-cone-mode: false
 
       - name: Download MSIX
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-${{ matrix.platform }}
           path: msix
 
       - name: Run WACK
-        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/run-wack@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           msix-path: msix
           report-path: wack-report-${{ matrix.platform }}.xml
@@ -566,7 +566,7 @@ jobs:
 
       - name: Upload WACK report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: wack-report-${{ matrix.platform }}
           path: wack-report-${{ matrix.platform }}.xml
@@ -584,9 +584,9 @@ jobs:
       DT_SYSTEM: command-palette
       DT_COMPONENT: bitwarden-extension
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
@@ -646,7 +646,7 @@ jobs:
           Write-Host "Prune:          $prune"
 
       - name: Generate CycloneDX SBOM
-        uses: hoobio/pipeline-tools/pipeline/github/step/build-cyclonedx-sbom@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/build-cyclonedx-sbom@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           app-language: dotnet
           app-manifest-path: ${{ env.SOLUTION_PATH }}
@@ -654,7 +654,7 @@ jobs:
           output-path: ${{ env.BOM_FILE }}
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sbom
           path: ${{ env.BOM_FILE }}
@@ -662,7 +662,7 @@ jobs:
 
       - name: Upload SBOM to Dependency-Track
         if: env.DT_HOST != '' && env.DT_API_KEY != ''
-        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/job/upload-sbom-to-dependency-track@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           bom-path: ${{ env.BOM_FILE }}
           upload-artifact: 'false'
@@ -703,48 +703,48 @@ jobs:
       contents: write
     steps:
       - name: Download MSIX (x64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-x64
           path: release/msix-x64
       - name: Download MSIX (ARM64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-ARM64
           path: release/msix-ARM64
       - name: Download MSI (x64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msi-x64
           path: release/msi-x64
       - name: Download MSI (ARM64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msi-ARM64
           path: release/msi-ARM64
       - name: Download SBOM
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: sbom
           path: release/sbom
       - name: Download WACK report (x64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: wack-report-x64
           path: release/wack-x64
       - name: Download WACK report (ARM64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: wack-report-ARM64
           path: release/wack-ARM64
       - name: Download MSIX bundle
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msixbundle
           path: release/bundle
 
       - name: Attest installer provenance
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: "release/msix-*/*.msix,release/msi-*/*.msi,release/bundle/*.msixbundle"
 
@@ -779,7 +779,7 @@ jobs:
 
       # Published via the release-please App, not GITHUB_TOKEN: GITHUB_TOKEN publishes trigger no follow-up workflows (v1.9.1 only reached Dependency-Track under channel=ci/main)
       - name: Publish draft release
-        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@v2.4.0
+        uses: hoobio/pipeline-tools/pipeline/github/step/publish-github-release@353f3a7d09d9e63ae303631a4a4bb1ac83f97635 # v2.4.0
         with:
           tag: ${{ needs.release-please.outputs.tag_name }}
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}
@@ -799,16 +799,16 @@ jobs:
       STORE_PRODUCT_ID: 9P5KS8T80MV3
       WHATS_NEW_PATH: HoobiBitwardenCommandPaletteExtension/Assets/WHATS_NEW.md
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Download MSIX bundle
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msixbundle
           path: bundle
 
       - name: Setup Microsoft Store CLI
-        uses: microsoft/microsoft-store-apppublisher@v1.4
+        uses: microsoft/microsoft-store-apppublisher@cc9910a8d59f2eb55cbb83df0a3800cf3b5300e0 # v1.4
 
       - name: Configure Store credentials
         shell: pwsh
@@ -869,7 +869,7 @@ jobs:
       contents: write
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -898,38 +898,38 @@ jobs:
           echo "prev_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Download MSIX (x64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-x64
           path: release/msix-x64
 
       - name: Download MSIX (ARM64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msix-ARM64
           path: release/msix-ARM64
 
       - name: Download MSI (x64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msi-x64
           path: release/msi-x64
 
       - name: Download MSI (ARM64)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msi-ARM64
           path: release/msi-ARM64
 
       - name: Download MSIX bundle
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: msixbundle
           path: release/bundle
 
       # Draft first: with immutable releases, softprops/action-gh-release publishes before uploading and fails with "Cannot upload asset ... to an immutable release"
       - name: Create pre-release (draft)
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: v${{ steps.version.outputs.version }}-pre.${{ github.run_number }}
           name: v${{ steps.version.outputs.version }}-pre.${{ github.run_number }}
