@@ -113,9 +113,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     switch (_service.LastStatus)
                     {
                         case VaultStatus.Unlocked when _service.IsCacheLoaded:
-                            var loadedResults = Search(_currentSearchText);
+                            var text = _currentSearchText;
+                            var loadedResults = Search(text);
                             DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedResults.Count} items");
-                            _currentItems = BuildListItems(loadedResults);
+                            _currentItems = BuildListItems(loadedResults, text);
                             IsLoading = false;
                             ReverifyIfSuspiciouslyEmpty(loadedResults.Count);
                             break;
@@ -153,7 +154,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
             if (CaptureContext() && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
-                _currentItems = BuildListItems(Search(_currentSearchText));
+                TryPublishVaultList(out _);
             }
 
             if (_initComplete && !_handlingAction)
@@ -214,9 +215,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
 
-        _currentItems = BuildListItems(Search(_currentSearchText));
+        var published = TryPublishVaultList(out _);
         IsLoading = false;
-        RaiseItemsChanged();
+        if (published) RaiseItemsChanged();
     }
 
     private void OnSearchDebounceTick(object? _)
@@ -240,13 +241,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked) return;
         CaptureContext();
-        var results = Search(_currentSearchText);
-        DebugLogService.Log("Page", $"OnCacheUpdated: {results.Count} items");
-        _currentItems = BuildListItems(results);
+        var published = TryPublishVaultList(out var count);
+        DebugLogService.Log("Page", $"OnCacheUpdated: {count} items");
         _initComplete = true;
         IsLoading = false;
-        RaiseItemsChanged();
-        ReverifyIfSuspiciouslyEmpty(results.Count);
+        if (published) RaiseItemsChanged();
+        ReverifyIfSuspiciouslyEmpty(count);
     }
 
     // A session that went stale without erroring lists zero items (the "No items found" symptom)
@@ -296,9 +296,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _autoBiometricTriggered = false;
                 HideBiometricStatus();
                 _emptyVaultReverifyArmed = true;
-                var rebuiltResults = Search(_currentSearchText);
-                _currentItems = BuildListItems(rebuiltResults);
-                ReverifyIfSuspiciouslyEmpty(rebuiltResults.Count);
+                TryPublishVaultList(out var rebuiltCount);
+                ReverifyIfSuspiciouslyEmpty(rebuiltCount);
                 break;
             case VaultStatus.Unlocked when _service.IsRefreshing:
                 IsLoading = true;
@@ -377,7 +376,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                         await _service.RefreshCacheAsync();
                     }
                     if (_service.IsCacheLoaded)
-                        _currentItems = BuildListItems(Search(_currentSearchText));
+                        TryPublishVaultList(out _);
                     else
                         // RefreshCacheAsync returned early because warmup held the lock; CacheUpdated/WarmupCompleted shows items
                         return;
@@ -733,7 +732,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     internal static bool MatchesCommand(string search, string command)
         => search.Length >= 2 && command.StartsWith(search, StringComparison.OrdinalIgnoreCase);
 
-    private IListItem[] BuildListItems(List<BitwardenItem> items)
+    private IListItem[] BuildListItems(List<BitwardenItem> items, string searchText)
     {
         var list = new List<IListItem>();
         var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
@@ -747,9 +746,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
         var contextTagsUsed = 0;
-        var capContextTags = showContextTag && string.IsNullOrWhiteSpace(_currentSearchText) && contextLimit > 0;
+        var capContextTags = showContextTag && string.IsNullOrWhiteSpace(searchText) && contextLimit > 0;
 
-        var search = (_currentSearchText ?? "").Trim();
+        var search = (searchText ?? "").Trim();
         var boostSync = MatchesCommand(search, "sync");
         var boostLock = MatchesCommand(search, "lock");
         var boostLogout = MatchesCommand(search, "logout");
@@ -911,9 +910,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
         {
-            lock (_itemsLock)
-                _currentItems = BuildListItems(Search(_currentSearchText));
-            RaiseItemsChanged();
+            RebuildVaultList();
         }
     }
 
@@ -973,9 +970,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
             if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
-                lock (_itemsLock)
-                    _currentItems = BuildListItems(Search(_currentSearchText));
-                RaiseItemsChanged();
+                RebuildVaultList();
             }
         });
     }
@@ -1006,6 +1001,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         {
             _handlingAction = false;
             IsLoading = false;
+            if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+                _searchDebounceTimer.Change(0, Timeout.Infinite);
         }
     });
 
@@ -1234,8 +1231,22 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private void RebuildVaultList()
     {
-        _currentItems = BuildListItems(Search(_currentSearchText));
-        RaiseItemsChanged();
+        if (TryPublishVaultList(out _))
+            RaiseItemsChanged();
+    }
+
+    private bool TryPublishVaultList(out int resultCount)
+    {
+        var text = _currentSearchText;
+        var results = Search(text);
+        resultCount = results.Count;
+        var built = BuildListItems(results, text);
+        lock (_itemsLock)
+        {
+            if (text != _currentSearchText) return false;
+            _currentItems = built;
+            return true;
+        }
     }
 
     private void OnLoginSubmitted(string email, string password, int? twoFactorMethod)
