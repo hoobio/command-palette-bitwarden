@@ -109,8 +109,8 @@ internal sealed class BitwardenItem
     BitwardenItemType.Login => Username ?? string.Empty,
     BitwardenItemType.SecureNote when Reprompt == 1 => "Protected",
     BitwardenItemType.SecureNote => Notes?.UseOrDefault(static n => TruncateLine(n, 60)) ?? "Secure Note",
-    BitwardenItemType.Card => CardBrand != null && CardLast4 != null
-        ? $"{CardBrand} ····{CardLast4}" : CardBrand ?? "Card",
+    BitwardenItemType.Card => CardLast4 is { } last4
+        ? $"{CardBrand ?? "Card"} ····{last4}" : CardBrand ?? "Card",
     BitwardenItemType.Identity => IdentityEmail ?? IdentityFullName ?? "Identity",
     BitwardenItemType.SshKey => SshFingerprint ?? "SSH Key",
     _ => string.Empty,

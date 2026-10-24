@@ -274,6 +274,14 @@ public class BitwardenCliServiceTests
   }
 
   [Fact]
+  public void Matches_Card_ByLast4OnlyNotFullNumber()
+  {
+    var item = new BitwardenItem { Name = "My Card", Type = BitwardenItemType.Card, CardNumber = ProtectedSecret.From("4111111111111234") };
+    Assert.True(BitwardenCliService.Matches(item, "1234"));
+    Assert.False(BitwardenCliService.Matches(item, "4111"));
+  }
+
+  [Fact]
   public void Matches_Card_ByCardholderName()
   {
     var item = new BitwardenItem { Name = "Card", Type = BitwardenItemType.Card, CardholderName = "John Doe" };
