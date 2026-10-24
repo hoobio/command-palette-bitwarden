@@ -11,11 +11,12 @@ If the window for an item is already open, the command brings that window to the
 
 ## Vault window
 
-The vault window has the same layout as Bitwarden Desktop. It is read-only in this release.
+The vault window has the same layout as Bitwarden Desktop.
 
 - **Filters** (left): All items, Favourites, each item type (Login, Card, Identity, Secure note, SSH key), each folder and No folder, each collection, each organisation, Archive and Trash. Collections and organisations show only when your account has them. Archive shows only when you have archived items. All items and the other filters do not include items in the archive or in the trash.
 - **Items** (middle): the name, and below it the username, card brand and last four digits, email or SSH fingerprint. A login shows its website icon when Command Palette already downloaded it. The search box filters the list as you type. It finds text in the name, that subtext and the website hosts. It does not search notes.
 - **Item details** (right): the same view as the item window. Select **Open in own window** to open the item in an item window, which you can keep on top of other windows.
+- **New item** opens an empty form for the item type that you select. **Clone** opens a form with a copy of the selected item, named "<name> - Clone". A clone does not copy passkeys.
 
 | Key | Action |
 |-----|--------|
@@ -51,14 +52,35 @@ The window has a close button only, so it does not minimise or maximise. You can
 
 Right-click the title bar or an empty area of the window and select **Always on top** to keep the window above other windows. New item windows use the same choice until the companion stops.
 
+## Edit an item
+
+Select **Edit** in the vault window or an item window. The form has the fields of Bitwarden Desktop:
+
+| Item type | Fields |
+|-----------|--------|
+| Login | Username, password, authenticator key (TOTP), websites with match detection (default, base domain, host, starts with, exact, regular expression, never) |
+| Card | Cardholder name, brand, number, expiration month and year, security code |
+| Identity | Title, first, middle and last name, username, company, national insurance number, passport number, licence number, email, phone, address 1 to 3, city or town, county or state, postcode, country |
+| Secure note | Notes |
+| SSH key | Private key, public key, fingerprint. **Import from private key** fills the public key and fingerprint from an OpenSSH private key. |
+
+All item types also have name, folder, favourite, master password re-prompt, notes and custom fields (text, hidden, boolean, linked). A linked field points to a field of the item type. You can add, remove and reorder websites and custom fields. When your account has organisations, **Owner** and **Collections** move a personal item into an organisation or change the collections of an organisation item. An item cannot move back to your personal vault.
+
+- **Save** checks that the name is set, each website is a valid URI and the expiration month is 1 to 12. The extension then saves the item and reads it back to confirm the change.
+- **Cancel**, or closing the window, asks before it discards changes that are not saved.
+- If the item changed in the vault after you started to edit it, for example from another device, **Save** asks you to **Reload** the item and discard your changes, or **Keep editing**.
+- There is no password generator in the form in this release.
+
+The item details also have **Archive**, **Delete** (moves the item to the trash), and for a login **Password history**. Password history shows the date of each old password. The values are masked, and the copy button copies through the extension. In the trash, **Restore** and **Delete permanently** replace them. In the archive, **Restore** moves the item back to the vault. Each delete asks you to confirm and names the item.
+
 ## Master password re-prompt
 
-For an item with master password re-prompt, the window shows no field values until you verify your master password. Select **Verify master password** and enter your master password. The window uses the same re-prompt grace period as Command Palette (see [Settings](Settings)). A successful verification starts the grace period. During the grace period, you can show, copy and open values without a prompt. When the grace period is 0, the window asks for your master password for each show, copy or open action, and the verification code is masked. Five failed attempts start the same 30-second cooldown as the Command Palette re-prompt.
+For an item with master password re-prompt, the window shows no field values until you verify your master password. Select **Verify master password** and enter your master password. The window uses the same re-prompt grace period as Command Palette (see [Settings](Settings)). A successful verification starts the grace period. During the grace period, you can show, copy and open values without a prompt. When the grace period is 0, the window asks for your master password for each show, copy or open action, and the verification code is masked. **Edit**, **Clone** and **Password history** use the same re-prompt. Five failed attempts start the same 30-second cooldown as the Command Palette re-prompt.
 
 If the item changes in the vault while the window is open, the window loads the new version and does not show or copy the old value.
 
 ## Locked vault
 
-When the vault locks or auto-locks, every item window removes the values it shows, stops the verification code and shows that the vault is locked. The vault window removes the list and the item details and shows that the vault is locked. Unlock the vault in Command Palette. The vault window and the open item windows then load the items again.
+When the vault locks or auto-locks, every item window removes the values it shows, closes an open edit form without saving, stops the verification code and shows that the vault is locked. The vault window removes the list and the item details and shows that the vault is locked. Unlock the vault in Command Palette. The vault window and the open item windows then load the items again.
 
 See [Architecture](Architecture) for the process model and the pipe protocol.
