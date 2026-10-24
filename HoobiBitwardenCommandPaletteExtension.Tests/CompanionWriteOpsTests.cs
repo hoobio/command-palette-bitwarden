@@ -263,6 +263,10 @@ public class CompanionWriteOpsTests
 
     Assert.Equal(IpcErrors.Conflict, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.UpdateItem, Edited(editable), IpcJson.Default.EditableItem))).Code);
     Assert.Equal(0, h.Vault.Writes);
+    Assert.Equal(new DateTime(2025, 2, 1, 0, 0, 0, DateTimeKind.Utc), h.Service.GetCachedItem(id)!.RevisionDate);
+
+    await h.Ops.UpdateItemAsync(Edited(await h.Ops.GetEditableItemAsync(id)));
+    Assert.Equal("GitHub work", h.Service.GetCachedItem(id)!.Name);
   }
 
   [Fact]
@@ -312,7 +316,8 @@ public class CompanionWriteOpsTests
 
     Assert.Equal(IpcErrors.Conflict, error.Code);
     Assert.Equal(0, h.Vault.Writes);
-    Assert.Equal(0, h.CacheUpdates);
+    Assert.Equal(1, h.CacheUpdates);
+    Assert.Equal(new DateTime(2025, 2, 1, 0, 0, 0, DateTimeKind.Utc), h.Service.GetCachedItem(id)!.RevisionDate);
   }
 
   [Fact]

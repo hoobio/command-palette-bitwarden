@@ -99,7 +99,10 @@ internal sealed partial class BitwardenCliService
       {
         current = await GetJsonAsync(noun, id) ?? throw new VaultWriteException(VaultWriteError.NotFound);
         if (RevisionOf(current) != expectedRevision)
+        {
+          commit(id, current, generation);
           throw new VaultWriteException(VaultWriteError.Conflict);
+        }
       }
 
       string output;
