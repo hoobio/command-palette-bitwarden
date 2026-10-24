@@ -15,6 +15,7 @@ internal static partial class SearchFocusGuard
   private static readonly Lock _startLock = new();
   private static bool _started;
   private static int _generation;
+  private static volatile nint _lastShownHwnd;
 
   internal static void Start()
   {
@@ -51,10 +52,24 @@ internal static partial class SearchFocusGuard
         return;
       if (!EnterKeySubmitService.IsCommandPaletteWindow(hwnd))
         return;
-      var generation = Interlocked.Increment(ref _generation);
-      _ = Task.Run(() => GuardFocusAsync(hwnd, generation));
+      _lastShownHwnd = hwnd;
+      StartGuard(hwnd);
     }
     catch { }
+  }
+
+  // The Windows Hello prompt belongs to Bitwarden Desktop and takes the foreground; when it closes, focus goes to the previous app.
+  internal static void RestoreFocus()
+  {
+    var hwnd = _lastShownHwnd;
+    if (hwnd != 0 && IsWindowVisible(hwnd) && !IsCloaked(hwnd))
+      StartGuard(hwnd);
+  }
+
+  private static void StartGuard(nint hwnd)
+  {
+    var generation = Interlocked.Increment(ref _generation);
+    _ = Task.Run(() => GuardFocusAsync(hwnd, generation));
   }
 
   private static async Task GuardFocusAsync(nint hwnd, int generation)
@@ -77,7 +92,7 @@ internal static partial class SearchFocusGuard
       }
       stableSince = 0;
       if (FocusSearchBox(hwnd))
-        DebugLogService.Log("FocusGuard", $"Command Palette was shown without focus; focused the search box after {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0}ms");
+        DebugLogService.Log("FocusGuard", $"Command Palette was visible without focus; focused the search box after {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0}ms");
     }
   }
 

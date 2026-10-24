@@ -114,7 +114,8 @@ internal static partial class DesktopIpcService
 
     DebugLogService.Log("Biometric", "Requesting Windows Hello prompt from Desktop app...");
     onStatus?.Invoke("Waiting for Windows Hello...");
-    return await client.UnlockWithBiometricsForUserAsync(userId);
+    try { return await client.UnlockWithBiometricsForUserAsync(userId); }
+    finally { SearchFocusGuard.RestoreFocus(); }
   }
 
   private static string GenerateSessionKey() =>
