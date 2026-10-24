@@ -1,7 +1,8 @@
 <Styles
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:chrome="using:Avalonia.Controls.Chrome">
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels">
     <Styles.Resources>
         <ControlTheme x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -23,6 +24,42 @@
             </Style>
             <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
                 <Setter Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="StackListItemTheme" TargetType="ListBoxItem">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,0,1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="3,0,0,0" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border
+                        Name="PART_Root"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover">
+                <Setter Property="Background" Value="{DynamicResource LayerFillColorAltBrush}" />
+            </Style>
+            <Style Selector="^:selected">
+                <Setter Property="Background" Value="{DynamicResource LayerFillColorAltBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            </Style>
+            <Style Selector="^:nth-child(1) /template/ Border#PART_Root">
+                <Setter Property="CornerRadius" Value="8,8,0,0" />
+            </Style>
+            <Style Selector="^:nth-last-child(1) /template/ Border#PART_Root">
+                <Setter Property="CornerRadius" Value="0,0,8,8" />
+            </Style>
+            <Style Selector="^:nth-child(1):nth-last-child(1) /template/ Border#PART_Root">
+                <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
             </Style>
         </ControlTheme>
 
@@ -161,9 +198,44 @@
         <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
     </Style>
 
+    <Style Selector="ListBox.Rail, ListBox.Stack">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.Rail ListBoxItem" x:DataType="vm:FilterViewModel">
+        <Setter Property="IsEnabled" Value="{Binding !IsHeader}" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+    </Style>
+
+    <Style Selector="ItemsControl.Stack">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Spacing="1" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="Border.StackRow">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+    </Style>
+
+    <Style Selector="ItemsControl.Stack > ContentPresenter:nth-child(1) Border.StackRow">
+        <Setter Property="CornerRadius" Value="8,8,0,0" />
+    </Style>
+
+    <Style Selector="ItemsControl.Stack > ContentPresenter:nth-last-child(1) Border.StackRow">
+        <Setter Property="CornerRadius" Value="0,0,8,8" />
+    </Style>
+
+    <Style Selector="ItemsControl.Stack > ContentPresenter:nth-child(1):nth-last-child(1) Border.StackRow">
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+    </Style>
+
     <Style Selector="TextBlock.GroupHeader">
-        <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         <Setter Property="Margin" Value="0,16,0,8" />
     </Style>
 

@@ -35,13 +35,20 @@ internal sealed class WindowCoordinator : IDisposable
   {
     if (op == Ops.Locked)
       Dispatcher.UIThread.Post(OnLocked);
+    else if (op == Ops.VaultChanged)
+      Dispatcher.UIThread.Post(() => _ = OnVaultChangedAsync());
   }
 
   internal void OnLocked()
   {
     foreach (var window in _itemWindows.Values)
       window.ViewModel?.OnLocked();
+    _mainWindow?.ViewModel?.OnLocked();
   }
+
+  internal Task OnVaultChangedAsync() => Task.WhenAll(
+    _itemWindows.Values.Select(w => w.ViewModel?.LoadAsync() ?? Task.CompletedTask)
+      .Append(_mainWindow?.ViewModel?.ReloadAsync() ?? Task.CompletedTask));
 
   private async Task<JsonElement?> HandleRequestAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
   {
@@ -84,10 +91,16 @@ internal sealed class WindowCoordinator : IDisposable
   {
     if (_mainWindow is null)
     {
-      _mainWindow = new MainWindow();
-      _mainWindow.Closed += (_, _) => _mainWindow = null;
+      var viewModel = new VaultViewModel(Channel, id => ShowItem(id));
+      _mainWindow = new MainWindow(viewModel);
+      _mainWindow.Closed += (_, _) =>
+      {
+        _mainWindow = null;
+        viewModel.Dispose();
+      };
     }
 
+    _ = _mainWindow.ViewModel?.ReloadAsync();
     BringToFront(_mainWindow);
     return _mainWindow;
   }
