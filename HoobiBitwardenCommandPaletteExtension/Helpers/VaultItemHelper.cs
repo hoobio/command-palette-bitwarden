@@ -39,9 +39,13 @@ internal static partial class VaultItemHelper
     {
       BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url => new OpenUrlCommand(url),
       BitwardenItemType.SshKey when HasSshHost(item) => BuildSshCommand(item),
+      _ when CompanionHost.Current is { } companion => BuildOpenInVaultCommand(companion, item.Id),
       _ => BuildOpenInWebVaultCommand(item.Id),
     });
   }
+
+  private static AnonymousCommand BuildOpenInVaultCommand(CompanionHost companion, string id) =>
+    new(() => companion.ShowItem(id)) { Name = "Open in Vault", Result = CommandResult.Dismiss() };
 
   internal static string? ToSafeWebUrl(string? uri)
   {
@@ -59,6 +63,7 @@ internal static partial class VaultItemHelper
     BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url =>
       () => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }),
     BitwardenItemType.SshKey when HasSshHost(item) => () => StartSsh(item),
+    _ when CompanionHost.Current is { } companion => () => companion.ShowItem(item.Id),
     _ => () => Process.Start(new ProcessStartInfo(
       $"{GetVaultBaseUrl()}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
     { UseShellExecute = true }),
@@ -69,6 +74,17 @@ internal static partial class VaultItemHelper
     var items = new List<CommandContextItem>();
     var id = item.Id;
     var reprompt = item.Reprompt == 1 ? service : null;
+    var companion = CompanionHost.Current;
+
+    if (companion is not null)
+    {
+      items.Add(new CommandContextItem(Track(id, BuildOpenInVaultCommand(companion, id)))
+      {
+        Title = "Open in Vault",
+        Icon = new IconInfo(""),
+        RequestedShortcut = Chord(VirtualKey.O, shift: true),
+      });
+    }
 
     switch (item.Type)
     {
@@ -91,22 +107,13 @@ internal static partial class VaultItemHelper
 
     AddCustomFieldContextItems(items, item, id, reprompt);
 
-    if (CompanionHost.Current is { } companion)
+    if (companion is not null && item.Type == BitwardenItemType.Login)
     {
-      items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.ShowItem(id)) { Name = "Open in window", Result = CommandResult.Dismiss() }))
+      items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.RotateItem(id)) { Name = "Rotate password", Result = CommandResult.Dismiss() }))
       {
-        Title = "Open in window",
-        Icon = new IconInfo(""),
-        RequestedShortcut = Chord(VirtualKey.O, shift: true),
+        Title = "Rotate password",
+        Icon = new IconInfo(""),
       });
-      if (item.Type == BitwardenItemType.Login)
-      {
-        items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.RotateItem(id)) { Name = "Rotate password", Result = CommandResult.Dismiss() }))
-        {
-          Title = "Rotate password",
-          Icon = new IconInfo(""),
-        });
-      }
     }
 
     var serverUrl = BitwardenCliService.ServerUrl;

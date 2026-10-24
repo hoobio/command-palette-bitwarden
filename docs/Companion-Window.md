@@ -4,9 +4,10 @@ The companion window shows a vault item in its own window next to Command Palett
 
 ## Window commands
 
-- **Open in window** is in the more-commands menu of each vault item (`Ctrl+Shift+O`), after the commands for the item type and before **View in Web Vault**. The Enter and `Ctrl+Enter` actions of the item do not change.
+- **Open in Vault** is the first command in the more-commands menu of each vault item (`Ctrl+Shift+O`). Command Palette runs the first more-command on `Ctrl+Enter`, so `Ctrl+Enter` opens the item window.
+- The Enter action of a note, card, identity, login without a URL or SSH key without a host opens the item window. Logins with a URL still open the website, and SSH keys with a host still open the SSH session. If the companion is not available, Enter opens the web vault.
 - **Open vault** is a top-level command. It opens the vault window.
-- **Rotate password** is in the more-commands menu of each login, after **Open in window**. It opens the item window and asks before it replaces the password (see [Quick Rotate](#quick-rotate)). It never rotates without the question.
+- **Rotate password** is in the more-commands menu of each login, after the commands for the item type. It opens the item window and asks before it replaces the password (see [Quick Rotate](#quick-rotate)). It never rotates without the question.
 
 If the window for an item is already open, the command brings that window to the front and loads the item again. You can open windows for more than one item at the same time.
 
