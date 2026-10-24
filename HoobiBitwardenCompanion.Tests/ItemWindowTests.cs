@@ -204,6 +204,28 @@ public class ItemWindowTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task ItemView_VerifyButton_PromptsAndVerifies() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { RepromptRequired = true };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(ItemId, channel);
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+
+    window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "VerifyButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    AvaloniaSession.WaitFor(() => window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Any());
+    var dialog = window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Single();
+    ((TextBox)dialog.Content!).Text = "correct";
+    dialog.Hide(FluentAvalonia.UI.Controls.FAContentDialogResult.Primary);
+
+    AvaloniaSession.WaitFor(() => !vm.RepromptRequired && vm.Groups.Count > 0);
+    Assert.Equal(1, extension.Count(Ops.VerifyReprompt));
+    window.Close();
+  });
+
+  [Fact]
   public Task ItemViewModel_MapsErrorsToMessages() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();

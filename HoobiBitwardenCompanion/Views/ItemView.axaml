@@ -1,0 +1,95 @@
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Views.ItemView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:ItemViewModel">
+    <Grid RowDefinitions="*,Auto">
+        <ScrollViewer>
+            <StackPanel Margin="{StaticResource PageGutter}">
+                <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,4">
+                    <Border Width="44" Height="44" CornerRadius="{StaticResource OverlayCornerRadius}" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                        <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{Binding Title}" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Classes="Caption" Text="{Binding Subtitle}" IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock
+                    x:Name="ErrorText"
+                    Margin="0,12,0,0"
+                    TextWrapping="Wrap"
+                    Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                    Text="{Binding ErrorMessage}"
+                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                <Border Classes="Card" Margin="0,16,0,0" Padding="16" IsVisible="{Binding RepromptRequired}">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="18" VerticalAlignment="Center" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                            <TextBlock Text="This item is protected" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Re-enter your master password to view and copy this item." />
+                        <Button x:Name="VerifyButton" Theme="{StaticResource AccentButtonStyle}" Content="Verify master password" Click="OnVerifyClick" />
+                    </StackPanel>
+                </Border>
+
+                <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FieldGroupViewModel">
+                            <StackPanel>
+                                <TextBlock Classes="GroupHeader" Text="{Binding Name}" />
+                                <ItemsControl Classes="Stack" ItemsSource="{Binding Fields}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:FieldViewModel">
+                                            <Border Classes="StackRow">
+                                                <Grid ColumnDefinitions="*,Auto" Margin="{StaticResource CardRowPadding}">
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Classes="FieldLabel" Text="{Binding Label}" />
+                                                        <TextBlock
+                                                            Text="{Binding DisplayValue}"
+                                                            TextWrapping="Wrap"
+                                                            FontFamily="{StaticResource MonoFontFamily}"
+                                                            IsVisible="{Binding IsSensitive}" />
+                                                        <SelectableTextBlock
+                                                            Text="{Binding DisplayValue}"
+                                                            TextWrapping="Wrap"
+                                                            IsVisible="{Binding !IsSensitive}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                                        <Panel Width="22" Height="22" Margin="0,0,6,0" IsVisible="{Binding IsTotp}">
+                                                            <Ellipse Stroke="{DynamicResource DividerStrokeColorDefaultBrush}" StrokeThickness="2" />
+                                                            <Arc StartAngle="-90" SweepAngle="{Binding TotpSweep}" Stroke="{DynamicResource AccentFillColorDefaultBrush}" StrokeThickness="2" />
+                                                            <TextBlock Text="{Binding TotpRemaining}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        </Panel>
+                                                        <Button Theme="{StaticResource IconButtonStyle}" Command="{Binding ToggleRevealCommand}" IsVisible="{Binding IsSecret}" ToolTip.Tip="Show or hide">
+                                                            <Panel>
+                                                                <TextBlock Text="{StaticResource Glyph.Eye}" IsVisible="{Binding !IsRevealed}" />
+                                                                <TextBlock Text="{StaticResource Glyph.EyeOff}" IsVisible="{Binding IsRevealed}" />
+                                                            </Panel>
+                                                        </Button>
+                                                        <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Open}" Command="{Binding OpenCommand}" IsVisible="{Binding CanOpen}" ToolTip.Tip="Open in browser" />
+                                                        <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" IsVisible="{Binding CanCopy}" ToolTip.Tip="Copy" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <TextBlock
+            Grid.Row="1"
+            Classes="Caption"
+            Margin="24,0,24,12"
+            Text="{Binding StatusMessage}"
+            IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </Grid>
+</UserControl>

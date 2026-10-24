@@ -24,7 +24,7 @@ public class ShellRenderTests(AvaloniaSession session)
     var window = new MainWindow();
     window.Show();
     var password = new TextBox();
-    var dialog = ItemWindow.CreateRepromptDialog(password);
+    var dialog = ItemView.CreateRepromptDialog(password);
 
     var shown = dialog.ShowAsync(window);
     AvaloniaSession.WaitFor(() => TopLevel.GetTopLevel(password) is not null);

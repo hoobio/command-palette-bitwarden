@@ -3,11 +3,14 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
+    x:DataType="vm:VaultViewModel"
     Title="Bitwarden"
-    Width="900"
-    Height="640"
-    MinWidth="560"
-    MinHeight="400"
+    Width="1100"
+    Height="700"
+    MinWidth="760"
+    MinHeight="420"
     WindowStartupLocation="CenterScreen"
     ExtendClientAreaToDecorationsHint="True"
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
@@ -20,10 +23,75 @@
             chrome:WindowDecorationProperties.ElementRole="TitleBar">
             <TextBlock Text="Bitwarden" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
         </Grid>
-        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+
+        <Grid Grid.Row="1" ColumnDefinitions="220,340,*" IsVisible="{Binding !IsLocked}">
+            <ListBox
+                x:Name="FilterList"
+                Classes="Rail"
+                Margin="8,0,0,12"
+                ItemsSource="{Binding Filters}"
+                SelectedItem="{Binding SelectedFilter}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FilterViewModel">
+                        <Panel>
+                            <TextBlock Classes="Caption" Text="{Binding Label}" IsVisible="{Binding IsHeader}" />
+                            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding !IsHeader}">
+                                <TextBlock Classes="Icon" Text="{Binding Glyph}" FontSize="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Panel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,8,12">
+                <TextBox x:Name="SearchBox" Text="{Binding SearchText}" PlaceholderText="Search vault" Margin="0,0,0,12" />
+                <TextBlock Grid.Row="1" Classes="Caption" Text="No items" HorizontalAlignment="Center" Margin="0,24,0,0" IsVisible="{Binding IsEmpty}" />
+                <ListBox
+                    x:Name="ItemList"
+                    Grid.Row="1"
+                    Classes="Stack"
+                    VerticalAlignment="Top"
+                    ItemContainerTheme="{StaticResource StackListItemTheme}"
+                    ItemsSource="{Binding Rows}"
+                    SelectedItem="{Binding SelectedRow}"
+                    DoubleTapped="OnItemDoubleTapped">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ItemRowViewModel">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <Panel Width="20" Height="20" VerticalAlignment="Center">
+                                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}" />
+                                    <TextBlock Classes="Icon" Text="{Binding Glyph}" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasIcon}" />
+                                </Panel>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="1">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Classes="Caption" Text="{Binding Subtext}" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasSubtext}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+
+            <Grid Grid.Column="2" RowDefinitions="Auto,*">
+                <Button
+                    x:Name="OpenWindowButton"
+                    Margin="24,0,24,0"
+                    HorizontalAlignment="Right"
+                    Content="Open in own window"
+                    Command="{Binding OpenSelectedCommand}"
+                    IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Grid.Row="1" Classes="Caption" Text="Select an item to show its details." HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNull}}" />
+                <views:ItemView x:Name="DetailView" Grid.Row="1" DataContext="{Binding Detail}" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </Grid>
+        </Grid>
+
+        <TextBlock Grid.Row="1" Classes="Caption" Margin="24,0" HorizontalAlignment="Center" VerticalAlignment="Top" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <StackPanel x:Name="LockedPanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="{Binding IsLocked}">
             <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="40" HorizontalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-            <TextBlock Text="Vault window" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" />
-            <TextBlock Classes="Caption" Text="Open an item from Command Palette with Open in window." HorizontalAlignment="Center" />
+            <TextBlock Text="Vault locked" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Classes="Caption" Text="Unlock the vault in Command Palette to show your items." HorizontalAlignment="Center" />
         </StackPanel>
     </Grid>
 </Window>
