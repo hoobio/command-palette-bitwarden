@@ -43,6 +43,54 @@ public class CompanionHostTests
   }
 
   [Fact]
+  public void Prewarm_WhenLockedOrLoggedOut_DoesNotStartTheCompanion()
+  {
+    var ops = new CompanionOps(new BitwardenCliService());
+    using var host = new CompanionHost(ops);
+    host.Prewarm();
+    ops.RaiseVaultChanged();
+    Assert.Null(host.Process);
+  }
+
+  [Fact]
+  public async Task Prewarm_AfterTheCacheLoads_StartsTheCompanionOnce_WithNoWindow()
+  {
+    var service = new BitwardenCliService();
+    service.SetSession("session-key");
+    var ops = new CompanionOps(service);
+    var host = new CompanionHost(ops);
+    try
+    {
+      ops.RaiseVaultChanged();
+      var started = host.Process!.Id;
+      ops.RaiseVaultChanged();
+      host.Prewarm();
+      Assert.Equal(started, host.Process!.Id);
+      using var companion = System.Diagnostics.Process.GetProcessById(started);
+      Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => host.RequestAsync("unknown", null).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken))).Code);
+      companion.Refresh();
+      Assert.Equal(IntPtr.Zero, companion.MainWindowHandle);
+
+      host.Dispose();
+      await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+    }
+    finally
+    {
+      host.Dispose();
+    }
+  }
+
+  [Fact]
+  public void Prewarm_WithoutTheCompanionExe_LogsAndDoesNotThrow()
+  {
+    var service = new BitwardenCliService();
+    service.SetSession("session-key");
+    using var host = new CompanionHost(new CompanionOps(service), exePath: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.exe"));
+    host.Prewarm();
+    Assert.Null(host.Process);
+  }
+
+  [Fact]
   public async Task TimedOutRequest_KillsTheCompanion_BeforeStartingANewOne()
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), requestTimeout: TimeSpan.FromMilliseconds(1));

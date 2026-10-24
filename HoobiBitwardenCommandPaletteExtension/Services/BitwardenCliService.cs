@@ -1767,6 +1767,7 @@ internal sealed partial class BitwardenCliService
       DeletedDate = DateTime.TryParse(node["deletedDate"]?.GetValue<string>(), out var dd) ? dd.ToUniversalTime() : null,
       ArchivedDate = DateTime.TryParse(node["archivedDate"]?.GetValue<string>(), out var ad) ? ad.ToUniversalTime() : null,
       Attachments = ParseAttachments(node["attachments"]),
+      EditableFromCache = IsEditableFromCache(type, node["fields"], login),
       Username = Text(login, "username"),
       Password = ProtectedSecret.From(Text(login, "password")),
       HasTotp = totp != null,
@@ -1811,6 +1812,15 @@ internal sealed partial class BitwardenCliService
       })
       .OfType<ItemUri>()
       .ToList() ?? [];
+
+  // The cache drops identity parts, boolean and linked fields, empty values, duplicate names and empty URIs, so those items are edited from the live item.
+  internal static bool IsEditableFromCache(BitwardenItemType type, JsonNode? fields, JsonNode? login)
+  {
+    if (type == BitwardenItemType.Identity) return false;
+    var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    return (fields as JsonArray ?? []).All(f => Text(f, "name") is { Length: > 0 } name && !string.IsNullOrEmpty(Text(f, "value")) && (f?["type"]?.GetValue<int>() ?? 0) is 0 or 1 && names.Add(name))
+      && (login?["uris"] as JsonArray ?? []).All(u => !string.IsNullOrEmpty(Text(u, "uri")));
+  }
 
   internal static Dictionary<string, CustomField> ParseCustomFields(JsonNode? fields)
   {

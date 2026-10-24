@@ -61,6 +61,8 @@ internal sealed partial class CompanionOps : IDisposable
 
   internal static TimeSpan IconsThrottle { get; set; } = TimeSpan.FromMilliseconds(500);
 
+  internal bool IsUnlocked => _service.IsUnlocked;
+
   internal event Action? Locked;
 
   internal event Action? VaultChanged;
