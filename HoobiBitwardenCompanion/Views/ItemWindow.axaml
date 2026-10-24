@@ -26,21 +26,26 @@
                     Header="Always on top"
                     ToggleType="CheckBox"
                     IsChecked="{Binding $parent[Window].Topmost, Mode=OneWay}"
-                    Click="OnAlwaysOnTopClick" />
+                    Click="OnAlwaysOnTopClick">
+                    <MenuItem.Icon>
+                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.Pin}" />
+                    </MenuItem.Icon>
+                </MenuItem>
             </ContextMenu>
         </Grid.ContextMenu>
 
         <Grid
             x:Name="AppTitleBar"
             Background="Transparent"
-            ColumnDefinitions="Auto,*,48"
+            ColumnDefinitions="Auto,*,46"
             chrome:WindowDecorationProperties.ElementRole="User">
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="16" />
                 <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Pin}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" IsVisible="{Binding $parent[Window].Topmost}" />
             </StackPanel>
         </Grid>
 
-        <views:ItemView Grid.Row="1" />
+        <views:ItemView Grid.Row="1" Margin="24,0,16,0" />
     </Grid>
 </Window>

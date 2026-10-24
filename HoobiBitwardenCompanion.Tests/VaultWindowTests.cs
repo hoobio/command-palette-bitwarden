@@ -94,7 +94,7 @@ public class VaultWindowTests(AvaloniaSession session)
     string[] Names(FilterKind kind, string? label = null) =>
       [.. VaultViewModel.Filter(rows, filters.First(f => f.Kind == kind && (label is null || f.Label == label)), "").Select(r => r.Name)];
 
-    Assert.Equal(["All items", "Favourites", "Types", "Login", "Card", "Identity", "Secure note", "SSH key", "Folders", "Personal", "Work", "No folder", "Collections", "Engineering", "Organisations", "Acme", "", "Archive", "Trash"], filters.Select(f => f.Label));
+    Assert.Equal(["All items", "Favourites", "Types", "Login", "Card", "Identity", "Secure note", "SSH key", "Folders", "Personal", "Work", "No folder", "Collections", "Engineering", "Organisations", "Acme", "Archive", "Trash"], filters.Select(f => f.Label));
     Assert.Equal(7, Names(FilterKind.All).Length);
     Assert.Equal(["GitHub"], Names(FilterKind.Favorites));
     Assert.Equal(["Visa Platinum"], Names(FilterKind.Type, "Card"));
@@ -333,7 +333,16 @@ public class VaultWindowTests(AvaloniaSession session)
       Assert.Equal(vm.Rows.Count, list.ItemCount);
     }
 
+    var rail = window.FindControl<ListBox>("FilterList")!;
+    var foot = window.FindControl<ListBox>("FootList")!;
+    foot.SelectedItem = vm.FootFilters.Single(f => f.Kind == FilterKind.Trash);
+    Assert.Equal(FilterKind.Trash, vm.SelectedFilter!.Kind);
+    Assert.Null(rail.SelectedItem);
+    rail.SelectedItem = vm.RailFilters[1];
+    Assert.Equal(FilterKind.Favorites, vm.SelectedFilter!.Kind);
+    Assert.Null(foot.SelectedItem);
     vm.SelectedFilter = vm.Filters[0];
+    Assert.Equal(vm.Filters[0], rail.SelectedItem);
     window.KeyPress(Key.F, RawInputModifiers.Control, PhysicalKey.F, "f");
     var search = window.FindControl<TextBox>("SearchBox")!;
     Assert.True(search.IsFocused);

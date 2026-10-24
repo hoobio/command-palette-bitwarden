@@ -220,7 +220,12 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
   public partial string? Fingerprint { get; set; }
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsNameMissing), nameof(FormMessage))]
   public partial string? ValidationMessage { get; set; }
+
+  public bool IsNameMissing => ValidationMessage is not null && Name.Trim().Length == 0;
+
+  public string? FormMessage => IsNameMissing ? null : ValidationMessage;
 
   internal string? Id => _source.Id;
 

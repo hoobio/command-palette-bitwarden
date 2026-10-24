@@ -131,7 +131,9 @@ public class ItemWindowTests(AvaloniaSession session)
     await vm.LoadAsync();
 
     Assert.Equal("GitHub", vm.Title);
-    Assert.Equal("Work  ·  Acme", vm.Subtitle);
+    Assert.Equal(("Work", "Acme"), (vm.FolderName, vm.OrganizationName));
+    Assert.True(vm.IsProtected);
+    Assert.False(vm.IsFavorite);
     Assert.Equal(["Login credentials", "Autofill options", "Item history"], vm.Groups.Select(g => g.Name));
     var password = Field(vm, ItemFields.Password);
     Assert.Equal(FieldViewModel.Mask, password.DisplayValue);
@@ -152,6 +154,9 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.Equal("000001", totp.DisplayValue);
     Assert.Equal(3, totp.TotpRemaining);
     Assert.Equal(36, totp.TotpSweep);
+    Assert.True(totp.IsTotpExpiring);
+    Assert.False(totp.IsPlain || totp.IsMono);
+    Assert.True(Field(vm, ItemFields.Username).IsPlain);
     await vm.TickAsync();
     await vm.TickAsync();
     Assert.Equal(1, totp.TotpRemaining);
@@ -217,7 +222,7 @@ public class ItemWindowTests(AvaloniaSession session)
     window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "VerifyButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     AvaloniaSession.WaitFor(() => window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Any());
     var dialog = window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Single();
-    ((TextBox)dialog.Content!).Text = "correct";
+    dialog.GetVisualDescendants().OfType<TextBox>().Single().Text = "correct";
     dialog.Hide(FluentAvalonia.UI.Controls.FAContentDialogResult.Primary);
 
     AvaloniaSession.WaitFor(() => !vm.RepromptRequired && vm.Groups.Count > 0);

@@ -16,51 +16,187 @@
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
     WindowDecorationsTheme="{StaticResource HoobiWindowDecorations}"
     Background="{DynamicResource WindowGroundBrush}">
+    <Window.Resources>
+        <DataTemplate x:Key="RailRow" x:DataType="vm:FilterViewModel">
+            <Panel>
+                <Grid ColumnDefinitions="*,Auto" Height="28" Margin="0,0,-8,0" IsVisible="{Binding IsHeader}">
+                    <TextBlock Text="{Binding Label}" FontSize="{StaticResource CaptionTextBlockFontSize}" FontWeight="Normal" Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+                    <Button
+                        Grid.Column="1"
+                        Theme="{StaticResource IconButtonStyle}"
+                        Width="24"
+                        Height="24"
+                        MinHeight="24"
+                        FontSize="16"
+                        VerticalAlignment="Bottom"
+                        Content="{StaticResource Glyph.Add}"
+                        IsVisible="{Binding CanAdd}"
+                        Click="OnNewFolderClick"
+                        ToolTip.Tip="New folder"
+                        AutomationProperties.Name="New folder" />
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="12" Height="32" Background="Transparent" IsVisible="{Binding !IsHeader}" ContextRequested="OnFilterContextRequested">
+                    <TextBlock Classes="Icon" Text="{Binding Glyph}" />
+                    <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Panel>
+        </DataTemplate>
+    </Window.Resources>
+
     <Grid RowDefinitions="48,*">
         <Grid
             x:Name="AppTitleBar"
             Background="Transparent"
+            ColumnDefinitions="Auto,*,Auto,146"
             chrome:WindowDecorationProperties.ElementRole="TitleBar">
-            <TextBlock Text="Bitwarden" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" IsHitTestVisible="False">
+                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Shield}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                <TextBlock Text="Bitwarden" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+            <Button
+                x:Name="GeneratorButton"
+                Grid.Column="2"
+                Theme="{StaticResource GhostButtonStyle}"
+                Command="{Binding ShowGeneratorCommand}"
+                chrome:WindowDecorationProperties.ElementRole="User">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Password}" FontSize="16" />
+                    <TextBlock Text="Generator" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
         </Grid>
 
-        <Grid Grid.Row="1" ColumnDefinitions="220,340,*" IsVisible="{Binding !IsLocked}">
-            <ListBox
-                x:Name="FilterList"
-                Classes="Rail"
-                Margin="8,0,0,12"
-                ItemsSource="{Binding Filters}"
-                SelectedItem="{Binding SelectedFilter}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:FilterViewModel">
-                        <Panel>
-                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsHeader}">
-                                <TextBlock Classes="Caption" Text="{Binding Label}" VerticalAlignment="Center" />
-                                <Button
-                                    Grid.Column="1"
-                                    Theme="{StaticResource IconButtonStyle}"
-                                    Width="24"
-                                    Height="24"
-                                    MinHeight="24"
-                                    FontSize="14"
-                                    Content="{StaticResource Glyph.Add}"
-                                    IsVisible="{Binding CanAdd}"
-                                    Click="OnNewFolderClick"
-                                    ToolTip.Tip="New folder"
-                                    AutomationProperties.Name="New folder" />
-                            </Grid>
-                            <StackPanel Orientation="Horizontal" Spacing="10" Background="Transparent" IsVisible="{Binding !IsHeader}" ContextRequested="OnFilterContextRequested">
-                                <TextBlock Classes="Icon" Text="{Binding Glyph}" FontSize="16" VerticalAlignment="Center" />
-                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </Panel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+        <Grid Grid.Row="1" ColumnDefinitions="232,344,*" IsVisible="{Binding !IsLocked}">
+            <Grid RowDefinitions="*,Auto" Margin="8,0,8,8">
+                <ListBox
+                    x:Name="FilterList"
+                    Classes="Rail"
+                    ItemContainerTheme="{StaticResource RailItemTheme}"
+                    ItemTemplate="{StaticResource RailRow}"
+                    ItemsSource="{Binding RailFilters}"
+                    SelectionChanged="OnRailSelectionChanged" />
+                <Border Grid.Row="1" BorderBrush="{DynamicResource TextControlBorderBrush}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                    <ListBox
+                        x:Name="FootList"
+                        Classes="Rail"
+                        ItemContainerTheme="{StaticResource RailItemTheme}"
+                        ItemTemplate="{StaticResource RailRow}"
+                        ItemsSource="{Binding FootFilters}"
+                        SelectionChanged="OnRailSelectionChanged" />
+                </Border>
+            </Grid>
 
-            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,8,12" IsEnabled="{Binding !Detail.IsEditing, FallbackValue=True}">
-                <TextBox x:Name="SearchBox" Text="{Binding SearchText}" PlaceholderText="Search vault" Margin="0,0,0,12" />
-                <TextBlock Grid.Row="1" Classes="Caption" Text="No items" HorizontalAlignment="Center" Margin="0,24,0,0" IsVisible="{Binding IsEmpty}" />
+            <Grid Grid.Column="1" RowDefinitions="Auto,*,40" Margin="8,0">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,12">
+                    <TextBox x:Name="SearchBox" Classes="Search" Text="{Binding SearchText}" PlaceholderText="Search vault" Padding="0,0,0,0">
+                        <TextBox.InnerLeftContent>
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Search}" FontSize="16" Margin="10,0,8,0" />
+                        </TextBox.InnerLeftContent>
+                        <TextBox.InnerRightContent>
+                            <Panel Margin="0,0,8,0" VerticalAlignment="Center">
+                                <Border Classes="Keycap" IsVisible="{Binding SearchText, Converter={x:Static StringConverters.IsNullOrEmpty}}">
+                                    <TextBlock Text="Ctrl+F" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </Border>
+                                <Button
+                                    Theme="{StaticResource IconButtonStyle}"
+                                    Width="28"
+                                    Height="28"
+                                    MinHeight="28"
+                                    FontSize="16"
+                                    Margin="0,0,-6,0"
+                                    Content="{StaticResource Glyph.Dismiss}"
+                                    Click="OnClearSearchClick"
+                                    IsVisible="{Binding SearchText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    ToolTip.Tip="Clear search"
+                                    AutomationProperties.Name="Clear search" />
+                            </Panel>
+                        </TextBox.InnerRightContent>
+                    </TextBox>
+                    <Button
+                        x:Name="NewItemButton"
+                        Grid.Column="1"
+                        Height="36"
+                        Theme="{StaticResource AccentButtonStyle}"
+                        IsEnabled="{Binding !Detail.IsEditing, FallbackValue=True}">
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="Login" Command="{Binding NewItemCommand}" CommandParameter="1">
+                                    <MenuItem.Icon><TextBlock Classes="Icon" Text="{StaticResource Glyph.Globe}" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Card" Command="{Binding NewItemCommand}" CommandParameter="3">
+                                    <MenuItem.Icon><TextBlock Classes="Icon" Text="{StaticResource Glyph.Card}" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Identity" Command="{Binding NewItemCommand}" CommandParameter="4">
+                                    <MenuItem.Icon><TextBlock Classes="Icon" Text="{StaticResource Glyph.Person}" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Secure note" Command="{Binding NewItemCommand}" CommandParameter="2">
+                                    <MenuItem.Icon><TextBlock Classes="Icon" Text="{StaticResource Glyph.Note}" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="SSH key" Command="{Binding NewItemCommand}" CommandParameter="5">
+                                    <MenuItem.Icon><TextBlock Classes="Icon" Text="{StaticResource Glyph.Key}" /></MenuItem.Icon>
+                                </MenuItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Add}" FontSize="16" Foreground="{DynamicResource WindowGroundBrush}" />
+                            <TextBlock Text="New item" VerticalAlignment="Center" />
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.ChevronDown}" FontSize="16" Foreground="{DynamicResource WindowGroundBrush}" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <StackPanel Grid.Row="1" Spacing="8" Margin="24" VerticalAlignment="Top">
+                    <StackPanel.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="IsEmpty" />
+                            <Binding Path="SearchText" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+                        </MultiBinding>
+                    </StackPanel.IsVisible>
+                    <Border Classes="Disc">
+                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.Search}" />
+                    </Border>
+                    <TextBlock Text="{Binding SearchText, StringFormat='No items match “{0}”'}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="Caption" FontSize="13" Text="Check the spelling, or search all items." HorizontalAlignment="Center" />
+                    <Button HorizontalAlignment="Center" Margin="0,8,0,0" Click="OnClearSearchClick">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Clear search" VerticalAlignment="Center" />
+                            <Border Classes="Keycap">
+                                <TextBlock Text="Esc" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </Border>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Spacing="8" Margin="24" VerticalAlignment="Top">
+                    <StackPanel.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="IsVaultEmpty" />
+                            <Binding Path="SearchText" Converter="{x:Static StringConverters.IsNullOrEmpty}" />
+                        </MultiBinding>
+                    </StackPanel.IsVisible>
+                    <Border Classes="Disc">
+                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.List}" />
+                    </Border>
+                    <TextBlock Text="Your vault is empty" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock Classes="Caption" FontSize="13" Text="Items you add show here." HorizontalAlignment="Center" />
+                    <Button HorizontalAlignment="Center" Margin="0,8,0,0" Theme="{StaticResource AccentButtonStyle}" Click="OnEmptyNewItemClick">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Add}" FontSize="16" Foreground="{DynamicResource WindowGroundBrush}" />
+                            <TextBlock Text="New item" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <TextBlock Grid.Row="1" Classes="Caption" Text="No items" HorizontalAlignment="Center" Margin="0,24,0,0">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="IsEmpty" />
+                            <Binding Path="!IsVaultEmpty" />
+                            <Binding Path="SearchText" Converter="{x:Static StringConverters.IsNullOrEmpty}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
                 <ListBox
                     x:Name="ItemList"
                     Grid.Row="1"
@@ -72,55 +208,59 @@
                     DoubleTapped="OnItemDoubleTapped">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:ItemRowViewModel">
-                            <Grid ColumnDefinitions="Auto,*">
-                                <Panel Width="20" Height="20" VerticalAlignment="Center">
-                                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}" />
-                                    <TextBlock Classes="Icon" Text="{Binding Glyph}" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasIcon}" />
-                                </Panel>
-                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="1">
-                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                                <Border Classes="Tile">
+                                    <Panel>
+                                        <Image Source="{Binding Icon}" Width="20" Height="20" IsVisible="{Binding HasIcon}" />
+                                        <TextBlock Classes="Icon Tile" Text="{Binding Glyph}" HorizontalAlignment="Center" IsVisible="{Binding !HasIcon}" />
+                                    </Panel>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Classes="Caption" Text="{Binding Subtext}" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasSubtext}" />
                                 </StackPanel>
+                                <TextBlock Grid.Column="2" Classes="Icon" Text="{StaticResource Glyph.Star}" FontSize="16" Foreground="{DynamicResource TextFillColorTertiaryBrush}" IsVisible="{Binding Summary.Favorite}" />
+                                <TextBlock Grid.Column="3" Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="16" Foreground="{DynamicResource TextFillColorTertiaryBrush}" IsVisible="{Binding Summary.Reprompt}" />
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Margin="4,0" TextElement.FontSize="12" TextElement.Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                    <Border Classes="Keycap"><TextBlock Text="↑" /></Border>
+                    <Border Classes="Keycap"><TextBlock Text="↓" /></Border>
+                    <TextBlock Text="move" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Border Classes="Keycap"><TextBlock Text="Enter" /></Border>
+                    <TextBlock Text="open in own window" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Border Classes="Keycap"><TextBlock Text="Esc" /></Border>
+                    <TextBlock Text="clear" VerticalAlignment="Center" />
+                </StackPanel>
             </Grid>
 
-            <Grid Grid.Column="2" RowDefinitions="Auto,*">
-                <StackPanel Orientation="Horizontal" Spacing="4" Margin="24,0,24,8">
-                    <DropDownButton x:Name="NewItemButton" Content="New item" IsEnabled="{Binding !Detail.IsEditing, FallbackValue=True}">
-                        <DropDownButton.Flyout>
-                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                                <MenuItem Header="Login" Command="{Binding NewItemCommand}" CommandParameter="1" />
-                                <MenuItem Header="Card" Command="{Binding NewItemCommand}" CommandParameter="3" />
-                                <MenuItem Header="Identity" Command="{Binding NewItemCommand}" CommandParameter="4" />
-                                <MenuItem Header="Secure note" Command="{Binding NewItemCommand}" CommandParameter="2" />
-                                <MenuItem Header="SSH key" Command="{Binding NewItemCommand}" CommandParameter="5" />
-                            </MenuFlyout>
-                        </DropDownButton.Flyout>
-                    </DropDownButton>
-                    <Button x:Name="CloneButton" Content="Clone" Command="{Binding CloneCommand}" IsEnabled="{Binding Detail.CanEdit, FallbackValue=False}" />
-                    <Button x:Name="GeneratorButton" Content="Generator" Command="{Binding ShowGeneratorCommand}" />
+            <Panel Grid.Column="2" Margin="16,0,16,0">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNull}}">
+                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.List}" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Classes="Caption" FontSize="13" Text="Select an item to show its details." HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" TextElement.FontSize="13" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <Border Classes="Keycap"><TextBlock Text="↑" /></Border>
+                        <Border Classes="Keycap"><TextBlock Text="↓" /></Border>
+                        <TextBlock Text="to move," VerticalAlignment="Center" />
+                        <Border Classes="Keycap"><TextBlock Text="Enter" /></Border>
+                        <TextBlock Text="to open in its own window" VerticalAlignment="Center" />
+                    </StackPanel>
                 </StackPanel>
-                <Button
-                    x:Name="OpenWindowButton"
-                    Margin="24,0,24,8"
-                    HorizontalAlignment="Right"
-                    Content="Open in own window"
-                    Command="{Binding OpenSelectedCommand}"
-                    IsVisible="{Binding Detail.IsReadOnly, FallbackValue=False}" />
-                <TextBlock Grid.Row="1" Classes="Caption" Text="Select an item to show its details." HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNull}}" />
-                <views:ItemView x:Name="DetailView" Grid.Row="1" DataContext="{Binding Detail}" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
-            </Grid>
+                <views:ItemView x:Name="DetailView" Classes="InVault" DataContext="{Binding Detail}" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </Panel>
         </Grid>
 
-        <TextBlock Grid.Row="1" Classes="Caption" Margin="24,0" HorizontalAlignment="Center" VerticalAlignment="Top" Foreground="{DynamicResource SystemFillColorCriticalBrush}" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Grid.Row="1" Classes="Caption Warn" Margin="24,0" HorizontalAlignment="Center" VerticalAlignment="Top" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-        <StackPanel x:Name="LockedPanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="{Binding IsLocked}">
-            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="40" HorizontalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        <StackPanel x:Name="LockedPanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" Margin="0,0,0,48" IsVisible="{Binding IsLocked}">
+            <Border Classes="Disc">
+                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            </Border>
             <TextBlock Text="Vault locked" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" />
-            <TextBlock Classes="Caption" Text="Unlock the vault in Command Palette to show your items." HorizontalAlignment="Center" />
+            <TextBlock Classes="Caption" FontSize="13" Text="Unlock the vault in Command Palette to show your items." HorizontalAlignment="Center" />
         </StackPanel>
     </Grid>
 </Window>

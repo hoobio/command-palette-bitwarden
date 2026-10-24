@@ -268,6 +268,12 @@ public class DesignGalleryTests(AvaloniaSession session)
   {
     var shown = dialog.ShowAsync(window);
     AvaloniaSession.WaitFor(() => dialog.IsAttachedToVisualTree());
+    var root = dialog.GetVisualDescendants().OfType<Panel>().First(p => p.Name == "LayoutRoot");
+    AvaloniaSession.WaitFor(() =>
+    {
+      AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+      return root.Opacity >= 1;
+    });
     Save(window, name);
     dialog.Hide();
     AvaloniaSession.WaitFor(() => shown.IsCompleted);
@@ -324,7 +330,7 @@ public class DesignGalleryTests(AvaloniaSession session)
     Save(window, "10-vault-edit-in-right-pane.png");
     await vm.Detail.CancelEditCommand.ExecuteAsync(null);
 
-    var newItem = window.FindControl<DropDownButton>("NewItemButton")!;
+    var newItem = window.FindControl<Button>("NewItemButton")!;
     OpenFlyoutInOverlay((PopupFlyoutBase)newItem.Flyout!, newItem);
     Save(window, "11-vault-new-item-type-picker.png");
     newItem.Flyout!.Hide();
@@ -347,8 +353,8 @@ public class DesignGalleryTests(AvaloniaSession session)
     Save(window, "14-vault-folder-context-menu.png");
     menu.Hide();
 
-    ShowDialog(window, MainWindow.CreateTextDialog("New folder", "Create", new TextBox { PlaceholderText = "Work", MinWidth = 320 }), "15-dialog-folder-create.png");
-    ShowDialog(window, MainWindow.CreateTextDialog("Rename folder", "Rename", new TextBox { Text = "Work", MinWidth = 320 }), "16-dialog-folder-rename.png");
+    ShowDialog(window, MainWindow.CreateTextDialog("New folder", "Create", new TextBox { PlaceholderText = "Work" }), "15-dialog-folder-create.png");
+    ShowDialog(window, MainWindow.CreateTextDialog("Rename folder", "Rename", new TextBox { Text = "Work" }), "16-dialog-folder-rename.png");
     ShowDialog(window, ItemView.CreateActionDialog(new ActionDialogRequest("Delete folder", "Delete the folder \"Work\"? Its items move to No folder. You cannot undo this.", "Delete folder")).Dialog,
       "17-dialog-folder-delete.png");
 
@@ -391,7 +397,7 @@ public class DesignGalleryTests(AvaloniaSession session)
     errorVm.ErrorMessage = ItemViewModel.Describe(new IpcException(IpcErrors.Conflict));
     Save(errorWindow, "29-item-error-line.png");
     errorVm.ErrorMessage = null;
-    ShowDialog(errorWindow, ItemView.CreateRepromptDialog(new TextBox { PasswordChar = '•', PlaceholderText = "Master password", MinWidth = 320 }), "30-dialog-reprompt.png");
+    ShowDialog(errorWindow, ItemView.CreateRepromptDialog("Google", new TextBox { PasswordChar = '•', PlaceholderText = "Master password", Classes = { "revealPasswordButton" } }), "30-dialog-reprompt.png");
     ShowDialog(errorWindow, ItemView.CreateActionDialog(new ActionDialogRequest("Remove item",
       "Archive \"Google\" or move it to the trash to keep it recoverable, or delete it permanently. You cannot undo a permanent delete.", "Permanently delete") { PrimaryLabel = "Archive" }).Dialog,
       "31-dialog-delete.png");
@@ -404,6 +410,30 @@ public class DesignGalleryTests(AvaloniaSession session)
     ShowDialog(errorWindow, ItemView.CreateActionDialog(new ActionDialogRequest("Delete attachment", "\"recovery-codes.pdf\" will be deleted permanently. You cannot undo this.", "Delete attachment")).Dialog,
       "36-dialog-attachment-delete.png");
     errorWindow.Close();
+
+    ItemWindow.AlwaysOnTop = true;
+    try
+    {
+      var (pinned, _) = await ItemAsync(host, "GitHub");
+      var root = pinned.FindControl<Grid>("Root")!;
+      var menu = root.ContextMenu!;
+      menu.PlacementTarget = pinned.FindControl<Grid>("AppTitleBar");
+      menu.Placement = PlacementMode.BottomEdgeAlignedLeft;
+      menu.HorizontalOffset = 120;
+      menu.VerticalOffset = -12;
+      menu.Open(root);
+      var popup = (Popup)typeof(ContextMenu).GetField("_popup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(menu)!;
+      menu.Close();
+      popup.ShouldUseOverlayLayer = true;
+      menu.Open(root);
+      Save(pinned, "38-item-always-on-top-menu.png");
+      menu.Close();
+      pinned.Close();
+    }
+    finally
+    {
+      ItemWindow.AlwaysOnTop = false;
+    }
 
     var (attachments, _) = await ItemAsync(host, "GitHub", 1500);
     var scroll = attachments.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.IsEffectivelyVisible);
@@ -438,7 +468,8 @@ public class DesignGalleryTests(AvaloniaSession session)
         Settle(window);
         OpenComboInOverlay(window, window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "FolderBox"), "46-edit-folder-dropdown.png");
         var match = window.GetVisualDescendants().OfType<ComboBox>().First(c => c.Name is null && c.ItemsSource == ItemEditorViewModel.MatchChoices);
-        match.BringIntoView();
+        var editor = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "EditorScroll");
+        editor.Offset = new Avalonia.Vector(0, editor.Offset.Y + Avalonia.VisualExtensions.TranslatePoint(match, default, editor)!.Value.Y - 240);
         Settle(window);
         OpenComboInOverlay(window, match, "47-edit-uri-match-dropdown.png");
       }

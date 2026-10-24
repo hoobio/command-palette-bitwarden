@@ -41,6 +41,10 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   public bool IsSensitive => IsSecret || IsTotp;
 
+  public bool IsMono => Key is ItemFields.SshPublicKey or ItemFields.SshFingerprint;
+
+  public bool IsPlain => !IsSensitive && !IsMono;
+
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(DisplayValue))]
   public partial string? RevealedValue { get; set; }
@@ -54,8 +58,10 @@ internal sealed partial class FieldViewModel : ObservableObject
   public partial string? TotpCode { get; set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(TotpSweep))]
+  [NotifyPropertyChangedFor(nameof(TotpSweep), nameof(IsTotpExpiring))]
   public partial int TotpRemaining { get; set; }
+
+  public bool IsTotpExpiring => TotpRemaining <= 5;
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(TotpSweep))]
