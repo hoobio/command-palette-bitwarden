@@ -26,9 +26,10 @@
         <Thickness x:Key="ComboBoxDropdownContentMargin">0</Thickness>
         <Thickness x:Key="ComboBoxPadding">10,0,0,0</Thickness>
         <Thickness x:Key="ComboBoxItemThemePadding">12,6</Thickness>
+        <SolidColorBrush x:Key="ComboBoxItemBackground" Color="#001F2430" />
         <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#FF1F2430" />
         <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="#FF1F2430" />
-        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#001F2430" />
         <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#FF1F2430" />
         <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#FF1F2430" />
         <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#FF73D0FF" />
@@ -90,7 +91,7 @@
         </ControlTheme>
 
         <ControlTheme x:Key="GhostButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Background" Value="#00242936" />
             <Setter Property="Padding" Value="8,0" />
         </ControlTheme>
 
@@ -98,7 +99,7 @@
             <Setter Property="Width" Value="32" />
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Background" Value="#00242936" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
             <Setter Property="FontSize" Value="20" />
