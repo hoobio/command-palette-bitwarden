@@ -390,6 +390,7 @@ internal sealed class ScriptedCliFactory
   private int _alive;
 
   public bool BlockSync { get; set; }
+  public bool FailSync { get; set; }
   public int MaxAliveSyncs { get; private set; }
   public string[] Args { get { lock (_gate) return [.. _args]; } }
   public int SyncCount => Args.Count(a => a == "sync");
@@ -411,7 +412,7 @@ internal sealed class ScriptedCliFactory
 
     return new FakeCliProcess(stdout: args switch
     {
-      "sync" => "Syncing complete.\n",
+      "sync" => FailSync ? "" : "Syncing complete.\n",
       "status" => "{\"status\":\"unlocked\"}\n",
       _ when args.StartsWith("unlock", StringComparison.Ordinal) => "session_key_abc\n",
       _ => "[]\n",
@@ -537,6 +538,77 @@ public class LiveSyncSyncTests : IDisposable
     _factory.ReleaseSync(0);
     await first;
     Assert.Equal(1, _factory.SyncCount);
+  }
+
+  private void ClearQueuedTimer()
+  {
+    var field = typeof(BitwardenCliService).GetField("_liveSyncTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+    (field.GetValue(_svc) as IDisposable)?.Dispose();
+    field.SetValue(_svc, null);
+  }
+
+  [Fact]
+  public async Task SyncVaultAsync_SyncReportsComplete_ReturnsTrue()
+  {
+    await UnlockWithLiveSync();
+    Assert.True(await _svc.SyncVaultAsync());
+  }
+
+  [Fact]
+  public async Task SyncVaultAsync_EmptySyncOutput_ReturnsFalse()
+  {
+    await UnlockWithLiveSync();
+    _factory.FailSync = true;
+    Assert.False(await _svc.SyncVaultAsync());
+  }
+
+  [Fact]
+  public async Task LiveSyncAsync_SyncFails_QueuesRetry()
+  {
+    await UnlockWithLiveSync();
+    _factory.FailSync = true;
+    await _svc.LiveSyncAsync();
+    Assert.True(_svc.IsLiveSyncQueued);
+  }
+
+  [Fact]
+  public async Task LiveSyncAsync_SyncSucceeds_DoesNotQueue()
+  {
+    await UnlockWithLiveSync();
+    await _svc.LiveSyncAsync();
+    Assert.False(_svc.IsLiveSyncQueued);
+  }
+
+  [Fact]
+  public async Task LiveSyncAsync_FourConsecutiveFailures_FourthDoesNotQueue()
+  {
+    await UnlockWithLiveSync();
+    _factory.FailSync = true;
+    for (var attempt = 1; attempt <= 3; attempt++)
+    {
+      await _svc.LiveSyncAsync();
+      Assert.True(_svc.IsLiveSyncQueued, $"attempt {attempt} should queue a retry");
+      ClearQueuedTimer();
+    }
+
+    await _svc.LiveSyncAsync();
+    Assert.False(_svc.IsLiveSyncQueued);
+    Assert.Equal(4, _factory.SyncCount);
+  }
+
+  [Fact]
+  public async Task LiveSyncAsync_AfterRetriesExhausted_NextFailureQueuesAgain()
+  {
+    await UnlockWithLiveSync();
+    _factory.FailSync = true;
+    for (var attempt = 0; attempt < 4; attempt++)
+    {
+      await _svc.LiveSyncAsync();
+      ClearQueuedTimer();
+    }
+
+    await _svc.LiveSyncAsync();
+    Assert.True(_svc.IsLiveSyncQueued);
   }
 
   [Fact]
