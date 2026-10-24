@@ -10,7 +10,7 @@ using HoobiBitwardenCommandPaletteExtension.Models;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
-internal enum VaultWriteError { Failed, NotFound, Conflict }
+internal enum VaultWriteError { Failed, NotFound, Conflict, Unknown }
 
 internal sealed class VaultWriteException : Exception
 {
@@ -35,14 +35,21 @@ internal sealed partial class BitwardenCliService
 
   internal int WriteVersion => Volatile.Read(ref _writeVersion);
 
+  internal int WriteTimeoutMs { get; set; } = 300_000;
+
   internal static bool IsDataWrite(string args) =>
-    args == "sync" || WriteVerbs.Any(v => args.StartsWith(v, StringComparison.Ordinal));
+    args == "sync" || IsItemWrite(args);
+
+  private static bool IsItemWrite(string args) => WriteVerbs.Any(v => args.StartsWith(v, StringComparison.Ordinal));
 
   internal async Task<JsonObject?> GetItemJsonAsync(string id) =>
     ParseObject(await RunCliAsync($"get item {RequireId(id)}", verbOnlyLog: true));
 
   internal Task<JsonObject> CreateItemAsync(JsonObject item) =>
-    WriteAsync(null, null, _ => RunCliAsync("create item", stdin: Encode(item), verbOnlyLog: true), (_, saved) => ContentMatches(item, saved));
+    WriteAsync(null, null, _ => RunWriteAsync("create item", Encode(item)),
+      (_, saved) => ContentMatches(item, saved)
+        && string.Equals(item["organizationId"]?.GetValue<string>(), saved?["organizationId"]?.GetValue<string>(), StringComparison.OrdinalIgnoreCase)
+        && (item["collectionIds"] is not JsonArray ids || SameIds(saved, ids.Select(i => i!.GetValue<string>()).ToList())));
 
   internal Task<JsonObject> EditItemAsync(string id, DateTime expectedRevision, Func<JsonObject, JsonObject> build)
   {
@@ -50,29 +57,31 @@ internal sealed partial class BitwardenCliService
     return WriteAsync(id, expectedRevision, current =>
     {
       sent = build(current!);
-      return RunCliAsync($"edit item {id}", stdin: Encode(sent), verbOnlyLog: true);
+      return RunWriteAsync($"edit item {id}", Encode(sent));
     }, (_, saved) => ContentMatches(sent!, saved));
   }
 
   internal Task<JsonObject> DeleteItemAsync(string id, DateTime expectedRevision, bool permanent) =>
-    WriteAsync(id, expectedRevision, _ => RunCliAsync(permanent ? $"delete item {id} --permanent" : $"delete item {id}", verbOnlyLog: true),
-      (_, saved) => permanent ? saved is null : saved?["deletedDate"] is not null, allowGone: permanent);
+    WriteAsync(id, expectedRevision, _ => RunWriteAsync(permanent ? $"delete item {id} --permanent" : $"delete item {id}"),
+      (_, saved) => saved?["deletedDate"] is not null, gone: permanent);
 
   internal Task<JsonObject> RestoreItemAsync(string id, DateTime expectedRevision) =>
-    WriteAsync(id, expectedRevision, _ => RunCliAsync($"restore item {id}", verbOnlyLog: true),
+    WriteAsync(id, expectedRevision, _ => RunWriteAsync($"restore item {id}"),
       (current, saved) => current!["deletedDate"] is not null ? saved?["deletedDate"] is null : saved?["archivedDate"] is null);
 
   internal Task<JsonObject> ArchiveItemAsync(string id, DateTime expectedRevision) =>
-    WriteAsync(id, expectedRevision, _ => RunCliAsync($"archive item {id}", verbOnlyLog: true), (_, saved) => saved?["archivedDate"] is not null);
+    WriteAsync(id, expectedRevision, _ => RunWriteAsync($"archive item {id}"), (_, saved) => saved?["archivedDate"] is not null);
 
   internal Task<JsonObject> MoveItemAsync(string id, DateTime expectedRevision, string organizationId, IReadOnlyList<string> collectionIds) =>
-    WriteAsync(id, expectedRevision, _ => RunCliAsync($"move {id} {RequireId(organizationId)}", stdin: EncodeIds(collectionIds), verbOnlyLog: true),
+    WriteAsync(id, expectedRevision, _ => RunWriteAsync($"move {id} {RequireId(organizationId)}", EncodeIds(collectionIds)),
       (_, saved) => string.Equals(saved?["organizationId"]?.GetValue<string>(), organizationId, StringComparison.OrdinalIgnoreCase) && SameIds(saved, collectionIds));
 
   internal Task<JsonObject> SetCollectionsAsync(string id, DateTime expectedRevision, IReadOnlyList<string> collectionIds) =>
-    WriteAsync(id, expectedRevision, _ => RunCliAsync($"edit item-collections {id}", stdin: EncodeIds(collectionIds), verbOnlyLog: true), (_, saved) => SameIds(saved, collectionIds));
+    WriteAsync(id, expectedRevision, _ => RunWriteAsync($"edit item-collections {id}", EncodeIds(collectionIds)), (_, saved) => SameIds(saved, collectionIds));
 
-  private async Task<JsonObject> WriteAsync(string? id, DateTime? expectedRevision, Func<JsonObject?, Task<string>> write, Func<JsonObject?, JsonObject?, bool> verify, bool allowGone = false)
+  private Task<string> RunWriteAsync(string args, string? stdin = null) => RunCliAsync(args, WriteTimeoutMs, stdin: stdin, verbOnlyLog: true);
+
+  private async Task<JsonObject> WriteAsync(string? id, DateTime? expectedRevision, Func<JsonObject?, Task<string>> write, Func<JsonObject?, JsonObject?, bool> verify, bool gone = false)
   {
     if (id is not null)
       RequireId(id);
@@ -89,25 +98,52 @@ internal sealed partial class BitwardenCliService
           throw new VaultWriteException(VaultWriteError.Conflict);
       }
 
-      var output = await write(current);
+      string output;
+      var timedOut = false;
+      try
+      {
+        output = await write(current);
+      }
+      catch (TimeoutException)
+      {
+        DebugLogService.Log("CLI", "Write outcome unknown: bw did not answer in time");
+        timedOut = true;
+        output = string.Empty;
+      }
+
       var result = ParseObject(output);
-      if (result is null && output.Contains("out of date", StringComparison.OrdinalIgnoreCase))
+      if (id is not null && result is null && output.Contains("out of date", StringComparison.OrdinalIgnoreCase))
+      {
+        await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
+        UpdateCachedItem(id, await GetItemJsonAsync(id), generation);
         throw new VaultWriteException(VaultWriteError.Conflict);
-      var savedId = id ?? (result?["id"]?.GetValue<string>() is { } created && Guid.TryParse(created, out _) ? created : throw new VaultWriteException(VaultWriteError.Failed));
+      }
 
       // The write process holds the sync gate until it exits, and bw flushes data.json after printing its result.
       await _syncGate.WaitAsync();
       _syncGate.Release();
 
-      var saved = await GetItemJsonAsync(savedId);
-      if (!verify(current, saved))
+      if (timedOut)
+        await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
+
+      var savedId = id ?? (result?["id"]?.GetValue<string>() is { } created && Guid.TryParse(created, out _) ? created : null);
+      if (savedId is null)
+      {
+        if (timedOut)
+          await RefreshCacheAsync();
+        throw new VaultWriteException(timedOut ? VaultWriteError.Unknown : VaultWriteError.Failed);
+      }
+
+      var savedOutput = await RunCliAsync($"get item {savedId}", verbOnlyLog: true);
+      var saved = ParseObject(savedOutput);
+      if (gone ? saved is not null || !savedOutput.Contains("Not found", StringComparison.OrdinalIgnoreCase) : !verify(current, saved))
       {
         DebugLogService.Log("CLI", "Write verification failed");
-        throw new VaultWriteException(VaultWriteError.Failed);
+        throw new VaultWriteException(timedOut ? VaultWriteError.Unknown : VaultWriteError.Failed);
       }
 
       UpdateCachedItem(savedId, saved, generation);
-      return saved ?? (allowGone ? new JsonObject() : throw new VaultWriteException(VaultWriteError.Failed));
+      return saved ?? new JsonObject();
     }
     finally
     {

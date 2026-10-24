@@ -19,6 +19,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private bool _disposed;
   private DateTime _revisionDate;
   private (string Op, JsonElement Payload, Action<JsonElement?> OnSuccess)? _repromptRetry;
+  private bool _createUncertain;
 
   public ItemViewModel(string id, PipeChannel channel)
   {
@@ -44,6 +45,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Func<string, string, string, string, Task<bool>>? Confirm { get; set; }
 
+  internal Func<Task<string?>>? AskPassword { get; set; }
+
   internal Action<EditableItem, FiltersResponse>? CloneRequested { get; set; }
 
   internal event Action? Removed;
@@ -53,14 +56,16 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   internal event Action? Discarded;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
+  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanArchive), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
   public partial ItemEditorViewModel? Editor { get; private set; }
 
   public bool IsEditing => Editor is not null;
 
   public bool IsReadOnly => Editor is null && !IsNew;
 
-  public bool CanEdit => IsReadOnly && !IsDeleted && !IsArchived;
+  public bool CanArchive => IsReadOnly && !IsDeleted && !IsArchived;
+
+  public bool CanEdit => CanArchive && ItemType is >= 1 and <= 5;
 
   public bool CanRestore => IsReadOnly && (IsDeleted || IsArchived);
 
@@ -71,19 +76,19 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public bool CanShowHistory => IsReadOnly && ItemType == 1;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
+  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanArchive), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
   public partial bool IsNew { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently))]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanArchive), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently))]
   public partial bool IsDeleted { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore))]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanArchive), nameof(CanRestore))]
   public partial bool IsArchived { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanShowHistory))]
+  [NotifyPropertyChangedFor(nameof(CanShowHistory), nameof(CanEdit))]
   public partial int ItemType { get; private set; }
 
   public ObservableCollection<FieldGroupViewModel> Groups { get; } = [];
@@ -221,9 +226,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
     if (!result.Verified)
     {
-      ErrorMessage = result.CooldownSeconds > 0
-        ? $"Too many failed attempts. Try again in {result.CooldownSeconds}s."
-        : "Incorrect master password.";
+      ErrorMessage = DescribeFailedReprompt(result);
       return false;
     }
 
@@ -260,23 +263,36 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (Editor is not { } editor || editor.Validate() is not null)
       return;
+    var creating = editor.Id is null;
+    if (creating && _createUncertain
+      && !await AskAsync("Save another copy?", "Bitwarden may have saved this item already. Check the vault list before you save it again.", "Save copy", "Cancel"))
+      return;
     var item = editor.ToDto();
-    var (ok, reply, error) = await SendAsync(editor.Id is null ? Ops.CreateItem : Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem));
+    var (ok, reply, error) = await WriteAsync(creating ? Ops.CreateItem : Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem));
     if (!ok)
     {
+      if (creating && error is null or IpcErrors.Unknown)
+      {
+        _createUncertain = true;
+        ErrorMessage = Describe(new IpcException(IpcErrors.Unknown));
+        Saved?.Invoke();
+        return;
+      }
+
       await OnEditFailedAsync(error);
       return;
     }
 
     var saved = IpcJson.Read(reply, IpcJson.Default.SavedResponse);
+    _createUncertain = false;
     Id = saved.Id;
     IsNew = false;
-    editor.MarkSaved(saved.Id, saved.RevisionDate);
-    if (item.OrganizationId is { } organization
+    editor.MarkSaved(saved.Id, saved.RevisionDate, creating ? item.OrganizationId : editor.OriginalOrganizationId, creating ? item.CollectionIds : editor.OriginalCollectionIds);
+    if (!creating && item.OrganizationId is { } organization
       && (organization != editor.OriginalOrganizationId || !item.CollectionIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(editor.OriginalCollectionIds)))
     {
       var request = new WriteRequest(saved.Id, saved.RevisionDate, OrganizationId: organization, CollectionIds: item.CollectionIds);
-      (ok, reply, error) = await SendAsync(editor.OriginalOrganizationId is null ? Ops.MoveItem : Ops.SetCollections, IpcJson.ToElement(request, IpcJson.Default.WriteRequest));
+      (ok, reply, error) = await WriteAsync(editor.OriginalOrganizationId is null ? Ops.MoveItem : Ops.SetCollections, IpcJson.ToElement(request, IpcJson.Default.WriteRequest));
       if (!ok)
       {
         await OnEditFailedAsync(error);
@@ -296,17 +312,20 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (error == IpcErrors.Failed)
       ErrorMessage = "Bitwarden did not save the change.";
-    if (error != IpcErrors.Conflict)
+    if (error is not (IpcErrors.Conflict or IpcErrors.Unknown))
       return;
     ErrorMessage = null;
-    if (await AskAsync("Item changed", "This item changed in the vault after you started editing.", "Reload", "Keep editing"))
+    var (title, message) = error == IpcErrors.Conflict
+      ? ("Item changed", "This item changed in the vault after you started editing.")
+      : ("Save not confirmed", "Bitwarden did not confirm the change. Reload the item to see what the vault holds.");
+    if (await AskAsync(title, message, "Reload", "Keep editing"))
     {
       Editor = null;
       await LoadAsync();
     }
     else
     {
-      ErrorMessage = Describe(new IpcException(IpcErrors.Conflict));
+      ErrorMessage = Describe(new IpcException(error));
     }
   }
 
@@ -346,11 +365,31 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private async Task WriteStateAsync(string op, bool permanent = false)
   {
-    var (ok, _, error) = await SendAsync(op, IpcJson.ToElement(new WriteRequest(Id, _revisionDate, permanent), IpcJson.Default.WriteRequest));
+    var (ok, _, error) = await WriteAsync(op, IpcJson.ToElement(new WriteRequest(Id, _revisionDate, permanent), IpcJson.Default.WriteRequest));
     if (ok)
       Removed?.Invoke();
-    else if (error == IpcErrors.Conflict)
+    else if (error is IpcErrors.Conflict or IpcErrors.Unknown)
       await ReloadStaleAsync();
+  }
+
+  private async Task<(bool Ok, JsonElement? Reply, string? Error)> WriteAsync(string op, JsonElement payload)
+  {
+    var sent = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
+    if (sent.Error != IpcErrors.Reprompt || AskPassword is null || await AskPassword() is not { Length: > 0 } password)
+      return sent;
+
+    var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
+    if (!ok)
+      return (false, null, error);
+    var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
+    if (!result.Verified)
+    {
+      ErrorMessage = DescribeFailedReprompt(result);
+      return (false, null, IpcErrors.Reprompt);
+    }
+
+    ErrorMessage = null;
+    return (true, result.Result, null);
   }
 
   [RelayCommand]
@@ -445,11 +484,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
   }
 
-  private async Task<(bool Ok, JsonElement? Reply, string? Error)> SendAsync(string op, JsonElement? payload)
+  private async Task<(bool Ok, JsonElement? Reply, string? Error)> SendAsync(string op, JsonElement? payload, TimeSpan? timeout = null)
   {
     try
     {
-      var reply = await _channel.RequestAsync(op, payload);
+      var reply = await (timeout is { } limit ? _channel.RequestAsync(op, payload, limit) : _channel.RequestAsync(op, payload));
       StatusMessage = null;
       return (true, reply, null);
     }
@@ -474,10 +513,16 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IpcException { Code: IpcErrors.NotFound } => "This item is no longer in the vault.",
     IpcException { Code: IpcErrors.Invalid } => "The request was not valid.",
     IpcException { Code: IpcErrors.Stale } => "This item changed in the vault. The window shows the new version.",
-    IpcException { Code: IpcErrors.Conflict } => "This item changed in the vault. Cancel and edit again to apply your changes.",    IOException => "The connection to Command Palette was lost.",
+    IpcException { Code: IpcErrors.Conflict } => "This item changed in the vault. Cancel and edit again to apply your changes.",
+    IpcException { Code: IpcErrors.Unknown } => "Bitwarden did not confirm the save. Check the vault before you save again.",
+    IOException => "The connection to Command Palette was lost.",
     TimeoutException => "Command Palette did not respond.",
     _ => "Something went wrong.",
   };
+
+  private static string DescribeFailedReprompt(RepromptResponse result) => result.CooldownSeconds > 0
+    ? $"Too many failed attempts. Try again in {result.CooldownSeconds}s."
+    : "Incorrect master password.";
 
   internal static string GlyphFor(int type) => type switch
   {

@@ -86,10 +86,6 @@ internal sealed partial class CompanionOps : IDisposable
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
         case Ops.CreateItem:
           return IpcJson.ToElement(await CreateItemAsync(IpcJson.Read(payload, IpcJson.Default.EditableItem)), IpcJson.Default.SavedResponse);
-        case Ops.UpdateItem:
-          return IpcJson.ToElement(await UpdateItemAsync(IpcJson.Read(payload, IpcJson.Default.EditableItem)), IpcJson.Default.SavedResponse);
-        case Ops.DeleteItem or Ops.RestoreItem or Ops.ArchiveItem or Ops.MoveItem or Ops.SetCollections:
-          return await WriteAsync(op, IpcJson.Read(payload, IpcJson.Default.WriteRequest)) is { } saved ? IpcJson.ToElement(saved, IpcJson.Default.SavedResponse) : null;
         default:
           return await DispatchAsync(op, payload, null);
       }
@@ -100,7 +96,13 @@ internal sealed partial class CompanionOps : IDisposable
     }
     catch (VaultWriteException ex)
     {
-      throw new IpcException(ex.Error switch { VaultWriteError.Conflict => IpcErrors.Conflict, VaultWriteError.NotFound => IpcErrors.NotFound, _ => IpcErrors.Failed }, ex);
+      throw new IpcException(ex.Error switch
+      {
+        VaultWriteError.Conflict => IpcErrors.Conflict,
+        VaultWriteError.NotFound => IpcErrors.NotFound,
+        VaultWriteError.Unknown => IpcErrors.Unknown,
+        _ => IpcErrors.Failed,
+      }, ex);
     }
     catch (ArgumentException ex)
     {
@@ -143,6 +145,12 @@ internal sealed partial class CompanionOps : IDisposable
         var open = IpcJson.Read(payload, IpcJson.Default.UriRequest);
         OpenUri(open.Id, open.Index, open.RevisionDate, IsVerified(open.Id, verifiedId));
         return null;
+      case Ops.UpdateItem:
+        var update = IpcJson.Read(payload, IpcJson.Default.EditableItem);
+        return IpcJson.ToElement(await UpdateItemAsync(update, IsVerified(update.Id, verifiedId)), IpcJson.Default.SavedResponse);
+      case Ops.DeleteItem or Ops.RestoreItem or Ops.ArchiveItem or Ops.MoveItem or Ops.SetCollections:
+        var write = IpcJson.Read(payload, IpcJson.Default.WriteRequest);
+        return await WriteAsync(op, write, IsVerified(write.Id, verifiedId)) is { } saved ? IpcJson.ToElement(saved, IpcJson.Default.SavedResponse) : null;
       default:
         throw new IpcException(IpcErrors.Invalid);
     }

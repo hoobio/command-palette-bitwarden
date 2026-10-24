@@ -5,14 +5,36 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using HoobiBitwarden.Ipc;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Companion;
 
 internal sealed partial class CompanionOps
 {
-  private static readonly string[] IdentityKeys =
-    ["title", "firstName", "middleName", "lastName", "address1", "address2", "address3", "city", "state", "postalCode", "country", "company", "email", "phone", "ssn", "username", "passportNumber", "licenseNumber"];
+  private static readonly IdentityEdit EmptyIdentity = new(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+
+  private static readonly (string Key, Func<IdentityEdit, string?> Get, Func<IdentityEdit, string?, IdentityEdit> Set)[] IdentityMap =
+  [
+    ("title", i => i.Title, (i, v) => i with { Title = v }),
+    ("firstName", i => i.FirstName, (i, v) => i with { FirstName = v }),
+    ("middleName", i => i.MiddleName, (i, v) => i with { MiddleName = v }),
+    ("lastName", i => i.LastName, (i, v) => i with { LastName = v }),
+    ("address1", i => i.Address1, (i, v) => i with { Address1 = v }),
+    ("address2", i => i.Address2, (i, v) => i with { Address2 = v }),
+    ("address3", i => i.Address3, (i, v) => i with { Address3 = v }),
+    ("city", i => i.City, (i, v) => i with { City = v }),
+    ("state", i => i.State, (i, v) => i with { State = v }),
+    ("postalCode", i => i.PostalCode, (i, v) => i with { PostalCode = v }),
+    ("country", i => i.Country, (i, v) => i with { Country = v }),
+    ("company", i => i.Company, (i, v) => i with { Company = v }),
+    ("email", i => i.Email, (i, v) => i with { Email = v }),
+    ("phone", i => i.Phone, (i, v) => i with { Phone = v }),
+    ("ssn", i => i.Ssn, (i, v) => i with { Ssn = v }),
+    ("username", i => i.Username, (i, v) => i with { Username = v }),
+    ("passportNumber", i => i.PassportNumber, (i, v) => i with { PassportNumber = v }),
+    ("licenseNumber", i => i.LicenseNumber, (i, v) => i with { LicenseNumber = v }),
+  ];
 
   internal async Task<EditableItem> GetEditableItemAsync(string? id, bool verified = false)
   {
@@ -38,18 +60,23 @@ internal sealed partial class CompanionOps
   internal async Task<SavedResponse> CreateItemAsync(EditableItem item)
   {
     Validate(item);
+    var organizationId = item.OrganizationId is null ? null : RequireGuid(item.OrganizationId);
+    var collectionIds = organizationId is null ? null : RequireIds(item.CollectionIds, atLeastOne: true);
     RequireUnlocked();
     var node = NewItemJson(item.Type);
     Apply(node, item);
+    node["organizationId"] = organizationId;
+    node["collectionIds"] = collectionIds is null ? null : new JsonArray([.. collectionIds.Select(c => (JsonNode?)JsonValue.Create(c))]);
     return Saved(await _service.CreateItemAsync(node)) ?? throw new IpcException(IpcErrors.Failed);
   }
 
-  internal async Task<SavedResponse> UpdateItemAsync(EditableItem item)
+  internal async Task<SavedResponse> UpdateItemAsync(EditableItem item, bool verified = false)
   {
     Validate(item);
     var id = RequireGuid(item.Id);
     var revision = item.RevisionDate ?? throw new IpcException(IpcErrors.Invalid);
     RequireUnlocked();
+    await RequireWriteGrantAsync(id, verified);
     var saved = await _service.EditItemAsync(id, revision, current =>
     {
       if (current["type"]?.GetValue<int>() != item.Type)
@@ -60,19 +87,32 @@ internal sealed partial class CompanionOps
     return Saved(saved) ?? throw new IpcException(IpcErrors.Failed);
   }
 
-  internal async Task<SavedResponse?> WriteAsync(string op, WriteRequest request)
+  internal async Task<SavedResponse?> WriteAsync(string op, WriteRequest request, bool verified = false)
   {
     var id = RequireGuid(request.Id);
+    var organizationId = op == Ops.MoveItem ? RequireGuid(request.OrganizationId) : null;
+    var collectionIds = op is Ops.MoveItem or Ops.SetCollections ? RequireIds(request.CollectionIds, atLeastOne: true) : null;
+    if (op is not (Ops.DeleteItem or Ops.RestoreItem or Ops.ArchiveItem or Ops.MoveItem or Ops.SetCollections))
+      throw new IpcException(IpcErrors.Invalid);
     RequireUnlocked();
+    await RequireWriteGrantAsync(id, verified);
     return Saved(op switch
     {
       Ops.DeleteItem => await _service.DeleteItemAsync(id, request.RevisionDate, request.Permanent),
       Ops.RestoreItem => await _service.RestoreItemAsync(id, request.RevisionDate),
       Ops.ArchiveItem => await _service.ArchiveItemAsync(id, request.RevisionDate),
-      Ops.MoveItem => await _service.MoveItemAsync(id, request.RevisionDate, RequireGuid(request.OrganizationId), RequireIds(request.CollectionIds, atLeastOne: true)),
-      Ops.SetCollections => await _service.SetCollectionsAsync(id, request.RevisionDate, RequireIds(request.CollectionIds, atLeastOne: false)),
-      _ => throw new IpcException(IpcErrors.Invalid),
+      Ops.MoveItem => await _service.MoveItemAsync(id, request.RevisionDate, organizationId!, collectionIds!),
+      _ => await _service.SetCollectionsAsync(id, request.RevisionDate, collectionIds!),
     });
+  }
+
+  private async Task RequireWriteGrantAsync(string id, bool verified)
+  {
+    if (verified || RepromptPage.IsWithinGracePeriod(id))
+      return;
+    var reprompt = (_service.GetCachedItem(id) ?? FindExtra(id))?.Reprompt ?? Int(await _service.GetItemJsonAsync(id), "reprompt");
+    if (reprompt == 1)
+      throw new IpcException(IpcErrors.Reprompt);
   }
 
   private void RequireUnlocked()
@@ -94,8 +134,8 @@ internal sealed partial class CompanionOps
     var valid = item.Type is >= 1 and <= 5
       && !string.IsNullOrWhiteSpace(item.Name)
       && (item.FolderId is null || Guid.TryParse(item.FolderId, out _))
-      && item.Fields.All(f => !string.IsNullOrWhiteSpace(f.Name) && f.Type is >= 0 and <= 3 && (f.Type == 3 ? ItemRules.IsValidLink(item.Type, f.LinkedId) : f.LinkedId is null))
-      && (item.Login?.Uris.All(u => ItemRules.IsValidUri(u.Uri, u.Match) && u.Match is null or (>= 0 and <= 5)) ?? true)
+      && item.Fields.All(f => f.Type is >= 0 and <= 3 && (f.Type == 3 ? ItemRules.IsValidLink(item.Type, f.LinkedId) : f.LinkedId is null))
+      && (item.Login?.Uris.All(u => u.Match is null or (>= 0 and <= 5)) ?? true)
       && ItemRules.IsValidMonth(item.Card?.ExpMonth)
       && (item.Type != 5 || item.SshKey is { PrivateKey.Length: > 0, PublicKey.Length: > 0, Fingerprint.Length: > 0 });
     if (!valid)
@@ -125,7 +165,7 @@ internal sealed partial class CompanionOps
     node["folderId"] = item.FolderId;
     node["fields"] = new JsonArray([.. item.Fields.Select(f => (JsonNode?)new JsonObject
     {
-      ["name"] = f.Name,
+      ["name"] = Text(f.Name),
       ["value"] = Text(f.Value),
       ["type"] = f.Type,
       ["linkedId"] = f.LinkedId,
@@ -155,9 +195,8 @@ internal sealed partial class CompanionOps
         break;
       case 4:
         var identity = Child(node, "identity");
-        var values = IdentityValues(item.Identity);
-        for (var i = 0; i < IdentityKeys.Length; i++)
-          identity[IdentityKeys[i]] = Text(values[i]);
+        foreach (var (key, get, _) in IdentityMap)
+          identity[key] = Text(get(item.Identity ?? EmptyIdentity));
         break;
       case 5:
         var ssh = Child(node, "sshKey");
@@ -189,22 +228,12 @@ internal sealed partial class CompanionOps
       (node["fields"] as JsonArray ?? []).Select(f => new CustomFieldEdit(Str(f, "name") ?? string.Empty, Str(f, "value"), Int(f, "type") ?? 0, Int(f, "linkedId"))).ToList(),
       type == 1
         ? new LoginEdit(Str(login, "username"), Str(login, "password"), Str(login, "totp"),
-          (login?["uris"] as JsonArray ?? []).Select(u => new UriEdit(Str(u, "uri") ?? string.Empty, Int(u, "match"))).ToList())
+          (login?["uris"] as JsonArray ?? []).Select(u => new UriEdit(Str(u, "uri"), Int(u, "match"))).ToList())
         : null,
       type == 3 ? new CardEdit(Str(card, "cardholderName"), Str(card, "brand"), Str(card, "number"), Str(card, "expMonth"), Str(card, "expYear"), Str(card, "code")) : null,
-      type == 4 ? IdentityFrom(identity) : null,
+      type == 4 ? IdentityMap.Aggregate(EmptyIdentity, (edit, map) => map.Set(edit, Str(identity, map.Key))) : null,
       type == 5 ? new SshKeyEdit(Str(ssh, "privateKey"), Str(ssh, "publicKey"), Str(ssh, "keyFingerprint")) : null);
   }
-
-  private static IdentityEdit IdentityFrom(JsonNode? node)
-  {
-    var v = IdentityKeys.Select(k => Str(node, k)).ToArray();
-    return new IdentityEdit(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15], v[16], v[17]);
-  }
-
-  private static string?[] IdentityValues(IdentityEdit? i) => i is null
-    ? new string?[IdentityKeys.Length]
-    : [i.Title, i.FirstName, i.MiddleName, i.LastName, i.Address1, i.Address2, i.Address3, i.City, i.State, i.PostalCode, i.Country, i.Company, i.Email, i.Phone, i.Ssn, i.Username, i.PassportNumber, i.LicenseNumber];
 
   private static List<(string Password, DateTime LastUsed)> HistoryOf(JsonObject? node) =>
     [.. (node?["passwordHistory"] as JsonArray ?? [])

@@ -63,7 +63,10 @@ internal sealed partial class PipeChannel : IDisposable
     }
   }
 
-  public async Task<JsonElement?> RequestAsync(string op, JsonElement? payload, CancellationToken cancellationToken = default)
+  public Task<JsonElement?> RequestAsync(string op, JsonElement? payload, CancellationToken cancellationToken = default) =>
+    RequestAsync(op, payload, _requestTimeout, cancellationToken);
+
+  public async Task<JsonElement?> RequestAsync(string op, JsonElement? payload, TimeSpan requestTimeout, CancellationToken cancellationToken = default)
   {
     var id = Interlocked.Increment(ref _nextId);
     var response = new TaskCompletionSource<Envelope>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -72,7 +75,7 @@ internal sealed partial class PipeChannel : IDisposable
       throw new IOException("Channel closed");
 
     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-    timeout.CancelAfter(_requestTimeout);
+    timeout.CancelAfter(requestTimeout);
     using var registration = timeout.Token.Register(() =>
     {
       if (!_pending.TryRemove(id, out var pending))
