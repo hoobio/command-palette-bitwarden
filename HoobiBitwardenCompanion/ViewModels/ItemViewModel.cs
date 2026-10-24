@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HoobiBitwarden.Ipc;
+using HoobiBitwardenCompanion.Services;
 
 namespace HoobiBitwardenCompanion.ViewModels;
 
@@ -53,6 +54,22 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Action<EditableItem, FiltersResponse>? CloneRequested { get; set; }
 
+  internal Func<string, Task<string?>>? PickSavePath { get; set; }
+
+  internal Func<Task<string?>>? PickOpenPath { get; set; }
+
+  internal Func<Task<string?>>? OpenGenerator { get; set; }
+
+  internal PipeChannel Channel => _channel;
+
+  public ObservableCollection<AttachmentViewModel> Attachments { get; } = [];
+
+  public bool ShowAttachments => IsReadOnly && !RepromptRequired && (Attachments.Count > 0 || CanAttach);
+
+  public bool CanAttach => IsReadOnly && !IsDeleted && !IsArchived && !RepromptRequired && ItemType is >= 1 and <= 5;
+
+  public bool CanRotate => IsReadOnly && ItemType == 1 && !IsDeleted && !IsArchived;
+
   internal event Action? Removed;
 
   internal event Action? Saved;
@@ -60,8 +77,14 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   internal event Action? Discarded;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory))]
+  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial ItemEditorViewModel? Editor { get; private set; }
+
+  partial void OnEditorChanged(ItemEditorViewModel? value)
+  {
+    if (value is not null)
+      value.Generate = () => OpenGenerator?.Invoke() ?? Task.FromResult<string?>(null);
+  }
 
   public bool IsEditing => Editor is not null;
 
@@ -78,19 +101,19 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public bool CanShowHistory => IsReadOnly && ItemType == 1;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory))]
+  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial bool IsNew { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel))]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial bool IsDeleted { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel))]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial bool IsArchived { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanShowHistory), nameof(CanEdit))]
+  [NotifyPropertyChangedFor(nameof(CanShowHistory), nameof(CanEdit), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial int ItemType { get; private set; }
 
   public ObservableCollection<FieldGroupViewModel> Groups { get; } = [];
@@ -108,6 +131,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public partial bool IsLoading { get; set; } = true;
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(CanAttach), nameof(ShowAttachments))]
   public partial bool RepromptRequired { get; set; }
 
   [ObservableProperty]
@@ -150,6 +174,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     foreach (var field in Groups.SelectMany(g => g.Fields))
       field.Wipe();
     Groups.Clear();
+    Attachments.Clear();
+    OnPropertyChanged(nameof(ShowAttachments));
     _totpField = null;
     _repromptRetry = null;
     Editor = null;
@@ -183,6 +209,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       history.Add(HistoryField("Password updated", passwordUpdated));
     if (!item.RepromptRequired)
       Groups.Add(new FieldGroupViewModel("Item history", history));
+
+    Attachments.Clear();
+    foreach (var attachment in item.Attachments ?? [])
+      Attachments.Add(new AttachmentViewModel(this, attachment));
+    OnPropertyChanged(nameof(ShowAttachments));
 
     _totpField = Groups.SelectMany(g => g.Fields).FirstOrDefault(f => f.IsTotp);
     if (_totpField is null)
@@ -446,6 +477,103 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   }
 
   [RelayCommand]
+  private async Task RotateAsync()
+  {
+    if (!await AskAsync("Rotate password", $"Replace the password for {Title}? The old password is kept in password history.", "Rotate", "Cancel"))
+      return;
+    var options = CompanionSettings.LoadGenerator();
+    if (options.Kind is not (GeneratorKinds.Password or GeneratorKinds.Passphrase))
+      options = options with { Kind = GeneratorKinds.Password };
+    var (ok, _, error) = await WriteAsync(Ops.RotatePassword, IpcJson.ToElement(new RotateRequest(Id, _revisionDate, options), IpcJson.Default.RotateRequest));
+    if (ok)
+    {
+      await LoadAsync();
+      StatusMessage = "Password replaced and copied";
+      Saved?.Invoke();
+      return;
+    }
+
+    if (error is IpcErrors.Reprompt or null)
+      return;
+    if (error is IpcErrors.Conflict or IpcErrors.Unknown or IpcErrors.Stale)
+      await LoadAsync();
+    ErrorMessage = error switch
+    {
+      IpcErrors.Unknown => "Bitwarden did not confirm the new password, so nothing was copied. Check the item before you use the password.",
+      IpcErrors.Conflict or IpcErrors.Stale => "This item changed in the vault. The password was not replaced and nothing was copied.",
+      IpcErrors.Failed => "Bitwarden did not save the new password. Nothing was copied.",
+      _ => ErrorMessage,
+    };
+  }
+
+  internal async Task RotateAfterLoadAsync()
+  {
+    await LoadAsync();
+    if (CanRotate && !IsLoading)
+      await RotateCommand.ExecuteAsync(null);
+  }
+
+  [RelayCommand]
+  private async Task AddAttachmentAsync()
+  {
+    if (PickOpenPath is null || await PickOpenPath() is not { Length: > 0 } path)
+      return;
+    var (ok, _, error) = await WriteAsync(Ops.UploadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, Path: path), IpcJson.Default.AttachmentRequest));
+    if (ok)
+    {
+      await LoadAsync();
+      StatusMessage = $"Attached {Path.GetFileName(path)}";
+    }
+    else if (error is IpcErrors.Conflict or IpcErrors.Unknown)
+    {
+      await ReloadStaleAsync();
+    }
+  }
+
+  internal async Task DownloadAttachmentAsync(AttachmentViewModel attachment)
+  {
+    if (PickSavePath is null || await PickSavePath(attachment.FileName) is not { Length: > 0 } path)
+      return;
+    var (ok, _, error) = await WriteAsync(Ops.DownloadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id, path), IpcJson.Default.AttachmentRequest));
+    if (ok)
+      StatusMessage = $"Saved {attachment.FileName}";
+    else if (error == IpcErrors.Stale)
+      await ReloadStaleAsync();
+    else if (error == IpcErrors.Failed)
+      ErrorMessage = "Bitwarden did not save the attachment.";
+  }
+
+  internal async Task DeleteAttachmentAsync(AttachmentViewModel attachment)
+  {
+    if (ConfirmAction is null)
+      return;
+    JsonElement? repromptFor = null;
+    var request = new ActionDialogRequest("Delete attachment", $"\"{attachment.FileName}\" will be deleted permanently. You cannot undo this.", "Delete attachment");
+    request.Danger = async () =>
+    {
+      var payload = IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id), IpcJson.Default.AttachmentRequest);
+      var (ok, _, error) = await SendAsync(Ops.DeleteAttachment, payload, Timeout.InfiniteTimeSpan);
+      var message = ErrorMessage;
+      ErrorMessage = null;
+      if (ok || error == IpcErrors.Reprompt)
+      {
+        repromptFor = ok ? null : payload;
+        return null;
+      }
+
+      if (error is IpcErrors.Conflict or IpcErrors.Unknown)
+        await ReloadStaleAsync();
+      return error == IpcErrors.Failed ? "Bitwarden did not delete the attachment." : message;
+    };
+    if (!await ConfirmAction(request))
+      return;
+    if (repromptFor is { } retry && !(await RetryWithPasswordAsync(Ops.DeleteAttachment, retry)).Ok)
+      return;
+    await LoadAsync();
+    StatusMessage = $"Deleted {attachment.FileName}";
+  }
+
+  [RelayCommand]
   private Task ShowPasswordHistoryAsync() => RunAsync(Ops.GetPasswordHistory, ItemPayload, reply =>
   {
     var history = IpcJson.Read(reply, IpcJson.Default.PasswordHistoryResponse);
@@ -568,6 +696,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IpcException { Code: IpcErrors.Stale } => "This item changed in the vault. The window shows the new version.",
     IpcException { Code: IpcErrors.Conflict } => "This item changed in the vault. Cancel and edit again to apply your changes.",
     IpcException { Code: IpcErrors.Unknown } => "Bitwarden did not confirm the save. Check the vault before you save again.",
+    IpcException { Code: IpcErrors.Premium } => "Attachments need Bitwarden Premium or an organisation that allows them.",
+    IpcException { Code: IpcErrors.TooLarge } => "The file is larger than the 500 MB that Bitwarden allows.",
+    IpcException { Code: IpcErrors.NoStorage } => "There is not enough Bitwarden storage for this file.",
     IOException => "The connection to Command Palette was lost.",
     TimeoutException => "Command Palette did not respond.",
     _ => "Something went wrong.",
@@ -593,6 +724,21 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _totpTimer.Stop();
     Editor = null;
   }
+}
+
+internal sealed partial class AttachmentViewModel(ItemViewModel owner, AttachmentDto attachment)
+{
+  public string Id => attachment.Id;
+
+  public string FileName => attachment.FileName;
+
+  public string? SizeName => attachment.SizeName;
+
+  [RelayCommand]
+  private Task DownloadAsync() => owner.DownloadAttachmentAsync(this);
+
+  [RelayCommand]
+  private Task DeleteAsync() => owner.DeleteAttachmentAsync(this);
 }
 
 internal sealed class ActionDialogRequest(string title, string message, string dangerLabel)

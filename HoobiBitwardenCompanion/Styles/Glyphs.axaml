@@ -12,4 +12,7 @@
     <x:String x:Key="Glyph.ChevronDown">&#xE488;</x:String>
     <x:String x:Key="Glyph.Add">&#xE00D;</x:String>
     <x:String x:Key="Glyph.Delete">&#xE66D;</x:String>
+    <x:String x:Key="Glyph.Refresh">&#xE0BF;</x:String>
+    <x:String x:Key="Glyph.Download">&#xE0DD;</x:String>
+    <x:String x:Key="Glyph.Document">&#xE7BB;</x:String>
 </ResourceDictionary>

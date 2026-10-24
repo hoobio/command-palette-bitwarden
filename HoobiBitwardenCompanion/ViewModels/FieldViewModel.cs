@@ -8,7 +8,7 @@ internal sealed record FieldGroupViewModel(string Name, IReadOnlyList<FieldViewM
 
 internal sealed partial class FieldViewModel : ObservableObject
 {
-  internal const string Mask = "••••••••";
+  public const string Mask = "••••••••";
 
   private readonly ItemViewModel? _owner;
   private readonly string? _value;

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using FluentAvalonia.UI.Controls;
 using HoobiBitwardenCompanion.ViewModels;
 
@@ -16,9 +17,28 @@ internal sealed partial class ItemView : UserControl
       {
         viewModel.Confirm ??= ConfirmAsync;
         viewModel.AskPassword ??= AskPasswordAsync;
-        viewModel.ConfirmAction ??= ConfirmActionAsync;
+        viewModel.ConfirmAction ??= request => ConfirmActionAsync(TopLevel.GetTopLevel(this), request);
+        viewModel.PickSavePath ??= PickSavePathAsync;
+        viewModel.PickOpenPath ??= PickOpenPathAsync;
+        viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this), viewModel.Channel, canUse: true);
       }
     };
+  }
+
+  private async Task<string?> PickSavePathAsync(string suggestedName)
+  {
+    if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+      return null;
+    var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Save attachment", SuggestedFileName = suggestedName, ShowOverwritePrompt = true });
+    return file?.TryGetLocalPath();
+  }
+
+  private async Task<string?> PickOpenPathAsync()
+  {
+    if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+      return null;
+    var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Add attachment", AllowMultiple = false });
+    return files.Count > 0 ? files[0].TryGetLocalPath() : null;
   }
 
   internal static (FAContentDialog Dialog, TextBlock Error, ProgressBar Busy) CreateActionDialog(ActionDialogRequest request)
@@ -59,13 +79,13 @@ internal sealed partial class ItemView : UserControl
     }
   }
 
-  private async Task<bool> ConfirmActionAsync(ActionDialogRequest request)
+  internal static async Task<bool> ConfirmActionAsync(TopLevel? owner, ActionDialogRequest request)
   {
     var (dialog, error, busy) = CreateActionDialog(request);
     var done = false;
     dialog.PrimaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Primary ?? request.Danger);
     dialog.SecondaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Danger);
-    await dialog.ShowAsync(TopLevel.GetTopLevel(this));
+    await dialog.ShowAsync(owner);
     return done;
 
     async Task RunDeferredAsync(FAContentDialogButtonClickEventArgs e, Func<Task<string?>> run)

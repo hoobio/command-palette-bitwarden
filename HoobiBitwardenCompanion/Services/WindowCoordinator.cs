@@ -44,6 +44,7 @@ internal sealed class WindowCoordinator : IDisposable
     foreach (var window in _itemWindows.Values)
       window.ViewModel?.OnLocked();
     _mainWindow?.ViewModel?.OnLocked();
+    GeneratorView.OnLocked();
   }
 
   internal Task OnVaultChangedAsync() => Task.WhenAll(
@@ -54,11 +55,14 @@ internal sealed class WindowCoordinator : IDisposable
   {
     switch (op)
     {
-      case Ops.ShowItem:
+      case Ops.ShowItem or Ops.RotateItem:
         var request = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
         if (!Guid.TryParse(request.Id, out _))
           throw new IpcException(IpcErrors.Invalid);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowItem(request.Id));
+        if (op == Ops.ShowItem)
+          await Dispatcher.UIThread.InvokeAsync(() => ShowItem(request.Id));
+        else
+          Dispatcher.UIThread.Post(() => RotateItem(request.Id));
         return null;
       case Ops.ShowVault:
         await Dispatcher.UIThread.InvokeAsync(ShowVault);
@@ -68,7 +72,17 @@ internal sealed class WindowCoordinator : IDisposable
     }
   }
 
-  public ItemWindow ShowItem(string id)
+  // The palette request returns before the confirm, because the extension restarts a companion that does not answer in time.
+  public ItemWindow RotateItem(string id)
+  {
+    var window = ShowItem(id, load: false);
+    _ = window.ViewModel?.RotateAfterLoadAsync();
+    return window;
+  }
+
+  public ItemWindow ShowItem(string id) => ShowItem(id, load: true);
+
+  private ItemWindow ShowItem(string id, bool load)
   {
     if (!_itemWindows.TryGetValue(id, out var window))
     {
@@ -85,7 +99,8 @@ internal sealed class WindowCoordinator : IDisposable
       _itemWindows[id] = window;
     }
 
-    _ = window.ViewModel?.LoadAsync();
+    if (load)
+      _ = window.ViewModel?.LoadAsync();
     BringToFront(window);
     return window;
   }

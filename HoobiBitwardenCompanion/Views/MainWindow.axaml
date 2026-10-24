@@ -34,8 +34,22 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:FilterViewModel">
                         <Panel>
-                            <TextBlock Classes="Caption" Text="{Binding Label}" IsVisible="{Binding IsHeader}" />
-                            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding !IsHeader}">
+                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsHeader}">
+                                <TextBlock Classes="Caption" Text="{Binding Label}" VerticalAlignment="Center" />
+                                <Button
+                                    Grid.Column="1"
+                                    Theme="{StaticResource IconButtonStyle}"
+                                    Width="24"
+                                    Height="24"
+                                    MinHeight="24"
+                                    FontSize="14"
+                                    Content="{StaticResource Glyph.Add}"
+                                    IsVisible="{Binding CanAdd}"
+                                    Click="OnNewFolderClick"
+                                    ToolTip.Tip="New folder"
+                                    AutomationProperties.Name="New folder" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="10" Background="Transparent" IsVisible="{Binding !IsHeader}" ContextRequested="OnFilterContextRequested">
                                 <TextBlock Classes="Icon" Text="{Binding Glyph}" FontSize="16" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
@@ -87,6 +101,7 @@
                         </DropDownButton.Flyout>
                     </DropDownButton>
                     <Button x:Name="CloneButton" Content="Clone" Command="{Binding CloneCommand}" IsEnabled="{Binding Detail.CanEdit, FallbackValue=False}" />
+                    <Button x:Name="GeneratorButton" Content="Generator" Command="{Binding ShowGeneratorCommand}" />
                 </StackPanel>
                 <Button
                     x:Name="OpenWindowButton"

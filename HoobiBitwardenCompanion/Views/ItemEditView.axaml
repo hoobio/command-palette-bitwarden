@@ -64,7 +64,10 @@
                 <Border Classes="StackRow">
                     <StackPanel Spacing="4">
                         <TextBlock Classes="FieldLabel" Text="Password" />
-                        <TextBox Classes="revealPasswordButton" Text="{Binding Password}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                            <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" Text="{Binding Password}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" />
+                            <Button x:Name="GeneratePasswordButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Refresh}" Command="{Binding GeneratePasswordCommand}" ToolTip.Tip="Generate password" AutomationProperties.Name="Generate password" />
+                        </Grid>
                     </StackPanel>
                 </Border>
                 <Border Classes="StackRow">

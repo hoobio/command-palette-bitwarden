@@ -286,6 +286,15 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
     return ValidationMessage;
   }
 
+  internal Func<Task<string?>>? Generate { get; set; }
+
+  [RelayCommand]
+  private async Task GeneratePasswordAsync()
+  {
+    if (Generate is not null && await Generate() is { Length: > 0 } value)
+      Password = value;
+  }
+
   [RelayCommand]
   private void AddUri() => Uris.Add(new UriEditViewModel(this, string.Empty, null));
 
