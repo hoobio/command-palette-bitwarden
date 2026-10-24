@@ -4,6 +4,29 @@
     xmlns:chrome="using:Avalonia.Controls.Chrome"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels">
     <Styles.Resources>
+        <SolidColorBrush x:Key="ComboBoxBackground" Color="#FF1A1F2B" />
+        <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#FF1A1F2B" />
+        <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#FF1A1F2B" />
+        <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#FF1A1F2B" />
+        <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF2B3140" />
+        <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="Transparent" />
+        <Thickness x:Key="ComboBoxBorderThemeThickness">0</Thickness>
+        <Thickness x:Key="ComboBoxDropdownBorderThickness">0</Thickness>
+        <Thickness x:Key="ComboBoxDropdownBorderPadding">4</Thickness>
+        <Thickness x:Key="ComboBoxDropdownContentMargin">0</Thickness>
+        <Thickness x:Key="ComboBoxItemThemePadding">12,6</Thickness>
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#FF232834" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="#FF232834" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#FF232834" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#FF232834" />
+        <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#FF73D0FF" />
+        <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="#FF73D0FF" />
+        <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPressed" Color="#FF73D0FF" />
+
         <ControlTheme x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Background" Value="{DynamicResource AccentButtonBackground}" />
@@ -231,6 +254,52 @@
 
     <Style Selector="ItemsControl.Stack > ContentPresenter:nth-child(1):nth-last-child(1) Border.StackRow">
         <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+    </Style>
+
+    <Style Selector="StackPanel.Stack">
+        <Setter Property="Spacing" Value="1" />
+    </Style>
+
+    <Style Selector="StackPanel.Stack > Border.StackRow">
+        <Setter Property="Padding" Value="{StaticResource CardRowPadding}" />
+    </Style>
+
+    <Style Selector="StackPanel.Stack > Border.StackRow:nth-child(1)">
+        <Setter Property="CornerRadius" Value="8,8,0,0" />
+    </Style>
+
+    <Style Selector="StackPanel.Stack > Border.StackRow:nth-last-child(1)">
+        <Setter Property="CornerRadius" Value="0,0,8,8" />
+    </Style>
+
+    <Style Selector="StackPanel.Stack > Border.StackRow:nth-child(1):nth-last-child(1)">
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+    </Style>
+
+    <Style Selector="Border.StackRow TextBox">
+        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Border.StackRow ComboBox">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="ComboBox /template/ Border#PopupBorder">
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="BoxShadow" Value="0 8 16 0 #47000000, 0 0 2 0 #3D000000" />
+    </Style>
+
+    <Style Selector="ComboBoxItem">
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+    </Style>
+
+    <Style Selector="ComboBoxItem /template/ Border#LayoutRoot">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style Selector="ComboBoxItem /template/ Rectangle#Pill">
+        <Setter Property="IsVisible" Value="False" />
     </Style>
 
     <Style Selector="TextBlock.GroupHeader">

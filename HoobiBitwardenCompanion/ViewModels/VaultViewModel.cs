@@ -224,12 +224,70 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
 
   private void ShowDetail(ItemRowViewModel? value)
   {
-    if (string.Equals(Detail?.Id, value?.Id, StringComparison.OrdinalIgnoreCase))
+    if (Detail is { IsEditing: true } || string.Equals(Detail?.Id, value?.Id, StringComparison.OrdinalIgnoreCase))
       return;
-    Detail?.Dispose();
-    Detail = value is null ? null : new ItemViewModel(value.Id, _channel);
+    SetDetail(value is null ? null : new ItemViewModel(value.Id, _channel));
     _ = Detail?.LoadAsync();
   }
+
+  private void SetDetail(ItemViewModel? detail)
+  {
+    if (Detail is { } old)
+    {
+      old.Removed -= OnDetailRemoved;
+      old.Discarded -= OnDetailRemoved;
+      old.Saved -= OnDetailSaved;
+      old.CloneRequested = null;
+      old.Dispose();
+    }
+
+    Detail = detail;
+    if (detail is null)
+      return;
+    detail.Removed += OnDetailRemoved;
+    detail.Discarded += OnDetailRemoved;
+    detail.Saved += OnDetailSaved;
+    detail.CloneRequested = ShowNew;
+  }
+
+  private void OnDetailRemoved()
+  {
+    SetDetail(null);
+    SelectedRow = null;
+  }
+
+  private void OnDetailSaved() => _ = ReloadAsync();
+
+  private void ShowNew(EditableItem item, FiltersResponse filters)
+  {
+    SetDetail(ItemViewModel.ForNew(_channel, item, filters));
+    SelectedRow = null;
+    SearchText = string.Empty;
+    _searchTimer.Stop();
+    if (SelectedFilter is { Kind: not FilterKind.All } && Filters.Count > 0)
+      SelectedFilter = Filters[0];
+    else
+      ApplyFilter(reset: true);
+  }
+
+  [RelayCommand]
+  private async Task NewItemAsync(string type)
+  {
+    try
+    {
+      var filters = IpcJson.Read(await _channel.RequestAsync(Ops.ListFilters, null), IpcJson.Default.FiltersResponse);
+      if (Detail is { IsEditing: true } editing && !await editing.TryEndEditAsync())
+        return;
+      ShowNew(ItemEditorViewModel.Blank(int.Parse(type, System.Globalization.CultureInfo.InvariantCulture)), filters);
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
+    {
+      ErrorMessage = ItemViewModel.Describe(ex);
+    }
+  }
+
+  [RelayCommand]
+  private Task CloneAsync() => Detail is { IsReadOnly: true } detail ? detail.CloneCommand.ExecuteAsync(null) : Task.CompletedTask;
 
   internal void MoveSelection(int delta)
   {
@@ -257,6 +315,8 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
   internal void OnLocked()
   {
     _searchTimer.Stop();
+    Detail?.OnLocked();
+    SetDetail(null);
     SelectedRow = null;
     Rows.Clear();
     _all = [];
@@ -268,6 +328,6 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
   public void Dispose()
   {
     _searchTimer.Stop();
-    Detail?.Dispose();
+    SetDetail(null);
   }
 }

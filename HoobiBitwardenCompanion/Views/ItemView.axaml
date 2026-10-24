@@ -3,9 +3,38 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
     x:DataType="vm:ItemViewModel">
-    <Grid RowDefinitions="*,Auto">
-        <ScrollViewer>
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <WrapPanel x:Name="Toolbar" Margin="24,0,24,4" ItemSpacing="4" LineSpacing="4">
+            <Button x:Name="EditButton" Content="Edit" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" />
+            <Button x:Name="RestoreButton" Content="Restore" Command="{Binding RestoreCommand}" IsVisible="{Binding CanRestore}" />
+            <Button x:Name="HistoryButton" Content="Password history" Command="{Binding ShowPasswordHistoryCommand}" IsVisible="{Binding CanShowHistory}" />
+            <Button x:Name="ArchiveButton" Content="Archive" Command="{Binding ArchiveCommand}" IsVisible="{Binding CanEdit}" />
+            <Button x:Name="DeleteButton" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}" />
+            <Button x:Name="DeletePermanentlyButton" Content="Delete permanently" Command="{Binding DeletePermanentlyCommand}" IsVisible="{Binding CanDeletePermanently}" />
+            <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditing}" />
+            <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelEditCommand}" IsVisible="{Binding IsEditing}" />
+        </WrapPanel>
+
+        <StackPanel Grid.Row="1" Margin="24,0,24,0">
+            <TextBlock
+                x:Name="ErrorText"
+                Margin="0,4,0,4"
+                TextWrapping="Wrap"
+                Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                Text="{Binding ErrorMessage}"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock
+                x:Name="ValidationText"
+                Margin="0,4,0,4"
+                TextWrapping="Wrap"
+                Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                Text="{Binding Editor.ValidationMessage, FallbackValue={x:Null}}"
+                IsVisible="{Binding Editor.ValidationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="2" IsVisible="{Binding !IsEditing}">
             <StackPanel Margin="{StaticResource PageGutter}">
                 <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,4">
                     <Border Width="44" Height="44" CornerRadius="{StaticResource OverlayCornerRadius}" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
@@ -16,14 +45,6 @@
                         <TextBlock Classes="Caption" Text="{Binding Subtitle}" IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                 </Grid>
-
-                <TextBlock
-                    x:Name="ErrorText"
-                    Margin="0,12,0,0"
-                    TextWrapping="Wrap"
-                    Foreground="{DynamicResource SystemFillColorCriticalBrush}"
-                    Text="{Binding ErrorMessage}"
-                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                 <Border Classes="Card" Margin="0,16,0,0" Padding="16" IsVisible="{Binding RepromptRequired}">
                     <StackPanel Spacing="10">
@@ -85,8 +106,12 @@
             </StackPanel>
         </ScrollViewer>
 
+        <ScrollViewer x:Name="EditorScroll" Grid.Row="2" IsVisible="{Binding IsEditing}">
+            <views:ItemEditView x:Name="EditView" Margin="{StaticResource PageGutter}" DataContext="{Binding Editor}" />
+        </ScrollViewer>
+
         <TextBlock
-            Grid.Row="1"
+            Grid.Row="3"
             Classes="Caption"
             Margin="24,0,24,12"
             Text="{Binding StatusMessage}"

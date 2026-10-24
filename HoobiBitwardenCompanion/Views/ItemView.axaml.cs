@@ -7,7 +7,15 @@ namespace HoobiBitwardenCompanion.Views;
 
 internal sealed partial class ItemView : UserControl
 {
-  public ItemView() => InitializeComponent();
+  public ItemView()
+  {
+    InitializeComponent();
+    DataContextChanged += (_, _) =>
+    {
+      if (DataContext is ItemViewModel viewModel)
+        viewModel.Confirm ??= ConfirmAsync;
+    };
+  }
 
   internal static FAContentDialog CreateRepromptDialog(TextBox password) => new()
   {
@@ -17,6 +25,18 @@ internal sealed partial class ItemView : UserControl
     CloseButtonText = "Cancel",
     DefaultButton = FAContentDialogButton.Primary,
   };
+
+  internal static FAContentDialog CreateConfirmDialog(string title, string message, string primary, string close) => new()
+  {
+    Title = title,
+    Content = new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+    PrimaryButtonText = primary,
+    CloseButtonText = close,
+    DefaultButton = FAContentDialogButton.Close,
+  };
+
+  private async Task<bool> ConfirmAsync(string title, string message, string primary, string close) =>
+    await CreateConfirmDialog(title, message, primary, close).ShowAsync(TopLevel.GetTopLevel(this)) == FAContentDialogResult.Primary;
 
   private void OnVerifyClick(object? sender, RoutedEventArgs e) => _ = PromptRepromptAsync();
 

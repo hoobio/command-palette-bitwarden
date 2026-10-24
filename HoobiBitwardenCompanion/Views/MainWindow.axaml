@@ -44,7 +44,7 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,8,12">
+            <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="8,0,8,12" IsEnabled="{Binding !Detail.IsEditing, FallbackValue=True}">
                 <TextBox x:Name="SearchBox" Text="{Binding SearchText}" PlaceholderText="Search vault" Margin="0,0,0,12" />
                 <TextBlock Grid.Row="1" Classes="Caption" Text="No items" HorizontalAlignment="Center" Margin="0,24,0,0" IsVisible="{Binding IsEmpty}" />
                 <ListBox
@@ -74,13 +74,27 @@
             </Grid>
 
             <Grid Grid.Column="2" RowDefinitions="Auto,*">
+                <StackPanel Orientation="Horizontal" Spacing="4" Margin="24,0,24,8">
+                    <DropDownButton x:Name="NewItemButton" Content="New item" IsEnabled="{Binding !Detail.IsEditing, FallbackValue=True}">
+                        <DropDownButton.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                <MenuItem Header="Login" Command="{Binding NewItemCommand}" CommandParameter="1" />
+                                <MenuItem Header="Card" Command="{Binding NewItemCommand}" CommandParameter="3" />
+                                <MenuItem Header="Identity" Command="{Binding NewItemCommand}" CommandParameter="4" />
+                                <MenuItem Header="Secure note" Command="{Binding NewItemCommand}" CommandParameter="2" />
+                                <MenuItem Header="SSH key" Command="{Binding NewItemCommand}" CommandParameter="5" />
+                            </MenuFlyout>
+                        </DropDownButton.Flyout>
+                    </DropDownButton>
+                    <Button x:Name="CloneButton" Content="Clone" Command="{Binding CloneCommand}" IsEnabled="{Binding Detail.CanEdit, FallbackValue=False}" />
+                </StackPanel>
                 <Button
                     x:Name="OpenWindowButton"
-                    Margin="24,0,24,0"
+                    Margin="24,0,24,8"
                     HorizontalAlignment="Right"
                     Content="Open in own window"
                     Command="{Binding OpenSelectedCommand}"
-                    IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    IsVisible="{Binding Detail.IsReadOnly, FallbackValue=False}" />
                 <TextBlock Grid.Row="1" Classes="Caption" Text="Select an item to show its details." HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNull}}" />
                 <views:ItemView x:Name="DetailView" Grid.Row="1" DataContext="{Binding Detail}" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
             </Grid>
