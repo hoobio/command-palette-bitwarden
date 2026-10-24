@@ -10,8 +10,8 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 internal static partial class SearchFocusGuard
 {
   private static readonly TimeSpan CheckInterval = TimeSpan.FromMilliseconds(20);
-  private static readonly TimeSpan MaxGuardDuration = TimeSpan.FromSeconds(2);
-  private const int StableChecksToStop = 5;
+  private static readonly TimeSpan StableDuration = TimeSpan.FromMilliseconds(500);
+  private static readonly TimeSpan MaxGuardDuration = TimeSpan.FromSeconds(5);
   private static readonly Lock _startLock = new();
   private static bool _started;
   private static int _generation;
@@ -60,8 +60,8 @@ internal static partial class SearchFocusGuard
   private static async Task GuardFocusAsync(nint hwnd, int generation)
   {
     var started = Stopwatch.GetTimestamp();
-    var stableChecks = 0;
-    while (stableChecks < StableChecksToStop
+    long stableSince = 0;
+    while ((stableSince == 0 || Stopwatch.GetElapsedTime(stableSince) < StableDuration)
         && Stopwatch.GetElapsedTime(started) < MaxGuardDuration
         && generation == Volatile.Read(ref _generation))
     {
@@ -71,10 +71,11 @@ internal static partial class SearchFocusGuard
       var foreground = GetForegroundWindow();
       if (foreground == hwnd || EnterKeySubmitService.IsCommandPaletteWindow(foreground))
       {
-        stableChecks++;
+        if (stableSince == 0)
+          stableSince = Stopwatch.GetTimestamp();
         continue;
       }
-      stableChecks = 0;
+      stableSince = 0;
       if (FocusSearchBox(hwnd))
         DebugLogService.Log("FocusGuard", $"Command Palette was shown without focus; focused the search box after {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0}ms");
     }
