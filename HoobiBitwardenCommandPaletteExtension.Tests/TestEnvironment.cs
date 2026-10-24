@@ -9,4 +9,9 @@ internal static class TestEnvironment
     [ModuleInitializer]
     internal static void IsolateCliData() =>
         Environment.SetEnvironmentVariable("BITWARDENCLI_APPDATA_DIR", Path.Combine(Path.GetTempPath(), $"bw_cli_{Guid.NewGuid():N}"));
+
+    // Tests that list login items queue real favicon downloads, which must not land in the developer's icon cache.
+    [ModuleInitializer]
+    internal static void IsolateIconCache() =>
+        Services.FaviconService.CacheDir = Path.Combine(Path.GetTempPath(), $"bw_icons_{Guid.NewGuid():N}");
 }
