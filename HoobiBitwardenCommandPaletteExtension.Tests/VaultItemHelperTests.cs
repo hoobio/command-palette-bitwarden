@@ -183,6 +183,65 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void BuildContextItems_OpenInWindow_IsFirstAndRotateFollowsTheTypeSpecificCommands()
+  {
+    BitwardenCliService.ResetStaticState();
+    var item = new BitwardenItem
+    {
+      Id = Guid.NewGuid().ToString(),
+      Type = BitwardenItemType.Login,
+      Username = "user@test.com",
+      Password = ProtectedSecret.From("secret"),
+      CustomFields = new Dictionary<string, CustomField> { ["note"] = new("value") },
+    };
+    var withoutCompanion = VaultItemHelper.BuildContextItems(item);
+    using var companion = new Companion.CompanionHost(new Companion.CompanionOps(new BitwardenCliService()));
+    Companion.CompanionHost.Current = companion;
+    try
+    {
+      var contextItems = VaultItemHelper.BuildContextItems(item);
+      Assert.Equal("Open in window", contextItems[0].Title);
+      Assert.Equal("Open in window", contextItems[0].Command?.Name);
+      Assert.Equal(withoutCompanion.Select(ci => ci.Title), contextItems.Skip(1).SkipLast(1).Select(ci => ci.Title));
+      Assert.Equal("Rotate password", contextItems[^1].Title);
+      var card = new BitwardenItem { Id = Guid.NewGuid().ToString(), Type = BitwardenItemType.Card, CardBrand = "Visa" };
+      Assert.DoesNotContain(VaultItemHelper.BuildContextItems(card), ci => ci.Title == "Rotate password");
+    }
+    finally
+    {
+      Companion.CompanionHost.Current = null;
+    }
+  }
+
+  [Fact]
+  public void GetDefaultCommand_FallbackItem_OpensInWindowWhenCompanionIsRunning()
+  {
+    BitwardenCliService.ResetStaticState();
+    RepromptPage.ClearGracePeriod();
+    var note = new BitwardenItem { Id = Guid.NewGuid().ToString(), Type = BitwardenItemType.SecureNote };
+    var login = new BitwardenItem
+    {
+      Id = Guid.NewGuid().ToString(),
+      Type = BitwardenItemType.Login,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var protectedNote = new BitwardenItem { Id = Guid.NewGuid().ToString(), Type = BitwardenItemType.SecureNote, Reprompt = 1 };
+    Assert.Equal("View in Web Vault", VaultItemHelper.GetDefaultCommand(note).Name);
+    using var companion = new Companion.CompanionHost(new Companion.CompanionOps(new BitwardenCliService()), Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.exe"));
+    Companion.CompanionHost.Current = companion;
+    try
+    {
+      Assert.Equal("Open in window", VaultItemHelper.GetDefaultCommand(note).Name);
+      Assert.NotEqual("Open in window", VaultItemHelper.GetDefaultCommand(login).Name);
+      Assert.IsType<RepromptPage>(VaultItemHelper.GetDefaultCommand(protectedNote, new BitwardenCliService()));
+    }
+    finally
+    {
+      Companion.CompanionHost.Current = null;
+    }
+  }
+
+  [Fact]
   public void CopyCommands_AfterSecretsDisposed_DoNotThrow()
   {
     var item = new BitwardenItem

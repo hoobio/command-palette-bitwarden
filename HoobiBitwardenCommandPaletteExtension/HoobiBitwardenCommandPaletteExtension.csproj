@@ -21,6 +21,38 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HoobiBitwardenCompanion\HoobiBitwardenCompanion.csproj"
+                      Targets="Build;Publish"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      OutputItemType="_CompanionTargetPath" />
+  </ItemGroup>
+
+  <Target Name="IncludeCompanionPayload" AfterTargets="ResolveProjectReferences">
+    <PropertyGroup>
+      <_CompanionPublishDir>@(_CompanionTargetPath->'%(RootDir)%(Directory)publish\')</_CompanionPublishDir>
+    </PropertyGroup>
+    <Error Condition="'$(DesignTimeBuild)' != 'true' and !Exists('$(_CompanionPublishDir)HoobiBitwardenCompanion.exe')" Text="Companion publish output missing: $(_CompanionPublishDir)" />
+    <ItemGroup>
+      <_CompanionFile Include="$(_CompanionPublishDir)**\*" Exclude="$(_CompanionPublishDir)**\*.pdb" />
+      <ContentWithTargetPath Include="@(_CompanionFile)">
+        <TargetPath>Companion\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ContentWithTargetPath>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
     <Content Include="Assets\Square150x150Logo.scale-200.png" />

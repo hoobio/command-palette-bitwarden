@@ -1043,6 +1043,12 @@ internal sealed partial class BitwardenCliService
       return _folders.GetValueOrDefault(folderId);
   }
 
+  internal BitwardenItem? GetCachedItem(string id)
+  {
+    lock (_cacheLock)
+      return _cache.Find(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+  }
+
   internal string? GetOrganizationName(string? organizationId)
   {
     if (organizationId == null) return null;
@@ -1217,6 +1223,7 @@ internal sealed partial class BitwardenCliService
 
     DebugLogService.Log("Cache", "RefreshCacheAsync started");
     var failed = false;
+    var writeVersion = WriteVersion;
     try
     {
       var foldersTask = RunCliAsync("list folders");
@@ -1234,6 +1241,14 @@ internal sealed partial class BitwardenCliService
           DebugLogService.Log("Cache", "RefreshCacheAsync dropped: vault locked or logged out during refresh");
           foreach (var item in items)
             item.DisposeSecrets();
+          return;
+        }
+        if (writeVersion != WriteVersion)
+        {
+          DebugLogService.Log("Cache", "RefreshCacheAsync dropped: a write completed during refresh");
+          foreach (var item in items)
+            item.DisposeSecrets();
+          Interlocked.Exchange(ref _refreshPending, 1);
           return;
         }
         DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations");
@@ -1411,14 +1426,15 @@ internal sealed partial class BitwardenCliService
     };
   }
 
-  private ICliProcess StartProcess(string args)
+  private ICliProcess StartProcess(string args, bool keepInput = false)
   {
     var psi = CliStartInfo(args);
     psi.Environment["BW_NOINTERACTION"] = "true";
     psi.Environment["NO_COLOR"] = "1";
 
     var process = _processFactory(psi);
-    process.StandardInput.Close();
+    if (!keepInput)
+      process.StandardInput.Close();
     _runningProcesses[process.Id] = (process, args);
     process.Exited += (_, _) => _runningProcesses.TryRemove(process.Id, out _);
     process.EnableRaisingEvents = true;
@@ -1445,7 +1461,7 @@ internal sealed partial class BitwardenCliService
   {
     foreach (var kvp in _runningProcesses)
     {
-      if (spareSync && kvp.Value.Args == "sync")
+      if (spareSync && IsDataWrite(kvp.Value.Args))
         continue;
       try { kvp.Value.Process.Kill(true); } catch { }
       _runningProcesses.TryRemove(kvp.Key, out _);
@@ -1474,10 +1490,10 @@ internal sealed partial class BitwardenCliService
   private const int CliTimeoutMs = 30_000;
   private const int CliLogoutTimeoutMs = 3_000;
 
-  private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
+  private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null, string? stdin = null, bool verbOnlyLog = false)
   {
-    if (args != "sync")
-      return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, null);
+    if (!IsDataWrite(args))
+      return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, null, stdin, verbOnlyLog);
 
     await _syncGate.WaitAsync();
     var released = 0;
@@ -1486,17 +1502,24 @@ internal sealed partial class BitwardenCliService
       if (Interlocked.Exchange(ref released, 1) == 0) _syncGate.Release();
     }
 
-    try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, ReleaseOnce); }
-    catch { ReleaseOnce(); throw; }
+    try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, ReleaseOnce, stdin, verbOnlyLog); }
+    catch (Exception ex) when (ex is not TimeoutException || !IsItemWrite(args)) { ReleaseOnce(); throw; }
   }
 
-  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd)
+  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd, string? stdin = null, bool verbOnlyLog = false)
   {
-    DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
+    var logged = verbOnlyLog ? args.Split(' ')[0] : args;
+    DebugLogService.Log("CLI", $"RunCliAsync: bw {logged}");
     var sw = System.Diagnostics.Stopwatch.StartNew();
-    using var lease = NewCliLease(args, timeoutMs, onProcessEnd);
+    using var lease = NewCliLease(args, timeoutMs, onProcessEnd, stdin != null, logged);
     try
     {
+      if (stdin != null)
+      {
+        await lease.Process.StandardInput.WriteAsync(stdin.AsMemory(), lease.Token);
+        lease.Process.StandardInput.Close();
+      }
+
       var reader = lease.Process.StandardOutput;
       var buffer = new char[4096];
       var accum = new System.Text.StringBuilder();
@@ -1531,7 +1554,7 @@ internal sealed partial class BitwardenCliService
               if (depth == 0)
               {
                 var json = accum.ToString()[jsonStartIdx..].Trim();
-                DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
+                DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} JSON early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
                 lease.Detach();
                 return json;
               }
@@ -1549,7 +1572,7 @@ internal sealed partial class BitwardenCliService
           var text = accum.ToString();
           if (text.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
           {
-            DebugLogService.Log("CLI", $"RunCliAsync: bw {args} text early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
+            DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} text early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
             lease.Detach();
             return text.Trim();
           }
@@ -1558,7 +1581,7 @@ internal sealed partial class BitwardenCliService
 
       if (jsonStartIdx >= 0)
       {
-        DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON EOF-exit ({sw.ElapsedMilliseconds}ms)");
+        DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} JSON EOF-exit ({sw.ElapsedMilliseconds}ms)");
         return accum.ToString()[jsonStartIdx..].Trim();
       }
 
@@ -1567,25 +1590,29 @@ internal sealed partial class BitwardenCliService
       var errorText = !string.IsNullOrEmpty(stderr) ? stderr : fallbackStr;
       if (IsSessionInvalidError(errorText))
       {
-        DebugLogService.Log("CLI", $"Session invalid detected in bw {args}: '{errorText}'");
+        DebugLogService.Log("CLI", verbOnlyLog ? $"Session invalid detected in bw {logged}" : $"Session invalid detected in bw {args}: '{errorText}'");
         HandleInvalidSession();
         throw new InvalidOperationException("Session expired - vault is locked");
       }
 
       var syncError = args == "sync" && stderr.Length > 0 ? $", stderr: {stderr[..Math.Min(stderr.Length, 300)]}" : "";
-      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms{syncError})");
-      return fallbackStr;
+      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {logged} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms{syncError})");
+      return verbOnlyLog ? errorText : fallbackStr;
     }
     catch (OperationCanceledException ex)
     {
-      DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {args} after {timeoutMs / 1000}s");
-      try { lease.Process.Kill(); } catch { }
+      DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {logged} after {timeoutMs / 1000}s");
+      // ponytail: a hung bw write keeps _syncGate until it exits; add a long backstop if that is ever seen.
+      if (IsItemWrite(args) || IsAttachmentDownload(args))
+        lease.Detach(backstop: false);
+      else
+        try { lease.Process.Kill(); } catch { }
       throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}", ex);
     }
   }
 
-  private CliProcessLease NewCliLease(string args, int timeoutMs, Action? onProcessEnd) =>
-      new(args, StartProcess(args), new CancellationTokenSource(timeoutMs), onProcessEnd);
+  private CliProcessLease NewCliLease(string args, int timeoutMs, Action? onProcessEnd, bool keepInput = false, string? logged = null) =>
+      new(logged ?? args, StartProcess(args, keepInput), new CancellationTokenSource(timeoutMs), onProcessEnd);
 
   private sealed partial class CliProcessLease(string args, ICliProcess process, CancellationTokenSource cts, Action? onProcessEnd) : IDisposable
   {
@@ -1594,10 +1621,10 @@ internal sealed partial class BitwardenCliService
     public CancellationToken Token => cts.Token;
     public Task<string> StderrTask { get; } = process.StandardError.ReadToEndAsync(cts.Token);
 
-    public void Detach()
+    public void Detach(bool backstop = true)
     {
       _detached = true;
-      DetachForBackgroundExit(args, process, StderrTask, cts, onProcessEnd);
+      DetachForBackgroundExit(args, process, StderrTask, cts, onProcessEnd, backstop);
     }
 
     public void Dispose()
@@ -1611,14 +1638,14 @@ internal sealed partial class BitwardenCliService
 
   // Detach rather than kill on early exit: killing `bw sync` mid-flush half-writes data.json and a later `bw list` emits "Vault is locked."
   private const int DetachExitGraceMs = 30_000;
-  private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts, Action? onProcessEnd)
+  private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts, Action? onProcessEnd, bool backstop = true)
   {
     _ = Task.Run(async () =>
     {
       var sw = System.Diagnostics.Stopwatch.StartNew();
       try
       {
-        using var killCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(DetachExitGraceMs));
+        using var killCts = new CancellationTokenSource(backstop ? TimeSpan.FromMilliseconds(DetachExitGraceMs) : Timeout.InfiniteTimeSpan);
         var stdoutDrain = process.StandardOutput.ReadToEndAsync();
 #pragma warning disable VSTHRD003 // stderrTask was started by the caller; safe to await here as both run on the ThreadPool
         try { await Task.WhenAll(stdoutDrain, stderrTask).WaitAsync(killCts.Token).ConfigureAwait(false); }
@@ -1634,7 +1661,7 @@ internal sealed partial class BitwardenCliService
       }
       finally
       {
-        try { if (!process.HasExited) { process.Kill(true); DebugLogService.Log("CLI", $"Detached bw {args} backstop-killed after {sw.ElapsedMilliseconds}ms"); } } catch { }
+        try { if (backstop && !process.HasExited) { process.Kill(true); DebugLogService.Log("CLI", $"Detached bw {args} backstop-killed after {sw.ElapsedMilliseconds}ms"); } } catch { }
         try { process.Dispose(); } catch { }
         cts.Dispose();
         onProcessEnd?.Invoke();
@@ -1730,11 +1757,17 @@ internal sealed partial class BitwardenCliService
       Type = type,
       Notes = ProtectedSecret.From(node["notes"]?.GetValue<string>()),
       RevisionDate = DateTime.TryParse(node["revisionDate"]?.GetValue<string>(), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue,
+      CreationDate = DateTime.TryParse(node["creationDate"]?.GetValue<string>(), out var cd) ? cd.ToUniversalTime() : null,
       CustomFields = ParseCustomFields(node["fields"]),
       Favorite = node["favorite"]?.GetValue<bool>() ?? false,
       FolderId = node["folderId"]?.GetValue<string>(),
       OrganizationId = node["organizationId"]?.GetValue<string>(),
       Reprompt = node["reprompt"]?.GetValue<int>() ?? 0,
+      CollectionIds = node["collectionIds"] is JsonArray collections ? collections.Select(c => c?.GetValue<string>()).OfType<string>().ToArray() : [],
+      DeletedDate = DateTime.TryParse(node["deletedDate"]?.GetValue<string>(), out var dd) ? dd.ToUniversalTime() : null,
+      ArchivedDate = DateTime.TryParse(node["archivedDate"]?.GetValue<string>(), out var ad) ? ad.ToUniversalTime() : null,
+      Attachments = ParseAttachments(node["attachments"]),
+      EditableFromCache = IsEditableFromCache(type, node["fields"], login),
       Username = Text(login, "username"),
       Password = ProtectedSecret.From(Text(login, "password")),
       HasTotp = totp != null,
@@ -1756,6 +1789,7 @@ internal sealed partial class BitwardenCliService
       IdentityAddress = address,
       SshPublicKey = Text(ssh, "publicKey"),
       SshFingerprint = Text(ssh, "keyFingerprint"),
+      SshPrivateKey = ProtectedSecret.From(Text(ssh, "privateKey")),
     };
   }
 
@@ -1778,6 +1812,15 @@ internal sealed partial class BitwardenCliService
       })
       .OfType<ItemUri>()
       .ToList() ?? [];
+
+  // The cache drops identity parts, boolean and linked fields, empty values, duplicate names and empty URIs, so those items are edited from the live item.
+  internal static bool IsEditableFromCache(BitwardenItemType type, JsonNode? fields, JsonNode? login)
+  {
+    if (type == BitwardenItemType.Identity) return false;
+    var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    return (fields as JsonArray ?? []).All(f => Text(f, "name") is { Length: > 0 } name && !string.IsNullOrEmpty(Text(f, "value")) && (f?["type"]?.GetValue<int>() ?? 0) is 0 or 1 && names.Add(name))
+      && (login?["uris"] as JsonArray ?? []).All(u => !string.IsNullOrEmpty(Text(u, "uri")));
+  }
 
   internal static Dictionary<string, CustomField> ParseCustomFields(JsonNode? fields)
   {

@@ -1,0 +1,51 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.Views.ItemWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
+    x:DataType="vm:ItemViewModel"
+    Title="{Binding Title}"
+    Width="440"
+    Height="620"
+    MinWidth="340"
+    MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid x:Name="Root" RowDefinitions="48,*" Background="Transparent">
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem
+                    x:Name="AlwaysOnTopItem"
+                    Header="Always on top"
+                    ToggleType="CheckBox"
+                    IsChecked="{Binding $parent[Window].Topmost, Mode=OneWay}"
+                    Click="OnAlwaysOnTopClick">
+                    <MenuItem.Icon>
+                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.Pin}" />
+                    </MenuItem.Icon>
+                </MenuItem>
+            </ContextMenu>
+        </Grid.ContextMenu>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Background="Transparent"
+            ColumnDefinitions="Auto,*,46"
+            chrome:WindowDecorationProperties.ElementRole="User">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="16" />
+                <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Pin}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" IsVisible="{Binding $parent[Window].Topmost}" />
+            </StackPanel>
+        </Grid>
+
+        <views:ItemView Grid.Row="1" Margin="24,0,0,0" />
+    </Grid>
+</Window>

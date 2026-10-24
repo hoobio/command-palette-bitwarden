@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>HoobiBitwardenCompanion</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>true</PublishTrimmed>
+    <!-- FluentAvaloniaUI references Avalonia.Controls.DataGrid, which is not trim-safe and is never instantiated. -->
+    <NoWarn>$(NoWarn);IL2104</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="HoobiBitwardenCompanion.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\Fonts\*.ttf" />
+    <AvaloniaResource Include="Assets\app.ico" />
+    <Content Include="Assets\Fonts\*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- A no-op trimmer run lists only the pdb in ResolvedFileToPublish, so the SDK publish clean deletes the native DLLs. -->
+  <Target Name="ForgetPriorPublishWrites" BeforeTargets="_GetCurrentAndPriorPublishFileWrites">
+    <ItemGroup>
+      <_PublishCleanFileToForget Include="$(IntermediateOutputPath)PublishOutputs.*.txt" />
+    </ItemGroup>
+    <Delete Files="@(_PublishCleanFileToForget)" />
+  </Target>
+
+  <Target Name="PrunePublishDir" AfterTargets="Publish">
+    <PropertyGroup>
+      <_FullPublishDir>$([System.IO.Path]::GetFullPath('$(PublishDir)'))</_FullPublishDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_PublishedFile Include="$(_FullPublishDir)**\*" Exclude="$(_FullPublishDir)**\*.pdb" />
+      <_ExpectedFile Include="@(ReferenceCopyLocalPaths->WithMetadataValue('AssetType', 'native')->'$(_FullPublishDir)%(DestinationSubPath)')" />
+      <_ExpectedFile Include="@(Content->'$(_FullPublishDir)%(Identity)')" />
+      <_ExpectedFile Include="$(_FullPublishDir)$(AssemblyName).exe" />
+      <_PublishedFile Remove="@(_ExpectedFile)" />
+    </ItemGroup>
+    <Delete Files="@(_PublishedFile)" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="FluentAvaloniaUI" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,29 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <FontFamily x:Key="IconFontFamily">avares://HoobiBitwardenCompanion/Assets/Fonts#FluentSystemIcons-Resizable</FontFamily>
+
+    <x:String x:Key="Glyph.Eye">&#xE883;</x:String>
+    <x:String x:Key="Glyph.EyeOff">&#xE889;</x:String>
+    <x:String x:Key="Glyph.Copy">&#xE5D7;</x:String>
+    <x:String x:Key="Glyph.Open">&#xECF4;</x:String>
+    <x:String x:Key="Glyph.Lock">&#xEBAC;</x:String>
+    <x:String x:Key="Glyph.ChevronUp">&#xE490;</x:String>
+    <x:String x:Key="Glyph.ChevronDown">&#xE488;</x:String>
+    <x:String x:Key="Glyph.Add">&#xE00D;</x:String>
+    <x:String x:Key="Glyph.Delete">&#xE66D;</x:String>
+    <x:String x:Key="Glyph.Refresh">&#xE0BF;</x:String>
+    <x:String x:Key="Glyph.Download">&#xE0DD;</x:String>
+    <x:String x:Key="Glyph.Document">&#xE7BB;</x:String>
+    <x:String x:Key="Glyph.Dismiss">&#xE6D3;</x:String>
+    <x:String x:Key="Glyph.Password">&#xED53;</x:String>
+    <x:String x:Key="Glyph.Edit">&#xE837;</x:String>
+    <x:String x:Key="Glyph.Warning">&#xF561;</x:String>
+    <x:String x:Key="Glyph.Checkmark">&#xE460;</x:String>
+    <x:String x:Key="Glyph.Pin">&#xEE75;</x:String>
+    <x:String x:Key="Glyph.StarFilled">&#xF15C;</x:String>
+    <x:String x:Key="Glyph.Folder">&#xE8EB;</x:String>
+    <x:String x:Key="Glyph.Organization">&#xE2F6;</x:String>
+    <x:String x:Key="Glyph.Team">&#xEDA9;</x:String>
+    <x:String x:Key="Glyph.Import">&#xE111;</x:String>
+</ResourceDictionary>

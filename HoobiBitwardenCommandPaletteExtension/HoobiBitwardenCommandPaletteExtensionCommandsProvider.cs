@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension;
@@ -26,6 +27,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         _settingsManager = new BitwardenSettingsManager();
         _service = new BitwardenCliService(_settingsManager);
         _fallbackItem = new BitwardenFallbackItem(_service, _settingsManager);
+        CompanionHost.Current = new CompanionHost(new CompanionOps(_service));
         _commands = [
             new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(_service, _settingsManager))
             {

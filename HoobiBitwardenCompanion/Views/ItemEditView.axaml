@@ -1,0 +1,401 @@
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Views.ItemEditView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:ItemEditorViewModel">
+    <UserControl.Styles>
+        <Style Selector="StackPanel.Solo">
+            <Setter Property="Grid.ColumnSpan" Value="3" />
+        </Style>
+        <Style Selector="TextBox.Notes">
+            <Setter Property="AcceptsReturn" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="MinHeight" Value="80" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel>
+        <TextBlock Classes="GroupHeader" Text="Item details" Margin="4,8,4,8" />
+        <Border Classes="Group">
+            <StackPanel Classes="Rows">
+                <Border Classes="Row Edit">
+                    <StackPanel>
+                        <TextBlock Classes="FieldLabel" Text="Name" />
+                        <TextBox x:Name="NameBox" Text="{Binding Name}" PlaceholderText="Name" Classes.Invalid="{Binding IsNameMissing}" />
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0" IsVisible="{Binding IsNameMissing}">
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Warning}" FontSize="16" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                            <TextBlock Classes="Caption Warn" Text="{Binding ValidationMessage}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Classes="Row Edit">
+                    <Grid ColumnDefinitions="*,8,*">
+                        <StackPanel Classes.Solo="{Binding !HasOrganizations}">
+                            <TextBlock Classes="FieldLabel" Text="Folder" />
+                            <ComboBox x:Name="FolderBox" ItemsSource="{Binding Folders}" SelectedItem="{Binding SelectedFolder}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" IsVisible="{Binding HasOrganizations}">
+                            <TextBlock Classes="FieldLabel" Text="Owner" />
+                            <ComboBox x:Name="OwnerBox" ItemsSource="{Binding Owners}" SelectedItem="{Binding SelectedOwner}" IsEnabled="{Binding CanChangeOwner}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border Classes="Row Switch">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <TextBlock x:Name="FavoriteLabel" Text="Favourite" VerticalAlignment="Center" />
+                        <ToggleSwitch x:Name="FavoriteSwitch" Grid.Column="1" MinWidth="0" IsChecked="{Binding Favorite}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                    </Grid>
+                </Border>
+                <Border Classes="Row Switch">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Master password re-prompt" />
+                            <TextBlock Classes="Caption" Text="Ask for the master password before secrets show" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch x:Name="RepromptSwitch" Grid.Column="1" MinWidth="0" IsChecked="{Binding Reprompt}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <StackPanel IsVisible="{Binding HasCollections}">
+            <TextBlock Classes="GroupHeader" Text="Collections" />
+            <Border Classes="Group">
+                <ItemsControl Classes="Rows" ItemsSource="{Binding Collections}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CollectionChoiceViewModel">
+                            <Border Classes="Row Switch">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Team}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" />
+                                    <ToggleSwitch Grid.Column="2" MinWidth="0" IsChecked="{Binding IsChecked}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsLogin}">
+            <TextBlock Classes="GroupHeader" Text="Login credentials" />
+            <Border Classes="Group">
+                <StackPanel Classes="Rows">
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Username" />
+                            <TextBox Text="{Binding Username}" PlaceholderText="jane@example.com" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Password" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" Text="{Binding Password}" PasswordChar="•" PlaceholderText="Password" FontFamily="{StaticResource MonoFontFamily}" />
+                                <Button x:Name="GeneratePasswordButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Password}" Command="{Binding GeneratePasswordCommand}" ToolTip.Tip="Generate password" AutomationProperties.Name="Generate password" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Authenticator key (TOTP)" />
+                            <TextBox Classes="revealPasswordButton" Text="{Binding Totp}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" PlaceholderText="otpauth://totp/…" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Classes="GroupHeader" Text="Autofill options" />
+            <Border Classes="Group">
+                <StackPanel Classes="Rows">
+                    <ItemsControl Classes="Rows" ItemsSource="{Binding Uris}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:UriEditViewModel">
+                                <Border Classes="Row Edit">
+                                    <StackPanel>
+                                        <TextBlock Classes="FieldLabel" Text="Website (URI)" />
+                                        <TextBox Text="{Binding Uri}" PlaceholderText="https://example.com" />
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4" Margin="0,6,0,0">
+                                            <ComboBox ItemsSource="{x:Static vm:ItemEditorViewModel.MatchChoices}" SelectedItem="{Binding SelectedMatch}" ToolTip.Tip="Match detection" />
+                                            <Button Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.ChevronUp}" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up" />
+                                            <Button Grid.Column="2" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.ChevronDown}" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down" />
+                                            <Button Grid.Column="3" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding RemoveCommand}" ToolTip.Tip="Remove website" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button x:Name="AddUriButton" Theme="{StaticResource AddRowButtonStyle}" Command="{Binding AddUriCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Add}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <TextBlock Text="Add website" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsCard}">
+            <TextBlock Classes="GroupHeader" Text="Card details" />
+            <Border Classes="Group">
+                <StackPanel Classes="Rows">
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Cardholder name" />
+                            <TextBox Text="{Binding CardholderName}" PlaceholderText="Jane Doe" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Brand" />
+                            <TextBox Text="{Binding CardBrand}" PlaceholderText="Visa" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Number" />
+                            <TextBox Classes="revealPasswordButton" Text="{Binding CardNumber}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Expiration month" />
+                                <TextBox x:Name="ExpMonthBox" Text="{Binding CardExpMonth}" PlaceholderText="04" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="Expiration year" />
+                                <TextBox Text="{Binding CardExpYear}" PlaceholderText="2030" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Security code" />
+                            <TextBox Classes="revealPasswordButton" Text="{Binding CardCode}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsIdentity}">
+            <TextBlock Classes="GroupHeader" Text="Personal details" />
+            <Border Classes="Group">
+                <StackPanel Classes="Rows">
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Title" />
+                                <TextBox Text="{Binding Title}" PlaceholderText="Ms" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="First name" />
+                                <TextBox Text="{Binding FirstName}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Middle name" />
+                                <TextBox Text="{Binding MiddleName}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="Last name" />
+                                <TextBox Text="{Binding LastName}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Username" />
+                                <TextBox Text="{Binding IdentityUsername}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="Company" />
+                                <TextBox Text="{Binding Company}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Classes="GroupHeader" Text="Identification" />
+            <Border Classes="Group">
+                <StackPanel Classes="Rows">
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="National insurance number" />
+                            <TextBox Text="{Binding Ssn}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Passport number" />
+                                <TextBox Text="{Binding PassportNumber}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="Licence number" />
+                                <TextBox Text="{Binding LicenseNumber}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Classes="GroupHeader" Text="Contact info" />
+            <Border Classes="Group">
+                <Border Classes="Row Edit">
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Email" />
+                            <TextBox Text="{Binding Email}" PlaceholderText="jane@example.com" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Classes="FieldLabel" Text="Phone" />
+                            <TextBox Text="{Binding Phone}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Border>
+
+            <TextBlock Classes="GroupHeader" Text="Address" />
+            <Border Classes="Group">
+                <StackPanel Classes="Rows">
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Address 1" />
+                            <TextBox Text="{Binding Address1}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Address 2" />
+                                <TextBox Text="{Binding Address2}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="Address 3" />
+                                <TextBox Text="{Binding Address3}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="City / Town" />
+                                <TextBox Text="{Binding City}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="County / State" />
+                                <TextBox Text="{Binding State}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Postcode" />
+                                <TextBox Text="{Binding PostalCode}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Classes="FieldLabel" Text="Country" />
+                                <TextBox Text="{Binding Country}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsSshKey}">
+            <TextBlock Classes="GroupHeader" Text="SSH key" />
+            <Border Classes="Group">
+                <StackPanel Classes="Rows">
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Private key" />
+                            <TextBox x:Name="PrivateKeyBox" Classes="revealPasswordButton Notes" PasswordChar="•" Text="{Binding PrivateKey}" FontFamily="{StaticResource MonoFontFamily}" PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                            <Button x:Name="ImportKeyButton" Margin="0,8,0,0" Background="{DynamicResource LayerFillColorAltBrush}" Command="{Binding ImportSshKeyCommand}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Import}" FontSize="16" Foreground="{DynamicResource DefaultTextForegroundThemeBrush}" />
+                                    <TextBlock Text="Import from private key" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Public key" />
+                            <TextBox Text="{Binding PublicKey}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Row Edit">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="Fingerprint" />
+                            <TextBox Text="{Binding Fingerprint}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <TextBlock Classes="GroupHeader" Text="Custom fields" />
+        <Border Classes="Group">
+            <StackPanel Classes="Rows">
+                <ItemsControl Classes="Rows" ItemsSource="{Binding Fields}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CustomFieldViewModel">
+                            <Border Classes="Row Edit">
+                                <StackPanel>
+                                    <TextBlock Classes="FieldLabel" Text="{Binding TypeLabel, StringFormat='{}{0} field'}" />
+                                    <Grid ColumnDefinitions="*,*,Auto,Auto,Auto" ColumnSpacing="4">
+                                        <TextBox Text="{Binding Name}" PlaceholderText="Field name" />
+                                        <TextBox Grid.Column="1" Text="{Binding Value}" PlaceholderText="Value" IsVisible="{Binding IsText}" />
+                                        <TextBox Grid.Column="1" Classes="revealPasswordButton" Text="{Binding Value}" PasswordChar="•" PlaceholderText="Value" IsVisible="{Binding IsHidden}" />
+                                        <ToggleSwitch Grid.Column="1" Margin="4,0,0,0" MinWidth="0" IsChecked="{Binding BoolValue}" OnContent="On" OffContent="Off" IsVisible="{Binding IsBoolean}" />
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding LinkTargets}" SelectedItem="{Binding SelectedLink}" PlaceholderText="Linked field" IsVisible="{Binding IsLinked}" />
+                                        <Button Grid.Column="2" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.ChevronUp}" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up" />
+                                        <Button Grid.Column="3" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.ChevronDown}" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down" />
+                                        <Button Grid.Column="4" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding RemoveCommand}" ToolTip.Tip="Remove field" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button x:Name="AddFieldButton" Theme="{StaticResource AddRowButtonStyle}">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                            <MenuItem Header="Text" Command="{Binding AddFieldCommand}" CommandParameter="0" />
+                            <MenuItem Header="Hidden" Command="{Binding AddFieldCommand}" CommandParameter="1" />
+                            <MenuItem Header="Boolean" Command="{Binding AddFieldCommand}" CommandParameter="2" />
+                            <MenuItem Header="Linked" Command="{Binding AddFieldCommand}" CommandParameter="3" IsVisible="{Binding CanLink}" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.Add}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                        <TextBlock Text="Add field" VerticalAlignment="Center" />
+                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.ChevronDown}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Classes="GroupHeader" Text="Additional options" />
+        <Border Classes="Group">
+            <Border Classes="Row Edit">
+                <StackPanel>
+                    <TextBlock Classes="FieldLabel" Text="Notes" />
+                    <TextBox Classes="Notes" Text="{Binding Notes}" />
+                </StackPanel>
+            </Border>
+        </Border>
+    </StackPanel>
+</UserControl>

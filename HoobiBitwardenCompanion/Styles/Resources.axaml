@@ -1,0 +1,137 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <FontFamily x:Key="ContentControlThemeFontFamily">avares://HoobiBitwardenCompanion/Assets/Fonts#Hanken Grotesk</FontFamily>
+    <FontFamily x:Key="MonoFontFamily">avares://HoobiBitwardenCompanion/Assets/Fonts#Cascadia Mono</FontFamily>
+
+    <Color x:Key="SystemAccentColor">#FF409FFF</Color>
+    <Color x:Key="SystemAccentColorLight1">#FF73D0FF</Color>
+    <Color x:Key="SystemAccentColorLight2">#FF73D0FF</Color>
+    <Color x:Key="SystemAccentColorLight3">#FF73D0FF</Color>
+
+    <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="#FFBAE67E" />
+    <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="#FFFFD580" />
+    <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="#FFF28779" />
+    <SolidColorBrush x:Key="AlertWarnFillBrush" Color="#26FFD580" />
+
+    <SolidColorBrush x:Key="WindowGroundBrush" Color="#FF181C26" />
+    <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#FF181C26" />
+    <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#FF181C26" />
+    <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FF1F2430" />
+    <SolidColorBrush x:Key="LayerFillColorAltBrush" Color="#FF242936" />
+
+    <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#FF8A9199" />
+    <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#FF707A8C" />
+    <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#FF707A8C" />
+    <SolidColorBrush x:Key="DefaultTextForegroundThemeBrush" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FF73D0FF" />
+    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FF409FFF" />
+
+    <SolidColorBrush x:Key="ButtonBackground" Color="#FF1F2430" />
+    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF242936" />
+    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF1F2430" />
+    <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#FF1F2430" />
+    <SolidColorBrush x:Key="ButtonForeground" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="ButtonBorderBrush" Color="Transparent" />
+    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="Transparent" />
+    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="Transparent" />
+    <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="Transparent" />
+
+    <SolidColorBrush x:Key="AccentButtonBackground" Color="#FF409FFF" />
+    <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#FF73D0FF" />
+    <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#FF73D0FF" />
+    <SolidColorBrush x:Key="AccentButtonBackgroundDisabled" Color="#FF409FFF" />
+    <SolidColorBrush x:Key="AccentButtonForeground" Color="#FF181C26" />
+    <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#FF181C26" />
+    <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#FF181C26" />
+    <SolidColorBrush x:Key="AccentButtonForegroundDisabled" Color="#FF181C26" />
+
+    <SolidColorBrush x:Key="ContentDialogBackground" Color="#FF242936" />
+    <SolidColorBrush x:Key="ContentDialogSmokeFill" Color="#80000000" />
+
+    <SolidColorBrush x:Key="TextControlBackground" Color="#FF15181F" />
+    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF15181F" />
+    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF15181F" />
+    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="#FF15181F" />
+    <SolidColorBrush x:Key="TextControlBorderBrush" Color="#FF343B4C" />
+    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#FF343B4C" />
+    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#FF409FFF" />
+    <SolidColorBrush x:Key="TextControlForeground" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF707A8C" />
+    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF707A8C" />
+    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF707A8C" />
+    <x:Double x:Key="TextBoxIconFontSize">16</x:Double>
+    <SolidColorBrush x:Key="TextControlButtonForeground" Color="#FF8A9199" />
+    <SolidColorBrush x:Key="TextControlButtonForegroundPointerOver" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="TextControlButtonForegroundPressed" Color="#FF73D0FF" />
+    <SolidColorBrush x:Key="TextControlButtonBackground" Color="#00242936" />
+    <SolidColorBrush x:Key="TextControlButtonBackgroundPointerOver" Color="#FF242936" />
+    <SolidColorBrush x:Key="TextControlButtonBackgroundPressed" Color="#FF242936" />
+
+    <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#FF15181F" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#FF15181F" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#FF15181F" />
+    <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#FF343B4C" />
+    <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="#FF343B4C" />
+    <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="#FF343B4C" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#FF8A9199" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#FF8A9199" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#FF8A9199" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#FF409FFF" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FF73D0FF" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#FF73D0FF" />
+    <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#FF409FFF" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FF181C26" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FF181C26" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FF181C26" />
+    <GridLength x:Key="ToggleSwitchPreContentMargin">0</GridLength>
+    <GridLength x:Key="ToggleSwitchPostContentMargin">0</GridLength>
+
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FF242936" />
+    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="Transparent" />
+    <Thickness x:Key="MenuFlyoutPresenterBorderThemeThickness">0</Thickness>
+    <Thickness x:Key="MenuFlyoutPresenterThemePadding">4</Thickness>
+    <Thickness x:Key="FlyoutBorderThemePadding">0</Thickness>
+    <Thickness x:Key="MenuFlyoutItemThemePaddingNarrow">12,6</Thickness>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackground" Color="#001F2430" />
+    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#FF1F2430" />
+    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#FF1F2430" />
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="MenuFlyoutSeparatorBackground" Color="#FF343B4C" />
+
+    <SolidColorBrush x:Key="CaptionButtonBackground" Color="#00242936" />
+    <SolidColorBrush x:Key="CaptionButtonBackgroundInactive" Color="#00242936" />
+    <SolidColorBrush x:Key="CaptionButtonBackgroundPointerOver" Color="#FF242936" />
+    <SolidColorBrush x:Key="CaptionButtonBackgroundPressed" Color="#FF1F2430" />
+    <SolidColorBrush x:Key="CaptionButtonForeground" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="CaptionButtonForegroundInactive" Color="#FF707A8C" />
+    <SolidColorBrush x:Key="CaptionButtonForegroundPointerOver" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="CaptionButtonForegroundPressed" Color="#FFCBCCC6" />
+    <SolidColorBrush x:Key="CaptionCloseBackgroundPointerOver" Color="#FFE81123" />
+    <SolidColorBrush x:Key="CaptionCloseBackgroundPressed" Color="#E6C42B1C" />
+
+    <x:Double x:Key="ControlContentThemeFontSize">13</x:Double>
+    <x:Double x:Key="CaptionTextBlockFontSize">12</x:Double>
+    <x:Double x:Key="BodyTextBlockFontSize">14</x:Double>
+    <x:Double x:Key="SubtitleTextBlockFontSize">20</x:Double>
+    <Thickness x:Key="ButtonPadding">12,0</Thickness>
+    <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+    <Thickness x:Key="TextControlThemePadding">10,6</Thickness>
+    <x:Double x:Key="TextControlThemeMinHeight">32</x:Double>
+    <x:Double x:Key="TitleBarHeight">48</x:Double>
+    <x:Double x:Key="CaptionButtonWidth">46</x:Double>
+    <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
+    <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+    <Thickness x:Key="PageGutter">0,0,24,24</Thickness>
+    <Thickness x:Key="CardRowPadding">16,10,8,10</Thickness>
+    <x:Double x:Key="ContentDialogMaxWidth">400</x:Double>
+    <BoxShadows x:Key="FlyoutShadow">0 8 16 0 #47000000, 0 0 2 0 #3D000000</BoxShadows>
+</ResourceDictionary>

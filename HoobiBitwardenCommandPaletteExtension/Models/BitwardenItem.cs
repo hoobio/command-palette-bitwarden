@@ -45,6 +45,8 @@ internal sealed record CustomField(string? Value, ProtectedSecret? Secret = null
   public bool IsHidden => Secret != null;
 }
 
+internal sealed record ItemAttachment(string Id, string FileName, long Size, string? SizeName);
+
 internal sealed class BitwardenItem
 {
   public string Id { get; init; } = string.Empty;
@@ -52,10 +54,16 @@ internal sealed class BitwardenItem
   public BitwardenItemType Type { get; init; }
   public ProtectedSecret? Notes { get; init; }
   public DateTime RevisionDate { get; init; }
+  public DateTime? CreationDate { get; init; }
   public bool Favorite { get; init; }
   public string? FolderId { get; init; }
   public string? OrganizationId { get; init; }
   public int Reprompt { get; init; }
+  public IReadOnlyList<string> CollectionIds { get; init; } = [];
+  public DateTime? DeletedDate { get; init; }
+  public DateTime? ArchivedDate { get; init; }
+  public IReadOnlyList<ItemAttachment> Attachments { get; init; } = Array.Empty<ItemAttachment>();
+  public bool EditableFromCache { get; init; }
 
   public string? Username { get; init; }
   public ProtectedSecret? Password { get; init; }
@@ -87,6 +95,7 @@ internal sealed class BitwardenItem
 
   public string? SshPublicKey { get; init; }
   public string? SshFingerprint { get; init; }
+  public ProtectedSecret? SshPrivateKey { get; init; }
 
   public Dictionary<string, CustomField> CustomFields { get; init; } = [];
   public string? SshHost => CustomFields.TryGetValue("host", out var h) ? h.Value : null;
@@ -100,6 +109,7 @@ internal sealed class BitwardenItem
     TotpSecret?.Dispose();
     CardNumber?.Dispose();
     CardCode?.Dispose();
+    SshPrivateKey?.Dispose();
     foreach (var field in CustomFields.Values)
       field.Secret?.Dispose();
   }

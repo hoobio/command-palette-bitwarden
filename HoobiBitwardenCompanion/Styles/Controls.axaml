@@ -1,0 +1,655 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:styles="using:HoobiBitwardenCompanion.Styles"
+    xmlns:ui="using:FluentAvalonia.UI.Controls">
+    <Styles.Resources>
+        <SolidColorBrush x:Key="ComboBoxBackground" Color="#FF15181F" />
+        <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#FF15181F" />
+        <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#FF15181F" />
+        <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#FF15181F" />
+        <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxForeground" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxForegroundPointerOver" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxForegroundPressed" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxForegroundFocused" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF242936" />
+        <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="Transparent" />
+        <Thickness x:Key="ComboBoxBorderThemeThickness">0</Thickness>
+        <Thickness x:Key="ComboBoxDropdownBorderThickness">0</Thickness>
+        <Thickness x:Key="ComboBoxDropdownBorderPadding">4</Thickness>
+        <Thickness x:Key="ComboBoxDropdownContentMargin">0</Thickness>
+        <Thickness x:Key="ComboBoxPadding">10,0,0,0</Thickness>
+        <Thickness x:Key="ComboBoxItemThemePadding">12,6</Thickness>
+        <SolidColorBrush x:Key="ComboBoxItemBackground" Color="#001F2430" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#FF1F2430" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="#FF1F2430" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#001F2430" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#FF1F2430" />
+        <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#FF1F2430" />
+        <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#FF73D0FF" />
+        <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="#FF73D0FF" />
+        <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPressed" Color="#FF73D0FF" />
+
+        <ControlTheme x:Key="{x:Type Button}" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Style Selector="^:disabled">
+                <Setter Property="Opacity" Value="0.45" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentButtonForeground}" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentButtonBackgroundPointerOver}" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentButtonForeground}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentButtonBackgroundPressed}" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentButtonForeground}" />
+            </Style>
+            <Style Selector="^:disabled /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource AccentButtonBackground}" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentButtonForeground}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource WindowGroundBrush}" />
+            <Style Selector="^:disabled /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource WindowGroundBrush}" />
+            </Style>
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource WindowGroundBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource WindowGroundBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="DialogCloseButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Style Selector="^.accent /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource ButtonBackground}" />
+                <Setter Property="Foreground" Value="{DynamicResource ButtonForeground}" />
+            </Style>
+            <Style Selector="^.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPointerOver}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#00242936" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="DangerIconButtonStyle" TargetType="Button" BasedOn="{StaticResource IconButtonStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="AddRowButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="CaptionButtonTheme" TargetType="Button" BasedOn="{StaticResource FluentDrawnCaptionButton}">
+            <Setter Property="Width" Value="{StaticResource CaptionButtonWidth}" />
+            <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+            <Setter Property="FontSize" Value="16" />
+            <Style Selector="^.Close:pointerover /template/ Border">
+                <Setter Property="Background" Value="{DynamicResource CaptionCloseBackgroundPointerOver}" />
+            </Style>
+            <Style Selector="^.Close:pressed /template/ Border">
+                <Setter Property="Background" Value="{DynamicResource CaptionCloseBackgroundPressed}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="HoobiCloseOnlyDecorations" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource {x:Type chrome:WindowDrawnDecorations}}">
+            <Setter Property="Template">
+                <WindowDrawnDecorationsTemplate>
+                    <chrome:WindowDrawnDecorationsContent>
+                        <chrome:WindowDrawnDecorationsContent.Underlay>
+                            <Panel Name="PART_UnderlayWrapper">
+                                <Border
+                                    Name="PART_WindowBorder"
+                                    Background="Transparent"
+                                    BorderThickness="{TemplateBinding FrameThickness}"
+                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                    IsHitTestVisible="False" />
+                                <Panel
+                                    Name="PART_TitleBar"
+                                    VerticalAlignment="Top"
+                                    Height="{TemplateBinding TitleBarHeight}"
+                                    Background="Transparent"
+                                    IsVisible="{TemplateBinding HasTitleBar}"
+                                    chrome:WindowDecorationProperties.ElementRole="TitleBar" />
+                            </Panel>
+                        </chrome:WindowDrawnDecorationsContent.Underlay>
+                        <chrome:WindowDrawnDecorationsContent.Overlay>
+                            <Panel Name="PART_OverlayWrapper">
+                                <StackPanel
+                                    Name="PART_OverlayPanel"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Height="{TemplateBinding TitleBarHeight}"
+                                    IsVisible="{TemplateBinding HasTitleBar}">
+                                    <Button
+                                        Name="PART_CloseButton"
+                                        Classes="CaptionButton Close"
+                                        Theme="{StaticResource CaptionButtonTheme}"
+                                        Content="{StaticResource Glyph.Dismiss}"
+                                        chrome:WindowDecorationProperties.ElementRole="CloseButton" />
+                                </StackPanel>
+                            </Panel>
+                        </chrome:WindowDrawnDecorationsContent.Overlay>
+                    </chrome:WindowDrawnDecorationsContent>
+                </WindowDrawnDecorationsTemplate>
+            </Setter>
+        </ControlTheme>
+
+        <ControlTheme x:Key="{x:Type ContextMenu}" TargetType="ContextMenu">
+            <Setter Property="Background" Value="{DynamicResource MenuFlyoutPresenterBackground}" />
+            <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+            <Setter Property="Padding" Value="{DynamicResource MenuFlyoutPresenterThemePadding}" />
+            <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+            <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+            <Setter Property="FontFamily" Value="{StaticResource ContentControlThemeFontFamily}" />
+            <Setter Property="MinWidth" Value="200" />
+            <Setter Property="WindowManagerAddShadowHint" Value="False" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border
+                        Name="LayoutRoot"
+                        Background="{TemplateBinding Background}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        BoxShadow="{StaticResource FlyoutShadow}"
+                        Padding="{TemplateBinding Padding}">
+                        <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" KeyboardNavigation.TabNavigation="Continue" Grid.IsSharedSizeScope="True" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+
+        <ControlTheme x:Key="{x:Type ui:FAContentDialog}" TargetType="ui:FAContentDialog">
+            <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ContentDialogBackground}" />
+            <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="Container">
+                        <Panel Name="LayoutRoot" Background="{DynamicResource ContentDialogSmokeFill}">
+                            <Border
+                                Name="BackgroundElement"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                BoxShadow="{StaticResource FlyoutShadow}"
+                                MaxWidth="{DynamicResource ContentDialogMaxWidth}"
+                                Margin="16"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Center">
+                                <Grid Name="DialogSpace" RowDefinitions="*,Auto" Margin="24">
+                                    <ScrollViewer Name="ContentScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                        <StackPanel Spacing="12">
+                                            <StackPanel.Styles>
+                                                <Style Selector="TextBlock">
+                                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                                </Style>
+                                            </StackPanel.Styles>
+                                            <ContentControl
+                                                Name="Title"
+                                                Content="{TemplateBinding Title}"
+                                                ContentTemplate="{TemplateBinding TitleTemplate}"
+                                                FontSize="20"
+                                                FontWeight="SemiBold"
+                                                Foreground="{TemplateBinding Foreground}" />
+                                            <ContentPresenter
+                                                Name="Content"
+                                                Content="{TemplateBinding Content}"
+                                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                FontSize="{StaticResource BodyTextBlockFontSize}"
+                                                Foreground="{TemplateBinding Foreground}" />
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                    <Grid Name="CommandSpace" Grid.Row="1" Margin="0,24,0,0" ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto,Auto">
+                                        <Button Name="PrimaryButton" Theme="{StaticResource AccentButtonStyle}" Content="{TemplateBinding PrimaryButtonText}" IsEnabled="{TemplateBinding IsPrimaryButtonEnabled}" IsVisible="False" />
+                                        <Button Name="SecondaryButton" Theme="{StaticResource DangerButtonStyle}" Content="{TemplateBinding SecondaryButtonText}" IsEnabled="{TemplateBinding IsSecondaryButtonEnabled}" IsVisible="False" />
+                                        <Button Name="CloseButton" Theme="{StaticResource DialogCloseButtonStyle}" Content="{TemplateBinding CloseButtonText}" IsVisible="False" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </Panel>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+
+            <Style Selector="^ /template/ Grid#CommandSpace > Button">
+                <Setter Property="Height" Value="36" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="Grid.ColumnSpan" Value="3" />
+            </Style>
+            <Style Selector="^:primary /template/ Button#PrimaryButton">
+                <Setter Property="IsVisible" Value="True" />
+            </Style>
+            <Style Selector="^:secondary /template/ Button#SecondaryButton">
+                <Setter Property="IsVisible" Value="True" />
+            </Style>
+            <Style Selector="^:close /template/ Button#CloseButton">
+                <Setter Property="IsVisible" Value="True" />
+            </Style>
+            <Style Selector="^:primary:close /template/ Button#PrimaryButton, ^:secondary:close /template/ Button#SecondaryButton, ^:primary:secondary /template/ Button#PrimaryButton">
+                <Setter Property="Grid.ColumnSpan" Value="1" />
+            </Style>
+            <Style Selector="^:primary:close /template/ Button#CloseButton, ^:secondary:close /template/ Button#CloseButton, ^:primary:secondary /template/ Button#SecondaryButton">
+                <Setter Property="Grid.Column" Value="2" />
+                <Setter Property="Grid.ColumnSpan" Value="1" />
+            </Style>
+            <Style Selector="^:primary:secondary:close /template/ Grid#CommandSpace > Button">
+                <Setter Property="Grid.Column" Value="0" />
+                <Setter Property="Grid.ColumnSpan" Value="3" />
+            </Style>
+            <Style Selector="^:primary:secondary:close /template/ Button#SecondaryButton">
+                <Setter Property="Grid.Row" Value="1" />
+                <Setter Property="Margin" Value="0,8,0,0" />
+            </Style>
+            <Style Selector="^:primary:secondary:close /template/ Button#CloseButton">
+                <Setter Property="Grid.Row" Value="2" />
+                <Setter Property="Margin" Value="0,8,0,0" />
+            </Style>
+
+            <Style Selector="^:hidden /template/ Panel#LayoutRoot">
+                <Style.Animations>
+                    <Animation Duration="00:00:00.167" FillMode="Forward">
+                        <KeyFrame Cue="0%">
+                            <Setter Property="Opacity" Value="1.0" />
+                        </KeyFrame>
+                        <KeyFrame Cue="100%">
+                            <Setter Property="Opacity" Value="0.0" />
+                            <Setter Property="IsVisible" Value="False" />
+                        </KeyFrame>
+                    </Animation>
+                </Style.Animations>
+            </Style>
+            <Style Selector="^:open /template/ Panel#LayoutRoot">
+                <Setter Property="IsVisible" Value="True" />
+                <Style.Animations>
+                    <Animation Duration="00:00:00.250" FillMode="Forward">
+                        <KeyFrame Cue="0%">
+                            <Setter Property="IsVisible" Value="True" />
+                            <Setter Property="Opacity" Value="0.0" />
+                        </KeyFrame>
+                        <KeyFrame Cue="100%">
+                            <Setter Property="IsVisible" Value="True" />
+                            <Setter Property="Opacity" Value="1.0" />
+                        </KeyFrame>
+                    </Animation>
+                </Style.Animations>
+            </Style>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <Style Selector=":is(TopLevel)">
+        <Setter Property="FontFamily" Value="{StaticResource ContentControlThemeFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+    </Style>
+
+    <Style Selector="ScrollViewer">
+        <Setter Property="styles:SmoothScroll.IsEnabled" Value="True" />
+        <Setter Property="styles:AutoScroll.IsEnabled" Value="True" />
+    </Style>
+
+    <Style Selector="TextBlock.Icon">
+        <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.Icon.Accent">
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.CaptionButton">
+        <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="Border.Row.Switch ToggleSwitch">
+        <Setter Property="Margin" Value="0,0,-12,0" />
+    </Style>
+
+    <Style Selector="Border.Group">
+        <Setter Property="Background" Value="{DynamicResource WindowGroundBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="StackPanel.Rows">
+        <Setter Property="Spacing" Value="1" />
+    </Style>
+
+    <Style Selector="ItemsControl.Rows">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Spacing="1" />
+            </ItemsPanelTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="StackPanel.Rows > ItemsControl.Rows:empty">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="Border.Row">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="Padding" Value="16,10,16,12" />
+    </Style>
+
+    <Style Selector="Border.Row.Field">
+        <Setter Property="Padding" Value="{StaticResource CardRowPadding}" />
+        <Setter Property="MinHeight" Value="56" />
+    </Style>
+
+    <Style Selector="Border.Row.Switch">
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="MinHeight" Value="48" />
+    </Style>
+
+    <Style Selector="Border.Row.KeyValue">
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="Height" Value="36" />
+    </Style>
+
+    <Style Selector="Border.Row TextBox, Border.Row NumericUpDown, Border.Row ComboBox">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="TextBox">
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="BoxShadow" Value="0 0 0 2 #FF409FFF" />
+    </Style>
+
+    <Style Selector="TextBox.Invalid /template/ Border#PART_BorderElement">
+        <Setter Property="BoxShadow" Value="0 0 0 1 #FFFFD580" />
+    </Style>
+
+    <Style Selector="TextBox /template/ ToggleButton /template/ ui|FAFontIcon#Glyph">
+        <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+        <Setter Property="Glyph" Value="{StaticResource Glyph.Eye}" />
+        <Setter Property="FontSize" Value="16" />
+    </Style>
+
+    <Style Selector="TextBox /template/ ToggleButton:checked /template/ ui|FAFontIcon#Glyph">
+        <Setter Property="Glyph" Value="{StaticResource Glyph.EyeOff}" />
+    </Style>
+
+    <Style Selector="ComboBox">
+        <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ComboBox /template/ ui|FAFontIcon#DropDownGlyph">
+        <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+        <Setter Property="Glyph" Value="{StaticResource Glyph.ChevronDown}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="ComboBox:dropdownopen /template/ Border#HighlightBackground">
+        <Setter Property="Opacity" Value="1" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+    </Style>
+
+    <Style Selector="ComboBox /template/ Border#PopupBorder">
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="BoxShadow" Value="{StaticResource FlyoutShadow}" />
+    </Style>
+
+    <Style Selector="ComboBox /template/ Popup#PART_Popup">
+        <Setter Property="Placement" Value="BottomEdgeAlignedLeft" />
+        <Setter Property="VerticalOffset" Value="4" />
+    </Style>
+
+    <Style Selector="ComboBoxItem">
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+        <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+
+    <Style Selector="ComboBoxItem /template/ Border#LayoutRoot">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style Selector="ComboBoxItem /template/ Rectangle#Pill">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="MenuFlyoutPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+        <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+
+    <Style Selector="MenuFlyoutPresenter /template/ Border#LayoutRoot">
+        <Setter Property="BoxShadow" Value="{StaticResource FlyoutShadow}" />
+    </Style>
+
+    <Style Selector="MenuItem">
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+    </Style>
+
+    <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style Selector="MenuItem /template/ Viewbox#PART_IconPresenter">
+        <Setter Property="Margin" Value="0,0,10,0" />
+    </Style>
+
+    <Style Selector="MenuItem:checked:toggle /template/ ContentControl#PART_ToggleIconPresenter">
+        <Setter Property="Grid.Column" Value="4" />
+        <Setter Property="Margin" Value="10,0,0,0" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        <Setter Property="Content">
+            <Template>
+                <TextBlock FontFamily="{StaticResource IconFontFamily}" Text="{StaticResource Glyph.Checkmark}" FontSize="16" VerticalAlignment="Center" />
+            </Template>
+        </Setter>
+    </Style>
+
+    <Style Selector="MenuItem TextBlock.Icon">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="NumericUpDown">
+        <Setter Property="Width" Value="120" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="ButtonSpinnerLocation" Value="Right" />
+    </Style>
+
+    <Style Selector="NumericUpDown /template/ ButtonSpinner">
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+    </Style>
+
+    <Style Selector="NumericUpDown /template/ StackPanel#PART_SpinnerPanel">
+        <Setter Property="Margin" Value="0,0,2,0" />
+    </Style>
+
+    <Style Selector="NumericUpDown /template/ RepeatButton">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="NumericUpDown /template/ RepeatButton#PART_IncreaseButton">
+        <Setter Property="Content" Value="{StaticResource Glyph.ChevronUp}" />
+    </Style>
+
+    <Style Selector="NumericUpDown /template/ RepeatButton#PART_DecreaseButton">
+        <Setter Property="Content" Value="{StaticResource Glyph.ChevronDown}" />
+    </Style>
+
+    <Style Selector="TabStrip">
+        <Setter Property="Height" Value="40" />
+    </Style>
+
+    <Style Selector="TabStripItem">
+        <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="4,0" />
+        <Setter Property="Margin" Value="0,0,20,0" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TabStripItem:selected">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.GroupHeader">
+        <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Margin" Value="4,20,4,8" />
+    </Style>
+
+    <Style Selector="TextBlock.FieldLabel">
+        <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="Border.Row.Edit TextBlock.FieldLabel">
+        <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+
+    <Style Selector="TextBlock.Caption">
+        <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.Warn">
+        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    </Style>
+
+    <Style Selector="Border.Tile">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+    </Style>
+
+    <Style Selector="Border.Tile.Large">
+        <Setter Property="Width" Value="48" />
+        <Setter Property="Height" Value="48" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+    </Style>
+
+    <Style Selector="Border.Badge">
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+        <Setter Property="TextElement.FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.BadgeIcon">
+        <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.Badge.Accent">
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Border.Alert">
+        <Setter Property="Background" Value="{DynamicResource AlertWarnFillBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="TextElement.FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    </Style>
+
+    <Style Selector="Panel.Ring">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+    </Style>
+
+    <Style Selector="Panel.Ring Arc">
+        <Setter Property="Stroke" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+    </Style>
+
+    <Style Selector="Panel.Ring TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Panel.Ring.Warn Arc">
+        <Setter Property="Stroke" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    </Style>
+
+    <Style Selector="Panel.Ring.Warn TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    </Style>
+</Styles>

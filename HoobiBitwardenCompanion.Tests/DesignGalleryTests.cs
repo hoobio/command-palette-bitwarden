@@ -1,0 +1,499 @@
+using System.Text.Json;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using FluentAvalonia.UI.Controls;
+using HoobiBitwarden.Ipc;
+using HoobiBitwardenCompanion.Services;
+using HoobiBitwardenCompanion.ViewModels;
+using HoobiBitwardenCompanion.Views;
+
+namespace HoobiBitwardenCompanion.Tests;
+
+public class DesignGalleryTests(AvaloniaSession session)
+{
+  private const string Work = "11111111-1111-4111-8111-111111111111";
+  private const string Personal = "22222222-2222-4222-8222-222222222222";
+  private const string Finance = "33333333-3333-4333-8333-333333333333";
+  private const string Acme = "44444444-4444-4444-8444-444444444444";
+  private const string Engineering = "55555555-5555-4555-8555-555555555555";
+  private const string Operations = "66666666-6666-4666-8666-666666666666";
+  private const string LoginGroup = "Login credentials";
+  private static readonly DateTime Revision = new(2025, 3, 14, 9, 30, 0, DateTimeKind.Utc);
+
+  private static string? Dir => Environment.GetEnvironmentVariable("COMPANION_SCREENSHOT_DIR") is { Length: > 0 } dir ? dir : null;
+
+  private sealed record Entry(string Id, string Name, ItemDto Detail, EditableItem Edit);
+
+  private sealed class Gallery
+  {
+    public List<Entry> Entries { get; } = [];
+
+    public string Id(string name) => Entries.Single(e => e.Name == name).Id;
+
+    public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken) => Task.FromResult<JsonElement?>(op switch
+    {
+      Ops.ListFilters => IpcJson.ToElement(new FiltersResponse(
+        [new FilterRef(Finance, "Finance"), new FilterRef(Personal, "Personal"), new FilterRef(Work, "Work")],
+        [new FilterRef(Engineering, "Engineering", Acme), new FilterRef(Operations, "Operations", Acme)],
+        [new FilterRef(Acme, "Acme Ltd")]), IpcJson.Default.FiltersResponse),
+      Ops.GetItem => IpcJson.ToElement(Find(IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id).Detail, IpcJson.Default.ItemDto),
+      Ops.GetEditableItem => IpcJson.ToElement(Find(IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id).Edit, IpcJson.Default.EditableItem),
+      Ops.GetTotp => IpcJson.ToElement(new TotpResponse("482 913", 18, 30), IpcJson.Default.TotpResponse),
+      Ops.Reveal => IpcJson.ToElement(new SecretResponse("correct-Horse-7-battery"), IpcJson.Default.SecretResponse),
+      Ops.GetPasswordHistory => IpcJson.ToElement(new PasswordHistoryResponse([Revision.AddDays(-12), Revision.AddDays(-95), Revision.AddDays(-400)]), IpcJson.Default.PasswordHistoryResponse),
+      Ops.Generate => Generate(IpcJson.Read(payload, IpcJson.Default.GeneratorOptions)),
+      Ops.ListGeneratorHistory => IpcJson.ToElement(new GeneratorHistoryResponse(
+      [
+        new GeneratedEntry(4, GeneratorKinds.Password, Revision.AddMinutes(-2)),
+        new GeneratedEntry(3, GeneratorKinds.Passphrase, Revision.AddMinutes(-9)),
+        new GeneratedEntry(2, GeneratorKinds.Password, Revision.AddHours(-3)),
+      ]), IpcJson.Default.GeneratorHistoryResponse),
+      _ => null,
+    });
+
+    private Entry Find(string id) => Entries.Single(e => e.Id == id);
+
+    private static JsonElement Generate(GeneratorOptions options) => IpcJson.ToElement(new GeneratedResponse(
+      options.Kind == GeneratorKinds.Passphrase ? "Granite-Velvet-Harbor-Lantern" : "rT8#mQ2v$Lx9pW4n!Zc7", 5), IpcJson.Default.GeneratedResponse);
+  }
+
+  private static Gallery Build()
+  {
+    var g = new Gallery();
+    var github = new EditableItem(null, 1, "GitHub", Work, null, [], true, false, "Recovery codes are in the safe.\nSSO through the company IdP.", Revision,
+      [new CustomFieldEdit("Account ID", "octo-4821", 0), new CustomFieldEdit("API token", "ghp_x8Kq", 1), new CustomFieldEdit("Two-factor on", "true", 2), new CustomFieldEdit("Linked password", null, 3, 101)],
+      Login: new LoginEdit("octocat@example.com", "correct-Horse-7-battery", "JBSWY3DPEHPK3PXP", [new UriEdit("https://github.com/login", 1), new UriEdit("https://gist.github.com")]));
+    Add(g, github,
+    [
+      new(ItemFields.Username, "Username", LoginGroup, "octocat@example.com", false),
+      new(ItemFields.Password, "Password", LoginGroup, null, true),
+      new(ItemFields.Totp, "Verification code (TOTP)", LoginGroup, null, true),
+      new(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://github.com/login", false, CanOpen: true),
+      new(ItemFields.UriPrefix + "1", "Website", "Autofill options", "https://gist.github.com", false, CanOpen: true),
+      new(ItemFields.CustomPrefix + "0", "Account ID", "Custom fields", "octo-4821", false),
+      new(ItemFields.CustomPrefix + "1", "API token", "Custom fields", null, true),
+      new(ItemFields.CustomPrefix + "2", "Two-factor on", "Custom fields", "true", false),
+      new(ItemFields.Notes, "Notes", "Additional options", null, true, IsMultiline: true),
+    ], attachments: [new("a1", "recovery-codes.pdf", "48 KB"), new("a2", "ssh-config.txt", "2 KB")], passwordUpdated: Revision.AddDays(-12));
+
+    Login(g, "Google", "jane.doe@gmail.com", Personal, favorite: true);
+    Login(g, "Bank of Example", "jdoe-4471", Finance, reprompt: true);
+    Card(g, "Visa Platinum", "Visa", "4242", Finance, favorite: true);
+    Identity(g, "Jane Doe", "jane@example.com", Personal);
+    Note(g, "Wi-Fi codes", Personal);
+    Ssh(g, "Build server", null, org: Acme, collections: [Engineering]);
+    return g;
+  }
+
+  private static void Add(Gallery g, EditableItem edit, IReadOnlyList<FieldDto> fields, IReadOnlyList<AttachmentDto>? attachments = null, DateTime? passwordUpdated = null, bool reprompt = false)
+  {
+    var id = Guid.NewGuid().ToString();
+    var folderName = edit.FolderId switch { Work => "Work", Personal => "Personal", Finance => "Finance", _ => null };
+    g.Entries.Add(new Entry(
+      id,
+      edit.Name,
+      new ItemDto(id, edit.Name, edit.Type, folderName, edit.OrganizationId is null ? null : "Acme Ltd", edit.Favorite, reprompt, reprompt, Revision.AddDays(-700), Revision, passwordUpdated,
+        reprompt ? [] : fields, reprompt ? null : attachments ?? []),
+      edit with { Id = id, Reprompt = reprompt }));
+  }
+
+  private static void Login(Gallery g, string name, string username, string? folder, bool favorite = false, bool reprompt = false)
+  {
+    var host = name.ToLowerInvariant().Replace(" ", string.Empty, StringComparison.Ordinal) + ".com";
+    var edit = new EditableItem(null, 1, name, folder, null, [], favorite, reprompt, null, Revision, [],
+      Login: new LoginEdit(username, "s3cret-Value-12", null, [new UriEdit("https://" + host)]));
+    Add(g, edit,
+    [
+      new(ItemFields.Username, "Username", LoginGroup, username, false),
+      new(ItemFields.Password, "Password", LoginGroup, null, true),
+      new(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://" + host, false, CanOpen: true),
+    ], reprompt: reprompt);
+  }
+
+  private static void Card(Gallery g, string name, string brand, string last4, string? folder, bool favorite = false)
+  {
+    var edit = new EditableItem(null, 3, name, folder, null, [], favorite, false, null, Revision, [],
+      Card: new CardEdit("Jane Doe", brand, "424242424242" + last4, "09", "2029", "123"));
+    Add(g, edit,
+    [
+      new(ItemFields.CardholderName, "Cardholder name", "Card details", "Jane Doe", false),
+      new(ItemFields.CardBrand, "Brand", "Card details", brand, false),
+      new(ItemFields.CardNumber, "Number", "Card details", null, true),
+      new(ItemFields.CardExpiration, "Expiration date", "Card details", "09 / 2029", false),
+      new(ItemFields.CardCode, "Security code", "Card details", null, true),
+    ]);
+  }
+
+  private static void Identity(Gallery g, string name, string email, string? folder)
+  {
+    var edit = new EditableItem(null, 4, name, folder, null, [], false, false, null, Revision, [],
+      Identity: new IdentityEdit("Ms", "Jane", "Q", "Doe", "1 Park Row", "Flat 2", null, "Leeds", "West Yorkshire", "LS1 5AB", "GB", "Acme Ltd", email, "0113 496 0000", "QQ123456C", "jdoe", "502135326", "DOE99901019JQ9AB"));
+    Add(g, edit,
+    [
+      new(ItemFields.IdentityName, "Name", "Personal details", "Jane Q Doe", false),
+      new(ItemFields.IdentityUsername, "Username", "Personal details", "jdoe", false),
+      new(ItemFields.IdentityCompany, "Company", "Personal details", "Acme Ltd", false),
+      new(ItemFields.IdentityEmail, "Email", "Contact info", email, false),
+      new(ItemFields.IdentityPhone, "Phone", "Contact info", "0113 496 0000", false),
+      new(ItemFields.IdentityAddress, "Address", "Contact info", "1 Park Row, Flat 2\nLeeds, West Yorkshire, LS1 5AB\nGB", false, IsMultiline: true),
+    ]);
+  }
+
+  private static void Note(Gallery g, string name, string? folder)
+  {
+    var edit = new EditableItem(null, 2, name, folder, null, [], false, false, "Network: Home-5G\nPassword: in the router drawer", Revision, []);
+    Add(g, edit, [new(ItemFields.Notes, "Notes", "Additional options", null, true, IsMultiline: true)]);
+  }
+
+  private static void Ssh(Gallery g, string name, string? folder, string? org = null, string[]? collections = null)
+  {
+    var edit = new EditableItem(null, 5, name, folder, org, collections ?? [], false, false, null, Revision, [new CustomFieldEdit("host", "build.acme.example", 0)],
+      SshKey: new SshKeyEdit("-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmU=\n-----END OPENSSH PRIVATE KEY-----", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB7 jane@acme", "SHA256:9x3Kf2Lq7hVb0YtRz8mN1pQwEeC4uAiJsDgHkL5oPZw"));
+    Add(g, edit,
+    [
+      new(ItemFields.SshPrivateKey, "Private key", "SSH key", null, true, IsMultiline: true),
+      new(ItemFields.SshPublicKey, "Public key", "SSH key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB7 jane@acme", false),
+      new(ItemFields.SshFingerprint, "Fingerprint", "SSH key", "SHA256:9x3Kf2Lq7hVb0YtRz8mN1pQwEeC4uAiJsDgHkL5oPZw", false),
+      new(ItemFields.CustomPrefix + "0", "host", "Custom fields", "build.acme.example", false),
+    ]);
+  }
+
+  private sealed class Host : IDisposable
+  {
+    private readonly ChannelPair _pair;
+
+    public Host(Gallery gallery)
+    {
+      Gallery = gallery;
+      _pair = new ChannelPair(gallery.HandleAsync);
+      Channel = new PipeChannel(_pair.CompanionInput, _pair.CompanionOutput, (_, _, _) => Task.FromResult<JsonElement?>(null));
+      _ = Task.Run(Channel.RunAsync);
+    }
+
+    public Gallery Gallery { get; }
+
+    public PipeChannel Channel { get; }
+
+    public void Dispose()
+    {
+      Channel.Dispose();
+      _pair.Dispose();
+    }
+  }
+
+  private static void Settle(TopLevel top)
+  {
+    for (var i = 0; i < 40; i++)
+    {
+      AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+      Dispatcher.UIThread.RunJobs();
+    }
+
+    top.UpdateLayout();
+  }
+
+  private static void Save(TopLevel top, string name)
+  {
+    Settle(top);
+    var frame = top.CaptureRenderedFrame();
+    Assert.NotNull(frame);
+    frame.Save(Path.Combine(Dir!, name), new PngBitmapEncoderOptions());
+  }
+
+  private static async Task<(ItemWindow Window, ItemViewModel Vm)> ItemAsync(Host host, string name, double height = 760)
+  {
+    var vm = new ItemViewModel(host.Gallery.Id(name), host.Channel);
+    var window = new ItemWindow(vm) { Width = 440, Height = height };
+    window.Show();
+    await vm.LoadAsync();
+    Settle(window);
+    return (window, vm);
+  }
+
+  private static void ShowDialog(TopLevel window, FAContentDialog dialog, string name)
+  {
+    var shown = dialog.ShowAsync(window);
+    AvaloniaSession.WaitFor(() => dialog.IsAttachedToVisualTree());
+    var root = dialog.GetVisualDescendants().OfType<Panel>().First(p => p.Name == "LayoutRoot");
+    AvaloniaSession.WaitFor(() =>
+    {
+      AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+      return root.Opacity >= 1;
+    });
+    Save(window, name);
+    dialog.Hide();
+    AvaloniaSession.WaitFor(() => shown.IsCompleted);
+  }
+
+  private static void OpenComboInOverlay(TopLevel window, ComboBox box, string name)
+  {
+    box.ApplyTemplate();
+    box.GetVisualDescendants().OfType<Popup>().Single().ShouldUseOverlayLayer = true;
+    box.IsDropDownOpen = true;
+    AvaloniaSession.WaitFor(() => box.GetVisualDescendants().OfType<Popup>().Single().IsOpen);
+    Save(window, name);
+    box.IsDropDownOpen = false;
+  }
+
+  private static (ContextMenu Menu, Popup Popup) OpenAlwaysOnTopMenu(ItemWindow window)
+  {
+    var root = window.FindControl<Grid>("Root")!;
+    var menu = root.ContextMenu!;
+    menu.PlacementTarget = window.FindControl<Grid>("AppTitleBar");
+    menu.Placement = PlacementMode.BottomEdgeAlignedLeft;
+    menu.HorizontalOffset = 120;
+    menu.VerticalOffset = -12;
+    menu.Open(root);
+    var popup = (Popup)typeof(ContextMenu).GetField("_popup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(menu)!;
+    menu.Close();
+    popup.ShouldUseOverlayLayer = true;
+    menu.Open(root);
+    return (menu, popup);
+  }
+
+  private static FAContentDialog[] ItemDialogs() =>
+  [
+    ItemView.CreateActionDialog(new ActionDialogRequest("Remove item", "Archive or delete.", "Permanently delete") { PrimaryLabel = "Archive" }).Dialog,
+    ItemView.CreateActionDialog(new ActionDialogRequest("Delete attachment", "\"recovery-codes.pdf\" will be deleted permanently. You cannot undo this.", "Delete attachment")).Dialog,
+    ItemView.CreateConfirmDialog("Discard changes?", "Your changes to this item are not saved.", "Discard", "Keep editing"),
+    ItemView.CreateConfirmDialog("Item changed", "This item changed in the vault after you started editing.", "Reload", "Keep editing"),
+  ];
+
+  [Fact]
+  public Task NoHoverOrPressFade_PassesThroughALighterColour() => session.RunAsync(async () =>
+  {
+    using var host = new Host(Build());
+    var flashes = new SortedSet<string>(StringComparer.Ordinal);
+
+    foreach (var name in FlashItems)
+    {
+      var (itemWindow, itemVm) = await ItemAsync(host, name);
+      HoverFlashProbe.Probe(itemWindow, flashes);
+      if (itemVm.CanEdit)
+      {
+        await itemVm.EditCommand.ExecuteAsync(null);
+        Settle(itemWindow);
+        HoverFlashProbe.Probe(itemWindow, flashes);
+        var combo = itemWindow.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.IsEffectivelyVisible);
+        if (combo is not null)
+        {
+          combo.ApplyTemplate();
+          combo.GetVisualDescendants().OfType<Popup>().Single().ShouldUseOverlayLayer = true;
+          combo.IsDropDownOpen = true;
+          Settle(itemWindow);
+          HoverFlashProbe.Probe(itemWindow, flashes);
+          combo.IsDropDownOpen = false;
+        }
+
+        if (itemWindow.GetVisualDescendants().OfType<Button>().SingleOrDefault(b => b.Name == "AddFieldButton" && b.IsEffectivelyVisible) is { Flyout: PopupFlyoutBase flyout } addField)
+        {
+          ((Popup)typeof(PopupFlyoutBase).GetProperty("Popup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!.GetValue(flyout)!).ShouldUseOverlayLayer = true;
+          flyout.ShowAt(addField);
+          Settle(itemWindow);
+          Assert.True(flyout.IsOpen);
+          HoverFlashProbe.Probe(itemWindow, flashes);
+          HoverFlashProbe.ProbePopups(itemWindow, flashes);
+          flyout.Hide();
+        }
+
+        await itemVm.CancelEditCommand.ExecuteAsync(null);
+      }
+
+      itemWindow.Close();
+    }
+
+    var (window, vm) = await ItemAsync(host, "GitHub");
+    var generatorVm = new GeneratorViewModel(host.Channel);
+    await generatorVm.InitializeAsync();
+    foreach (var dialog in ItemDialogs().Append(GeneratorView.CreateDialog(generatorVm)))
+    {
+      var shown = dialog.ShowAsync(window);
+      AvaloniaSession.WaitFor(() => dialog.IsAttachedToVisualTree());
+      Settle(window);
+      HoverFlashProbe.Probe(window, flashes);
+      dialog.Hide();
+      AvaloniaSession.WaitFor(() => shown.IsCompleted);
+    }
+
+    var (menu, _) = OpenAlwaysOnTopMenu(window);
+    Settle(window);
+    HoverFlashProbe.Probe(window, flashes);
+    HoverFlashProbe.ProbePopups(window, flashes);
+    menu.Close();
+    window.Close();
+
+    ToastWindow.Show(null, "Copied Password");
+    Settle(ToastWindow.Current!);
+    HoverFlashProbe.Probe(ToastWindow.Current!, flashes);
+    ToastWindow.Current!.Hide();
+
+    var themes = new Window { Width = 600, Height = 900, Content = ThemeGallery() };
+    themes.Show();
+    Settle(themes);
+    HoverFlashProbe.Probe(themes, flashes);
+    themes.Close();
+
+    Assert.True(flashes.Count == 0, string.Join(Environment.NewLine, flashes));
+  });
+
+  private static readonly string[] FlashItems = ["GitHub", "Bank of Example"];
+
+  private static readonly string[] Options = ["One", "Two"];
+
+  private static StackPanel ThemeGallery()
+  {
+    Button Themed(string key) => new() { Content = key, Theme = (Avalonia.Styling.ControlTheme)Avalonia.Application.Current!.FindResource(key)! };
+
+    return new StackPanel
+    {
+      Spacing = 4,
+      Children =
+      {
+        new Button { Content = "Default" },
+        Themed("AccentButtonStyle"),
+        Themed("DangerButtonStyle"),
+        Themed("DialogCloseButtonStyle"),
+        Themed("IconButtonStyle"),
+        Themed("DangerIconButtonStyle"),
+        Themed("AddRowButtonStyle"),
+        new ToggleButton { Content = "Toggle" },
+        new ToggleButton { Content = "Toggled", IsChecked = true },
+        new RepeatButton { Content = "Repeat" },
+        new CheckBox { Content = "Check" },
+        new CheckBox { Content = "Checked", IsChecked = true },
+        new RadioButton { Content = "Radio" },
+        new ToggleSwitch(),
+        new ToggleSwitch { IsChecked = true },
+        new ComboBox { ItemsSource = Options, SelectedIndex = 0 },
+        new TextBox { Text = "Text" },
+        new TabStrip { ItemsSource = Options, SelectedIndex = 0 },
+      },
+    };
+  }
+
+  [Fact]
+  public Task Gallery_ItemWindows() => Dir is null ? Task.CompletedTask : session.RunAsync(async () =>
+  {
+    using var host = new Host(Build());
+    var (full, _) = await ItemAsync(host, "GitHub", 1500);
+    Save(full, "20-item-login-full.png");
+    full.Close();
+
+    var (login, loginVm) = await ItemAsync(host, "GitHub");
+    Save(login, "21-item-login.png");
+    await loginVm.ToggleRevealAsync(loginVm.Groups[0].Fields.Single(f => f.Key == ItemFields.Password));
+    Save(login, "22-item-login-password-revealed.png");
+    await loginVm.ShowPasswordHistoryCommand.ExecuteAsync(null);
+    login.Height = 1700;
+    Save(login, "23-item-password-history.png");
+    login.Close();
+
+    foreach (var (name, file) in new[] { ("Visa Platinum", "24-item-card.png"), ("Jane Doe", "25-item-identity.png"), ("Wi-Fi codes", "26-item-secure-note.png"),
+      ("Build server", "27-item-ssh-key.png"), ("Bank of Example", "28-item-reprompt-locked.png") })
+    {
+      var (window, _) = await ItemAsync(host, name);
+      Save(window, file);
+      window.Close();
+    }
+
+    var (errorWindow, errorVm) = await ItemAsync(host, "Google");
+    errorVm.ErrorMessage = ItemViewModel.Describe(new IpcException(IpcErrors.Conflict));
+    Save(errorWindow, "29-item-error-line.png");
+    errorVm.ErrorMessage = null;
+    ShowDialog(errorWindow, ItemView.CreateActionDialog(new ActionDialogRequest("Remove item",
+      "Archive \"Google\" or move it to the trash to keep it recoverable, or delete it permanently. You cannot undo a permanent delete.", "Permanently delete") { PrimaryLabel = "Archive" }).Dialog,
+      "31-dialog-delete.png");
+    ShowDialog(errorWindow, ItemView.CreateConfirmDialog("Item changed", "This item changed in the vault after you started editing.", "Reload", "Keep editing"), "33-dialog-conflict.png");
+    ShowDialog(errorWindow, ItemView.CreateConfirmDialog("Discard changes?", "Your changes to this item are not saved.", "Discard", "Keep editing"), "34-dialog-unsaved-changes.png");
+    ShowDialog(errorWindow, ItemView.CreateConfirmDialog("Rotate password", "Replace the password for Google? The old password is kept in password history.", "Rotate", "Cancel"),
+      "35-dialog-quick-rotate.png");
+    ShowDialog(errorWindow, ItemView.CreateActionDialog(new ActionDialogRequest("Delete attachment", "\"recovery-codes.pdf\" will be deleted permanently. You cannot undo this.", "Delete attachment")).Dialog,
+      "36-dialog-attachment-delete.png");
+    errorWindow.Close();
+
+    ItemWindow.AlwaysOnTop = true;
+    try
+    {
+      var (pinned, _) = await ItemAsync(host, "GitHub");
+      var (menu, _) = OpenAlwaysOnTopMenu(pinned);
+      Save(pinned, "38-item-always-on-top-menu.png");
+      menu.Close();
+      pinned.Close();
+    }
+    finally
+    {
+      ItemWindow.AlwaysOnTop = false;
+    }
+
+    var (attachments, _) = await ItemAsync(host, "GitHub", 1500);
+    var scroll = attachments.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.IsEffectivelyVisible);
+    scroll.Offset = new Avalonia.Vector(0, scroll.Extent.Height);
+    attachments.Height = 760;
+    Settle(attachments);
+    scroll.Offset = new Avalonia.Vector(0, scroll.Extent.Height);
+    Save(attachments, "37-item-attachments-group.png");
+    attachments.Close();
+  });
+
+  [Fact]
+  public Task Gallery_EditForms() => Dir is null ? Task.CompletedTask : session.RunAsync(async () =>
+  {
+    using var host = new Host(Build());
+    foreach (var (name, file) in new[] { ("GitHub", "40-edit-login-full.png"), ("Visa Platinum", "41-edit-card-full.png"), ("Jane Doe", "42-edit-identity-full.png"),
+      ("Wi-Fi codes", "43-edit-secure-note-full.png"), ("Build server", "44-edit-ssh-key-full.png") })
+    {
+      var (window, vm) = await ItemAsync(host, name, 1800);
+      await vm.EditCommand.ExecuteAsync(null);
+      Settle(window);
+      window.Height = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "EditorScroll").Extent.Height + 120;
+      Save(window, file);
+      if (name == "GitHub")
+      {
+        vm.Editor!.Name = string.Empty;
+        vm.Editor.Validate();
+        Save(window, "45-edit-validation-error.png");
+        vm.Editor.Name = name;
+        vm.Editor.Validate();
+        window.Height = 760;
+        Settle(window);
+        OpenComboInOverlay(window, window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "FolderBox"), "46-edit-folder-dropdown.png");
+        var match = window.GetVisualDescendants().OfType<ComboBox>().First(c => c.Name is null && c.ItemsSource == ItemEditorViewModel.MatchChoices);
+        var editor = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "EditorScroll");
+        editor.Offset = new Avalonia.Vector(0, editor.Offset.Y + Avalonia.VisualExtensions.TranslatePoint(match, default, editor)!.Value.Y - 240);
+        Settle(window);
+        OpenComboInOverlay(window, match, "47-edit-uri-match-dropdown.png");
+      }
+
+      await vm.CancelEditCommand.ExecuteAsync(null);
+      window.Close();
+    }
+  });
+
+  [Fact]
+  public Task Gallery_Generator() => Dir is null ? Task.CompletedTask : session.RunAsync(async () =>
+  {
+    File.Delete(CompanionSettings.FilePath);
+    using var host = new Host(Build());
+    foreach (var (tab, file) in new[] { (0, "50-generator-password.png"), (1, "51-generator-passphrase.png") })
+    {
+      var vm = new GeneratorViewModel(host.Channel) { SelectedTab = tab, Special = true };
+      await vm.InitializeAsync();
+      var window = new Window { Width = 480, Height = 1000, Content = new ScrollViewer { Content = new GeneratorView { DataContext = vm, Margin = new Avalonia.Thickness(24) } } };
+      window.Show();
+      Save(window, file);
+      window.Close();
+    }
+
+    var dialogHost = new Window { Width = 600, Height = 900 };
+    dialogHost.Show();
+    var dialogVm = new GeneratorViewModel(host.Channel);
+    await dialogVm.InitializeAsync();
+    ShowDialog(dialogHost, GeneratorView.CreateDialog(dialogVm), "53-generator-dialog-from-edit-form.png");
+    dialogHost.Close();
+    File.Delete(CompanionSettings.FilePath);
+  });
+}

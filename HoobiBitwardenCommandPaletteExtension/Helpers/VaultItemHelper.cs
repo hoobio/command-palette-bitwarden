@@ -9,6 +9,7 @@ using Microsoft.CommandPalette.Extensions.Toolkit;
 using Windows.System;
 using Windows.UI.ViewManagement;
 using HoobiBitwardenCommandPaletteExtension.Commands;
+using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -38,9 +39,13 @@ internal static partial class VaultItemHelper
     {
       BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url => new OpenUrlCommand(url),
       BitwardenItemType.SshKey when HasSshHost(item) => BuildSshCommand(item),
+      _ when CompanionHost.Current is { } companion => BuildOpenInWindowCommand(companion, item.Id),
       _ => BuildOpenInWebVaultCommand(item.Id),
     });
   }
+
+  private static AnonymousCommand BuildOpenInWindowCommand(CompanionHost companion, string id) =>
+    new(() => companion.ShowItem(id)) { Name = "Open in window", Result = CommandResult.Dismiss() };
 
   internal static string? ToSafeWebUrl(string? uri)
   {
@@ -58,6 +63,7 @@ internal static partial class VaultItemHelper
     BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url =>
       () => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }),
     BitwardenItemType.SshKey when HasSshHost(item) => () => StartSsh(item),
+    _ when CompanionHost.Current is { } companion => () => companion.ShowItem(item.Id),
     _ => () => Process.Start(new ProcessStartInfo(
       $"{GetVaultBaseUrl()}/#/vault?itemId={Uri.EscapeDataString(item.Id)}")
     { UseShellExecute = true }),
@@ -68,6 +74,17 @@ internal static partial class VaultItemHelper
     var items = new List<CommandContextItem>();
     var id = item.Id;
     var reprompt = item.Reprompt == 1 ? service : null;
+    var companion = CompanionHost.Current;
+
+    if (companion is not null)
+    {
+      items.Add(new CommandContextItem(Track(id, BuildOpenInWindowCommand(companion, id)))
+      {
+        Title = "Open in window",
+        Icon = new IconInfo(""),
+        RequestedShortcut = Chord(VirtualKey.O, shift: true),
+      });
+    }
 
     switch (item.Type)
     {
@@ -89,6 +106,15 @@ internal static partial class VaultItemHelper
     }
 
     AddCustomFieldContextItems(items, item, id, reprompt);
+
+    if (companion is not null && item.Type == BitwardenItemType.Login)
+    {
+      items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.RotateItem(id)) { Name = "Rotate password", Result = CommandResult.Dismiss() }))
+      {
+        Title = "Rotate password",
+        Icon = new IconInfo(""),
+      });
+    }
 
     var serverUrl = BitwardenCliService.ServerUrl;
     if (!string.IsNullOrEmpty(serverUrl))
@@ -382,14 +408,22 @@ internal static partial class VaultItemHelper
       return new IconInfo("\uE8C7");
 
     var isDark = IsDarkTheme();
-    var slug = SanitizeBrandSlug(brand);
-    var theme = isDark ? "dark" : "light";
     return FaviconService.GetOrQueue(
-      $"card-brand:{slug}:{theme}",
+      CardBrandCacheKey(brand, isDark),
       GetCardBrandImageUrl(brand, isDark),
       new IconInfo("\uE8C7"),
       priority);
   }
+
+  private static string CardBrandCacheKey(string brand, bool isDark) =>
+    $"card-brand:{SanitizeBrandSlug(brand)}:{(isDark ? "dark" : "light")}";
+
+  internal static string? IconCacheKey(BitwardenItem item) => item.Type switch
+  {
+    BitwardenItemType.Login => item.FirstHost,
+    BitwardenItemType.Card when item.CardBrand is { } brand => CardBrandCacheKey(brand, IsDarkTheme()),
+    _ => null,
+  };
 
   internal static IconInfo GetFaviconIcon(BitwardenItem item, int priority = int.MaxValue)
   {

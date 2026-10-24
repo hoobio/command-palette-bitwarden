@@ -1,0 +1,23 @@
+<Application
+    x:Class="HoobiBitwardenCompanion.App"
+    Name="Bitwarden"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sty="using:FluentAvalonia.Styling"
+    RequestedThemeVariant="Dark">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://HoobiBitwardenCompanion/Styles/Resources.axaml" />
+                <ResourceInclude Source="avares://HoobiBitwardenCompanion/Styles/Glyphs.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+    <Application.Styles>
+        <sty:FluentAvaloniaTheme PreferSystemTheme="False" PreferUserAccentColor="False" CustomAccentColor="#FF409FFF" UseSystemFontOnWindows="False" />
+        <StyleInclude Source="avares://HoobiBitwardenCompanion/Styles/Controls.axaml" />
+        <Style Selector="Window">
+            <Setter Property="Icon" Value="avares://HoobiBitwardenCompanion/Assets/app.ico" />
+        </Style>
+    </Application.Styles>
+</Application>
