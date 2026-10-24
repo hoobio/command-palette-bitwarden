@@ -125,7 +125,7 @@ internal sealed class WindowCoordinator : IDisposable
     return _mainWindow;
   }
 
-  // The companion is started by a background COM server, so a plain Activate only flashes the taskbar button.
+  // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused.
   private static void BringToFront(Window window)
   {
     window.Show();

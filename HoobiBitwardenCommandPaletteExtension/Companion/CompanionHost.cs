@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,15 +18,17 @@ internal sealed partial class CompanionHost : IDisposable
   private readonly CompanionOps _ops;
   private readonly string _exePath;
   private readonly TimeSpan? _requestTimeout;
+  private readonly Func<int, bool> _allowForeground;
   private readonly Lock _lock = new();
   private Process? _process;
   private PipeChannel? _channel;
 
-  public CompanionHost(CompanionOps ops, string? exePath = null, TimeSpan? requestTimeout = null)
+  public CompanionHost(CompanionOps ops, string? exePath = null, TimeSpan? requestTimeout = null, Func<int, bool>? allowForeground = null)
   {
     _ops = ops;
     _exePath = exePath ?? Path.Combine(AppContext.BaseDirectory, "Companion", "HoobiBitwardenCompanion.exe");
     _requestTimeout = requestTimeout;
+    _allowForeground = allowForeground ?? AllowSetForegroundWindow;
     _ops.Locked += NotifyLocked;
     _ops.VaultChanged += NotifyVaultChanged;
     _ops.VaultChanged += Prewarm;
@@ -60,6 +63,7 @@ internal sealed partial class CompanionHost : IDisposable
   internal async Task<JsonElement?> RequestAsync(string op, JsonElement? payload)
   {
     var channel = EnsureStarted();
+    GrantForeground();
     try
     {
       return await channel.RequestAsync(op, payload);
@@ -69,6 +73,16 @@ internal sealed partial class CompanionHost : IDisposable
       MarkDead(channel, kill: true);
       throw;
     }
+  }
+
+  // Command Palette grants foreground rights to the extension for each command (CoAllowSetForegroundWindow), and only a holder can pass them on before Invoke returns.
+  private void GrantForeground()
+  {
+    int? pid;
+    lock (_lock)
+      pid = _process?.Id;
+    if (pid is { } id && !_allowForeground(id))
+      DebugLogService.Log("Companion", $"AllowSetForegroundWindow failed: {Marshal.GetLastPInvokeError()}");
   }
 
   internal void NotifyLocked() => Notify(Ops.Locked);
@@ -208,4 +222,8 @@ internal sealed partial class CompanionHost : IDisposable
       Stop();
     _ops.Dispose();
   }
+
+  [LibraryImport("user32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool AllowSetForegroundWindow(int dwProcessId);
 }

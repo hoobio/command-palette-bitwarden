@@ -35,6 +35,22 @@ public class CompanionHostTests
   }
 
   [Fact]
+  public async Task Request_GrantsTheCompanionForegroundRights_BeforeItReturns()
+  {
+    var granted = new List<int>();
+    using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), allowForeground: pid =>
+    {
+      granted.Add(pid);
+      return false;
+    });
+
+    var request = host.RequestAsync("unknown", null);
+
+    Assert.Equal([host.Process!.Id], granted);
+    Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => request.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken))).Code);
+  }
+
+  [Fact]
   public void NotifyLocked_DoesNotStartTheCompanion()
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()));
