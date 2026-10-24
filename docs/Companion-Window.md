@@ -5,9 +5,26 @@ The companion window shows a vault item in its own window next to Command Palett
 ## Window commands
 
 - **Open in window** is in the more-commands menu of each vault item (`Ctrl+Shift+O`), after the commands for the item type and before **View in Web Vault**. The Enter and `Ctrl+Enter` actions of the item do not change.
-- **Open vault** is a top-level command. In this release it opens a placeholder vault window. The vault list comes in a later release.
+- **Open vault** is a top-level command. It opens the vault window.
 
 If the window for an item is already open, the command brings that window to the front and loads the item again. You can open windows for more than one item at the same time.
+
+## Vault window
+
+The vault window has the same layout as Bitwarden Desktop. It is read-only in this release.
+
+- **Filters** (left): All items, Favourites, each item type (Login, Card, Identity, Secure note, SSH key), each folder and No folder, each collection, each organisation, Archive and Trash. Collections and organisations show only when your account has them. Archive shows only when you have archived items. All items and the other filters do not include items in the archive or in the trash.
+- **Items** (middle): the name, and below it the username, card brand and last four digits, email or SSH fingerprint. A login shows its website icon when Command Palette already downloaded it. The search box filters the list as you type. It finds text in the name, that subtext and the website hosts. It does not search notes.
+- **Item details** (right): the same view as the item window. Select **Open in own window** to open the item in an item window, which you can keep on top of other windows.
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+F` | Go to the search box |
+| `Up`, `Down` | Select the previous or next item |
+| `Enter` | Open the selected item in its own window |
+| `Esc` | Clear the search |
+
+When the vault changes, for example after a sync, the vault window and every item window load the new data. The selected item stays selected.
 
 ## Item window
 
@@ -42,6 +59,6 @@ If the item changes in the vault while the window is open, the window loads the 
 
 ## Locked vault
 
-When the vault locks or auto-locks, every item window removes the values it shows, stops the verification code and shows that the vault is locked. Unlock the vault in Command Palette and open the item again.
+When the vault locks or auto-locks, every item window removes the values it shows, stops the verification code and shows that the vault is locked. The vault window removes the list and the item details and shows that the vault is locked. Unlock the vault in Command Palette. The vault window and the open item windows then load the items again.
 
 See [Architecture](Architecture) for the process model and the pipe protocol.
