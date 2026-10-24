@@ -183,6 +183,34 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void BuildContextItems_OpenInWindow_FollowsTheTypeSpecificCommands()
+  {
+    BitwardenCliService.ResetStaticState();
+    var item = new BitwardenItem
+    {
+      Id = Guid.NewGuid().ToString(),
+      Type = BitwardenItemType.Login,
+      Username = "user@test.com",
+      Password = ProtectedSecret.From("secret"),
+      CustomFields = new Dictionary<string, CustomField> { ["note"] = new("value") },
+    };
+    var withoutCompanion = VaultItemHelper.BuildContextItems(item);
+    using var companion = new Companion.CompanionHost(new Companion.CompanionOps(new BitwardenCliService()));
+    Companion.CompanionHost.Current = companion;
+    try
+    {
+      var contextItems = VaultItemHelper.BuildContextItems(item);
+      Assert.Equal(withoutCompanion.Select(ci => ci.Title), contextItems.SkipLast(1).Select(ci => ci.Title));
+      Assert.Equal("Open in window", contextItems[^1].Title);
+      Assert.NotEqual("Open in window", contextItems[0].Title);
+    }
+    finally
+    {
+      Companion.CompanionHost.Current = null;
+    }
+  }
+
+  [Fact]
   public void CopyCommands_AfterSecretsDisposed_DoNotThrow()
   {
     var item = new BitwardenItem
