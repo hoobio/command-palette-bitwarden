@@ -1609,7 +1609,8 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  private const int DetachExitGraceMs = 10_000;
+  // Detach rather than kill on early exit: killing `bw sync` mid-flush half-writes data.json and a later `bw list` emits "Vault is locked."
+  private const int DetachExitGraceMs = 30_000;
   private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts, Action? onProcessEnd)
   {
     _ = Task.Run(async () =>

@@ -120,7 +120,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                             DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedResults.Count} items");
                             _currentItems = BuildListItems(loadedResults, text);
                             IsLoading = false;
-                            ReverifyIfSuspiciouslyEmpty(loadedResults.Count);
+                            ReverifyIfSuspiciouslyEmpty();
                             break;
                         case VaultStatus.Unlocked:
                             _currentItems = BuildLoadingPlaceholder("Retrieving items from vault...", "bw list items");
@@ -248,13 +248,13 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _initComplete = true;
         IsLoading = false;
         if (published) RaiseItemsChanged();
-        if (published) ReverifyIfSuspiciouslyEmpty(count);
+        ReverifyIfSuspiciouslyEmpty();
     }
 
     // A session that went stale without erroring lists zero items (the "No items found" symptom)
-    private void ReverifyIfSuspiciouslyEmpty(int resultCount)
+    private void ReverifyIfSuspiciouslyEmpty()
     {
-        if (resultCount > 0) { _emptyVaultReverifyArmed = true; return; }
+        if (_service.CacheCount > 0) { _emptyVaultReverifyArmed = true; return; }
         if (!string.IsNullOrWhiteSpace(_currentSearchText)) return;
         if (_handlingAction) return;
         if (!_emptyVaultReverifyArmed) return;
@@ -298,8 +298,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _autoBiometricTriggered = false;
                 HideBiometricStatus();
                 _emptyVaultReverifyArmed = true;
-                if (TryPublishVaultList(out var rebuiltCount))
-                    ReverifyIfSuspiciouslyEmpty(rebuiltCount);
+                TryPublishVaultList(out _);
+                ReverifyIfSuspiciouslyEmpty();
                 break;
             case VaultStatus.Unlocked when _service.IsRefreshing:
                 IsLoading = true;
@@ -1246,7 +1246,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var built = BuildListItems(results, text);
         lock (_itemsLock)
         {
-            if (text != _currentSearchText || generation <= _publishedGeneration) return false;
+            if (text != _currentSearchText || generation <= _publishedGeneration || _service.LastStatus != VaultStatus.Unlocked) return false;
             _publishedGeneration = generation;
             _currentItems = built;
             return true;
