@@ -16,5 +16,8 @@
     <Application.Styles>
         <sty:FluentAvaloniaTheme PreferSystemTheme="False" PreferUserAccentColor="False" CustomAccentColor="#FF409FFF" UseSystemFontOnWindows="False" />
         <StyleInclude Source="avares://HoobiBitwardenCompanion/Styles/Controls.axaml" />
+        <Style Selector="Window">
+            <Setter Property="Icon" Value="avares://HoobiBitwardenCompanion/Assets/app.ico" />
+        </Style>
     </Application.Styles>
 </Application>
