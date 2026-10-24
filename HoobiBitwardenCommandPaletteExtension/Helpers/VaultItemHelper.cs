@@ -70,16 +70,6 @@ internal static partial class VaultItemHelper
     var id = item.Id;
     var reprompt = item.Reprompt == 1 ? service : null;
 
-    if (CompanionHost.Current is { } companion)
-    {
-      items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.ShowItem(id)) { Name = "Open in window", Result = CommandResult.Dismiss() }))
-      {
-        Title = "Open in window",
-        Icon = new IconInfo(""),
-        RequestedShortcut = Chord(VirtualKey.O, shift: true),
-      });
-    }
-
     switch (item.Type)
     {
       case BitwardenItemType.Login:
@@ -100,6 +90,16 @@ internal static partial class VaultItemHelper
     }
 
     AddCustomFieldContextItems(items, item, id, reprompt);
+
+    if (CompanionHost.Current is { } companion)
+    {
+      items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.ShowItem(id)) { Name = "Open in window", Result = CommandResult.Dismiss() }))
+      {
+        Title = "Open in window",
+        Icon = new IconInfo(""),
+        RequestedShortcut = Chord(VirtualKey.O, shift: true),
+      });
+    }
 
     var serverUrl = BitwardenCliService.ServerUrl;
     if (!string.IsNullOrEmpty(serverUrl))
