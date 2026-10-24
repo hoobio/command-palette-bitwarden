@@ -63,6 +63,7 @@ internal sealed class BitwardenItem
   public DateTime? DeletedDate { get; init; }
   public DateTime? ArchivedDate { get; init; }
   public IReadOnlyList<ItemAttachment> Attachments { get; init; } = Array.Empty<ItemAttachment>();
+  public bool EditableFromCache { get; init; }
 
   public string? Username { get; init; }
   public ProtectedSecret? Password { get; init; }

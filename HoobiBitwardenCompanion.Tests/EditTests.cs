@@ -160,6 +160,55 @@ public class EditTests(AvaloniaSession session)
     }
   }
 
+  private static async Task UntilAsync(Func<bool> condition)
+  {
+    for (var i = 0; i < 500 && !condition(); i++)
+      await Task.Delay(10);
+    Assert.True(condition());
+  }
+
+  [Fact]
+  public Task Edit_UsesTheFiltersPrefetchedOnLoad() => session.RunAsync(async () =>
+  {
+    var item = Sample(1);
+    using var h = new Harness(item);
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+    await UntilAsync(() => h.Extension.Payloads(Ops.ListFilters).Count == 1);
+    await Task.Delay(50);
+
+    await vm.EditCommand.ExecuteAsync(null);
+
+    Assert.NotNull(vm.Editor);
+    Assert.Single(h.Extension.Payloads(Ops.ListFilters));
+    Assert.Single(h.Extension.Payloads(Ops.GetEditableItem));
+
+    await vm.CancelEditCommand.ExecuteAsync(null);
+    vm.OnLocked();
+    await vm.EditCommand.ExecuteAsync(null);
+    Assert.Equal(2, h.Extension.Payloads(Ops.ListFilters).Count);
+  });
+
+  [Fact]
+  public Task FailedFilterPrefetch_StaysQuiet_AndEditAsksAgain() => session.RunAsync(async () =>
+  {
+    var item = Sample(1);
+    using var h = new Harness(item);
+    h.Extension.FailWith = IpcErrors.Locked;
+    h.Extension.FailOp = Ops.ListFilters;
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+    await UntilAsync(() => h.Extension.Payloads(Ops.ListFilters).Count == 1);
+    await Task.Delay(50);
+    Assert.Null(vm.ErrorMessage);
+
+    h.Extension.FailWith = null;
+    await vm.EditCommand.ExecuteAsync(null);
+
+    Assert.NotNull(vm.Editor);
+    Assert.Equal(2, h.Extension.Payloads(Ops.ListFilters).Count);
+  });
+
   [Fact]
   public Task EditCancel_TracksDirtyState_AndPromptsOnlyWhenDirty() => session.RunAsync(async () =>
   {

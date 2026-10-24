@@ -28,10 +28,26 @@ internal sealed partial class CompanionHost : IDisposable
     _requestTimeout = requestTimeout;
     _ops.Locked += NotifyLocked;
     _ops.VaultChanged += NotifyVaultChanged;
+    _ops.VaultChanged += Prewarm;
     _ops.IconsChanged += NotifyIconsChanged;
   }
 
   internal Process? Process => _process;
+
+  // The vault cache loads after warmup and after an unlock, so the companion cold start is paid before the first window is asked for.
+  internal void Prewarm()
+  {
+    if (!_ops.IsUnlocked)
+      return;
+    try
+    {
+      EnsureStarted();
+    }
+    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+    {
+      DebugLogService.Log("Companion", $"Prewarm failed: {ex.GetType().Name}");
+    }
+  }
 
   public void ShowItem(string id) =>
     _ = SendAsync(Ops.ShowItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
@@ -186,6 +202,7 @@ internal sealed partial class CompanionHost : IDisposable
   {
     _ops.Locked -= NotifyLocked;
     _ops.VaultChanged -= NotifyVaultChanged;
+    _ops.VaultChanged -= Prewarm;
     _ops.IconsChanged -= NotifyIconsChanged;
     lock (_lock)
       Stop();

@@ -76,7 +76,7 @@ Right-click the title bar or an empty area of the window and select **Always on 
 
 ## Edit an item
 
-Select **Edit** in the vault window or an item window. The form has the fields of Bitwarden Desktop:
+Select **Edit** in the vault window or an item window. The form opens from the extension's vault cache. An identity item, or an item with a boolean or linked custom field, an empty custom field or an empty website, opens after the Bitwarden CLI reads it, because the cache does not keep those values. **Save** reads the item from the Bitwarden CLI again, so passkeys and password history are kept. The form has the fields of Bitwarden Desktop:
 
 | Item type | Fields |
 |-----------|--------|

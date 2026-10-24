@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using HoobiBitwarden.Ipc;
+using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -39,8 +40,28 @@ internal sealed partial class CompanionOps
   internal async Task<EditableItem> GetEditableItemAsync(string? id, bool verified = false)
   {
     var item = FindGranted(id, null, verified);
-    return ToEditable(await _service.GetItemJsonAsync(item.Id) ?? throw new IpcException(IpcErrors.NotFound));
+    return item.EditableFromCache ? FromCache(item) : ToEditable(await _service.GetItemJsonAsync(item.Id) ?? throw new IpcException(IpcErrors.NotFound));
   }
+
+  internal static EditableItem FromCache(BitwardenItem item) => new(
+    item.Id,
+    (int)item.Type,
+    item.Name,
+    item.FolderId,
+    item.OrganizationId,
+    item.CollectionIds.ToList(),
+    item.Favorite,
+    item.Reprompt == 1,
+    item.Notes?.Reveal(),
+    item.RevisionDate,
+    item.CustomFields.Select(f => new CustomFieldEdit(f.Key, f.Value.Secret?.Reveal() ?? f.Value.Value, f.Value.IsHidden ? 1 : 0)).ToList(),
+    item.Type == BitwardenItemType.Login
+      ? new LoginEdit(item.Username, item.Password?.Reveal(), item.TotpSecret?.Reveal(),
+        item.Uris.Select(u => new UriEdit(u.Uri, u.Match == UriMatchType.Default ? null : (int)u.Match)).ToList())
+      : null,
+    item.Type == BitwardenItemType.Card ? new CardEdit(item.CardholderName, item.CardBrand, item.CardNumber?.Reveal(), item.CardExpMonth, item.CardExpYear, item.CardCode?.Reveal()) : null,
+    null,
+    item.Type == BitwardenItemType.SshKey ? new SshKeyEdit(item.SshPrivateKey?.Reveal(), item.SshPublicKey, item.SshFingerprint) : null);
 
   internal async Task<PasswordHistoryResponse> GetPasswordHistoryAsync(string? id, bool verified = false)
   {

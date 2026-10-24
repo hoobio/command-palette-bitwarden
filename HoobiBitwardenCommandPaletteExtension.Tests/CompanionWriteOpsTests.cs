@@ -224,6 +224,82 @@ public class CompanionWriteOpsTests
     Assert.Equal(1, h.CacheUpdates);
   }
 
+  private static JsonObject CacheComplete(string id)
+  {
+    var item = Login(id);
+    item["fields"] = JsonNode.Parse("""[{ "name": "pin", "value": "1234", "type": 1, "linkedId": null }, { "name": "env", "value": "prod", "type": 0, "linkedId": null }]""");
+    item["login"]!["totp"] = "JBSWY3DPEHPK3PXP";
+    item["login"]!["uris"]!.AsArray().Add(new JsonObject { ["match"] = 3, ["uri"] = "https://gist.github.com" });
+    return item;
+  }
+
+  private static string Json(EditableItem item) => JsonSerializer.Serialize(item, IpcJson.Default.EditableItem);
+
+  [Fact]
+  public async Task Edit_FromACompleteCacheEntry_StartsNoBw_AndSavesOntoTheLiveItem()
+  {
+    var id = NewId();
+    var h = new Harness(CacheComplete(id));
+
+    var editable = await h.Ops.GetEditableItemAsync(id);
+
+    Assert.Empty(h.Vault.Started);
+    Assert.Equal(Json(CompanionOps.ToEditable(CacheComplete(id))), Json(editable));
+
+    await h.Ops.UpdateItemAsync(Edited(editable));
+    var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Vault.Stdin))))!;
+    Assert.True(JsonNode.DeepEquals(Login(id)["login"]!["fido2Credentials"], sent["login"]!["fido2Credentials"]));
+    Assert.True(JsonNode.DeepEquals(Login(id)["passwordHistory"], sent["passwordHistory"]));
+    Assert.Equal("rotated-secret", sent["login"]!["password"]!.GetValue<string>());
+  }
+
+  [Fact]
+  public async Task Edit_FromACacheEntryOlderThanTheVault_IsAConflict_AndWritesNothing()
+  {
+    var id = NewId();
+    var h = new Harness(CacheComplete(id));
+    var editable = await h.Ops.GetEditableItemAsync(id);
+    h.Vault.Items[id]["revisionDate"] = "2025-02-01T00:00:00.000Z";
+
+    Assert.Equal(IpcErrors.Conflict, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.UpdateItem, Edited(editable), IpcJson.Default.EditableItem))).Code);
+    Assert.Equal(0, h.Vault.Writes);
+  }
+
+  [Fact]
+  public void EditableFromCache_OnlyWhenTheCacheKeepsEveryEditedValue()
+  {
+    static bool Check(Models.BitwardenItemType type, string fields, string uris = "[]") =>
+      BitwardenCliService.IsEditableFromCache(type, JsonNode.Parse(fields), JsonNode.Parse($$"""{ "uris": {{uris}} }"""));
+
+    Assert.True(Check(Models.BitwardenItemType.Login, """[{ "name": "a", "value": "1", "type": 0 }, { "name": "b", "value": "2", "type": 1 }]""", """[{ "uri": "x.com" }]"""));
+    Assert.True(BitwardenCliService.IsEditableFromCache(Models.BitwardenItemType.SecureNote, null, null));
+    Assert.False(Check(Models.BitwardenItemType.Identity, "[]"));
+    Assert.False(Check(Models.BitwardenItemType.Login, """[{ "name": "a", "value": "true", "type": 2 }]"""));
+    Assert.False(Check(Models.BitwardenItemType.Login, """[{ "name": "a", "value": null, "type": 3, "linkedId": 100 }]"""));
+    Assert.False(Check(Models.BitwardenItemType.Login, """[{ "name": "a", "value": "", "type": 1 }]"""));
+    Assert.False(Check(Models.BitwardenItemType.Login, """[{ "name": "", "value": "1", "type": 0 }]"""));
+    Assert.False(Check(Models.BitwardenItemType.Login, """[{ "name": "a", "value": "1", "type": 0 }, { "name": "A", "value": "2", "type": 0 }]"""));
+    Assert.False(Check(Models.BitwardenItemType.Login, "[]", """[{ "uri": "" }]"""));
+    Assert.False(Check(Models.BitwardenItemType.Login, "[]", """[{ "uri": null }]"""));
+  }
+
+  [Fact]
+  public async Task Edit_OfACardOrSshKeyFromTheCache_RevealsItsSecrets()
+  {
+    var card = NewId();
+    var ssh = NewId();
+    var h = new Harness(
+      JsonNode.Parse($$"""{ "id": "{{card}}", "type": 3, "name": "Visa", "revisionDate": "{{Revision}}", "card": { "cardholderName": "Jane", "brand": "Visa", "number": "4111", "expMonth": "4", "expYear": "2030", "code": "123" } }""")!.AsObject(),
+      JsonNode.Parse($$"""{ "id": "{{ssh}}", "type": 5, "name": "Key", "revisionDate": "{{Revision}}", "sshKey": { "privateKey": "PRIVATE", "publicKey": "ssh-ed25519 AAAA", "keyFingerprint": "SHA256:x" } }""")!.AsObject());
+
+    var cardEdit = await h.Ops.GetEditableItemAsync(card);
+    var sshEdit = await h.Ops.GetEditableItemAsync(ssh);
+
+    Assert.Empty(h.Vault.Started);
+    Assert.Equal(new CardEdit("Jane", "Visa", "4111", "4", "2030", "123"), cardEdit.Card);
+    Assert.Equal(new SshKeyEdit("PRIVATE", "ssh-ed25519 AAAA", "SHA256:x"), sshEdit.SshKey);
+  }
+
   [Fact]
   public async Task Edit_WithAStaleRevision_IsAConflict_AndWritesNothing()
   {

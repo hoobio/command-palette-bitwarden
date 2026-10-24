@@ -23,6 +23,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private bool _createUncertain;
   private bool _inOrganization;
   private bool _archiveUnavailable;
+  private FiltersResponse? _filters;
 
   public ItemViewModel(string id, PipeChannel channel)
   {
@@ -166,6 +167,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     {
       Apply(IpcJson.Read(await _channel.RequestAsync(Ops.GetItem, ItemPayload), IpcJson.Default.ItemDto));
       ErrorMessage = null;
+      if (CanEdit)
+        _ = PrefetchFiltersAsync();
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
@@ -195,6 +198,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     OnPropertyChanged(nameof(ShowAttachments));
     _totpField = null;
     _repromptRetry = null;
+    _filters = null;
     Editor = null;
     RepromptRequired = false;
     StatusMessage = null;
@@ -613,8 +617,23 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private async Task<FiltersResponse?> LoadFiltersAsync()
   {
+    if (_filters is { } prefetched)
+      return prefetched;
     var (ok, reply, _) = await SendAsync(Ops.ListFilters, null);
-    return ok ? IpcJson.Read(reply, IpcJson.Default.FiltersResponse) : null;
+    return ok ? _filters = IpcJson.Read(reply, IpcJson.Default.FiltersResponse) : null;
+  }
+
+  // The extension lists trash, archive and collections with bw for the filters, so Edit would otherwise wait on three bw processes.
+  private async Task PrefetchFiltersAsync()
+  {
+    try
+    {
+      _filters = IpcJson.Read(await _channel.RequestAsync(Ops.ListFilters, null), IpcJson.Default.FiltersResponse);
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
+    {
+      _filters = null;
+    }
   }
 
   private Task<bool> AskAsync(string title, string message, string primary, string close) =>
