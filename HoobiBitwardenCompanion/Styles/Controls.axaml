@@ -470,6 +470,14 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <Style Selector="TextBlock.Icon.Accent">
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.Icon.Mute">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+    </Style>
+
     <Style Selector="Button.CaptionButton">
         <Setter Property="CornerRadius" Value="0" />
     </Style>
@@ -736,13 +744,6 @@
     <Style Selector="TextBlock.Caption">
         <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-    </Style>
-
-    <Style Selector="TextBlock.Hint">
-        <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-        <Setter Property="Margin" Value="0,6,0,0" />
-        <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style Selector="TextBlock.Warn">

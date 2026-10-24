@@ -341,8 +341,15 @@ public class VaultWindowTests(AvaloniaSession session)
     rail.SelectedItem = vm.RailFilters[1];
     Assert.Equal(FilterKind.Favorites, vm.SelectedFilter!.Kind);
     Assert.Null(foot.SelectedItem);
+    foot.SelectedItem = vm.FootFilters.Single(f => f.Kind == FilterKind.Trash);
+    await vm.ReloadAsync();
+    Assert.Equal(FilterKind.Trash, ((FilterViewModel)foot.SelectedItem!).Kind);
+    Assert.Null(rail.SelectedItem);
     vm.SelectedFilter = vm.Filters[0];
     Assert.Equal(vm.Filters[0], rail.SelectedItem);
+    await vm.ReloadAsync();
+    Assert.Equal(vm.Filters[0], rail.SelectedItem);
+    Assert.Null(foot.SelectedItem);
     window.KeyPress(Key.F, RawInputModifiers.Control, PhysicalKey.F, "f");
     var search = window.FindControl<TextBox>("SearchBox")!;
     Assert.True(search.IsFocused);

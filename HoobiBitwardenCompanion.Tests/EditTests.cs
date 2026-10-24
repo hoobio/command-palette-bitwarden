@@ -344,6 +344,11 @@ public class EditTests(AvaloniaSession session)
     editor.PrivateKey = "-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----";
     editor.ImportSshKeyCommand.Execute(null);
     Assert.NotNull(editor.ValidationMessage);
+    Assert.False(editor.IsNameMissing);
+    Assert.Equal(editor.ValidationMessage, editor.FormMessage);
+    editor.Validate();
+    Assert.True(editor.IsNameMissing);
+    Assert.Null(editor.FormMessage);
     Assert.False(SshKeyParser.TryParse("-----BEGIN OPENSSH PRIVATE KEY-----\n!!\n-----END OPENSSH PRIVATE KEY-----", out _, out _));
     Assert.False(SshKeyParser.TryParse($"-----BEGIN OPENSSH PRIVATE KEY-----\n{Convert.ToBase64String(Encoding.ASCII.GetBytes("not-openssh"))}\n-----END OPENSSH PRIVATE KEY-----", out _, out _));
   }

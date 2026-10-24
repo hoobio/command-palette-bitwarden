@@ -15,6 +15,8 @@ internal sealed record Choice(string? Value, string Label)
 
 internal sealed partial class ItemEditorViewModel : ObservableObject
 {
+  private const string NameRequired = "Name is required.";
+
   public static readonly Choice[] MatchChoices =
     [new(null, "Default"), new("0", "Base domain"), new("1", "Host"), new("2", "Starts with"), new("3", "Exact"), new("4", "Regular expression"), new("5", "Never")];
 
@@ -223,7 +225,7 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
   [NotifyPropertyChangedFor(nameof(IsNameMissing), nameof(FormMessage))]
   public partial string? ValidationMessage { get; set; }
 
-  public bool IsNameMissing => ValidationMessage is not null && Name.Trim().Length == 0;
+  public bool IsNameMissing => ValidationMessage == NameRequired;
 
   public string? FormMessage => IsNameMissing ? null : ValidationMessage;
 
@@ -281,7 +283,7 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
 
   public string? Validate()
   {
-    ValidationMessage = Name.Trim().Length == 0 ? "Name is required."
+    ValidationMessage = Name.Trim().Length == 0 ? NameRequired
       : IsCard && !ItemRules.IsValidMonth(Empty(CardExpMonth)) ? "Expiration month must be a number from 1 to 12."
       : IsSshKey && (Empty(PrivateKey) is null || Empty(PublicKey) is null || Empty(Fingerprint) is null) ? "An SSH key needs the private key, public key and fingerprint."
       : Fields.Any(f => f.IsAdded && f.Name.Trim().Length == 0) ? "Every new custom field needs a name."
