@@ -36,6 +36,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
 
         Settings = _settingsManager.Settings;
         _ = _service.WarmCacheAsync();
+        SearchFocusGuard.Start();
     }
 
     public override ICommandItem[] TopLevelCommands() => _commands;

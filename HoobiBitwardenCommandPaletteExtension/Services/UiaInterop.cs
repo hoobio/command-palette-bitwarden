@@ -120,7 +120,9 @@ internal partial interface IUIAutomation
 [GeneratedComInterface, Guid("d22108aa-8ac5-49a5-837b-37bbb3d7591e")]
 internal partial interface IUIAutomationElement
 {
-  void _ReservedSetFocus();
+  [PreserveSig]
+  int SetFocus();
+
   void _ReservedGetRuntimeId();
 
   [PreserveSig]

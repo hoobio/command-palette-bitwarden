@@ -150,7 +150,7 @@ internal static unsafe partial class EnterKeySubmitService
     return Interlocked.CompareExchange(ref _lastInvokeTimestamp, now, last) == last;
   }
 
-  private static bool IsCommandPaletteWindow(nint hwnd)
+  internal static bool IsCommandPaletteWindow(nint hwnd)
   {
     if (hwnd == 0)
       return false;
