@@ -62,20 +62,23 @@ Select **Edit** in the vault window or an item window. The form has the fields o
 | Card | Cardholder name, brand, number, expiration month and year, security code |
 | Identity | Title, first, middle and last name, username, company, national insurance number, passport number, licence number, email, phone, address 1 to 3, city or town, county or state, postcode, country |
 | Secure note | Notes |
-| SSH key | Private key, public key, fingerprint. **Import from private key** fills the public key and fingerprint from an OpenSSH private key. |
+| SSH key | Private key (masked, with a show button), public key, fingerprint. **Import from private key** fills the public key and fingerprint from an OpenSSH private key. |
 
-All item types also have name, folder, favourite, master password re-prompt, notes and custom fields (text, hidden, boolean, linked). A linked field points to a field of the item type. You can add, remove and reorder websites and custom fields. When your account has organisations, **Owner** and **Collections** move a personal item into an organisation or change the collections of an organisation item. An item cannot move back to your personal vault.
+All item types also have name, folder, favourite, master password re-prompt, notes and custom fields (text, hidden, boolean, linked). A linked field points to a field of the item type. You can add, remove and reorder websites and custom fields. When your account has organisations, **Owner** and **Collections** set the organisation of a new item, move a personal item into an organisation or change the collections of an organisation item. An organisation item needs at least one collection. A new organisation item, or a clone of one, is created directly in the organisation and never passes through your personal vault. An item cannot move back to your personal vault.
 
-- **Save** checks that the name is set, each website is a valid URI and the expiration month is 1 to 12. The extension then saves the item and reads it back to confirm the change.
+Bank account, driver's licence and passport items show read-only, with no **Edit** button.
+
+- **Save** checks that the name is set, each new custom field has a name and the expiration month is 1 to 12. A website can be any text, as in Bitwarden. A boolean custom field keeps its stored value until you change the switch. The extension then saves the item and reads it back to confirm the change.
 - **Cancel**, or closing the window, asks before it discards changes that are not saved.
-- If the item changed in the vault after you started to edit it, for example from another device, **Save** asks you to **Reload** the item and discard your changes, or **Keep editing**.
+- If the item changed in the vault after you started to edit it, for example from another device, **Save** asks you to **Reload** the item and discard your changes, or **Keep editing**. The extension syncs the vault first, so **Reload** shows the server version.
+- A save waits for Bitwarden for as long as it takes. If Bitwarden does not confirm a new item, the window says so and asks before it saves another copy. Check the vault list first: the item can already be there.
 - There is no password generator in the form in this release.
 
 The item details also have **Archive**, **Delete** (moves the item to the trash), and for a login **Password history**. Password history shows the date of each old password. The values are masked, and the copy button copies through the extension. In the trash, **Restore** and **Delete permanently** replace them. In the archive, **Restore** moves the item back to the vault. Each delete asks you to confirm and names the item.
 
 ## Master password re-prompt
 
-For an item with master password re-prompt, the window shows no field values until you verify your master password. Select **Verify master password** and enter your master password. The window uses the same re-prompt grace period as Command Palette (see [Settings](Settings)). A successful verification starts the grace period. During the grace period, you can show, copy and open values without a prompt. When the grace period is 0, the window asks for your master password for each show, copy or open action, and the verification code is masked. **Edit**, **Clone** and **Password history** use the same re-prompt. Five failed attempts start the same 30-second cooldown as the Command Palette re-prompt.
+For an item with master password re-prompt, the window shows no field values until you verify your master password. Select **Verify master password** and enter your master password. The window uses the same re-prompt grace period as Command Palette (see [Settings](Settings)). A successful verification starts the grace period. During the grace period, you can show, copy and open values without a prompt. When the grace period is 0, the window asks for your master password for each show, copy or open action, and the verification code is masked. **Edit**, **Clone** and **Password history** use the same re-prompt. **Save**, **Delete**, **Delete permanently**, **Restore**, **Archive** and owner or collection changes also ask for your master password outside the grace period, as the Bitwarden web vault does. When the grace period is 0, a save that also moves the item into an organisation asks twice. Five failed attempts start the same 30-second cooldown as the Command Palette re-prompt.
 
 If the item changes in the vault while the window is open, the window loads the new version and does not show or copy the old value.
 
