@@ -81,14 +81,18 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
 
-  public async Task ReloadAsync()
+  public async Task ReloadAsync(bool iconsOnly = false)
   {
     try
     {
       var items = IpcJson.Read(await _channel.RequestAsync(Ops.ListItems, null), IpcJson.Default.ItemListResponse);
       var filters = IpcJson.Read(await _channel.RequestAsync(Ops.ListFilters, null), IpcJson.Default.FiltersResponse);
       Apply(items.Items, filters);
-      if (Detail is { } detail)
+      if (Detail is not { } detail)
+        return;
+      if (iconsOnly)
+        detail.IconPath = items.Items.FirstOrDefault(i => string.Equals(i.Id, detail.Id, StringComparison.OrdinalIgnoreCase))?.IconPath;
+      else
         await detail.LoadAsync();
     }
     catch (IpcException ex) when (ex.Code == IpcErrors.Locked)

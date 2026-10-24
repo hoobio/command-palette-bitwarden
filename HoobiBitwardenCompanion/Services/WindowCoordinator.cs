@@ -37,6 +37,8 @@ internal sealed class WindowCoordinator : IDisposable
       Dispatcher.UIThread.Post(OnLocked);
     else if (op == Ops.VaultChanged)
       Dispatcher.UIThread.Post(() => _ = OnVaultChangedAsync());
+    else if (op == Ops.IconsChanged)
+      Dispatcher.UIThread.Post(() => _ = _mainWindow?.ViewModel?.ReloadAsync(iconsOnly: true));
   }
 
   internal void OnLocked()

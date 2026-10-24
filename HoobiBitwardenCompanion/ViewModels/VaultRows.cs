@@ -79,7 +79,7 @@ internal sealed class ItemRowViewModel(ItemSummary summary)
     return false;
   }
 
-  private static Bitmap? LoadIcon(string path)
+  internal static Bitmap? LoadIcon(string path)
   {
     if (Icons.TryGetValue(path, out var icon))
       return icon;
@@ -87,7 +87,11 @@ internal sealed class ItemRowViewModel(ItemSummary summary)
     {
       icon = new Bitmap(path);
     }
-    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidOperationException)
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    {
+      return null;
+    }
+    catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
     {
       icon = null;
     }

@@ -21,6 +21,7 @@ internal static class Ops
   public const string ListItems = "listItems";
   public const string ListFilters = "listFilters";
   public const string VaultChanged = "vaultChanged";
+  public const string IconsChanged = "iconsChanged";
   public const string GetEditableItem = "getEditableItem";
   public const string GetPasswordHistory = "getPasswordHistory";
   public const string CreateItem = "createItem";
@@ -163,7 +164,8 @@ internal sealed record ItemDto(
   IReadOnlyList<FieldDto> Fields,
   bool Deleted = false,
   bool Archived = false,
-  IReadOnlyList<AttachmentDto>? Attachments = null);
+  IReadOnlyList<AttachmentDto>? Attachments = null,
+  string? IconPath = null);
 
 internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
 

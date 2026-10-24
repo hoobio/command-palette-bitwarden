@@ -201,10 +201,72 @@ public class CompanionVaultOpsTests
   }
 
   [Fact]
+  public void CardBrandIcon_IsSentInTheSummaryAndTheDetail()
+  {
+    var h = new Harness();
+    var card = new BitwardenItem { Id = CardId, Type = BitwardenItemType.Card, CardBrand = "Visa" };
+    var key = Helpers.VaultItemHelper.IconCacheKey(card);
+    Assert.StartsWith("card-brand:visa:", key, StringComparison.Ordinal);
+    Assert.Null(Helpers.VaultItemHelper.IconCacheKey(new BitwardenItem { Type = BitwardenItemType.SecureNote }));
+
+    Directory.CreateDirectory(FaviconService.CacheDir);
+    var path = Path.Combine(FaviconService.CacheDir, key!.Replace(':', '_') + ".png");
+    var existed = File.Exists(path);
+    if (!existed)
+      File.WriteAllBytes(path, [0x89, 0x50, 0x4E, 0x47]);
+    try
+    {
+      Assert.Equal(path, CompanionOps.Summarize(card, true).IconPath);
+      Assert.Equal(path, h.Ops.GetItem(CardId).IconPath);
+    }
+    finally
+    {
+      if (!existed)
+        File.Delete(path);
+    }
+  }
+
+  [Fact]
+  public async Task IconCached_PushesOneIconsChangedPerThrottleWindow()
+  {
+    var throttle = CompanionOps.IconsThrottle;
+    CompanionOps.IconsThrottle = TimeSpan.FromMilliseconds(50);
+    using var ops = new CompanionOps(new BitwardenCliService());
+    FaviconService.IconCached -= ops.OnIconCached;
+    var raised = 0;
+    ops.IconsChanged += () => Interlocked.Increment(ref raised);
+    try
+    {
+      ops.OnIconCached();
+      ops.OnIconCached();
+      ops.OnIconCached();
+      await WaitForAsync(() => Volatile.Read(ref raised) == 1);
+      await Task.Delay(150, TestContext.Current.CancellationToken);
+      Assert.Equal(1, Volatile.Read(ref raised));
+
+      ops.OnIconCached();
+      await WaitForAsync(() => Volatile.Read(ref raised) == 2);
+    }
+    finally
+    {
+      CompanionOps.IconsThrottle = throttle;
+    }
+  }
+
+  private static async Task WaitForAsync(Func<bool> condition)
+  {
+    var deadline = DateTime.UtcNow.AddSeconds(5);
+    while (!condition() && DateTime.UtcNow < deadline)
+      await Task.Delay(10, TestContext.Current.CancellationToken);
+    Assert.True(condition());
+  }
+
+  [Fact]
   public void CompanionHost_NotifyVaultChanged_DoesNotStartTheCompanion()
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()));
     host.NotifyVaultChanged();
+    host.NotifyIconsChanged();
     Assert.Null(host.Process);
   }
 

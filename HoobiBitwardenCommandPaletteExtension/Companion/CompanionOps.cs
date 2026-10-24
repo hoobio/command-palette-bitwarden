@@ -37,6 +37,7 @@ internal sealed partial class CompanionOps : IDisposable
   private readonly Lock _extrasLock = new();
   private VaultExtras? _extras;
   private (DateTime Refresh, int Writes) _extrasStamp;
+  private int _iconsPending;
 
   public CompanionOps(
     BitwardenCliService service,
@@ -55,11 +56,30 @@ internal sealed partial class CompanionOps : IDisposable
     _service.StatusChanged += RaiseIfLocked;
     _service.AutoLocked += RaiseIfLocked;
     _service.CacheUpdated += RaiseVaultChanged;
+    FaviconService.IconCached += OnIconCached;
   }
+
+  internal static TimeSpan IconsThrottle { get; set; } = TimeSpan.FromMilliseconds(500);
 
   internal event Action? Locked;
 
   internal event Action? VaultChanged;
+
+  internal event Action? IconsChanged;
+
+  // One push per throttle window: a first-open burst downloads hundreds of icons, and each push re-lists the vault.
+  internal void OnIconCached()
+  {
+    if (Interlocked.Exchange(ref _iconsPending, 1) == 0)
+      _ = RaiseIconsChangedAsync();
+  }
+
+  private async Task RaiseIconsChangedAsync()
+  {
+    await Task.Delay(IconsThrottle);
+    Volatile.Write(ref _iconsPending, 0);
+    IconsChanged?.Invoke();
+  }
 
   internal void RaiseIfLocked()
   {
@@ -209,14 +229,22 @@ internal sealed partial class CompanionOps : IDisposable
       locked ? [] : MapFields(item),
       item.DeletedDate != null,
       item.ArchivedDate != null,
-      locked ? null : item.Attachments.Select(a => new AttachmentDto(a.Id, a.FileName, a.SizeName)).ToList());
+      locked ? null : item.Attachments.Select(a => new AttachmentDto(a.Id, a.FileName, a.SizeName)).ToList(),
+      _service.ShowWebsiteIcons ? CachedIconPath(item) : null);
   }
 
   internal async Task<ItemListResponse> ListItemsAsync()
   {
     var extras = await EnsureExtrasAsync();
     var showIcons = _service.ShowWebsiteIcons;
-    return new ItemListResponse(_service.GetCachedItems().Concat(extras.Items).Select(i => Summarize(i, showIcons)).ToList());
+    var items = _service.GetCachedItems().Concat(extras.Items).ToList();
+    if (showIcons)
+    {
+      foreach (var item in items)
+        _ = VaultItemHelper.GetIcon(item);
+    }
+
+    return new ItemListResponse(items.Select(i => Summarize(i, showIcons)).ToList());
   }
 
   internal async Task<FiltersResponse> ListFiltersAsync()
@@ -247,7 +275,10 @@ internal sealed partial class CompanionOps : IDisposable
     item.Reprompt == 1,
     item.Notes != null,
     item.Uris.Select(u => u.Host).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-    showIcons && item.Type == BitwardenItemType.Login && item.FirstHost is { Length: > 0 } host ? FaviconService.TryGetCachedIconPath(host) : null);
+    showIcons ? CachedIconPath(item) : null);
+
+  private static string? CachedIconPath(BitwardenItem item) =>
+    VaultItemHelper.IconCacheKey(item) is { Length: > 0 } key ? FaviconService.TryGetCachedIconPath(key) : null;
 
   // The palette subtitle of a secure note is the first line of its notes, which are secret.
   private static string? SubtextOf(BitwardenItem item) =>
@@ -518,6 +549,7 @@ internal sealed partial class CompanionOps : IDisposable
     _service.StatusChanged -= RaiseIfLocked;
     _service.AutoLocked -= RaiseIfLocked;
     _service.CacheUpdated -= RaiseVaultChanged;
+    FaviconService.IconCached -= OnIconCached;
     ClearGeneratorHistory();
     _extrasGate.Dispose();
   }

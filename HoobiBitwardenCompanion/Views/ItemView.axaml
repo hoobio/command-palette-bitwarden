@@ -9,7 +9,10 @@
         <DataTemplate x:Key="ItemHeader" x:DataType="vm:ItemViewModel">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Margin="0,0,8,12">
                 <Border Classes="Tile Large">
-                    <TextBlock Classes="Icon Accent" Text="{Binding TypeGlyph}" FontSize="24" HorizontalAlignment="Center" />
+                    <Panel>
+                        <Image Source="{Binding Icon}" Width="32" Height="32" IsVisible="{Binding HasIcon}" />
+                        <TextBlock Classes="Icon Accent" Text="{Binding TypeGlyph}" FontSize="24" HorizontalAlignment="Center" IsVisible="{Binding !HasIcon}" />
+                    </Panel>
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Title}" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />

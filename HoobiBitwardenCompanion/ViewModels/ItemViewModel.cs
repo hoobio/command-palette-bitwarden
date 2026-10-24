@@ -134,6 +134,14 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public partial bool IsProtected { get; set; }
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(Icon), nameof(HasIcon))]
+  public partial string? IconPath { get; set; }
+
+  public Avalonia.Media.Imaging.Bitmap? Icon => IconPath is { } path ? ItemRowViewModel.LoadIcon(path) : null;
+
+  public bool HasIcon => Icon is not null;
+
+  [ObservableProperty]
   public partial string TypeGlyph { get; set; } = "";
 
   [ObservableProperty]
@@ -203,6 +211,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IsFavorite = item.Favorite;
     IsProtected = item.Reprompt;
     TypeGlyph = GlyphFor(item.Type);
+    IconPath = item.IconPath;
     ItemType = item.Type;
     IsDeleted = item.Deleted;
     IsArchived = item.Archived;
