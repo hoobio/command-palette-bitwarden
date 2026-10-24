@@ -1,6 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using FluentAvalonia.UI.Controls;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -16,9 +18,49 @@ internal sealed partial class MainWindow : Window
     InitializeComponent();
     DataContext = viewModel;
     AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+    if (viewModel is not null)
+    {
+      viewModel.AskText ??= AskTextAsync;
+      viewModel.ConfirmAction ??= request => ItemView.ConfirmActionAsync(this, request);
+      viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(this, viewModel.Channel, canUse: false);
+    }
   }
 
   internal VaultViewModel? ViewModel => DataContext as VaultViewModel;
+
+  internal static FAContentDialog CreateTextDialog(string title, string primary, TextBox input) => new()
+  {
+    Title = title,
+    Content = input,
+    PrimaryButtonText = primary,
+    CloseButtonText = "Cancel",
+    DefaultButton = FAContentDialogButton.Primary,
+  };
+
+  private async Task<string?> AskTextAsync(string title, string primary, string? current)
+  {
+    var input = new TextBox { Text = current, PlaceholderText = "Work", MinWidth = 320 };
+    input.AttachedToVisualTree += (_, _) =>
+    {
+      input.Focus();
+      input.SelectAll();
+    };
+    return await CreateTextDialog(title, primary, input).ShowAsync(this) == FAContentDialogResult.Primary ? input.Text : null;
+  }
+
+  private void OnNewFolderClick(object? sender, RoutedEventArgs e) => ViewModel?.NewFolderCommand.Execute(null);
+
+  private void OnFilterContextRequested(object? sender, ContextRequestedEventArgs e)
+  {
+    e.Handled = true;
+    if (sender is not Control { DataContext: FilterViewModel { IsUserFolder: true } folder } target || ViewModel is not { } vm)
+      return;
+    var rename = new MenuItem { Header = "Rename", Command = vm.RenameFolderCommand, CommandParameter = folder };
+    var delete = new MenuItem { Header = "Delete", Command = vm.DeleteFolderCommand, CommandParameter = folder, Classes = { "Danger" } };
+    var menu = new MenuFlyout { Items = { rename, delete } };
+    FlyoutBase.SetAttachedFlyout(target, menu);
+    menu.ShowAt(target, showAtPointer: true);
+  }
 
   // Tunnel, because the search box handles Up, Down and Enter itself before they bubble.
   private void OnPreviewKeyDown(object? sender, KeyEventArgs e)

@@ -35,6 +35,8 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
 
   internal bool IsSearchPending => _searchTimer.IsEnabled;
 
+  internal PipeChannel Channel => _channel;
+
   internal void ApplySearch()
   {
     _searchTimer.Stop();
@@ -104,7 +106,9 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
     {
       var selected = SelectedFilter;
       Filters = BuildFilters(filters, items);
-      SelectedFilter = Filters.FirstOrDefault(f => f == selected) ?? Filters[0];
+      SelectedFilter = Filters.FirstOrDefault(f => f == selected)
+        ?? Filters.FirstOrDefault(f => f.IsUserFolder && selected is { IsUserFolder: true } && f.Id == selected.Id)
+        ?? Filters[0];
     }
     finally
     {
@@ -123,7 +127,7 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
       new(FilterKind.Header, "Types"),
     };
     list.AddRange(Types.Select(t => new FilterViewModel(FilterKind.Type, t.Label, ItemViewModel.GlyphFor(t.Type), Type: t.Type)));
-    list.Add(new(FilterKind.Header, "Folders"));
+    list.Add(new(FilterKind.Header, "Folders", CanAdd: true));
     list.AddRange(filters.Folders.Select(f => new FilterViewModel(FilterKind.Folder, f.Name, FolderGlyph, f.Id)));
     list.Add(new(FilterKind.Folder, "No folder", FolderGlyph));
     if (filters.Collections.Count > 0)
@@ -204,8 +208,14 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
     }
   }
 
-  partial void OnSelectedFilterChanged(FilterViewModel? value)
+  partial void OnSelectedFilterChanged(FilterViewModel? oldValue, FilterViewModel? newValue)
   {
+    if (newValue is { IsHeader: true })
+    {
+      Dispatcher.UIThread.Post(() => SelectedFilter = oldValue);
+      return;
+    }
+
     if (!_reloading)
       ApplyFilter(reset: true);
   }
@@ -284,6 +294,66 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
     {
       ErrorMessage = ItemViewModel.Describe(ex);
     }
+  }
+
+  internal Func<string, string, string?, Task<string?>>? AskText { get; set; }
+
+  internal Func<ActionDialogRequest, Task<bool>>? ConfirmAction { get; set; }
+
+  internal Func<Task>? OpenGenerator { get; set; }
+
+  [RelayCommand]
+  private Task ShowGeneratorAsync() => OpenGenerator?.Invoke() ?? Task.CompletedTask;
+
+  [RelayCommand]
+  private async Task NewFolderAsync()
+  {
+    if (await AskFolderNameAsync("New folder", "Create", null) is { } name)
+      await FolderWriteAsync(Ops.CreateFolder, new FolderRequest(null, name));
+  }
+
+  [RelayCommand]
+  private async Task RenameFolderAsync(FilterViewModel folder)
+  {
+    if (folder.IsUserFolder && await AskFolderNameAsync("Rename folder", "Rename", folder.Label) is { } name && name != folder.Label)
+      await FolderWriteAsync(Ops.RenameFolder, new FolderRequest(folder.Id, name));
+  }
+
+  [RelayCommand]
+  private async Task DeleteFolderAsync(FilterViewModel folder)
+  {
+    if (!folder.IsUserFolder || ConfirmAction is null)
+      return;
+    var request = new ActionDialogRequest("Delete folder", $"Delete the folder \"{folder.Label}\"? Its items move to No folder. You cannot undo this.", "Delete folder");
+    request.Danger = async () => await FolderWriteAsync(Ops.DeleteFolder, new FolderRequest(folder.Id, null)) ? null : ErrorMessage;
+    await ConfirmAction(request);
+  }
+
+  private async Task<string?> AskFolderNameAsync(string title, string primary, string? current)
+  {
+    if (AskText is null || await AskText(title, primary, current) is not { } text)
+      return null;
+    if (text.Trim().Length > 0)
+      return text.Trim();
+    ErrorMessage = "Enter a folder name.";
+    return null;
+  }
+
+  private async Task<bool> FolderWriteAsync(string op, FolderRequest request)
+  {
+    try
+    {
+      await _channel.RequestAsync(op, IpcJson.ToElement(request, IpcJson.Default.FolderRequest), Timeout.InfiniteTimeSpan);
+      ErrorMessage = null;
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
+    {
+      ErrorMessage = ex is IpcException { Code: IpcErrors.Failed } ? "Bitwarden did not save the folder change." : ItemViewModel.Describe(ex);
+      return false;
+    }
+
+    await ReloadAsync();
+    return true;
   }
 
   [RelayCommand]

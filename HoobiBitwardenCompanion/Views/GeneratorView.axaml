@@ -1,0 +1,150 @@
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Views.GeneratorView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:GeneratorViewModel">
+    <StackPanel>
+        <TabStrip x:Name="KindTabs" SelectedIndex="{Binding SelectedTab}">
+            <TabStripItem Content="Password" />
+            <TabStripItem Content="Passphrase" />
+            <TabStripItem Content="Username" IsVisible="{Binding ShowUsernameTab}" />
+        </TabStrip>
+
+        <StackPanel Classes="Stack" Margin="0,12,0,0">
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                    <Border Classes="Chip" MinHeight="32">
+                        <SelectableTextBlock x:Name="ValueText" Text="{Binding Value}" FontFamily="{StaticResource MonoFontFamily}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </Border>
+                    <Button x:Name="RegenerateButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Refresh}" Command="{Binding RegenerateCommand}" ToolTip.Tip="Regenerate" AutomationProperties.Name="Regenerate" />
+                    <Button x:Name="CopyButton" Grid.Column="2" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy" AutomationProperties.Name="Copy" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <TextBlock Classes="GroupHeader" Text="Options" />
+        <StackPanel x:Name="PasswordOptions" Classes="Stack" IsVisible="{Binding IsPassword}">
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Length" VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Column="1" Width="120" Minimum="5" Maximum="128" Increment="1" FormatString="0" Value="{Binding Length}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Uppercase (A-Z)" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding Uppercase}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Lowercase (a-z)" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding Lowercase}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Numbers (0-9)" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding Numbers}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Special (!@#$%^&amp;*)" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding Special}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow" IsVisible="{Binding Numbers}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Minimum numbers" VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Column="1" Width="120" Minimum="0" Maximum="9" Increment="1" FormatString="0" Value="{Binding MinNumber}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow" IsVisible="{Binding Special}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Minimum special" VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Column="1" Width="120" Minimum="0" Maximum="9" Increment="1" FormatString="0" Value="{Binding MinSpecial}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Avoid ambiguous characters" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding AvoidAmbiguous}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <StackPanel x:Name="PassphraseOptions" Classes="Stack" IsVisible="{Binding IsPassphrase}">
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Number of words" VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Column="1" Width="120" Minimum="3" Maximum="20" Increment="1" FormatString="0" Value="{Binding Words}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Word separator" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" Width="120" MaxLength="1" Text="{Binding Separator}" PlaceholderText="-" FontFamily="{StaticResource MonoFontFamily}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Capitalise" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding Capitalize}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+            </Border>
+            <Border Classes="StackRow">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="RowLabel" Text="Include number" VerticalAlignment="Center" />
+                    <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding IncludeNumber}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <StackPanel x:Name="UsernameOptions" Classes="Stack" IsVisible="{Binding IsUsername}">
+            <Border Classes="StackRow">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="FieldLabel" Text="Type" />
+                    <ComboBox x:Name="UsernameKindBox" ItemsSource="{x:Static vm:GeneratorViewModel.UsernameKinds}" SelectedItem="{Binding SelectedUsernameKind}" />
+                </StackPanel>
+            </Border>
+            <Border Classes="StackRow" IsVisible="{Binding IsPlusAddress}">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="FieldLabel" Text="Email" />
+                    <TextBox Text="{Binding Email}" PlaceholderText="jane@example.com" />
+                </StackPanel>
+            </Border>
+            <Border Classes="StackRow" IsVisible="{Binding !IsPlusAddress}">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="FieldLabel" Text="Domain" />
+                    <TextBox Text="{Binding Domain}" PlaceholderText="example.com" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <TextBlock x:Name="ErrorText" Margin="0,8,0,0" TextWrapping="Wrap" Classes="Danger" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Classes="Caption" Margin="0,8,0,0" Text="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <Button x:Name="UseButton" Margin="0,12,0,0" Theme="{StaticResource AccentButtonStyle}" Content="Use password" Command="{Binding UseCommand}" IsVisible="{Binding CanUse}" />
+
+        <StackPanel IsVisible="{Binding HasHistory}">
+            <TextBlock Classes="GroupHeader" Text="Generator history" />
+            <ItemsControl x:Name="HistoryList" Classes="Stack" ItemsSource="{Binding History}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GeneratedRowViewModel">
+                        <Border Classes="StackRow">
+                            <Grid ColumnDefinitions="*,Auto" Margin="{StaticResource CardRowPadding}">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Classes="FieldLabel" Text="{Binding Label}" />
+                                    <TextBlock Text="{x:Static vm:FieldViewModel.Mask}" FontFamily="{StaticResource MonoFontFamily}" />
+                                    <TextBlock Classes="Caption" Text="{Binding Created}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" VerticalAlignment="Center" ToolTip.Tip="Copy" AutomationProperties.Name="Copy" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

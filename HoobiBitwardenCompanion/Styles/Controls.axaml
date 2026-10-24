@@ -244,7 +244,7 @@
     </Style>
 
     <Style Selector="ListBox.Rail ListBoxItem" x:DataType="vm:FilterViewModel">
-        <Setter Property="IsEnabled" Value="{Binding !IsHeader}" />
+        <Setter Property="IsEnabled" Value="{Binding IsEnabledInRail}" />
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
     </Style>
@@ -302,6 +302,23 @@
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>
 
+    <Style Selector="Border.StackRow NumericUpDown">
+        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Border.Chip">
+        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="Padding" Value="10,6" />
+    </Style>
+
+    <Style Selector="TabStripItem">
+        <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Padding" Value="12,0" />
+    </Style>
+
     <Style Selector="ComboBox">
         <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
     </Style>
@@ -345,6 +362,10 @@
     </Style>
 
     <Style Selector="TextBlock.Danger">
+        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+    </Style>
+
+    <Style Selector="MenuItem.Danger">
         <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
     </Style>
 

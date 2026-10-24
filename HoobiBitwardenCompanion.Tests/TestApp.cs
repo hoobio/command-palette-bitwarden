@@ -12,6 +12,9 @@ public sealed class AvaloniaSession : IDisposable
 {
   private readonly HeadlessUnitTestSession _session = HeadlessUnitTestSession.StartNew(typeof(AvaloniaSession));
 
+  public AvaloniaSession() =>
+    HoobiBitwardenCompanion.Services.CompanionSettings.FilePath = Path.Combine(Path.GetTempPath(), $"companion-generator-{Guid.NewGuid():N}.json");
+
   public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
     .UseSkia()
     .UseHoobiFonts()

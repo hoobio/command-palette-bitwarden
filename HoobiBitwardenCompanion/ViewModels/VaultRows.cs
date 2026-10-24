@@ -16,9 +16,13 @@ internal enum FilterKind
   Trash,
 }
 
-internal sealed record FilterViewModel(FilterKind Kind, string Label, string Glyph = "", string? Id = null, int Type = 0)
+internal sealed record FilterViewModel(FilterKind Kind, string Label, string Glyph = "", string? Id = null, int Type = 0, bool CanAdd = false)
 {
   public bool IsHeader => Kind == FilterKind.Header;
+
+  public bool IsUserFolder => Kind == FilterKind.Folder && Id is not null;
+
+  public bool IsEnabledInRail => !IsHeader || CanAdd;
 
   public bool Matches(ItemSummary item) => Kind switch
   {
