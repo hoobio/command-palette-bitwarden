@@ -47,7 +47,14 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
   public partial AvaloniaList<ItemRowViewModel> Rows { get; private set; } = [];
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(RailFilters), nameof(FootFilters))]
   public partial IReadOnlyList<FilterViewModel> Filters { get; private set; } = [];
+
+  public IReadOnlyList<FilterViewModel> RailFilters => [.. Filters.Where(f => !IsFootFilter(f))];
+
+  public IReadOnlyList<FilterViewModel> FootFilters => [.. Filters.Where(IsFootFilter)];
+
+  private static bool IsFootFilter(FilterViewModel filter) => filter.Kind is FilterKind.Archive or FilterKind.Trash;
 
   [ObservableProperty]
   public partial FilterViewModel? SelectedFilter { get; set; }
@@ -67,6 +74,9 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
 
   [ObservableProperty]
   public partial bool IsEmpty { get; private set; }
+
+  [ObservableProperty]
+  public partial bool IsVaultEmpty { get; private set; }
 
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
@@ -142,7 +152,6 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
       list.AddRange(filters.Organizations.Select(o => new FilterViewModel(FilterKind.Organization, o.Name, OrganizationGlyph, o.Id)));
     }
 
-    list.Add(new(FilterKind.Header, string.Empty));
     if (items.Any(i => i.Archived))
       list.Add(new(FilterKind.Archive, "Archive", ArchiveGlyph));
     list.Add(new(FilterKind.Trash, "Trash", TrashGlyph));
@@ -181,6 +190,7 @@ internal sealed partial class VaultViewModel : ObservableObject, IDisposable
     }
 
     IsEmpty = result.Count == 0;
+    IsVaultEmpty = _all.Count == 0;
     var match = selectedId is null ? null : result.Find(r => string.Equals(r.Id, selectedId, StringComparison.OrdinalIgnoreCase));
     SelectedRow = match;
     ShowDetail(match);

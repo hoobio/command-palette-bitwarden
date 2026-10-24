@@ -224,7 +224,7 @@ public class VaultToolsTests(AvaloniaSession session)
 
     var view = window.GetVisualDescendants().OfType<GeneratorView>().Single();
     Assert.Equal(vm.Value, view.FindControl<SelectableTextBlock>("ValueText")!.Text);
-    Assert.True(view.FindControl<Button>("UseButton")!.IsEffectivelyVisible);
+    Assert.Equal("Use password", GeneratorView.CreateDialog(vm).PrimaryButtonText);
     Assert.True(view.FindControl<StackPanel>("PasswordOptions")!.IsEffectivelyVisible);
     Assert.False(view.FindControl<StackPanel>("PassphraseOptions")!.IsEffectivelyVisible);
     var history = view.FindControl<ItemsControl>("HistoryList")!;

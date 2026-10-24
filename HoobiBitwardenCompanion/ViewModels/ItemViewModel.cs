@@ -122,7 +122,16 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public partial string Title { get; set; } = "Loading";
 
   [ObservableProperty]
-  public partial string? Subtitle { get; set; }
+  public partial string? FolderName { get; set; }
+
+  [ObservableProperty]
+  public partial string? OrganizationName { get; set; }
+
+  [ObservableProperty]
+  public partial bool IsFavorite { get; set; }
+
+  [ObservableProperty]
+  public partial bool IsProtected { get; set; }
 
   [ObservableProperty]
   public partial string TypeGlyph { get; set; } = "";
@@ -189,7 +198,10 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _repromptRetry = null;
     _revisionDate = item.RevisionDate;
     Title = item.Name;
-    Subtitle = string.Join("  ·  ", new[] { item.FolderName, item.OrganizationName }.Where(s => !string.IsNullOrEmpty(s)));
+    OrganizationName = item.OrganizationName;
+    FolderName = item.FolderName ?? (item.OrganizationName is null ? "No folder" : null);
+    IsFavorite = item.Favorite;
+    IsProtected = item.Reprompt;
     TypeGlyph = GlyphFor(item.Type);
     ItemType = item.Type;
     IsDeleted = item.Deleted;

@@ -23,15 +23,38 @@ internal sealed partial class MainWindow : Window
       viewModel.AskText ??= AskTextAsync;
       viewModel.ConfirmAction ??= request => ItemView.ConfirmActionAsync(this, request);
       viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(this, viewModel.Channel, canUse: false);
+      viewModel.PropertyChanged += (_, e) =>
+      {
+        if (e.PropertyName is nameof(VaultViewModel.SelectedFilter) or nameof(VaultViewModel.Filters))
+          SyncRailSelection();
+      };
+      DetailView.OpenInWindowCommand = viewModel.OpenSelectedCommand;
     }
   }
+
+  private void SyncRailSelection()
+  {
+    var selected = ViewModel?.SelectedFilter;
+    FilterList.SelectedItem = selected is not null && ViewModel!.RailFilters.Contains(selected) ? selected : null;
+    FootList.SelectedItem = selected is not null && ViewModel!.FootFilters.Contains(selected) ? selected : null;
+  }
+
+  private void OnRailSelectionChanged(object? sender, SelectionChangedEventArgs e)
+  {
+    if (sender is ListBox { SelectedItem: FilterViewModel filter } && ViewModel is { } vm)
+      vm.SelectedFilter = filter;
+  }
+
+  private void OnClearSearchClick(object? sender, RoutedEventArgs e) => ViewModel?.ClearSearch();
+
+  private void OnEmptyNewItemClick(object? sender, RoutedEventArgs e) => NewItemButton.Flyout?.ShowAt((Control)sender!);
 
   internal VaultViewModel? ViewModel => DataContext as VaultViewModel;
 
   internal static FAContentDialog CreateTextDialog(string title, string primary, TextBox input) => new()
   {
     Title = title,
-    Content = input,
+    Content = new StackPanel { Spacing = 6, Children = { new TextBlock { Text = "Folder name", Classes = { "FieldLabel" } }, input } },
     PrimaryButtonText = primary,
     CloseButtonText = "Cancel",
     DefaultButton = FAContentDialogButton.Primary,
@@ -39,7 +62,7 @@ internal sealed partial class MainWindow : Window
 
   private async Task<string?> AskTextAsync(string title, string primary, string? current)
   {
-    var input = new TextBox { Text = current, PlaceholderText = "Work", MinWidth = 320 };
+    var input = new TextBox { Text = current, PlaceholderText = "Work" };
     input.AttachedToVisualTree += (_, _) =>
     {
       input.Focus();
@@ -55,12 +78,14 @@ internal sealed partial class MainWindow : Window
     e.Handled = true;
     if (sender is not Control { DataContext: FilterViewModel { IsUserFolder: true } folder } target || ViewModel is not { } vm)
       return;
-    var rename = new MenuItem { Header = "Rename", Command = vm.RenameFolderCommand, CommandParameter = folder };
-    var delete = new MenuItem { Header = "Delete", Command = vm.DeleteFolderCommand, CommandParameter = folder, Classes = { "Danger" } };
-    var menu = new MenuFlyout { Items = { rename, delete } };
+    var rename = new MenuItem { Header = "Rename", Icon = MenuIcon("Glyph.Rename"), Command = vm.RenameFolderCommand, CommandParameter = folder };
+    var delete = new MenuItem { Header = "Delete", Icon = MenuIcon("Glyph.Delete"), Command = vm.DeleteFolderCommand, CommandParameter = folder, Classes = { "Danger" } };
+    var menu = new MenuFlyout { Items = { rename, new Separator(), delete } };
     FlyoutBase.SetAttachedFlyout(target, menu);
     menu.ShowAt(target, showAtPointer: true);
   }
+
+  private TextBlock MenuIcon(string key) => new() { Text = this.FindResource(key) as string, Classes = { "Icon" } };
 
   // Tunnel, because the search box handles Up, Down and Enter itself before they bubble.
   private void OnPreviewKeyDown(object? sender, KeyEventArgs e)

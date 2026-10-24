@@ -1,3 +1,5 @@
+using System.Windows.Input;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -8,6 +10,14 @@ namespace HoobiBitwardenCompanion.Views;
 
 internal sealed partial class ItemView : UserControl
 {
+  public static readonly StyledProperty<ICommand?> OpenInWindowCommandProperty = AvaloniaProperty.Register<ItemView, ICommand?>(nameof(OpenInWindowCommand));
+
+  public ICommand? OpenInWindowCommand
+  {
+    get => GetValue(OpenInWindowCommandProperty);
+    set => SetValue(OpenInWindowCommandProperty, value);
+  }
+
   public ItemView()
   {
     InitializeComponent();
@@ -43,7 +53,7 @@ internal sealed partial class ItemView : UserControl
 
   internal static (FAContentDialog Dialog, TextBlock Error, ProgressBar Busy) CreateActionDialog(ActionDialogRequest request)
   {
-    var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, IsVisible = false, Classes = { "Danger" } };
+    var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, IsVisible = false, Classes = { "Warn" } };
     var busy = new ProgressBar { IsIndeterminate = true, IsVisible = false };
     var dialog = new FAContentDialog
     {
@@ -103,10 +113,10 @@ internal sealed partial class ItemView : UserControl
     }
   }
 
-  internal static FAContentDialog CreateRepromptDialog(TextBox password) => new()
+  internal static FAContentDialog CreateRepromptDialog(string itemName, TextBox password) => new()
   {
     Title = "Master password required",
-    Content = password,
+    Content = new StackPanel { Spacing = 12, Children = { new TextBlock { Text = $"{itemName} is protected. Enter your master password to continue.", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, password } },
     PrimaryButtonText = "Verify",
     CloseButtonText = "Cancel",
     DefaultButton = FAContentDialogButton.Primary,
@@ -134,8 +144,8 @@ internal sealed partial class ItemView : UserControl
 
   private async Task<string?> AskPasswordAsync()
   {
-    var password = new TextBox { PasswordChar = '•', PlaceholderText = "Master password", MinWidth = 320 };
-    var dialog = CreateRepromptDialog(password);
+    var password = new TextBox { PasswordChar = '•', PlaceholderText = "Master password", Classes = { "revealPasswordButton" } };
+    var dialog = CreateRepromptDialog((DataContext as ItemViewModel)?.Title ?? "This item", password);
     password.AttachedToVisualTree += (_, _) => password.Focus();
     var text = await dialog.ShowAsync(TopLevel.GetTopLevel(this)) == FAContentDialogResult.Primary ? password.Text : null;
     password.Text = null;
