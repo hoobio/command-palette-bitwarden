@@ -40,7 +40,7 @@
     <PropertyGroup>
       <_CompanionPublishDir>@(_CompanionTargetPath->'%(RootDir)%(Directory)publish\')</_CompanionPublishDir>
     </PropertyGroup>
-    <Error Condition="!Exists('$(_CompanionPublishDir)HoobiBitwardenCompanion.exe')" Text="Companion publish output missing: $(_CompanionPublishDir)" />
+    <Error Condition="'$(DesignTimeBuild)' != 'true' and !Exists('$(_CompanionPublishDir)HoobiBitwardenCompanion.exe')" Text="Companion publish output missing: $(_CompanionPublishDir)" />
     <ItemGroup>
       <_CompanionFile Include="$(_CompanionPublishDir)**\*" Exclude="$(_CompanionPublishDir)**\*.pdb" />
       <ContentWithTargetPath Include="@(_CompanionFile)">
