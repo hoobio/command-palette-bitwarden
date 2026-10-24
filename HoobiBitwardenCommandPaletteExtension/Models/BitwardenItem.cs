@@ -57,6 +57,9 @@ internal sealed class BitwardenItem
   public string? FolderId { get; init; }
   public string? OrganizationId { get; init; }
   public int Reprompt { get; init; }
+  public IReadOnlyList<string> CollectionIds { get; init; } = [];
+  public DateTime? DeletedDate { get; init; }
+  public DateTime? ArchivedDate { get; init; }
 
   public string? Username { get; init; }
   public ProtectedSecret? Password { get; init; }

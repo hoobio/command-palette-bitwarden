@@ -27,6 +27,7 @@ internal sealed partial class CompanionHost : IDisposable
     _exePath = exePath ?? Path.Combine(AppContext.BaseDirectory, "Companion", "HoobiBitwardenCompanion.exe");
     _requestTimeout = requestTimeout;
     _ops.Locked += NotifyLocked;
+    _ops.VaultChanged += NotifyVaultChanged;
   }
 
   internal Process? Process => _process;
@@ -50,13 +51,17 @@ internal sealed partial class CompanionHost : IDisposable
     }
   }
 
-  internal void NotifyLocked()
+  internal void NotifyLocked() => Notify(Ops.Locked);
+
+  internal void NotifyVaultChanged() => Notify(Ops.VaultChanged);
+
+  private void Notify(string op)
   {
     PipeChannel? channel;
     lock (_lock)
       channel = _channel is { IsClosed: false } ? _channel : null;
     if (channel is not null)
-      _ = SendEventAsync(channel, Ops.Locked);
+      _ = SendEventAsync(channel, op);
   }
 
   private static async Task SendEventAsync(PipeChannel channel, string op)
@@ -174,6 +179,7 @@ internal sealed partial class CompanionHost : IDisposable
   public void Dispose()
   {
     _ops.Locked -= NotifyLocked;
+    _ops.VaultChanged -= NotifyVaultChanged;
     lock (_lock)
       Stop();
     _ops.Dispose();
