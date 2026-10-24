@@ -24,6 +24,8 @@ Add-AppxPackage -Register -Path "$out\AppxManifest.xml" -ForceUpdateFromAnyVersi
 Start-Process 'shell:AppsFolder\Microsoft.PowerToysWin32'
 ```
 
+**Never stop only the extension process.** Command Palette keeps its connection to a dead extension process and fails every call with `0x800706BA` (RPC server unavailable) until PowerToys restarts. A build or test that hits a locked `HoobiBitwardenCommandPaletteExtension.exe` uses the full cycle above, which stops and restarts PowerToys as well. Package install, update and uninstall do not need a restart, because Command Palette reloads the extension on those package events.
+
 Debug builds install as a separate **Dev** channel (`Hoobi.BitwardenCommandPaletteExtension.Dev`, display name suffixed `(Dev)`) so they sit side by side with a production install. Test against the **(Dev)** entry in Command Palette.
 
 ### Working in a git worktree (important)
