@@ -43,17 +43,23 @@ public class CompanionHostTests
   }
 
   [Fact]
-  public async Task TimedOutRequest_MarksTheCompanionDead_AndItExits()
+  public async Task TimedOutRequest_KillsTheCompanion_BeforeStartingANewOne()
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), requestTimeout: TimeSpan.FromMilliseconds(1));
     host.EnsureStarted();
     using var companion = System.Diagnostics.Process.GetProcessById(host.Process!.Id);
+    // The exit code is readable later only through a handle opened while the process runs.
+    _ = companion.Handle;
 
-    var ex = await Assert.ThrowsAsync<TimeoutException>(() => host.RequestAsync(Ops.ShowVault, null).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+    var ex = await Assert.ThrowsAsync<TimeoutException>(() => host.RequestAsync("unknown", null).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
 
-    Assert.Equal($"{Ops.ShowVault} timed out", ex.Message);
+    Assert.Equal("unknown timed out", ex.Message);
     Assert.Null(host.Process);
     await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+    Assert.Equal(-1, companion.ExitCode);
+
+    host.EnsureStarted();
+    Assert.NotEqual(companion.Id, host.Process!.Id);
   }
 
   [Fact]

@@ -45,7 +45,7 @@ internal sealed partial class CompanionHost : IDisposable
     }
     catch (TimeoutException)
     {
-      MarkDead(channel);
+      MarkDead(channel, kill: true);
       throw;
     }
   }
@@ -87,12 +87,27 @@ internal sealed partial class CompanionHost : IDisposable
     }
   }
 
-  private void MarkDead(PipeChannel channel)
+  private void MarkDead(PipeChannel channel, bool kill = false)
   {
     lock (_lock)
     {
-      if (ReferenceEquals(channel, _channel))
-        Stop();
+      if (!ReferenceEquals(channel, _channel))
+        return;
+      if (kill)
+        Kill(_process);
+      Stop();
+    }
+  }
+
+  private static void Kill(Process? process)
+  {
+    try
+    {
+      process?.Kill(entireProcessTree: true);
+    }
+    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+    {
+      DebugLogService.Log("Companion", $"Kill failed: {ex.GetType().Name}");
     }
   }
 
