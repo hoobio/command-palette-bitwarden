@@ -345,6 +345,24 @@ public class ItemWindowTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task ItemViewModel_StaleResultFromVerify_ReloadsTheWindow() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    using var vm = new ItemViewModel(ItemId, channel);
+    await vm.LoadAsync();
+    extension.RepromptEveryOp = true;
+    await Field(vm, ItemFields.Password).ToggleRevealCommand.ExecuteAsync(null);
+    extension.StaleOnce = true;
+
+    Assert.False(await vm.VerifyRepromptAsync("correct"));
+
+    Assert.Equal(2, extension.Count(Ops.GetItem));
+    Assert.Equal(ItemViewModel.Describe(new IpcException(IpcErrors.Stale)), vm.StatusMessage);
+  });
+
+  [Fact]
   public Task Coordinator_ReadLoopFault_StillShutsDownTheCompanion() => session.RunAsync(async () =>
   {
     using var coordinator = new WindowCoordinator(new FaultingStream(), new MemoryStream());

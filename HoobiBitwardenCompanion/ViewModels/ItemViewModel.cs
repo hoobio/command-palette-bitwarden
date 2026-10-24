@@ -147,9 +147,13 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public async Task<bool> VerifyRepromptAsync(string password)
   {
     var (op, payload, onSuccess) = _repromptRetry ?? (Ops.GetItem, ItemPayload, reply => Apply(IpcJson.Read(reply, IpcJson.Default.ItemDto)));
-    var (ok, reply, _) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest));
+    var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest));
     if (!ok)
+    {
+      if (error == IpcErrors.Stale)
+        await ReloadStaleAsync();
       return false;
+    }
 
     var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
     if (!result.Verified)
@@ -184,9 +188,14 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
     else if (error == IpcErrors.Stale)
     {
-      await LoadAsync();
-      StatusMessage = Describe(new IpcException(IpcErrors.Stale));
+      await ReloadStaleAsync();
     }
+  }
+
+  private async Task ReloadStaleAsync()
+  {
+    await LoadAsync();
+    StatusMessage = Describe(new IpcException(IpcErrors.Stale));
   }
 
   internal async Task TickAsync()
