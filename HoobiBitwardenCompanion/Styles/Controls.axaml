@@ -2,6 +2,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:styles="using:HoobiBitwardenCompanion.Styles"
     xmlns:ui="using:FluentAvalonia.UI.Controls"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels">
     <Styles.Resources>
@@ -461,6 +462,11 @@
         <Setter Property="FontFamily" Value="{StaticResource ContentControlThemeFontFamily}" />
         <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+    </Style>
+
+    <Style Selector="ScrollViewer">
+        <Setter Property="styles:SmoothScroll.IsEnabled" Value="True" />
+        <Setter Property="styles:AutoScroll.IsEnabled" Value="True" />
     </Style>
 
     <Style Selector="TextBlock.Icon">

@@ -11,6 +11,10 @@ The companion window shows a vault item in its own window next to Command Palett
 
 If the window for an item is already open, the command brings that window to the front and loads the item again. You can open windows for more than one item at the same time.
 
+## Scrolling
+
+Every scroll area scrolls smoothly with the mouse wheel. Press the middle mouse button on a scroll area and move the pointer up or down to scroll. The farther the pointer is from the start point, the faster the scroll. Click, press `Esc`, or release the button after a move to stop.
+
 ## Vault window
 
 The vault window has the same layout as Bitwarden Desktop.
