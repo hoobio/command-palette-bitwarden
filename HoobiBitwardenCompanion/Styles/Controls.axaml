@@ -2,6 +2,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:ui="using:FluentAvalonia.UI.Controls"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels">
     <Styles.Resources>
         <SolidColorBrush x:Key="ComboBoxBackground" Color="#FF1A1F2B" />
@@ -51,6 +52,18 @@
             </Style>
             <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
                 <Setter Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="DangerIconButtonStyle" TargetType="Button" BasedOn="{StaticResource IconButtonStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#26F28779" />
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#40F28779" />
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
             </Style>
         </ControlTheme>
 
@@ -324,6 +337,20 @@
     <Style Selector="TextBlock.Caption">
         <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.Danger">
+        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+    </Style>
+
+    <Style Selector="ui|FAContentDialog.Action /template/ Button#SecondaryButton">
+        <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+        <Setter Property="Foreground" Value="#FF1A1F2B" />
+    </Style>
+
+    <Style Selector="ui|FAContentDialog.Action /template/ Button#SecondaryButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#FFF49B8F" />
+        <Setter Property="Foreground" Value="#FF1A1F2B" />
     </Style>
 
     <Style Selector="TextBlock.Icon">
