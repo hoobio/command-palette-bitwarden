@@ -8,6 +8,14 @@
     <Platform Solution="*|x64" Project="x64" />
     <Deploy />
   </Project>
+  <Project Path="HoobiBitwardenCompanion/HoobiBitwardenCompanion.csproj">
+    <Platform Solution="*|ARM64" Project="ARM64" />
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+  <Project Path="HoobiBitwardenCompanion.Tests/HoobiBitwardenCompanion.Tests.csproj">
+    <Platform Solution="*|ARM64" Project="ARM64" />
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
   <Project Path="HoobiBitwardenCommandPaletteExtension.Tests/HoobiBitwardenCommandPaletteExtension.Tests.csproj">
     <Platform Solution="*|ARM64" Project="ARM64" />
     <Platform Solution="*|x64" Project="x64" />

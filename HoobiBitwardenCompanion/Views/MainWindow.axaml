@@ -1,0 +1,29 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.Views.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    Title="Bitwarden"
+    Width="900"
+    Height="640"
+    MinWidth="560"
+    MinHeight="400"
+    WindowStartupLocation="CenterScreen"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiWindowDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid RowDefinitions="48,*">
+        <Grid
+            x:Name="AppTitleBar"
+            Background="Transparent"
+            chrome:WindowDecorationProperties.ElementRole="TitleBar">
+            <TextBlock Text="Bitwarden" FontSize="12" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+        </Grid>
+        <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="40" HorizontalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            <TextBlock Text="Vault window" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Classes="Caption" Text="Open an item from Command Palette with Open in window." HorizontalAlignment="Center" />
+        </StackPanel>
+    </Grid>
+</Window>
