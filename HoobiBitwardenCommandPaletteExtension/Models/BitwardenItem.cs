@@ -45,6 +45,8 @@ internal sealed record CustomField(string? Value, ProtectedSecret? Secret = null
   public bool IsHidden => Secret != null;
 }
 
+internal sealed record ItemAttachment(string Id, string FileName, long Size, string? SizeName);
+
 internal sealed class BitwardenItem
 {
   public string Id { get; init; } = string.Empty;
@@ -60,6 +62,7 @@ internal sealed class BitwardenItem
   public IReadOnlyList<string> CollectionIds { get; init; } = [];
   public DateTime? DeletedDate { get; init; }
   public DateTime? ArchivedDate { get; init; }
+  public IReadOnlyList<ItemAttachment> Attachments { get; init; } = Array.Empty<ItemAttachment>();
 
   public string? Username { get; init; }
   public ProtectedSecret? Password { get; init; }

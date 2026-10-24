@@ -10,7 +10,7 @@ using HoobiBitwardenCommandPaletteExtension.Models;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
-internal enum VaultWriteError { Failed, NotFound, Conflict, Unknown }
+internal enum VaultWriteError { Failed, NotFound, Conflict, Unknown, Premium, TooLarge, NoStorage }
 
 internal sealed class VaultWriteException : Exception
 {
@@ -42,8 +42,10 @@ internal sealed partial class BitwardenCliService
 
   private static bool IsItemWrite(string args) => WriteVerbs.Any(v => args.StartsWith(v, StringComparison.Ordinal));
 
-  internal async Task<JsonObject?> GetItemJsonAsync(string id) =>
-    ParseObject(await RunCliAsync($"get item {RequireId(id)}", verbOnlyLog: true));
+  internal Task<JsonObject?> GetItemJsonAsync(string id) => GetJsonAsync("item", id);
+
+  private async Task<JsonObject?> GetJsonAsync(string noun, string id) =>
+    ParseObject(await RunCliAsync($"get {noun} {RequireId(id)}", verbOnlyLog: true));
 
   internal Task<JsonObject> CreateItemAsync(JsonObject item) =>
     WriteAsync(null, null, _ => RunWriteAsync("create item", Encode(item)),
@@ -81,19 +83,21 @@ internal sealed partial class BitwardenCliService
 
   private Task<string> RunWriteAsync(string args, string? stdin = null) => RunCliAsync(args, WriteTimeoutMs, stdin: stdin, verbOnlyLog: true);
 
-  private async Task<JsonObject> WriteAsync(string? id, DateTime? expectedRevision, Func<JsonObject?, Task<string>> write, Func<JsonObject?, JsonObject?, bool> verify, bool gone = false)
+  private async Task<JsonObject> WriteAsync(string? id, DateTime? expectedRevision, Func<JsonObject?, Task<string>> write, Func<JsonObject?, JsonObject?, bool> verify, bool gone = false,
+    string noun = "item", Action<string, JsonObject?, int>? commit = null)
   {
     if (id is not null)
       RequireId(id);
+    commit ??= UpdateCachedItem;
     await _writeGate.WaitAsync();
     try
     {
       int generation;
       lock (_cacheLock) generation = _sessionGeneration;
       JsonObject? current = null;
-      if (id is not null)
+      if (id is not null && expectedRevision is not null)
       {
-        current = await GetItemJsonAsync(id) ?? throw new VaultWriteException(VaultWriteError.NotFound);
+        current = await GetJsonAsync(noun, id) ?? throw new VaultWriteException(VaultWriteError.NotFound);
         if (RevisionOf(current) != expectedRevision)
           throw new VaultWriteException(VaultWriteError.Conflict);
       }
@@ -115,7 +119,7 @@ internal sealed partial class BitwardenCliService
       if (id is not null && result is null && output.Contains("out of date", StringComparison.OrdinalIgnoreCase))
       {
         await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
-        UpdateCachedItem(id, await GetItemJsonAsync(id), generation);
+        commit(id, await GetJsonAsync(noun, id), generation);
         throw new VaultWriteException(VaultWriteError.Conflict);
       }
 
@@ -134,7 +138,7 @@ internal sealed partial class BitwardenCliService
         if (savedId is null)
           throw new VaultWriteException(VaultWriteError.Unknown);
 
-        var savedOutput = await RunCliAsync($"get item {savedId}", verbOnlyLog: true);
+        var savedOutput = await RunCliAsync($"get {noun} {savedId}", verbOnlyLog: true);
         var saved = ParseObject(savedOutput);
         if (gone ? saved is not null || !savedOutput.Contains("Not found", StringComparison.OrdinalIgnoreCase) : !verify(current, saved))
         {
@@ -142,7 +146,7 @@ internal sealed partial class BitwardenCliService
           throw new VaultWriteException(timedOut ? VaultWriteError.Unknown : VaultWriteError.Failed);
         }
 
-        UpdateCachedItem(savedId, saved, generation);
+        commit(savedId, saved, generation);
         return saved ?? new JsonObject();
       }
       catch (Exception ex) when (id is null)

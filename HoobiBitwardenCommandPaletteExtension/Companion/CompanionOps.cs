@@ -66,6 +66,7 @@ internal sealed partial class CompanionOps : IDisposable
     if (_service.IsUnlocked)
       return;
     ClearExtras();
+    ClearGeneratorHistory();
     Locked?.Invoke();
   }
 
@@ -86,6 +87,21 @@ internal sealed partial class CompanionOps : IDisposable
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
         case Ops.CreateItem:
           return IpcJson.ToElement(await CreateItemAsync(IpcJson.Read(payload, IpcJson.Default.EditableItem)), IpcJson.Default.SavedResponse);
+        case Ops.CreateFolder:
+          return IpcJson.ToElement(await CreateFolderAsync(IpcJson.Read(payload, IpcJson.Default.FolderRequest)), IpcJson.Default.FilterRef);
+        case Ops.RenameFolder:
+          await RenameFolderAsync(IpcJson.Read(payload, IpcJson.Default.FolderRequest));
+          return null;
+        case Ops.DeleteFolder:
+          await DeleteFolderAsync(IpcJson.Read(payload, IpcJson.Default.FolderRequest));
+          return null;
+        case Ops.Generate:
+          return IpcJson.ToElement(await GenerateAsync(IpcJson.Read(payload, IpcJson.Default.GeneratorOptions)), IpcJson.Default.GeneratedResponse);
+        case Ops.ListGeneratorHistory:
+          return IpcJson.ToElement(ListGeneratorHistory(), IpcJson.Default.GeneratorHistoryResponse);
+        case Ops.CopyGenerated:
+          CopyGenerated(IpcJson.Read(payload, IpcJson.Default.HistoryEntryRequest).Id);
+          return null;
         default:
           return await DispatchAsync(op, payload, null);
       }
@@ -101,6 +117,9 @@ internal sealed partial class CompanionOps : IDisposable
         VaultWriteError.Conflict => IpcErrors.Conflict,
         VaultWriteError.NotFound => IpcErrors.NotFound,
         VaultWriteError.Unknown => IpcErrors.Unknown,
+        VaultWriteError.Premium => IpcErrors.Premium,
+        VaultWriteError.TooLarge => IpcErrors.TooLarge,
+        VaultWriteError.NoStorage => IpcErrors.NoStorage,
         _ => IpcErrors.Failed,
       }, ex);
     }
@@ -151,6 +170,17 @@ internal sealed partial class CompanionOps : IDisposable
       case Ops.DeleteItem or Ops.RestoreItem or Ops.ArchiveItem or Ops.MoveItem or Ops.SetCollections:
         var write = IpcJson.Read(payload, IpcJson.Default.WriteRequest);
         return await WriteAsync(op, write, IsVerified(write.Id, verifiedId)) is { } saved ? IpcJson.ToElement(saved, IpcJson.Default.SavedResponse) : null;
+      case Ops.DownloadAttachment:
+        var download = IpcJson.Read(payload, IpcJson.Default.AttachmentRequest);
+        await DownloadAttachmentAsync(download, IsVerified(download.Id, verifiedId));
+        return null;
+      case Ops.UploadAttachment or Ops.DeleteAttachment:
+        var attachment = IpcJson.Read(payload, IpcJson.Default.AttachmentRequest);
+        var verified = IsVerified(attachment.Id, verifiedId);
+        return IpcJson.ToElement(op == Ops.UploadAttachment ? await UploadAttachmentAsync(attachment, verified) : await DeleteAttachmentAsync(attachment, verified), IpcJson.Default.SavedResponse);
+      case Ops.RotatePassword:
+        var rotate = IpcJson.Read(payload, IpcJson.Default.RotateRequest);
+        return IpcJson.ToElement(await RotatePasswordAsync(rotate, IsVerified(rotate.Id, verifiedId)), IpcJson.Default.SavedResponse);
       default:
         throw new IpcException(IpcErrors.Invalid);
     }
@@ -178,7 +208,8 @@ internal sealed partial class CompanionOps : IDisposable
       item.PasswordRevisionDate,
       locked ? [] : MapFields(item),
       item.DeletedDate != null,
-      item.ArchivedDate != null);
+      item.ArchivedDate != null,
+      locked ? null : item.Attachments.Select(a => new AttachmentDto(a.Id, a.FileName, a.SizeName)).ToList());
   }
 
   internal async Task<ItemListResponse> ListItemsAsync()
@@ -487,6 +518,7 @@ internal sealed partial class CompanionOps : IDisposable
     _service.StatusChanged -= RaiseIfLocked;
     _service.AutoLocked -= RaiseIfLocked;
     _service.CacheUpdated -= RaiseVaultChanged;
+    ClearGeneratorHistory();
     _extrasGate.Dispose();
   }
 }
