@@ -1043,6 +1043,12 @@ internal sealed partial class BitwardenCliService
       return _folders.GetValueOrDefault(folderId);
   }
 
+  internal BitwardenItem? GetCachedItem(string id)
+  {
+    lock (_cacheLock)
+      return _cache.Find(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+  }
+
   internal string? GetOrganizationName(string? organizationId)
   {
     if (organizationId == null) return null;
@@ -1730,6 +1736,7 @@ internal sealed partial class BitwardenCliService
       Type = type,
       Notes = ProtectedSecret.From(node["notes"]?.GetValue<string>()),
       RevisionDate = DateTime.TryParse(node["revisionDate"]?.GetValue<string>(), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue,
+      CreationDate = DateTime.TryParse(node["creationDate"]?.GetValue<string>(), out var cd) ? cd.ToUniversalTime() : null,
       CustomFields = ParseCustomFields(node["fields"]),
       Favorite = node["favorite"]?.GetValue<bool>() ?? false,
       FolderId = node["folderId"]?.GetValue<string>(),
@@ -1756,6 +1763,7 @@ internal sealed partial class BitwardenCliService
       IdentityAddress = address,
       SshPublicKey = Text(ssh, "publicKey"),
       SshFingerprint = Text(ssh, "keyFingerprint"),
+      SshPrivateKey = ProtectedSecret.From(Text(ssh, "privateKey")),
     };
   }
 
