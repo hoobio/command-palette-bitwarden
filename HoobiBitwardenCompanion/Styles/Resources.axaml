@@ -127,7 +127,7 @@
     <x:Double x:Key="CaptionButtonWidth">46</x:Double>
     <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
     <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
-    <Thickness x:Key="PageGutter">0,0,8,24</Thickness>
+    <Thickness x:Key="PageGutter">0,0,24,24</Thickness>
     <Thickness x:Key="CardRowPadding">16,10,8,10</Thickness>
     <x:Double x:Key="ContentDialogMaxWidth">400</x:Double>
     <BoxShadows x:Key="FlyoutShadow">0 8 16 0 #47000000, 0 0 2 0 #3D000000</BoxShadows>

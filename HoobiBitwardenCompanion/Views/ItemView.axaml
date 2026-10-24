@@ -94,9 +94,9 @@
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
-        <ContentControl Classes="VaultHeader" Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" />
+        <ContentControl Classes="VaultHeader" Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,0,16,0" />
 
-        <Grid x:Name="Toolbar" Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,0,8,4">
+        <Grid x:Name="Toolbar" Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,0,24,4">
             <WrapPanel ItemSpacing="8" LineSpacing="8">
                 <Button x:Name="RestoreButton" Content="Restore" Command="{Binding RestoreCommand}" IsVisible="{Binding CanRestore}" />
                 <Button x:Name="EditButton" Content="Edit" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" />
@@ -119,7 +119,7 @@
             <Button x:Name="DeleteButton" Grid.Column="2" VerticalAlignment="Top" Theme="{StaticResource DangerIconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}" ToolTip.Tip="{Binding DeleteLabel}" AutomationProperties.Name="{Binding DeleteLabel}" />
         </Grid>
 
-        <StackPanel Grid.Row="2" Margin="0,0,8,0">
+        <StackPanel Grid.Row="2" Margin="0,0,24,0">
             <Border x:Name="ErrorBanner" Classes="Banner" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                     <TextBlock Classes="Icon" Text="{StaticResource Glyph.Warning}" Foreground="{DynamicResource SystemFillColorCautionBrush}" VerticalAlignment="Top" />
@@ -262,7 +262,7 @@
         <TextBlock
             Grid.Row="4"
             Classes="Caption"
-            Margin="0,0,8,12"
+            Margin="0,0,24,12"
             Text="{Binding StatusMessage}"
             IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     </Grid>
