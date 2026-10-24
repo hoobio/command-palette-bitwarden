@@ -1417,14 +1417,15 @@ internal sealed partial class BitwardenCliService
     };
   }
 
-  private ICliProcess StartProcess(string args)
+  private ICliProcess StartProcess(string args, bool keepInput = false)
   {
     var psi = CliStartInfo(args);
     psi.Environment["BW_NOINTERACTION"] = "true";
     psi.Environment["NO_COLOR"] = "1";
 
     var process = _processFactory(psi);
-    process.StandardInput.Close();
+    if (!keepInput)
+      process.StandardInput.Close();
     _runningProcesses[process.Id] = (process, args);
     process.Exited += (_, _) => _runningProcesses.TryRemove(process.Id, out _);
     process.EnableRaisingEvents = true;
@@ -1451,7 +1452,7 @@ internal sealed partial class BitwardenCliService
   {
     foreach (var kvp in _runningProcesses)
     {
-      if (spareSync && kvp.Value.Args == "sync")
+      if (spareSync && IsDataWrite(kvp.Value.Args))
         continue;
       try { kvp.Value.Process.Kill(true); } catch { }
       _runningProcesses.TryRemove(kvp.Key, out _);
@@ -1480,10 +1481,10 @@ internal sealed partial class BitwardenCliService
   private const int CliTimeoutMs = 30_000;
   private const int CliLogoutTimeoutMs = 3_000;
 
-  private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
+  private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null, string? stdin = null, bool verbOnlyLog = false)
   {
-    if (args != "sync")
-      return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, null);
+    if (!IsDataWrite(args))
+      return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, null, stdin, verbOnlyLog);
 
     await _syncGate.WaitAsync();
     var released = 0;
@@ -1492,17 +1493,24 @@ internal sealed partial class BitwardenCliService
       if (Interlocked.Exchange(ref released, 1) == 0) _syncGate.Release();
     }
 
-    try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, ReleaseOnce); }
+    try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, ReleaseOnce, stdin, verbOnlyLog); }
     catch { ReleaseOnce(); throw; }
   }
 
-  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd)
+  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd, string? stdin = null, bool verbOnlyLog = false)
   {
-    DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
+    var logged = verbOnlyLog ? args.Split(' ')[0] : args;
+    DebugLogService.Log("CLI", $"RunCliAsync: bw {logged}");
     var sw = System.Diagnostics.Stopwatch.StartNew();
-    using var lease = NewCliLease(args, timeoutMs, onProcessEnd);
+    using var lease = NewCliLease(args, timeoutMs, onProcessEnd, stdin != null, logged);
     try
     {
+      if (stdin != null)
+      {
+        await lease.Process.StandardInput.WriteAsync(stdin.AsMemory(), lease.Token);
+        lease.Process.StandardInput.Close();
+      }
+
       var reader = lease.Process.StandardOutput;
       var buffer = new char[4096];
       var accum = new System.Text.StringBuilder();
@@ -1537,7 +1545,7 @@ internal sealed partial class BitwardenCliService
               if (depth == 0)
               {
                 var json = accum.ToString()[jsonStartIdx..].Trim();
-                DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
+                DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} JSON early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
                 lease.Detach();
                 return json;
               }
@@ -1555,7 +1563,7 @@ internal sealed partial class BitwardenCliService
           var text = accum.ToString();
           if (text.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
           {
-            DebugLogService.Log("CLI", $"RunCliAsync: bw {args} text early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
+            DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} text early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
             lease.Detach();
             return text.Trim();
           }
@@ -1564,7 +1572,7 @@ internal sealed partial class BitwardenCliService
 
       if (jsonStartIdx >= 0)
       {
-        DebugLogService.Log("CLI", $"RunCliAsync: bw {args} JSON EOF-exit ({sw.ElapsedMilliseconds}ms)");
+        DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} JSON EOF-exit ({sw.ElapsedMilliseconds}ms)");
         return accum.ToString()[jsonStartIdx..].Trim();
       }
 
@@ -1573,25 +1581,25 @@ internal sealed partial class BitwardenCliService
       var errorText = !string.IsNullOrEmpty(stderr) ? stderr : fallbackStr;
       if (IsSessionInvalidError(errorText))
       {
-        DebugLogService.Log("CLI", $"Session invalid detected in bw {args}: '{errorText}'");
+        DebugLogService.Log("CLI", verbOnlyLog ? $"Session invalid detected in bw {logged}" : $"Session invalid detected in bw {args}: '{errorText}'");
         HandleInvalidSession();
         throw new InvalidOperationException("Session expired - vault is locked");
       }
 
       var syncError = args == "sync" && stderr.Length > 0 ? $", stderr: {stderr[..Math.Min(stderr.Length, 300)]}" : "";
-      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms{syncError})");
+      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {logged} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms{syncError})");
       return fallbackStr;
     }
     catch (OperationCanceledException ex)
     {
-      DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {args} after {timeoutMs / 1000}s");
+      DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {logged} after {timeoutMs / 1000}s");
       try { lease.Process.Kill(); } catch { }
       throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}", ex);
     }
   }
 
-  private CliProcessLease NewCliLease(string args, int timeoutMs, Action? onProcessEnd) =>
-      new(args, StartProcess(args), new CancellationTokenSource(timeoutMs), onProcessEnd);
+  private CliProcessLease NewCliLease(string args, int timeoutMs, Action? onProcessEnd, bool keepInput = false, string? logged = null) =>
+      new(logged ?? args, StartProcess(args, keepInput), new CancellationTokenSource(timeoutMs), onProcessEnd);
 
   private sealed partial class CliProcessLease(string args, ICliProcess process, CancellationTokenSource cts, Action? onProcessEnd) : IDisposable
   {
