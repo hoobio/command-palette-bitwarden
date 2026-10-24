@@ -424,6 +424,8 @@ public class DesignGalleryTests(AvaloniaSession session)
     {
       var (window, vm) = await ItemAsync(host, name, 1800);
       await vm.EditCommand.ExecuteAsync(null);
+      Settle(window);
+      window.Height = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "EditorScroll").Extent.Height + 120;
       Save(window, file);
       if (name == "GitHub")
       {
