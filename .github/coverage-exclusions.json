@@ -48,10 +48,6 @@
     "reason": "Named-pipe IPC to a live Bitwarden Desktop process"
   },
   {
-    "pattern": "SearchFocusGuard\\.cs$",
-    "reason": "WinEvent hook and UI Automation SetFocus against the live Command Palette window, cannot be exercised in unit tests"
-  },
-  {
     "pattern": "NotificationsService\\.cs$",
     "reason": "WebSocket connection loop to a live notifications hub; framing and parsing live in HubProtocol.cs"
   }
