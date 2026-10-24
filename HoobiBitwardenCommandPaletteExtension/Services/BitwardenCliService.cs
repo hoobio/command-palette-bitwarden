@@ -21,6 +21,7 @@ internal sealed partial class BitwardenCliService
   private readonly CliProcessFactory _processFactory;
   private volatile ProtectedSecret? _sessionKey;
   private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (ICliProcess Process, string Args)> _runningProcesses = new();
+  // Held until the detached `bw sync` exits: overlapping syncs interleave data.json writes, and killing one mid-flush half-writes it.
   private readonly SemaphoreSlim _syncGate = new(1, 1);
   private ICliProcess? _pendingDeviceVerificationProcess;
   private CancellationTokenSource? _pendingDeviceVerificationCts;
@@ -1473,23 +1474,27 @@ internal sealed partial class BitwardenCliService
   private const int CliTimeoutMs = 30_000;
   private const int CliLogoutTimeoutMs = 3_000;
 
-  // Early exit detaches the process instead of killing it: killing `bw sync` mid-flush half-writes data.json and later `bw list` emits "Vault is locked."
-  // Two concurrent `bw sync` runs can interleave their data.json writes.
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
   {
     if (args != "sync")
-      return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText);
+      return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, null);
 
     await _syncGate.WaitAsync();
-    try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText); }
-    finally { _syncGate.Release(); }
+    var released = 0;
+    void ReleaseOnce()
+    {
+      if (Interlocked.Exchange(ref released, 1) == 0) _syncGate.Release();
+    }
+
+    try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, ReleaseOnce); }
+    catch { ReleaseOnce(); throw; }
   }
 
-  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText)
+  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd)
   {
     DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
     var sw = System.Diagnostics.Stopwatch.StartNew();
-    using var lease = NewCliLease(args, timeoutMs);
+    using var lease = NewCliLease(args, timeoutMs, onProcessEnd);
     try
     {
       var reader = lease.Process.StandardOutput;
@@ -1579,10 +1584,10 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  private CliProcessLease NewCliLease(string args, int timeoutMs) =>
-      new(args, StartProcess(args), new CancellationTokenSource(timeoutMs));
+  private CliProcessLease NewCliLease(string args, int timeoutMs, Action? onProcessEnd) =>
+      new(args, StartProcess(args), new CancellationTokenSource(timeoutMs), onProcessEnd);
 
-  private sealed partial class CliProcessLease(string args, ICliProcess process, CancellationTokenSource cts) : IDisposable
+  private sealed partial class CliProcessLease(string args, ICliProcess process, CancellationTokenSource cts, Action? onProcessEnd) : IDisposable
   {
     private bool _detached;
     public ICliProcess Process => process;
@@ -1592,7 +1597,7 @@ internal sealed partial class BitwardenCliService
     public void Detach()
     {
       _detached = true;
-      DetachForBackgroundExit(args, process, StderrTask, cts);
+      DetachForBackgroundExit(args, process, StderrTask, cts, onProcessEnd);
     }
 
     public void Dispose()
@@ -1600,24 +1605,25 @@ internal sealed partial class BitwardenCliService
       if (_detached) return;
       try { process.Dispose(); } catch { }
       cts.Dispose();
+      onProcessEnd?.Invoke();
     }
   }
 
   private const int DetachExitGraceMs = 10_000;
-  private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts)
+  private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts, Action? onProcessEnd)
   {
     _ = Task.Run(async () =>
     {
       var sw = System.Diagnostics.Stopwatch.StartNew();
       try
       {
+        using var killCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(DetachExitGraceMs));
         var stdoutDrain = process.StandardOutput.ReadToEndAsync();
 #pragma warning disable VSTHRD003 // stderrTask was started by the caller; safe to await here as both run on the ThreadPool
-        try { await Task.WhenAll(stdoutDrain, stderrTask).ConfigureAwait(false); }
+        try { await Task.WhenAll(stdoutDrain, stderrTask).WaitAsync(killCts.Token).ConfigureAwait(false); }
         catch { /* one side may have been canceled if the outer timeout fired first */ }
 #pragma warning restore VSTHRD003
 
-        using var killCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(DetachExitGraceMs));
         await process.WaitForExitAsync(killCts.Token).ConfigureAwait(false);
         DebugLogService.Log("CLI", $"Detached bw {args} exited naturally ({sw.ElapsedMilliseconds}ms post-detach)");
       }
@@ -1630,6 +1636,7 @@ internal sealed partial class BitwardenCliService
         try { if (!process.HasExited) { process.Kill(true); DebugLogService.Log("CLI", $"Detached bw {args} backstop-killed after {sw.ElapsedMilliseconds}ms"); } } catch { }
         try { process.Dispose(); } catch { }
         cts.Dispose();
+        onProcessEnd?.Invoke();
       }
     });
   }
