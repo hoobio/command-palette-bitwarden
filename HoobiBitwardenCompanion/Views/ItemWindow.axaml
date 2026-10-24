@@ -46,6 +46,6 @@
             </StackPanel>
         </Grid>
 
-        <views:ItemView Grid.Row="1" Margin="24,0,16,0" />
+        <views:ItemView Grid.Row="1" Margin="24,0,0,0" />
     </Grid>
 </Window>

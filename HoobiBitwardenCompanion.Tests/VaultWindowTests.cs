@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
 using HoobiBitwardenCompanion.ViewModels;
@@ -392,6 +394,42 @@ public class VaultWindowTests(AvaloniaSession session)
     var frame = window.CaptureRenderedFrame();
     Assert.NotNull(frame);
     SaveScreenshot(frame, "item-window.png");
+    window.Close();
+  });
+
+  [Fact]
+  public Task ItemWindow_ScrollBarHugsTheRightEdge_AndNoValueClips() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(extension.Items[0].Id, channel);
+    var window = new ItemWindow(vm) { Width = 440, Height = 340 };
+    window.Show();
+    await vm.LoadAsync();
+    var frame = window.CaptureRenderedFrame();
+    Assert.NotNull(frame);
+    SaveScreenshot(frame, "item-window-scroll.png");
+
+    var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.IsVisible);
+    Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+    var bar = scroll.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ScrollBar>().First(b => b.Orientation == Avalonia.Layout.Orientation.Vertical);
+    Assert.True(bar.IsVisible);
+    var barLeft = bar.TranslatePoint(default, window)!.Value.X;
+    Assert.InRange(window.Bounds.Width - (barLeft + bar.Bounds.Width), -0.5, 0.5);
+
+    var values = scroll.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text) && t.Text.Contains("2025", StringComparison.Ordinal)).ToList();
+    Assert.NotEmpty(values);
+    foreach (var value in values)
+    {
+      Assert.DoesNotContain(value.TextLayout.TextLines, l => l.HasCollapsed);
+      Assert.True(value.TranslatePoint(new Avalonia.Point(value.Bounds.Width, 0), window)!.Value.X <= barLeft, $"'{value.Text}' runs under the scroll bar");
+    }
+
+    scroll.ScrollToEnd();
+    var bottom = window.CaptureRenderedFrame();
+    Assert.NotNull(bottom);
+    SaveScreenshot(bottom, "item-window-scroll-end.png");
     window.Close();
   });
 
