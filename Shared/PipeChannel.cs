@@ -14,10 +14,14 @@ internal sealed partial class PipeChannel : IDisposable
 {
   private static readonly byte[] Newline = [(byte)'\n'];
 
+  internal static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(60);
+
   private readonly StreamReader _reader;
   private readonly Stream _output;
   private readonly IpcRequestHandler _onRequest;
   private readonly Action<string, JsonElement?>? _onEvent;
+  private readonly Action<string>? _log;
+  private readonly TimeSpan _requestTimeout;
   private readonly ConcurrentDictionary<long, TaskCompletionSource<Envelope>> _pending = new();
   private readonly SemaphoreSlim _writeLock = new(1, 1);
   private readonly CancellationTokenSource _closing = new();
@@ -25,12 +29,20 @@ internal sealed partial class PipeChannel : IDisposable
   private volatile bool _closed;
   private int _disposed;
 
-  public PipeChannel(Stream input, Stream output, IpcRequestHandler onRequest, Action<string, JsonElement?>? onEvent = null)
+  public PipeChannel(
+    Stream input,
+    Stream output,
+    IpcRequestHandler onRequest,
+    Action<string, JsonElement?>? onEvent = null,
+    Action<string>? log = null,
+    TimeSpan? requestTimeout = null)
   {
     _reader = new StreamReader(input, new UTF8Encoding(false));
     _output = output;
     _onRequest = onRequest;
     _onEvent = onEvent;
+    _log = log;
+    _requestTimeout = requestTimeout ?? DefaultRequestTimeout;
   }
 
   public bool IsClosed => _closed;
@@ -59,10 +71,16 @@ internal sealed partial class PipeChannel : IDisposable
     if (_closed && _pending.TryRemove(id, out _))
       throw new IOException("Channel closed");
 
-    using var registration = cancellationToken.Register(() =>
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeout.CancelAfter(_requestTimeout);
+    using var registration = timeout.Token.Register(() =>
     {
-      if (_pending.TryRemove(id, out var pending))
+      if (!_pending.TryRemove(id, out var pending))
+        return;
+      if (cancellationToken.IsCancellationRequested)
         pending.TrySetCanceled(cancellationToken);
+      else
+        pending.TrySetException(new TimeoutException($"{op} timed out"));
     });
     try
     {
@@ -96,7 +114,14 @@ internal sealed partial class PipeChannel : IDisposable
         _ = RespondAsync(message);
         break;
       case MessageTypes.Event when message.Op is { } op:
-        _onEvent?.Invoke(op, message.Payload);
+        try
+        {
+          _onEvent?.Invoke(op, message.Payload);
+        }
+        catch (Exception ex)
+        {
+          _log?.Invoke($"Event {op} handler failed: {ex.GetType().Name}");
+        }
         break;
     }
   }

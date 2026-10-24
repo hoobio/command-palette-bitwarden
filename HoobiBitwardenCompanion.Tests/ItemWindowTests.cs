@@ -17,26 +17,44 @@ public class ItemWindowTests(AvaloniaSession session)
   private sealed class FakeExtension
   {
     public bool RepromptRequired { get; set; }
+    public bool RepromptEveryOp { get; set; }
+    public bool StaleOnce { get; set; }
     public string? ErrorCode { get; set; }
     public int TotpRemaining { get; set; } = 3;
     public int TotpCalls { get; private set; }
     public List<string> Requests { get; } = [];
 
-    public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
+    public int Count(string op)
+    {
+      lock (Requests)
+        return Requests.Count(r => r == op);
+    }
+
+    public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken) =>
+      Task.FromResult(Handle(op, payload, verified: false));
+
+    private JsonElement? Handle(string op, JsonElement? payload, bool verified)
     {
       lock (Requests)
         Requests.Add(op);
       if (ErrorCode is { } code)
         throw new IpcException(code);
+      if (RepromptEveryOp && !verified && op is Ops.Reveal or Ops.Copy or Ops.GetTotp)
+        throw new IpcException(IpcErrors.Reprompt);
+      if (StaleOnce && op is Ops.Reveal)
+      {
+        StaleOnce = false;
+        throw new IpcException(IpcErrors.Stale);
+      }
 
-      return Task.FromResult<JsonElement?>(op switch
+      return op switch
       {
         Ops.GetItem => IpcJson.ToElement(Item(), IpcJson.Default.ItemDto),
         Ops.Reveal => IpcJson.ToElement(new SecretResponse("hunter2"), IpcJson.Default.SecretResponse),
         Ops.GetTotp => IpcJson.ToElement(new TotpResponse($"00000{++TotpCalls}", TotpRemaining, 30), IpcJson.Default.TotpResponse),
         Ops.VerifyReprompt => VerifyReprompt(IpcJson.Read(payload, IpcJson.Default.RepromptRequest)),
         _ => null,
-      });
+      };
     }
 
     private JsonElement VerifyReprompt(RepromptRequest request)
@@ -44,7 +62,8 @@ public class ItemWindowTests(AvaloniaSession session)
       var ok = request.Password == "correct";
       if (ok)
         RepromptRequired = false;
-      return IpcJson.ToElement(new RepromptResponse(ok, 0), IpcJson.Default.RepromptResponse);
+      var result = ok && request.Op is { } op ? Handle(op, request.Payload, verified: true) : null;
+      return IpcJson.ToElement(new RepromptResponse(ok, 0, result), IpcJson.Default.RepromptResponse);
     }
 
     private ItemDto Item() => new(
@@ -218,6 +237,7 @@ public class ItemWindowTests(AvaloniaSession session)
     await pair.Extension.RequestAsync(Ops.ShowItem, IpcJson.ToElement(new ItemRequest(ItemId), IpcJson.Default.ItemRequest), TestContext.Current.CancellationToken);
     await pair.Extension.RequestAsync(Ops.ShowItem, IpcJson.ToElement(new ItemRequest(ItemId.ToUpperInvariant()), IpcJson.Default.ItemRequest), TestContext.Current.CancellationToken);
     var window = Assert.Single(coordinator.ItemWindows);
+    AvaloniaSession.WaitFor(() => extension.Count(Ops.GetItem) == 2);
     Assert.Same(window, coordinator.ShowItem(ItemId));
 
     var invalid = await Assert.ThrowsAsync<IpcException>(() => pair.Extension.RequestAsync(Ops.ShowItem, IpcJson.ToElement(new ItemRequest("nope"), IpcJson.Default.ItemRequest), TestContext.Current.CancellationToken));
@@ -237,6 +257,117 @@ public class ItemWindowTests(AvaloniaSession session)
     await run.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
     AvaloniaSession.WaitFor(() => closed);
   });
+
+  [Fact]
+  public Task Coordinator_LockedEvent_WipesRevealedValuesInEveryWindow() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var vm = coordinator.ShowItem(ItemId).ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.Groups.Count > 0 && Field(vm, ItemFields.Totp).TotpCode is not null);
+    var password = Field(vm, ItemFields.Password);
+    var totp = Field(vm, ItemFields.Totp);
+    await password.ToggleRevealCommand.ExecuteAsync(null);
+    Assert.Equal("hunter2", password.RevealedValue);
+    Assert.True(vm.IsTotpRunning);
+
+    await pair.Extension.SendEventAsync(Ops.Locked);
+    AvaloniaSession.WaitFor(() => vm.Groups.Count == 0);
+
+    Assert.Null(password.RevealedValue);
+    Assert.False(password.IsRevealed);
+    Assert.Null(totp.TotpCode);
+    Assert.False(vm.IsTotpRunning);
+    Assert.Equal(ItemViewModel.Describe(new IpcException(IpcErrors.Locked)), vm.ErrorMessage);
+    foreach (var window in coordinator.ItemWindows.ToList())
+      window.Close();
+  });
+
+  [Fact]
+  public Task ItemViewModel_GraceZero_PromptsForEveryRevealAndRunsTheOpAfterVerify() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    using var vm = new ItemViewModel(ItemId, channel);
+    await vm.LoadAsync();
+    extension.RepromptEveryOp = true;
+    var password = Field(vm, ItemFields.Password);
+
+    await password.ToggleRevealCommand.ExecuteAsync(null);
+    Assert.True(vm.RepromptRequired);
+    Assert.Null(password.RevealedValue);
+
+    Assert.True(await vm.VerifyRepromptAsync("correct"));
+    Assert.False(vm.RepromptRequired);
+    Assert.Equal("hunter2", password.DisplayValue);
+
+    await password.ToggleRevealCommand.ExecuteAsync(null);
+    await password.ToggleRevealCommand.ExecuteAsync(null);
+    Assert.True(vm.RepromptRequired);
+    Assert.False(password.IsRevealed);
+    Assert.Equal(1, extension.Count(Ops.VerifyReprompt));
+  });
+
+  [Fact]
+  public Task ItemViewModel_Disposed_DoesNotStartTheTotpTimer() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(ItemId, channel);
+    vm.Dispose();
+
+    await vm.LoadAsync();
+
+    Assert.Equal(1, extension.TotpCalls);
+    Assert.False(vm.IsTotpRunning);
+  });
+
+  [Fact]
+  public Task ItemViewModel_StaleRevision_ReloadsTheWindow() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    using var vm = new ItemViewModel(ItemId, channel);
+    await vm.LoadAsync();
+    extension.StaleOnce = true;
+
+    await Field(vm, ItemFields.Password).ToggleRevealCommand.ExecuteAsync(null);
+
+    Assert.Equal(2, extension.Count(Ops.GetItem));
+    Assert.Equal(ItemViewModel.Describe(new IpcException(IpcErrors.Stale)), vm.StatusMessage);
+    Assert.Null(vm.ErrorMessage);
+    Assert.False(Field(vm, ItemFields.Password).IsRevealed);
+  });
+
+  [Fact]
+  public Task Coordinator_ReadLoopFault_StillShutsDownTheCompanion() => session.RunAsync(async () =>
+  {
+    using var coordinator = new WindowCoordinator(new FaultingStream(), new MemoryStream());
+    var closed = false;
+
+    await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.RunAsync(() => closed = true));
+
+    AvaloniaSession.WaitFor(() => closed);
+  });
+
+  private sealed class FaultingStream : Stream
+  {
+    public override bool CanRead => true;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+    public override void Flush() { }
+    public override int Read(byte[] buffer, int offset, int count) => throw new InvalidOperationException("fault");
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+  }
 
   private static PipeChannel CompanionChannel(ChannelPair pair)
   {

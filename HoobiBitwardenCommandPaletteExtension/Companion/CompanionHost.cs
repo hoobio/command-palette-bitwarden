@@ -16,14 +16,17 @@ internal sealed partial class CompanionHost : IDisposable
 
   private readonly CompanionOps _ops;
   private readonly string _exePath;
+  private readonly TimeSpan? _requestTimeout;
   private readonly Lock _lock = new();
   private Process? _process;
   private PipeChannel? _channel;
 
-  public CompanionHost(CompanionOps ops, string? exePath = null)
+  public CompanionHost(CompanionOps ops, string? exePath = null, TimeSpan? requestTimeout = null)
   {
     _ops = ops;
     _exePath = exePath ?? Path.Combine(AppContext.BaseDirectory, "Companion", "HoobiBitwardenCompanion.exe");
+    _requestTimeout = requestTimeout;
+    _ops.Locked += NotifyLocked;
   }
 
   internal Process? Process => _process;
@@ -33,7 +36,65 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void ShowVault() => _ = SendAsync(Ops.ShowVault, null);
 
-  internal Task<JsonElement?> RequestAsync(string op, JsonElement? payload) => EnsureStarted().RequestAsync(op, payload);
+  internal async Task<JsonElement?> RequestAsync(string op, JsonElement? payload)
+  {
+    var channel = EnsureStarted();
+    try
+    {
+      return await channel.RequestAsync(op, payload);
+    }
+    catch (TimeoutException)
+    {
+      MarkDead(channel);
+      throw;
+    }
+  }
+
+  internal void NotifyLocked()
+  {
+    PipeChannel? channel;
+    lock (_lock)
+      channel = _channel is { IsClosed: false } ? _channel : null;
+    if (channel is not null)
+      _ = SendEventAsync(channel, Ops.Locked);
+  }
+
+  private static async Task SendEventAsync(PipeChannel channel, string op)
+  {
+    try
+    {
+      await channel.SendEventAsync(op);
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Companion", $"{op} event failed: {ex.GetType().Name}");
+    }
+  }
+
+  private async Task WatchAsync(PipeChannel channel)
+  {
+    try
+    {
+      await channel.RunAsync();
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Companion", $"Pipe loop failed: {ex.GetType().Name}");
+    }
+    finally
+    {
+      MarkDead(channel);
+    }
+  }
+
+  private void MarkDead(PipeChannel channel)
+  {
+    lock (_lock)
+    {
+      if (ReferenceEquals(channel, _channel))
+        Stop();
+    }
+  }
 
   private async Task SendAsync(string op, JsonElement? payload)
   {
@@ -79,10 +140,11 @@ internal sealed partial class CompanionHost : IDisposable
         throw;
       }
 
-      _channel = new PipeChannel(fromCompanion, toCompanion, _ops.HandleAsync);
-      _ = _channel.RunAsync();
+      var channel = new PipeChannel(fromCompanion, toCompanion, _ops.HandleAsync, log: message => DebugLogService.Log("Companion", message), requestTimeout: _requestTimeout);
+      _channel = channel;
       DebugLogService.Log("Companion", $"Started companion process {_process.Id}");
-      return _channel;
+      _ = WatchAsync(channel);
+      return channel;
     }
   }
 
@@ -96,6 +158,7 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void Dispose()
   {
+    _ops.Locked -= NotifyLocked;
     lock (_lock)
       Stop();
     _ops.Dispose();

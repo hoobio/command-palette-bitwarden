@@ -13,6 +13,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private readonly DispatcherTimer _totpTimer;
   private FieldViewModel? _totpField;
   private bool _totpFetching;
+  private bool _disposed;
+  private DateTime _revisionDate;
+  private (string Op, JsonElement Payload, Action<JsonElement?> OnSuccess)? _repromptRetry;
 
   public ItemViewModel(string id, PipeChannel channel)
   {
@@ -23,6 +26,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   }
 
   public string Id { get; }
+
+  internal bool IsTotpRunning => _totpTimer.IsEnabled;
 
   public ObservableCollection<FieldGroupViewModel> Groups { get; } = [];
 
@@ -55,7 +60,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       Apply(IpcJson.Read(await _channel.RequestAsync(Ops.GetItem, ItemPayload), IpcJson.Default.ItemDto));
       ErrorMessage = null;
     }
-    catch (Exception ex) when (ex is IpcException or IOException)
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
       ErrorMessage = Describe(ex);
     }
@@ -64,12 +69,32 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       IsLoading = false;
     }
 
+    await RefreshTotpIfShownAsync();
+  }
+
+  private async Task RefreshTotpIfShownAsync()
+  {
     if (_totpField is not null && !RepromptRequired)
       await RefreshTotpAsync();
   }
 
+  internal void OnLocked()
+  {
+    _totpTimer.Stop();
+    foreach (var field in Groups.SelectMany(g => g.Fields))
+      field.Wipe();
+    Groups.Clear();
+    _totpField = null;
+    _repromptRetry = null;
+    RepromptRequired = false;
+    StatusMessage = null;
+    ErrorMessage = Describe(new IpcException(IpcErrors.Locked));
+  }
+
   internal void Apply(ItemDto item)
   {
+    _repromptRetry = null;
+    _revisionDate = item.RevisionDate;
     Title = item.Name;
     Subtitle = string.Join("  ·  ", new[] { item.FolderName, item.OrganizationName }.Where(s => !string.IsNullOrEmpty(s)));
     TypeGlyph = GlyphFor(item.Type);
@@ -102,30 +127,27 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       return;
     }
 
-    var (ok, reply) = await SendAsync(Ops.Reveal, FieldPayload(field.Key));
-    if (ok)
+    await RunAsync(Ops.Reveal, FieldPayload(field.Key), reply =>
     {
       field.RevealedValue = IpcJson.Read(reply, IpcJson.Default.SecretResponse).Value;
       field.IsRevealed = true;
-    }
+    });
   }
 
-  public async Task CopyAsync(FieldViewModel field)
-  {
-    if ((await SendAsync(Ops.Copy, FieldPayload(field.Key))).Ok)
-      StatusMessage = $"Copied {field.Label}";
-  }
+  public Task CopyAsync(FieldViewModel field) =>
+    RunAsync(Ops.Copy, FieldPayload(field.Key), _ => StatusMessage = $"Copied {field.Label}");
 
   public async Task OpenUriAsync(FieldViewModel field)
   {
     if (field.Key.StartsWith(ItemFields.UriPrefix, StringComparison.Ordinal)
       && int.TryParse(field.Key.AsSpan(ItemFields.UriPrefix.Length), CultureInfo.InvariantCulture, out var index))
-      await SendAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(Id, index), IpcJson.Default.UriRequest));
+      await RunAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(Id, index, _revisionDate), IpcJson.Default.UriRequest), _ => { });
   }
 
   public async Task<bool> VerifyRepromptAsync(string password)
   {
-    var (ok, reply) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password), IpcJson.Default.RepromptRequest));
+    var (op, payload, onSuccess) = _repromptRetry ?? (Ops.GetItem, ItemPayload, reply => Apply(IpcJson.Read(reply, IpcJson.Default.ItemDto)));
+    var (ok, reply, _) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest));
     if (!ok)
       return false;
 
@@ -139,8 +161,32 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
 
     ErrorMessage = null;
-    await LoadAsync();
+    _repromptRetry = null;
+    RepromptRequired = false;
+    onSuccess(result.Result);
+    await RefreshTotpIfShownAsync();
     return true;
+  }
+
+  private async Task RunAsync(string op, JsonElement payload, Action<JsonElement?> onSuccess)
+  {
+    var (ok, reply, error) = await SendAsync(op, payload);
+    if (ok)
+    {
+      onSuccess(reply);
+      return;
+    }
+
+    if (error == IpcErrors.Reprompt)
+    {
+      _repromptRetry = (op, payload, onSuccess);
+      RepromptRequired = true;
+    }
+    else if (error == IpcErrors.Stale)
+    {
+      await LoadAsync();
+      StatusMessage = Describe(new IpcException(IpcErrors.Stale));
+    }
   }
 
   internal async Task TickAsync()
@@ -160,10 +206,13 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _totpFetching = true;
     try
     {
-      var (ok, reply) = await SendAsync(Ops.GetTotp, ItemPayload);
+      var (ok, reply, error) = await SendAsync(Ops.GetTotp, ItemPayload);
       if (!ok)
       {
         _totpTimer.Stop();
+        field.TotpCode = null;
+        if (error == IpcErrors.Reprompt)
+          ErrorMessage = null;
         return;
       }
 
@@ -171,7 +220,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       field.TotpPeriod = totp.Period;
       field.TotpRemaining = totp.Remaining;
       field.TotpCode = totp.Code;
-      _totpTimer.Start();
+      if (!_disposed)
+        _totpTimer.Start();
     }
     finally
     {
@@ -179,26 +229,24 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
   }
 
-  private async Task<(bool Ok, JsonElement? Reply)> SendAsync(string op, JsonElement payload)
+  private async Task<(bool Ok, JsonElement? Reply, string? Error)> SendAsync(string op, JsonElement payload)
   {
     try
     {
       var reply = await _channel.RequestAsync(op, payload);
       StatusMessage = null;
-      return (true, reply);
+      return (true, reply, null);
     }
-    catch (Exception ex) when (ex is IpcException or IOException)
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
-      if (ex is IpcException { Code: IpcErrors.Reprompt })
-        RepromptRequired = true;
       ErrorMessage = Describe(ex);
-      return (false, null);
+      return (false, null, (ex as IpcException)?.Code);
     }
   }
 
   private JsonElement ItemPayload => IpcJson.ToElement(new ItemRequest(Id), IpcJson.Default.ItemRequest);
 
-  private JsonElement FieldPayload(string field) => IpcJson.ToElement(new FieldRequest(Id, field), IpcJson.Default.FieldRequest);
+  private JsonElement FieldPayload(string field) => IpcJson.ToElement(new FieldRequest(Id, field, _revisionDate), IpcJson.Default.FieldRequest);
 
   private static FieldViewModel HistoryField(string label, DateTime value) =>
     new(null, new FieldDto(label, label, "Item history", value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), false), canCopy: false);
@@ -209,7 +257,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IpcException { Code: IpcErrors.Locked } => "The vault is locked. Unlock it in Command Palette.",
     IpcException { Code: IpcErrors.NotFound } => "This item is no longer in the vault.",
     IpcException { Code: IpcErrors.Invalid } => "The request was not valid.",
+    IpcException { Code: IpcErrors.Stale } => "This item changed in the vault. The window shows the new version.",
     IOException => "The connection to Command Palette was lost.",
+    TimeoutException => "Command Palette did not respond.",
     _ => "Something went wrong.",
   };
 
@@ -223,5 +273,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _ => "",
   };
 
-  public void Dispose() => _totpTimer.Stop();
+  public void Dispose()
+  {
+    _disposed = true;
+    _totpTimer.Stop();
+  }
 }
