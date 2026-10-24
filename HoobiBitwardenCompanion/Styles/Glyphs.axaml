@@ -8,7 +8,4 @@
     <x:String x:Key="Glyph.Copy">&#xE5D7;</x:String>
     <x:String x:Key="Glyph.Open">&#xECF4;</x:String>
     <x:String x:Key="Glyph.Lock">&#xEBAC;</x:String>
-    <x:String x:Key="Glyph.Folder">&#xE8EB;</x:String>
-    <x:String x:Key="Glyph.Building">&#xE2F6;</x:String>
-    <x:String x:Key="Glyph.Error">&#xE877;</x:String>
 </ResourceDictionary>
