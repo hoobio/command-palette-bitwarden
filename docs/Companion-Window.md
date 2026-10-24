@@ -9,7 +9,7 @@ The companion window shows a vault item in its own window next to Command Palett
 - **Open vault** is a top-level command. It opens the vault window.
 - **Rotate password** is in the more-commands menu of each login, after the commands for the item type. It opens the item window and asks before it replaces the password (see [Quick Rotate](#quick-rotate)). It never rotates without the question.
 
-If the window for an item is already open, the command brings that window to the front and loads the item again. You can open windows for more than one item at the same time.
+The window opens in front with keyboard focus. Command Palette gives the extension the right to set the foreground window for each command, and the extension passes that right to the companion. If the window for an item is already open, the command brings that window to the front and loads the item again. You can open windows for more than one item at the same time.
 
 ## Scrolling
 
