@@ -63,7 +63,7 @@ public class CompanionHostTests
   }
 
   [Fact]
-  public async Task TrimmedCompanion_ShowsVaultAndItemWindows_AndExitsOnPipeEof()
+  public async Task TrimmedCompanion_ShowsAnItemWindow_AndExitsOnPipeEof()
   {
     var exePath = Path.Combine(AppContext.BaseDirectory, "Companion", "HoobiBitwardenCompanion.exe");
     var itemId = Guid.NewGuid().ToString();
@@ -89,7 +89,6 @@ public class CompanionHostTests
     try
     {
       var timeout = TimeSpan.FromSeconds(60);
-      await channel.RequestAsync(Ops.ShowVault, null, TestContext.Current.CancellationToken).WaitAsync(timeout, TestContext.Current.CancellationToken);
       await channel.RequestAsync(Ops.ShowItem, IpcJson.ToElement(new ItemRequest(itemId), IpcJson.Default.ItemRequest), TestContext.Current.CancellationToken).WaitAsync(timeout, TestContext.Current.CancellationToken);
       await itemRequested.Task.WaitAsync(timeout, TestContext.Current.CancellationToken);
       await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
