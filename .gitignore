@@ -53,3 +53,9 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+## Claude Code local state
+.claude/worktrees/
+.claude/session-marker/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
