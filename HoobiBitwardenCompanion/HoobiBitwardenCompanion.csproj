@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>HoobiBitwardenCompanion</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
@@ -29,6 +30,7 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\Fonts\*.ttf" />
+    <AvaloniaResource Include="Assets\app.ico" />
     <Content Include="Assets\Fonts\*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
