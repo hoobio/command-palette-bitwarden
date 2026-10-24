@@ -14,11 +14,11 @@ If the window for an item is already open, the command brings that window to the
 
 The vault window has the same layout as Bitwarden Desktop.
 
-- **Filters** (left): All items, Favourites, each item type (Login, Card, Identity, Secure note, SSH key), each folder and No folder, each collection, each organisation, Archive and Trash. Collections and organisations show only when your account has them. Archive shows only when you have archived items. All items and the other filters do not include items in the archive or in the trash.
-- **Items** (middle): the name, and below it the username, card brand and last four digits, email or SSH fingerprint. A login shows its website icon when Command Palette already downloaded it. The search box filters the list as you type. It finds text in the name, that subtext and the website hosts. It does not search notes.
-- **Item details** (right): the same view as the item window. Select **Open in own window** to open the item in an item window, which you can keep on top of other windows.
-- **New item** opens an empty form for the item type that you select. **Clone** opens a form with a copy of the selected item, named "<name> - Clone". A clone does not copy passkeys.
-- **Generator** opens the [password generator](#password-generator).
+- **Filters** (left): All items, Favourites, each item type (Login, Card, Identity, Secure note, SSH key), each folder and No folder, each collection and each organisation. **Archive** and **Trash** are at the bottom of the filter list. Collections and organisations show only when your account has them. Archive shows only when you have archived items. All items and the other filters do not include items in the archive or in the trash.
+- **Items** (middle): the name, and below it the username, card brand and last four digits, email or SSH fingerprint. A star shows on a favourite and a lock on an item with master password re-prompt. A login shows its website icon when Command Palette already downloaded it. The search box filters the list as you type. It finds text in the name, that subtext and the website hosts. It does not search notes. The clear button in the search box, or `Esc`, clears the search. When no item matches, the list names the search and shows **Clear search**. An empty vault shows **New item**. A line below the list shows the keyboard keys.
+- **Item details** (right): the item name, type icon and badges for the folder, organisation, favourite and master password re-prompt, then one toolbar and the same field groups as the item window. The toolbar has **Edit**, **Clone**, **Password history** and **Rotate password** (for a login), then **Open in own window** and the red trash-can button. In the archive or the trash, **Restore** is first. **Open in own window** opens the item in an item window, which you can keep on top of other windows.
+- **New item**, next to the search box, opens an empty form for the item type that you select. It is not available while a form is open. **Clone** opens a form with a copy of the selected item, named "<name> - Clone". A clone does not copy passkeys.
+- **Generator**, in the title bar, opens the [password generator](#password-generator).
 
 ### Folders
 
@@ -35,7 +35,7 @@ When the vault changes, for example after a sync, the vault window and every ite
 
 ## Item window
 
-The item window shows the item name, its type icon, and its folder and organization. The fields are grouped as Bitwarden Desktop groups them:
+The item window shows a toolbar at the top (**Edit**, **Password history** and **Rotate password** for a login, and the red trash-can button), then the item name, its type icon and badges for the folder, organisation, favourite and master password re-prompt. The fields are grouped as Bitwarden Desktop groups them. Each group is one block of rows with its name above it:
 
 | Item type | Groups |
 |-----------|--------|
@@ -49,8 +49,9 @@ All item types also show Custom fields, Additional options (notes) and Item hist
 
 - Secret fields (password, card number, security code, SSH private key, hidden custom fields, notes) are masked. Select the eye button to show or hide one value.
 - The copy button copies through the extension. Secrets are excluded from clipboard history and cleared after the time set in [Settings](Settings), also after you close the window.
-- The verification code changes at the end of each period. The ring shows the seconds left in the current period.
+- The verification code changes at the end of each period. The ring shows the seconds left in the current period. The ring and the number turn yellow for the last 5 seconds.
 - The open button on a website opens it in your browser. Only `http` and `https` addresses open.
+- A failed request shows as a yellow message at the top of the item. Red is used only for actions that you cannot undo.
 
 The window has a close button only, so it does not minimise or maximise. You can resize it.
 
@@ -59,14 +60,14 @@ The window has a close button only, so it does not minimise or maximise. You can
 The item details show an **Attachments** group with the name and size of each file.
 
 - The download button opens a save dialog. Bitwarden writes the file to the place that you select, so the file content never goes through the companion.
-- **Add attachment** opens a file dialog and adds the file to the item. A file can be up to 500 MB.
+- **Add attachment**, the last row of the group, opens a file dialog and adds the file to the item. A file can be up to 500 MB.
 - The red delete button asks first. You cannot undo an attachment delete.
 
 Attachments need Bitwarden Premium, or an organisation item in an organisation that allows them. The window shows a message when Bitwarden refuses a file because of the plan, the 500 MB limit or the storage space. For an item with master password re-prompt, the attachments show after you verify, and each download, upload and delete asks for your master password outside the grace period.
 
 ### Always on top
 
-Right-click the title bar or an empty area of the window and select **Always on top** to keep the window above other windows. New item windows use the same choice until the companion stops.
+Right-click the title bar or an empty area of the window and select **Always on top** to keep the window above other windows. A check mark shows in the menu and a pin shows in the title bar while it is on. New item windows use the same choice until the companion stops.
 
 ## Edit an item
 
@@ -84,7 +85,8 @@ All item types also have name, folder, favourite, master password re-prompt, not
 
 Bank account, driver's licence and passport items show read-only, with no **Edit** button.
 
-- **Save** checks that the name is set, each new custom field has a name and the expiration month is 1 to 12. A website can be any text, as in Bitwarden. A boolean custom field keeps its stored value until you change the switch. The extension then saves the item and reads it back to confirm the change.
+- **Save** and **Cancel** replace the toolbar while the form is open. In the vault window the header shows an **Editing** badge.
+- **Save** checks that the name is set, each new custom field has a name and the expiration month is 1 to 12. A missing name shows a yellow ring and a message below the name; the other checks show a yellow message above the form. A website can be any text, as in Bitwarden. A boolean custom field keeps its stored value until you change the switch. The extension then saves the item and reads it back to confirm the change.
 - **Cancel**, or closing the window, asks before it discards changes that are not saved.
 - If the item changed in the vault after you started to edit it, for example from another device, **Save** asks you to **Reload** the item and discard your changes, or **Keep editing**. The extension syncs the vault first, so **Reload** shows the server version.
 - A save waits for Bitwarden for as long as it takes. If Bitwarden does not confirm a new item, the window says so and asks before it saves another copy. Check the vault list first: the item can already be there.
@@ -92,7 +94,9 @@ Bank account, driver's licence and passport items show read-only, with no **Edit
 
 The item details also have a red trash-can button (**Delete**) and, for a login, **Password history** and **Rotate password**. Password history shows the date of each old password. The values are masked, and the copy button copies through the extension.
 
-The trash-can button opens a dialog that names the item. For an active item it offers **Archive**, **Permanently delete** and **Cancel**. When Bitwarden cannot archive the item (for example an organisation item, or an account without archive), **Move to Trash** replaces **Archive**, so a recoverable option stays available. In the trash or the archive, the button is **Delete permanently** and the dialog offers **Permanently delete** and **Cancel**; **Restore** is a separate button. The dialog stays open while Bitwarden runs the change and shows an error in the dialog when the change fails.
+**Add website** and **Add field** are the last rows of their groups. The reorder and remove buttons of websites and custom fields are not red, because **Cancel** undoes them.
+
+The trash-can button opens a dialog that names the item. For an active item it offers **Archive**, **Permanently delete** and **Cancel**, one above the other so that each fits in a narrow window. When Bitwarden cannot archive the item (for example an organisation item, or an account without archive), **Move to Trash** replaces **Archive**, so a recoverable option stays available. In the trash or the archive, the button is **Delete permanently** and the dialog offers **Permanently delete** and **Cancel**; **Restore** is a separate button. The dialog stays open while Bitwarden runs the change and shows an error in the dialog when the change fails.
 
 ## Password generator
 
@@ -104,7 +108,7 @@ The generator has three tabs:
 | Passphrase | Number of words (3 to 20), word separator (one character), capitalise, include number | 4 words, separated by `-` |
 | Username | Plus-addressed email (`jane+abc12345@example.com`, from the email that you enter) or catch-all email (`abc12345@example.com`, from the domain that you enter) | Plus-addressed |
 
-The Bitwarden CLI makes passwords and passphrases. The extension makes usernames, because the CLI has no username generator; the random part is 8 letters and digits from a cryptographic random number generator. **Regenerate** makes a new value, the copy button copies it through the extension with the clipboard clear timer, and **Use password** (from the edit form only) puts it in the password field. The username tab is not available from the edit form.
+The Bitwarden CLI makes passwords and passphrases. The extension makes usernames, because the CLI has no username generator; the random part is 8 letters and digits from a cryptographic random number generator. **Regenerate** makes a new value, the copy button copies it through the extension with the clipboard clear timer, and **Use password** (a dialog button, from the edit form only) puts it in the password field. The username tab is not available from the edit form.
 
 **Generator history** lists the last 50 values with their type and time. The values are masked; the copy button copies through the extension. The history is kept in the extension memory only, is never written to disk, and is erased when the vault locks. The companion saves the generator options, but not the values, in `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\companion-generator.json`.
 
