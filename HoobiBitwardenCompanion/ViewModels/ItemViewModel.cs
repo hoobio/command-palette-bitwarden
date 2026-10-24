@@ -20,6 +20,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private DateTime _revisionDate;
   private (string Op, JsonElement Payload, Action<JsonElement?> OnSuccess)? _repromptRetry;
   private bool _createUncertain;
+  private bool _inOrganization;
+  private bool _archiveUnavailable;
 
   public ItemViewModel(string id, PipeChannel channel)
   {
@@ -47,6 +49,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Func<Task<string?>>? AskPassword { get; set; }
 
+  internal Func<ActionDialogRequest, Task<bool>>? ConfirmAction { get; set; }
+
   internal Action<EditableItem, FiltersResponse>? CloneRequested { get; set; }
 
   internal event Action? Removed;
@@ -56,35 +60,33 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   internal event Action? Discarded;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanArchive), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
+  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory))]
   public partial ItemEditorViewModel? Editor { get; private set; }
 
   public bool IsEditing => Editor is not null;
 
   public bool IsReadOnly => Editor is null && !IsNew;
 
-  public bool CanArchive => IsReadOnly && !IsDeleted && !IsArchived;
-
-  public bool CanEdit => CanArchive && ItemType is >= 1 and <= 5;
+  public bool CanEdit => IsReadOnly && !IsDeleted && !IsArchived && ItemType is >= 1 and <= 5;
 
   public bool CanRestore => IsReadOnly && (IsDeleted || IsArchived);
 
-  public bool CanDelete => IsReadOnly && !IsDeleted;
+  public bool CanDelete => IsReadOnly;
 
-  public bool CanDeletePermanently => IsReadOnly && IsDeleted;
+  public string DeleteLabel => IsDeleted || IsArchived ? "Delete permanently" : "Delete";
 
   public bool CanShowHistory => IsReadOnly && ItemType == 1;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanArchive), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
+  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory))]
   public partial bool IsNew { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanArchive), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently))]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel))]
   public partial bool IsDeleted { get; private set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanArchive), nameof(CanRestore))]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel))]
   public partial bool IsArchived { get; private set; }
 
   [ObservableProperty]
@@ -166,6 +168,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     ItemType = item.Type;
     IsDeleted = item.Deleted;
     IsArchived = item.Archived;
+    _inOrganization = item.OrganizationName is not null;
     RepromptRequired = item.RepromptRequired;
 
     Groups.Clear();
@@ -346,26 +349,71 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   [RelayCommand]
   private async Task DeleteAsync()
   {
-    if (await AskAsync("Delete item", $"Move \"{Title}\" to the trash?", "Delete", "Cancel"))
-      await WriteStateAsync(Ops.DeleteItem);
+    if (ConfirmAction is null)
+      return;
+    (string Op, JsonElement Payload)? repromptFor = null;
+    var active = !IsDeleted && !IsArchived;
+    var request = new ActionDialogRequest(
+      active ? "Remove item" : "Delete permanently",
+      active
+        ? $"Archive \"{Title}\" or move it to the trash to keep it recoverable, or delete it permanently. You cannot undo a permanent delete."
+        : $"\"{Title}\" will be deleted permanently. You cannot undo this.",
+      "Permanently delete");
+    request.Danger = () => AttemptAsync(Ops.DeleteItem, permanent: true);
+    if (active)
+    {
+      request.PrimaryLabel = ArchiveLabel;
+      request.Primary = () => _archiveUnavailable || _inOrganization ? AttemptAsync(Ops.DeleteItem, permanent: false) : AttemptAsync(Ops.ArchiveItem, permanent: false);
+    }
+
+    if (!await ConfirmAction(request))
+      return;
+    if (repromptFor is { } retry)
+    {
+      var (ok, _, error) = await RetryWithPasswordAsync(retry.Op, retry.Payload);
+      if (!ok)
+      {
+        if (error is IpcErrors.Conflict or IpcErrors.Unknown)
+          await ReloadStaleAsync();
+        return;
+      }
+    }
+
+    Removed?.Invoke();
+
+    async Task<string?> AttemptAsync(string op, bool permanent)
+    {
+      var payload = IpcJson.ToElement(new WriteRequest(Id, _revisionDate, permanent), IpcJson.Default.WriteRequest);
+      var (ok, _, error) = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
+      var message = ErrorMessage;
+      ErrorMessage = null;
+      if (ok || error == IpcErrors.Reprompt)
+      {
+        repromptFor = ok ? null : (op, payload);
+        return null;
+      }
+
+      if (op == Ops.ArchiveItem && error == IpcErrors.Failed)
+      {
+        _archiveUnavailable = true;
+        request.PrimaryLabel = ArchiveLabel;
+        return "Bitwarden could not archive this item. Move it to the trash instead.";
+      }
+
+      if (error is IpcErrors.Conflict or IpcErrors.Unknown)
+        await ReloadStaleAsync();
+      return error == IpcErrors.Failed ? "Bitwarden did not save the change." : message ?? Describe(new IpcException(error ?? IpcErrors.Failed));
+    }
   }
 
-  [RelayCommand]
-  private async Task DeletePermanentlyAsync()
-  {
-    if (await AskAsync("Delete permanently", $"\"{Title}\" will be deleted permanently. You cannot undo this.", "Delete permanently", "Cancel"))
-      await WriteStateAsync(Ops.DeleteItem, permanent: true);
-  }
+  private string ArchiveLabel => _archiveUnavailable || _inOrganization ? "Move to Trash" : "Archive";
 
   [RelayCommand]
   private Task RestoreAsync() => WriteStateAsync(Ops.RestoreItem);
 
-  [RelayCommand]
-  private Task ArchiveAsync() => WriteStateAsync(Ops.ArchiveItem);
-
-  private async Task WriteStateAsync(string op, bool permanent = false)
+  private async Task WriteStateAsync(string op)
   {
-    var (ok, _, error) = await WriteAsync(op, IpcJson.ToElement(new WriteRequest(Id, _revisionDate, permanent), IpcJson.Default.WriteRequest));
+    var (ok, _, error) = await WriteAsync(op, IpcJson.ToElement(new WriteRequest(Id, _revisionDate), IpcJson.Default.WriteRequest));
     if (ok)
       Removed?.Invoke();
     else if (error is IpcErrors.Conflict or IpcErrors.Unknown)
@@ -375,8 +423,13 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private async Task<(bool Ok, JsonElement? Reply, string? Error)> WriteAsync(string op, JsonElement payload)
   {
     var sent = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
-    if (sent.Error != IpcErrors.Reprompt || AskPassword is null || await AskPassword() is not { Length: > 0 } password)
-      return sent;
+    return sent.Error == IpcErrors.Reprompt ? await RetryWithPasswordAsync(op, payload) : sent;
+  }
+
+  private async Task<(bool Ok, JsonElement? Reply, string? Error)> RetryWithPasswordAsync(string op, JsonElement payload)
+  {
+    if (AskPassword is null || await AskPassword() is not { Length: > 0 } password)
+      return (false, null, IpcErrors.Reprompt);
 
     var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
     if (!ok)
@@ -540,4 +593,19 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _totpTimer.Stop();
     Editor = null;
   }
+}
+
+internal sealed class ActionDialogRequest(string title, string message, string dangerLabel)
+{
+  public string Title { get; } = title;
+
+  public string Message { get; } = message;
+
+  public string DangerLabel { get; } = dangerLabel;
+
+  public Func<Task<string?>> Danger { get; set; } = () => Task.FromResult<string?>(null);
+
+  public string? PrimaryLabel { get; set; }
+
+  public Func<Task<string?>>? Primary { get; set; }
 }

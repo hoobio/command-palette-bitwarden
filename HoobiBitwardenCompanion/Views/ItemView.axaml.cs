@@ -16,8 +16,71 @@ internal sealed partial class ItemView : UserControl
       {
         viewModel.Confirm ??= ConfirmAsync;
         viewModel.AskPassword ??= AskPasswordAsync;
+        viewModel.ConfirmAction ??= ConfirmActionAsync;
       }
     };
+  }
+
+  internal static (FAContentDialog Dialog, TextBlock Error, ProgressBar Busy) CreateActionDialog(ActionDialogRequest request)
+  {
+    var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, IsVisible = false, Classes = { "Danger" } };
+    var busy = new ProgressBar { IsIndeterminate = true, IsVisible = false };
+    var dialog = new FAContentDialog
+    {
+      Title = request.Title,
+      Content = new StackPanel { Spacing = 12, Children = { new TextBlock { Text = request.Message, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, busy, error } },
+      PrimaryButtonText = request.PrimaryLabel ?? string.Empty,
+      SecondaryButtonText = request.DangerLabel,
+      CloseButtonText = "Cancel",
+      DefaultButton = FAContentDialogButton.Close,
+      Classes = { "Action" },
+    };
+    dialog.Closing += (_, e) => e.Cancel |= busy.IsVisible;
+    return (dialog, error, busy);
+  }
+
+  internal static async Task<bool> RunActionAsync(FAContentDialog dialog, TextBlock error, ProgressBar busy, ActionDialogRequest request, Func<Task<string?>> run)
+  {
+    error.IsVisible = false;
+    busy.IsVisible = true;
+    dialog.IsPrimaryButtonEnabled = dialog.IsSecondaryButtonEnabled = false;
+    try
+    {
+      var failure = await run();
+      error.Text = failure;
+      error.IsVisible = failure is not null;
+      return failure is null;
+    }
+    finally
+    {
+      busy.IsVisible = false;
+      dialog.IsPrimaryButtonEnabled = dialog.IsSecondaryButtonEnabled = true;
+      dialog.PrimaryButtonText = request.PrimaryLabel ?? string.Empty;
+    }
+  }
+
+  private async Task<bool> ConfirmActionAsync(ActionDialogRequest request)
+  {
+    var (dialog, error, busy) = CreateActionDialog(request);
+    var done = false;
+    dialog.PrimaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Primary ?? request.Danger);
+    dialog.SecondaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Danger);
+    await dialog.ShowAsync(TopLevel.GetTopLevel(this));
+    return done;
+
+    async Task RunDeferredAsync(FAContentDialogButtonClickEventArgs e, Func<Task<string?>> run)
+    {
+      var deferral = e.GetDeferral();
+      try
+      {
+        done = await RunActionAsync(dialog, error, busy, request, run);
+        e.Cancel = !done;
+      }
+      finally
+      {
+        deferral.Complete();
+      }
+    }
   }
 
   internal static FAContentDialog CreateRepromptDialog(TextBox password) => new()

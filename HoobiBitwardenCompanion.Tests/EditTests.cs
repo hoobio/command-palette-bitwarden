@@ -91,7 +91,7 @@ public class EditTests(AvaloniaSession session)
     private ItemDto Dto(string id)
     {
       var item = Items[id];
-      return new ItemDto(id, item.Name, item.Type, null, null, item.Favorite, false, false, Revision, item.RevisionDate ?? Revision, null,
+      return new ItemDto(id, item.Name, item.Type, null, item.OrganizationId is null ? null : "Acme", item.Favorite, false, false, Revision, item.RevisionDate ?? Revision, null,
         [new FieldDto(ItemFields.Username, "Username", "Login credentials", item.Login?.Username, false)], Deleted);
     }
   }
@@ -126,8 +126,25 @@ public class EditTests(AvaloniaSession session)
 
     public ItemViewModel Item(string id)
     {
-      var vm = new ItemViewModel(id, Channel) { Confirm = Ask, AskPassword = () => Task.FromResult(Password) };
+      var vm = new ItemViewModel(id, Channel) { Confirm = Ask, AskPassword = () => Task.FromResult(Password), ConfirmAction = ConfirmActionAsync };
       return vm;
+    }
+
+    public List<string?> ActionFailures { get; } = [];
+
+    public string? Pick { get; set; }
+
+    public ActionDialogRequest? LastRequest { get; private set; }
+
+    public async Task<bool> ConfirmActionAsync(ActionDialogRequest request)
+    {
+      LastRequest = request;
+      Prompts.Add($"{request.Title}|{request.PrimaryLabel}|{request.DangerLabel}");
+      if (Pick is null)
+        return false;
+      var failure = await (Pick == "danger" ? request.Danger : request.Primary!)();
+      ActionFailures.Add(failure);
+      return failure is null;
     }
 
     public Task<bool> Ask(string title, string message, string primary, string close)
@@ -341,15 +358,26 @@ public class EditTests(AvaloniaSession session)
     vm.Removed += () => removed++;
     await vm.LoadAsync();
 
+    Assert.Equal("Delete", vm.DeleteLabel);
     await vm.DeleteCommand.ExecuteAsync(null);
-    Assert.Empty(h.Extension.Payloads(Ops.DeleteItem));
-    h.Answer = true;
+    Assert.Equal("Remove item|Archive|Permanently delete", Assert.Single(h.Prompts));
+    Assert.Empty(h.Extension.Payloads(Ops.ArchiveItem));
+    h.Pick = "primary";
     await vm.DeleteCommand.ExecuteAsync(null);
-    var delete = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.DeleteItem)), IpcJson.Default.WriteRequest);
-    Assert.False(delete.Permanent);
-    Assert.Equal(1, removed);
-    await vm.ArchiveCommand.ExecuteAsync(null);
     Assert.Single(h.Extension.Payloads(Ops.ArchiveItem));
+    Assert.Equal(1, removed);
+
+    h.Extension.FailWith = IpcErrors.Failed;
+    h.Extension.FailOp = Ops.ArchiveItem;
+    await vm.DeleteCommand.ExecuteAsync(null);
+    Assert.Equal("Bitwarden could not archive this item. Move it to the trash instead.", h.ActionFailures[^1]);
+    Assert.Equal("Move to Trash", h.LastRequest!.PrimaryLabel);
+    Assert.Null(vm.ErrorMessage);
+    h.Extension.FailWith = null;
+    await vm.DeleteCommand.ExecuteAsync(null);
+    Assert.Equal("Remove item|Move to Trash|Permanently delete", h.Prompts[^1]);
+    Assert.False(IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.DeleteItem)), IpcJson.Default.WriteRequest).Permanent);
+    Assert.Equal(2, removed);
 
     await vm.ShowPasswordHistoryCommand.ExecuteAsync(null);
     var history = vm.Groups.Single(g => g.Name == "Password history");
@@ -361,12 +389,21 @@ public class EditTests(AvaloniaSession session)
     h.Extension.Deleted = true;
     await vm.LoadAsync();
     Assert.True(vm.CanRestore);
-    Assert.True(vm.CanDeletePermanently);
+    Assert.True(vm.CanDelete);
+    Assert.Equal("Delete permanently", vm.DeleteLabel);
     Assert.False(vm.CanEdit);
     await vm.RestoreCommand.ExecuteAsync(null);
-    await vm.DeletePermanentlyCommand.ExecuteAsync(null);
+    h.Pick = "danger";
+    await vm.DeleteCommand.ExecuteAsync(null);
+    Assert.Equal("Delete permanently||Permanently delete", h.Prompts[^1]);
+    Assert.Null(h.LastRequest!.Primary);
     Assert.True(IpcJson.Read(h.Extension.Payloads(Ops.DeleteItem)[^1], IpcJson.Default.WriteRequest).Permanent);
-    Assert.Contains($"Delete permanently|Delete permanently|Cancel", h.Prompts);
+
+    h.Extension.FailWith = IpcErrors.Failed;
+    h.Extension.FailOp = Ops.DeleteItem;
+    await vm.DeleteCommand.ExecuteAsync(null);
+    Assert.Equal("Bitwarden did not save the change.", h.ActionFailures[^1]);
+    Assert.Null(vm.ErrorMessage);
     Assert.Equal(4, removed);
   });
 
@@ -500,10 +537,11 @@ public class EditTests(AvaloniaSession session)
     _ = coordinator.RunAsync(() => { });
     var window = coordinator.ShowItem(item.Id!);
     var vm = window.ViewModel!;
-    vm.Confirm = h.Ask;
+    vm.ConfirmAction = h.ConfirmActionAsync;
+    h.Pick = "primary";
     AvaloniaSession.WaitFor(() => vm.Title == item.Name);
 
-    await vm.ArchiveCommand.ExecuteAsync(null);
+    await vm.DeleteCommand.ExecuteAsync(null);
 
     AvaloniaSession.WaitFor(() => coordinator.ItemWindows.Count == 0);
   });
@@ -584,7 +622,7 @@ public class EditTests(AvaloniaSession session)
     var removed = 0;
     vm.Removed += () => removed++;
     await vm.LoadAsync();
-    h.Answer = true;
+    h.Pick = "danger";
     h.Extension.FailWith = IpcErrors.Reprompt;
     h.Extension.FailOp = Ops.DeleteItem;
 
@@ -631,7 +669,7 @@ public class EditTests(AvaloniaSession session)
 
     Assert.Equal(6, vm.ItemType);
     Assert.False(vm.CanEdit);
-    Assert.True(vm.CanArchive);
+    Assert.True(vm.CanDelete);
   });
 
   [Fact]
@@ -657,6 +695,70 @@ public class EditTests(AvaloniaSession session)
     Assert.Equal((name.FontWeight, name.FontSize, name.FontFamily), (selected.FontWeight, selected.FontSize, selected.FontFamily));
     Assert.Equal((name.Foreground as Avalonia.Media.ISolidColorBrush)?.Color, (selected.Foreground as Avalonia.Media.ISolidColorBrush)?.Color);
     window.Close();
+  });
+
+  [Fact]
+  public Task OrgItem_OffersMoveToTrash_InPlaceOfArchive() => session.RunAsync(async () =>
+  {
+    var item = Sample(1) with { OrganizationId = OrgId, CollectionIds = [CollectionId] };
+    using var h = new Harness(item);
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+    h.Pick = "primary";
+
+    await vm.DeleteCommand.ExecuteAsync(null);
+
+    Assert.Equal("Remove item|Move to Trash|Permanently delete", Assert.Single(h.Prompts));
+    Assert.Empty(h.Extension.Payloads(Ops.ArchiveItem));
+    Assert.False(IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.DeleteItem)), IpcJson.Default.WriteRequest).Permanent);
+  });
+
+  [Fact]
+  public Task Toolbar_DeleteIsARedTrashButton_AndItsDialogRunsTheWrite() => session.RunAsync(async () =>
+  {
+    var item = Sample(1);
+    using var h = new Harness(item);
+    var vm = h.Item(item.Id!);
+    var window = new ItemWindow(vm) { Height = 500 };
+    window.Show();
+    await vm.LoadAsync();
+    window.UpdateLayout();
+
+    var delete = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeleteButton");
+    Assert.True(delete.IsEffectivelyVisible);
+    Assert.Equal("Delete", ToolTip.GetTip(delete));
+    Assert.Equal("Delete", Avalonia.Automation.AutomationProperties.GetName(delete));
+    Assert.Equal(Avalonia.Media.Color.Parse("#F28779"), ((Avalonia.Media.ISolidColorBrush)delete.Foreground!).Color);
+    Assert.Null(window.GetVisualDescendants().OfType<Button>().SingleOrDefault(b => b.Name == "ArchiveButton"));
+    var frame = window.CaptureRenderedFrame();
+    Assert.NotNull(frame);
+    SaveScreenshot(frame, "item-toolbar.png");
+    window.Close();
+
+    var request = new ActionDialogRequest("Remove item", "Archive or delete?", "Permanently delete") { PrimaryLabel = "Archive" };
+    var (dialog, error, busy) = ItemView.CreateActionDialog(request);
+    Assert.Contains("Action", dialog.Classes);
+    Assert.Equal(("Archive", "Permanently delete", "Cancel"), (dialog.PrimaryButtonText, dialog.SecondaryButtonText, dialog.CloseButtonText));
+    using var gate = new SemaphoreSlim(0);
+    var running = ItemView.RunActionAsync(dialog, error, busy, request, async () =>
+    {
+      await gate.WaitAsync();
+      request.PrimaryLabel = "Move to Trash";
+      return "Bitwarden could not archive this item. Move it to the trash instead.";
+    });
+    Assert.True(busy.IsVisible);
+    Assert.False(dialog.IsPrimaryButtonEnabled || dialog.IsSecondaryButtonEnabled);
+    gate.Release();
+    Assert.False(await running);
+    Assert.False(busy.IsVisible);
+    Assert.True(dialog.IsPrimaryButtonEnabled && dialog.IsSecondaryButtonEnabled);
+    Assert.True(error.IsVisible);
+    Assert.Equal("Move to Trash", dialog.PrimaryButtonText);
+    Assert.True(await ItemView.RunActionAsync(dialog, error, busy, request, () => Task.FromResult<string?>(null)));
+    Assert.False(error.IsVisible);
+
+    var (permanent, _, _) = ItemView.CreateActionDialog(new ActionDialogRequest("Delete permanently", "Gone?", "Permanently delete"));
+    Assert.Equal(string.Empty, permanent.PrimaryButtonText);
   });
 
   private static void SaveScreenshot(Avalonia.Media.Imaging.WriteableBitmap frame, string name)
