@@ -403,7 +403,7 @@ internal sealed class ScriptedCliFactory
       _args.Add(args);
       if (args == "sync" && BlockSync)
       {
-        var blocked = new FakeCliProcess(0);
+        var blocked = new FakeCliProcess(0) { ExitSignal = new(TaskCreationOptions.RunContinuationsAsynchronously) };
         _blockedSyncs.Add(blocked);
         MaxAliveSyncs = Math.Max(MaxAliveSyncs, ++_alive);
         return blocked;
@@ -419,7 +419,16 @@ internal sealed class ScriptedCliFactory
     });
   }
 
-  public void ReleaseSync(int index)
+  public void ReleaseSync(int index, bool exit = true)
+  {
+    FakeCliProcess blocked;
+    lock (_gate) blocked = _blockedSyncs[index];
+    blocked.StdoutStream.Enqueue("Syncing complete.\n");
+    blocked.StdoutStream.Complete();
+    if (exit) EndSync(index);
+  }
+
+  public void EndSync(int index)
   {
     FakeCliProcess blocked;
     lock (_gate)
@@ -427,8 +436,8 @@ internal sealed class ScriptedCliFactory
       blocked = _blockedSyncs[index];
       _alive--;
     }
-    blocked.StdoutStream.Enqueue("Syncing complete.\n");
-    blocked.StdoutStream.Complete();
+    blocked.StderrStream.Complete();
+    blocked.ExitSignal!.TrySetResult();
   }
 
   public int BlockedSyncCount { get { lock (_gate) return _blockedSyncs.Count; } }
@@ -627,6 +636,27 @@ public class LiveSyncSyncTests : IDisposable
     _factory.ReleaseSync(1);
     await Task.WhenAll(first, second);
 
+    Assert.Equal(1, _factory.MaxAliveSyncs);
+  }
+
+  [Fact]
+  public async Task SyncVaultAsync_DetachedFirstSyncStillAlive_SecondWaitsForProcessExit()
+  {
+    await UnlockWithLiveSync();
+    _factory.BlockSync = true;
+    var first = _svc.SyncVaultAsync();
+    await WaitFor(() => _factory.BlockedSyncCount == 1);
+    _factory.ReleaseSync(0, exit: false);
+    Assert.True(await first);
+
+    var second = _svc.SyncVaultAsync();
+    await Task.Delay(200, TestContext.Current.CancellationToken);
+    Assert.Equal(1, _factory.BlockedSyncCount);
+
+    _factory.EndSync(0);
+    await WaitFor(() => _factory.BlockedSyncCount == 2);
+    _factory.ReleaseSync(1);
+    Assert.True(await second);
     Assert.Equal(1, _factory.MaxAliveSyncs);
   }
 }
