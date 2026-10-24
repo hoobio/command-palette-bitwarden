@@ -21,6 +21,7 @@ internal sealed partial class BitwardenCliService
   private readonly CliProcessFactory _processFactory;
   private volatile ProtectedSecret? _sessionKey;
   private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (ICliProcess Process, string Args)> _runningProcesses = new();
+  private readonly SemaphoreSlim _syncGate = new(1, 1);
   private ICliProcess? _pendingDeviceVerificationProcess;
   private CancellationTokenSource? _pendingDeviceVerificationCts;
   private Task<(string Content, bool Detected)>? _pendingStdoutTask;
@@ -138,8 +139,11 @@ internal sealed partial class BitwardenCliService
     _settings?.UsePortableDataDirectory.Value ?? false,
     _settings?.CliDataDirectoryOverride.Value);
 
-  private void ReplaceSessionKey(string? sessionKey) =>
+  private void ReplaceSessionKey(string? sessionKey)
+  {
     Interlocked.Exchange(ref _sessionKey, ProtectedSecret.From(sessionKey))?.Dispose();
+    UpdateLiveSync();
+  }
 
   private string? RevealSessionKey()
   {
@@ -189,6 +193,7 @@ internal sealed partial class BitwardenCliService
       _settings.Settings.SettingsChanged += (_, _) => ApplyAutoLockSetting();
       _settings.Settings.SettingsChanged += (_, _) => CheckCliConfigChanged();
       _settings.Settings.SettingsChanged += (_, _) => CheckRememberSessionDisabled();
+      _settings.Settings.SettingsChanged += (_, _) => UpdateLiveSync();
     }
   }
 
@@ -411,6 +416,7 @@ internal sealed partial class BitwardenCliService
       _autoLockTimer?.Dispose();
       _autoLockTimer = null;
     }
+    UpdateLiveSync();
     return status;
   }
 
@@ -1464,7 +1470,18 @@ internal sealed partial class BitwardenCliService
   private const int CliLogoutTimeoutMs = 3_000;
 
   // Early exit detaches the process instead of killing it: killing `bw sync` mid-flush half-writes data.json and later `bw list` emits "Vault is locked."
+  // Two concurrent `bw sync` runs can interleave their data.json writes.
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null)
+  {
+    if (args != "sync")
+      return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText);
+
+    await _syncGate.WaitAsync();
+    try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText); }
+    finally { _syncGate.Release(); }
+  }
+
+  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText)
   {
     DebugLogService.Log("CLI", $"RunCliAsync: bw {args}");
     var sw = System.Diagnostics.Stopwatch.StartNew();
