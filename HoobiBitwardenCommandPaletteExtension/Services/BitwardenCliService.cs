@@ -1603,7 +1603,7 @@ internal sealed partial class BitwardenCliService
     {
       DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {logged} after {timeoutMs / 1000}s");
       // ponytail: a hung bw write keeps _syncGate until it exits; add a long backstop if that is ever seen.
-      if (IsItemWrite(args))
+      if (IsItemWrite(args) || IsAttachmentDownload(args))
         lease.Detach(backstop: false);
       else
         try { lease.Process.Kill(); } catch { }
@@ -1766,6 +1766,7 @@ internal sealed partial class BitwardenCliService
       CollectionIds = node["collectionIds"] is JsonArray collections ? collections.Select(c => c?.GetValue<string>()).OfType<string>().ToArray() : [],
       DeletedDate = DateTime.TryParse(node["deletedDate"]?.GetValue<string>(), out var dd) ? dd.ToUniversalTime() : null,
       ArchivedDate = DateTime.TryParse(node["archivedDate"]?.GetValue<string>(), out var ad) ? ad.ToUniversalTime() : null,
+      Attachments = ParseAttachments(node["attachments"]),
       Username = Text(login, "username"),
       Password = ProtectedSecret.From(Text(login, "password")),
       HasTotp = totp != null,

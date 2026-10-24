@@ -30,6 +30,25 @@ internal static class Ops
   public const string ArchiveItem = "archiveItem";
   public const string MoveItem = "moveItem";
   public const string SetCollections = "setCollections";
+  public const string CreateFolder = "createFolder";
+  public const string RenameFolder = "renameFolder";
+  public const string DeleteFolder = "deleteFolder";
+  public const string DownloadAttachment = "downloadAttachment";
+  public const string UploadAttachment = "uploadAttachment";
+  public const string DeleteAttachment = "deleteAttachment";
+  public const string Generate = "generate";
+  public const string ListGeneratorHistory = "listGeneratorHistory";
+  public const string CopyGenerated = "copyGenerated";
+  public const string RotatePassword = "rotatePassword";
+  public const string RotateItem = "rotateItem";
+}
+
+internal static class GeneratorKinds
+{
+  public const string Password = "password";
+  public const string Passphrase = "passphrase";
+  public const string PlusAddress = "plusAddress";
+  public const string CatchAll = "catchAll";
 }
 
 internal static class IpcErrors
@@ -42,6 +61,9 @@ internal static class IpcErrors
   public const string Stale = "stale";
   public const string Conflict = "conflict";
   public const string Unknown = "unknown";
+  public const string Premium = "premium";
+  public const string TooLarge = "tooLarge";
+  public const string NoStorage = "noStorage";
 }
 
 internal static class MessageTypes
@@ -140,7 +162,41 @@ internal sealed record ItemDto(
   DateTime? PasswordRevisionDate,
   IReadOnlyList<FieldDto> Fields,
   bool Deleted = false,
-  bool Archived = false);
+  bool Archived = false,
+  IReadOnlyList<AttachmentDto>? Attachments = null);
+
+internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
+
+internal sealed record AttachmentRequest(string Id, DateTime RevisionDate, string? AttachmentId = null, string? Path = null);
+
+internal sealed record FolderRequest(string? Id, string? Name);
+
+internal sealed record GeneratorOptions(
+  string Kind = GeneratorKinds.Password,
+  int Length = 20,
+  bool Uppercase = true,
+  bool Lowercase = true,
+  bool Numbers = true,
+  bool Special = false,
+  int MinNumber = 1,
+  int MinSpecial = 1,
+  bool AvoidAmbiguous = false,
+  int Words = 4,
+  string Separator = "-",
+  bool Capitalize = false,
+  bool IncludeNumber = false,
+  string? Email = null,
+  string? Domain = null);
+
+internal sealed record GeneratedResponse(string Value, long EntryId);
+
+internal sealed record GeneratedEntry(long Id, string Kind, DateTime Created);
+
+internal sealed record GeneratorHistoryResponse(IReadOnlyList<GeneratedEntry> Entries);
+
+internal sealed record HistoryEntryRequest(long Id);
+
+internal sealed record RotateRequest(string Id, DateTime RevisionDate, GeneratorOptions Options);
 
 internal sealed record ItemSummary(
   string Id,
@@ -235,6 +291,14 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 [JsonSerializable(typeof(WriteRequest))]
 [JsonSerializable(typeof(SavedResponse))]
 [JsonSerializable(typeof(PasswordHistoryResponse))]
+[JsonSerializable(typeof(AttachmentRequest))]
+[JsonSerializable(typeof(FolderRequest))]
+[JsonSerializable(typeof(FilterRef))]
+[JsonSerializable(typeof(GeneratorOptions))]
+[JsonSerializable(typeof(GeneratedResponse))]
+[JsonSerializable(typeof(GeneratorHistoryResponse))]
+[JsonSerializable(typeof(HistoryEntryRequest))]
+[JsonSerializable(typeof(RotateRequest))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);
