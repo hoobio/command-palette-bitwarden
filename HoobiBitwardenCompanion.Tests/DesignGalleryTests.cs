@@ -289,6 +289,17 @@ public class DesignGalleryTests(AvaloniaSession session)
           combo.IsDropDownOpen = false;
         }
 
+        if (itemWindow.GetVisualDescendants().OfType<Button>().SingleOrDefault(b => b.Name == "AddFieldButton" && b.IsEffectivelyVisible) is { Flyout: PopupFlyoutBase flyout } addField)
+        {
+          ((Popup)typeof(PopupFlyoutBase).GetProperty("Popup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!.GetValue(flyout)!).ShouldUseOverlayLayer = true;
+          flyout.ShowAt(addField);
+          Settle(itemWindow);
+          Assert.True(flyout.IsOpen);
+          HoverFlashProbe.Probe(itemWindow, flashes);
+          HoverFlashProbe.ProbePopups(itemWindow, flashes);
+          flyout.Hide();
+        }
+
         await itemVm.CancelEditCommand.ExecuteAsync(null);
       }
 
