@@ -672,6 +672,7 @@ public class LiveSyncLifecycleTests : IDisposable
   [Fact]
   public async Task Unlock_LiveSyncOff_StaysInactive()
   {
+    _settings.LiveSync.Value = false;
     await Unlock();
     Assert.False(_svc.IsLiveSyncActive);
   }
