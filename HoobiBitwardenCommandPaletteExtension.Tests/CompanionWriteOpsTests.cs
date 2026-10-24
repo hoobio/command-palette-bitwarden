@@ -30,6 +30,8 @@ public class CompanionWriteOpsTests
     public string? WriteOutput { get; set; }
     public string? WriteError { get; set; }
     public string? EchoOutput { get; set; }
+    public Action? OnSync { get; set; }
+    public Func<string, FakeCliProcess?>? Override { get; set; }
 
     public FakeCliProcess Create(ProcessStartInfo psi)
     {
@@ -38,6 +40,13 @@ public class CompanionWriteOpsTests
         Flush();
         Started.Add(psi);
         var args = psi.Arguments;
+        if (Override?.Invoke(args) is { } overridden)
+          return overridden;
+        if (args == "sync")
+        {
+          OnSync?.Invoke();
+          return new FakeCliProcess("Syncing complete.\n");
+        }
         if (args.StartsWith("get item ", StringComparison.Ordinal))
           return new FakeCliProcess(Items.TryGetValue(args[9..], out var item) ? item.ToJsonString() + "\n" : "Not found.\n");
         if (args == "create item")
@@ -231,15 +240,17 @@ public class CompanionWriteOpsTests
   }
 
   [Fact]
-  public async Task Edit_ServerOutOfDate_IsAConflict()
+  public async Task Edit_ServerOutOfDate_IsAConflict_AndSyncsBeforeReturning()
   {
     var id = NewId();
     var h = new Harness(Login(id));
     var editable = await h.Ops.GetEditableItemAsync(id);
     h.Vault.WriteError = "The cipher you are updating is out of date. Please save your work, sync your vault, and try again.";
+    h.Vault.OnSync = () => h.Vault.Items[id]["name"] = "Renamed elsewhere";
 
     Assert.Equal(IpcErrors.Conflict, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.UpdateItem, Edited(editable), IpcJson.Default.EditableItem))).Code);
-    Assert.Equal(0, h.CacheUpdates);
+    Assert.Contains(h.Vault.Started, p => p.Arguments == "sync");
+    Assert.Equal("Renamed elsewhere", h.Service.GetCachedItem(id)!.Name);
   }
 
   [Fact]
@@ -315,15 +326,15 @@ public class CompanionWriteOpsTests
   {
     var login = new EditableItem(null, 1, "x", null, null, [], false, false, null, null, [], Login: new LoginEdit(null, null, null, [new UriEdit("https://ok.example")]));
     CompanionOps.Validate(login);
-    CompanionOps.Validate(login with { Login = login.Login! with { Uris = [new UriEdit("^https://.*$", ItemRules.RegexMatch)] } });
+    CompanionOps.Validate(login with { Login = login.Login! with { Uris = [new UriEdit("^https://.*$", 4)] } });
 
     void Invalid(EditableItem item) => Assert.Equal(IpcErrors.Invalid, Assert.Throws<IpcException>(() => CompanionOps.Validate(item)).Code);
-    Invalid(login with { Login = login.Login! with { Uris = [new UriEdit("http://[bad")] } });
+    CompanionOps.Validate(login with { Login = login.Login! with { Uris = [new UriEdit("My router"), new UriEdit(null), new UriEdit("http://[bad")] } });
+    CompanionOps.Validate(login with { Fields = [new CustomFieldEdit("", "v", 0)] });
     Invalid(login with { Login = login.Login! with { Uris = [new UriEdit("ok.example", 9)] } });
     Invalid(login with { Type = 3, Login = null, Card = new CardEdit(null, null, null, "13", null, null) });
     Invalid(login with { Fields = [new CustomFieldEdit("linked", null, 3, 300)] });
     Invalid(login with { Fields = [new CustomFieldEdit("text", "v", 0, 100)] });
-    Invalid(login with { Fields = [new CustomFieldEdit("", "v", 0)] });
     Invalid(login with { Type = 5, Login = null, SshKey = new SshKeyEdit("key", null, "fp") });
     Invalid(login with { Type = 9 });
     CompanionOps.Validate(login with { Type = 3, Login = null, Card = new CardEdit(null, null, null, "12", "2030", null), Fields = [new CustomFieldEdit("l", null, 3, 305)] });
@@ -428,8 +439,8 @@ public class CompanionWriteOpsTests
   public void EveryType_RoundTripsThroughBwJson(int type)
   {
     var item = new EditableItem(null, type, "Item", Guid.NewGuid().ToString(), null, [], true, true, "notes",
-      null, [new CustomFieldEdit("t", "v", 0), new CustomFieldEdit("b", "true", 2)],
-      Login: type == 1 ? new LoginEdit("u", "p", "t", [new UriEdit("a.example", 0), new UriEdit("b.example")]) : null,
+      null, [new CustomFieldEdit("t", "v", 0), new CustomFieldEdit("b", "true", 2), new CustomFieldEdit("", "unnamed", 0)],
+      Login: type == 1 ? new LoginEdit("u", "p", "t", [new UriEdit("a.example", 0), new UriEdit("b.example"), new UriEdit("My router"), new UriEdit(null)]) : null,
       Card: type == 3 ? new CardEdit("Jane", "Visa", "4111", "04", "2030", "123") : null,
       Identity: type == 4 ? new IdentityEdit("Ms", "Jane", "Q", "Doe", "1 Road", "Flat 2", "Floor 3", "Leeds", "Yorks", "LS1", "GB", "Acme", "j@x", "01", "AB123", "jdoe", "P1", "L1") : null,
       SshKey: type == 5 ? new SshKeyEdit("PRIVATE", "ssh-ed25519 AAAA", "SHA256:x") : null);
@@ -441,6 +452,164 @@ public class CompanionWriteOpsTests
 
     Assert.Equal(JsonSerializer.Serialize(item with { RevisionDate = RevisionDate }, IpcJson.Default.EditableItem), JsonSerializer.Serialize(back, IpcJson.Default.EditableItem));
     Assert.True(BitwardenCliService.ContentMatches(node, (JsonObject)node.DeepClone()));
+  }
+
+  [Fact]
+  public async Task Create_InAnOrganisation_IsOneCreateCarryingTheOwnerAndCollections()
+  {
+    var h = new Harness();
+    var item = new EditableItem(null, 2, "Org note", null, OrgId, [CollectionId], false, false, "n", null, []);
+
+    var saved = IpcJson.Read(await h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem), IpcJson.Default.SavedResponse);
+
+    Assert.Equal("create item", Assert.Single(h.Vault.Started, p => BitwardenCliService.IsDataWrite(p.Arguments)).Arguments);
+    var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Vault.Stdin))))!;
+    Assert.Equal(OrgId, sent["organizationId"]!.GetValue<string>());
+    Assert.Equal(CollectionId, Assert.Single(sent["collectionIds"]!.AsArray())!.GetValue<string>());
+    Assert.Equal(OrgId, h.Service.GetCachedItem(saved.Id)!.OrganizationId);
+
+    h.Vault.Started.Clear();
+    Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item with { CollectionIds = [] }, IpcJson.Default.EditableItem))).Code);
+    Assert.Empty(h.Vault.Started);
+
+    h.Vault.OnWrite = (_, created) =>
+    {
+      created["organizationId"] = null;
+      return created;
+    };
+    Assert.Equal(IpcErrors.Failed, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem))).Code);
+  }
+
+  [Fact]
+  public async Task Write_ThatTimesOut_IsNotStopped_ThenSyncs_AndReportsAnUnknownOutcome()
+  {
+    var h = new Harness();
+    h.Service.WriteTimeoutMs = 50;
+    var hung = new FakeCliProcess(0) { ExitSignal = new TaskCompletionSource() };
+    h.Vault.Override = args => args switch
+    {
+      "create item" => hung,
+      "list items" or "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
+      _ => null,
+    };
+
+    var save = h.Handle(Ops.CreateItem, new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem);
+    await Task.Delay(300, TestContext.Current.CancellationToken);
+    Assert.False(save.IsCompleted);
+    Assert.False(hung.Killed);
+
+    hung.StdoutStream.Complete();
+    hung.StderrStream.Complete();
+    hung.ExitSignal.SetResult();
+
+    string? code = null;
+    try
+    {
+      await save;
+    }
+    catch (IpcException ex)
+    {
+      code = ex.Code;
+    }
+
+    Assert.Equal(IpcErrors.Unknown, code);
+    Assert.False(hung.Killed);
+    Assert.Single(h.Vault.Started, p => p.Arguments == "create item");
+    Assert.Contains(h.Vault.Started, p => p.Arguments == "sync");
+  }
+
+  [Fact]
+  public async Task Reprompt_GatesEveryWriteOp_EvenWithNoGracePeriod()
+  {
+    RepromptPage.ClearGracePeriod();
+    RepromptPage.GracePeriodSeconds = 0;
+    try
+    {
+      var id = NewId();
+      var trashed = NewId();
+      var h = new Harness(Login(id, reprompt: 1));
+      var deleted = Login(trashed, reprompt: 1);
+      deleted["deletedDate"] = Revision;
+      h.Vault.Items[trashed] = deleted;
+      var editable = CompanionOps.ToEditable(Login(id, reprompt: 1));
+
+      async Task Gated(string op, JsonElement payload) =>
+        Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(op, payload, TestContext.Current.CancellationToken))).Code);
+      JsonElement Write(WriteRequest request) => IpcJson.ToElement(request, IpcJson.Default.WriteRequest);
+
+      await Gated(Ops.UpdateItem, IpcJson.ToElement(Edited(editable), IpcJson.Default.EditableItem));
+      await Gated(Ops.DeleteItem, Write(new WriteRequest(id, RevisionDate)));
+      await Gated(Ops.DeleteItem, Write(new WriteRequest(id, RevisionDate, Permanent: true)));
+      await Gated(Ops.ArchiveItem, Write(new WriteRequest(id, RevisionDate)));
+      await Gated(Ops.MoveItem, Write(new WriteRequest(id, RevisionDate, OrganizationId: OrgId, CollectionIds: [CollectionId])));
+      await Gated(Ops.SetCollections, Write(new WriteRequest(id, RevisionDate, CollectionIds: [CollectionId])));
+      await Gated(Ops.RestoreItem, Write(new WriteRequest(trashed, RevisionDate)));
+      Assert.Equal(0, h.Vault.Writes);
+
+      Assert.False((await h.Ops.VerifyRepromptAsync(id, "wrong", Ops.ArchiveItem, Write(new WriteRequest(id, RevisionDate)))).Verified);
+      Assert.Equal(0, h.Vault.Writes);
+      RepromptPage.ClearGracePeriod();
+
+      var verified = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.UpdateItem, IpcJson.ToElement(Edited(editable), IpcJson.Default.EditableItem));
+      Assert.True(verified.Verified);
+      var saved = IpcJson.Read(verified.Result, IpcJson.Default.SavedResponse);
+      Assert.Equal("GitHub work", h.Service.GetCachedItem(id)!.Name);
+      await Gated(Ops.ArchiveItem, Write(new WriteRequest(id, saved.RevisionDate)));
+    }
+    finally
+    {
+      RepromptPage.GracePeriodSeconds = 60;
+      RepromptPage.ClearGracePeriod();
+    }
+  }
+
+  [Fact]
+  public async Task PermanentDelete_CountsAsDoneOnlyOnNotFound()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id));
+    var gets = 0;
+    h.Vault.Override = args => args == $"get item {id}" && ++gets == 2 ? new FakeCliProcess("", "Request failed: socket hang up\n") : null;
+
+    Assert.Equal(IpcErrors.Failed, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.DeleteItem, new WriteRequest(id, RevisionDate, Permanent: true), IpcJson.Default.WriteRequest))).Code);
+    Assert.NotNull(h.Service.GetCachedItem(id));
+  }
+
+  [Fact]
+  public async Task Refresh_ThatStartedBeforeAWrite_DoesNotBringBackTheOldItem()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id));
+    var stale = Login(id).ToJsonString();
+    var held = new FakeCliProcess(0);
+    var lists = 0;
+    h.Vault.Override = args => args switch
+    {
+      "list items" => ++lists == 1 ? held : new FakeCliProcess("[" + h.Vault.Items[id].ToJsonString() + "]\n"),
+      "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
+      _ => null,
+    };
+
+    var refresh = h.Service.RefreshCacheAsync();
+    await h.Ops.UpdateItemAsync(Edited(await h.Ops.GetEditableItemAsync(id)));
+    held.StdoutStream.Enqueue("[" + stale + "]\n");
+    held.StdoutStream.Complete();
+    held.StderrStream.Complete();
+    await refresh;
+
+    Assert.Equal("GitHub work", h.Service.GetCachedItem(id)!.Name);
+    Assert.Equal(2, lists);
+  }
+
+  [Fact]
+  public async Task CollectionWrites_RequireAtLeastOneCollection()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id));
+    h.Vault.Started.Clear();
+
+    Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.SetCollections, new WriteRequest(id, RevisionDate, CollectionIds: []), IpcJson.Default.WriteRequest))).Code);
+    Assert.Empty(h.Vault.Started);
   }
 
   [Fact]

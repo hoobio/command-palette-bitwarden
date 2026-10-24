@@ -242,9 +242,9 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
     OnPropertyChanged(nameof(HasCollections));
   }
 
-  internal void MarkSaved(string id, DateTime revision)
+  internal void MarkSaved(string id, DateTime revision, string? organizationId, IReadOnlyList<string> collectionIds)
   {
-    _source = ToDto() with { Id = id, RevisionDate = revision, OrganizationId = _source.OrganizationId, CollectionIds = _source.CollectionIds };
+    _source = ToDto() with { Id = id, RevisionDate = revision, OrganizationId = organizationId, CollectionIds = collectionIds };
     _original = Serialize(_source);
   }
 
@@ -260,13 +260,13 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
     Name,
     SelectedFolder?.Value,
     SelectedOwner?.Value,
-    [.. Collections.Where(c => c.IsChecked).Select(c => c.Id)],
+    HasCollections || SelectedOwner?.Value != _source.OrganizationId ? [.. Collections.Where(c => c.IsChecked).Select(c => c.Id)] : _source.CollectionIds,
     Favorite,
     Reprompt,
     Empty(Notes),
     _source.RevisionDate,
     [.. Fields.Select(f => f.ToDto())],
-    Login: IsLogin ? new LoginEdit(Empty(Username), Empty(Password), Empty(Totp), [.. Uris.Select(u => new UriEdit(u.Uri.Trim(), u.Match))]) : null,
+    Login: IsLogin ? new LoginEdit(Empty(Username), Empty(Password), Empty(Totp), [.. Uris.Select(u => new UriEdit(Empty(u.Uri?.Trim()), u.Match))]) : null,
     Card: IsCard ? new CardEdit(Empty(CardholderName), Empty(CardBrand), Empty(CardNumber), Empty(CardExpMonth), Empty(CardExpYear), Empty(CardCode)) : null,
     Identity: IsIdentity
       ? new IdentityEdit(Empty(Title), Empty(FirstName), Empty(MiddleName), Empty(LastName), Empty(Address1), Empty(Address2), Empty(Address3), Empty(City), Empty(State),
@@ -277,12 +277,11 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
   public string? Validate()
   {
     ValidationMessage = Name.Trim().Length == 0 ? "Name is required."
-      : Uris.Select((u, i) => (u, i)).FirstOrDefault(p => !ItemRules.IsValidUri(p.u.Uri.Trim(), p.u.Match)) is ({ }, var index) ? $"Website {index + 1} is not a valid URI."
       : IsCard && !ItemRules.IsValidMonth(Empty(CardExpMonth)) ? "Expiration month must be a number from 1 to 12."
       : IsSshKey && (Empty(PrivateKey) is null || Empty(PublicKey) is null || Empty(Fingerprint) is null) ? "An SSH key needs the private key, public key and fingerprint."
-      : Fields.Any(f => f.Name.Trim().Length == 0) ? "Every custom field needs a name."
+      : Fields.Any(f => f.IsAdded && f.Name.Trim().Length == 0) ? "Every new custom field needs a name."
       : Fields.Any(f => f.IsLinked && f.SelectedLink is null) ? "Choose the linked field for every linked custom field."
-      : SelectedOwner?.Value is { } org && org != OriginalOrganizationId && !Collections.Any(c => c.IsChecked) ? "Choose at least one collection for the organisation."
+      : SelectedOwner?.Value is { } org && (HasCollections || org != OriginalOrganizationId) && !Collections.Any(c => c.IsChecked) ? "Choose at least one collection for the organisation."
       : null;
     return ValidationMessage;
   }
@@ -291,7 +290,7 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
   private void AddUri() => Uris.Add(new UriEditViewModel(this, string.Empty, null));
 
   [RelayCommand]
-  private void AddField(string type) => Fields.Add(new CustomFieldViewModel(this, new CustomFieldEdit(string.Empty, null, int.Parse(type, CultureInfo.InvariantCulture))));
+  private void AddField(string type) => Fields.Add(new CustomFieldViewModel(this, new CustomFieldEdit(string.Empty, type == "2" ? "false" : null, int.Parse(type, CultureInfo.InvariantCulture))) { IsAdded = true });
 
   [RelayCommand]
   private void ImportSshKey()
@@ -321,10 +320,10 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
   private static string Serialize(EditableItem item) => JsonSerializer.Serialize(item, IpcJson.Default.EditableItem);
 }
 
-internal sealed partial class UriEditViewModel(ItemEditorViewModel owner, string uri, int? match) : ObservableObject
+internal sealed partial class UriEditViewModel(ItemEditorViewModel owner, string? uri, int? match) : ObservableObject
 {
   [ObservableProperty]
-  public partial string Uri { get; set; } = uri;
+  public partial string? Uri { get; set; } = uri;
 
   [ObservableProperty]
   public partial Choice SelectedMatch { get; set; } = ItemEditorViewModel.MatchChoices.FirstOrDefault(c => c.Value == match?.ToString(CultureInfo.InvariantCulture)) ?? ItemEditorViewModel.MatchChoices[0];
@@ -344,6 +343,7 @@ internal sealed partial class UriEditViewModel(ItemEditorViewModel owner, string
 internal sealed partial class CustomFieldViewModel : ObservableObject
 {
   private readonly ItemEditorViewModel _owner;
+  private readonly bool _originalBool;
 
   public CustomFieldViewModel(ItemEditorViewModel owner, CustomFieldEdit field)
   {
@@ -351,11 +351,13 @@ internal sealed partial class CustomFieldViewModel : ObservableObject
     Type = field.Type;
     Name = field.Name;
     Value = field.Value;
-    BoolValue = string.Equals(field.Value, "true", StringComparison.OrdinalIgnoreCase);
+    BoolValue = _originalBool = string.Equals(field.Value, "true", StringComparison.OrdinalIgnoreCase);
     SelectedLink = owner.LinkTargets.FirstOrDefault(t => t.Value == field.LinkedId?.ToString(CultureInfo.InvariantCulture));
   }
 
   public int Type { get; }
+
+  internal bool IsAdded { get; init; }
 
   public string TypeLabel => Type switch { 1 => "Hidden", 2 => "Boolean", 3 => "Linked", _ => "Text" };
 
@@ -383,7 +385,7 @@ internal sealed partial class CustomFieldViewModel : ObservableObject
 
   public CustomFieldEdit ToDto() => Type switch
   {
-    2 => new CustomFieldEdit(Name, BoolValue ? "true" : "false", 2),
+    2 => new CustomFieldEdit(Name, BoolValue == _originalBool ? Value : BoolValue ? "true" : "false", 2),
     3 => new CustomFieldEdit(Name, null, 3, SelectedLink?.Value is { } link ? int.Parse(link, CultureInfo.InvariantCulture) : null),
     _ => new CustomFieldEdit(Name, string.IsNullOrEmpty(Value) ? null : Value, Type),
   };

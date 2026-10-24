@@ -41,6 +41,7 @@ internal static class IpcErrors
   public const string Failed = "failed";
   public const string Stale = "stale";
   public const string Conflict = "conflict";
+  public const string Unknown = "unknown";
 }
 
 internal static class MessageTypes
@@ -77,8 +78,6 @@ internal static class ItemFields
 
 internal static class ItemRules
 {
-  public const int RegexMatch = 4;
-
   public static readonly IReadOnlyDictionary<int, (int Id, string Label)[]> LinkTargets = new Dictionary<int, (int Id, string Label)[]>
   {
     [1] = [(100, "Username"), (101, "Password")],
@@ -90,10 +89,6 @@ internal static class ItemRules
       (402, "Address 1"), (403, "Address 2"), (404, "Address 3"), (405, "City / Town"), (406, "County / State"), (407, "Postcode"), (408, "Country"),
     ],
   };
-
-  public static bool IsValidUri(string? uri, int? match) =>
-    !string.IsNullOrWhiteSpace(uri)
-    && (match == RegexMatch || Uri.TryCreate(uri.Contains("://", StringComparison.Ordinal) ? uri : "https://" + uri, UriKind.Absolute, out _));
 
   public static bool IsValidMonth(string? month) =>
     string.IsNullOrEmpty(month) || (int.TryParse(month, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var value) && value is >= 1 and <= 12);
@@ -171,7 +166,7 @@ internal sealed record FilterRef(string Id, string Name, string? OrganizationId 
 
 internal sealed record FiltersResponse(IReadOnlyList<FilterRef> Folders, IReadOnlyList<FilterRef> Collections, IReadOnlyList<FilterRef> Organizations);
 
-internal sealed record UriEdit(string Uri, int? Match = null);
+internal sealed record UriEdit(string? Uri, int? Match = null);
 
 internal sealed record CustomFieldEdit(string Name, string? Value, int Type, int? LinkedId = null);
 

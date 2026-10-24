@@ -10,7 +10,7 @@
             <Button x:Name="EditButton" Content="Edit" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" />
             <Button x:Name="RestoreButton" Content="Restore" Command="{Binding RestoreCommand}" IsVisible="{Binding CanRestore}" />
             <Button x:Name="HistoryButton" Content="Password history" Command="{Binding ShowPasswordHistoryCommand}" IsVisible="{Binding CanShowHistory}" />
-            <Button x:Name="ArchiveButton" Content="Archive" Command="{Binding ArchiveCommand}" IsVisible="{Binding CanEdit}" />
+            <Button x:Name="ArchiveButton" Content="Archive" Command="{Binding ArchiveCommand}" IsVisible="{Binding CanArchive}" />
             <Button x:Name="DeleteButton" Content="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}" />
             <Button x:Name="DeletePermanentlyButton" Content="Delete permanently" Command="{Binding DeletePermanentlyCommand}" IsVisible="{Binding CanDeletePermanently}" />
             <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditing}" />

@@ -26,10 +26,16 @@
                 </StackPanel>
             </Border>
             <Border Classes="StackRow">
-                <ToggleSwitch Content="Favourite" IsChecked="{Binding Favorite}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="FieldLabel" Text="Favourite" VerticalAlignment="Center" />
+                    <ToggleSwitch x:Name="FavoriteSwitch" Grid.Column="1" MinWidth="0" IsChecked="{Binding Favorite}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
             </Border>
             <Border Classes="StackRow">
-                <ToggleSwitch Content="Master password re-prompt" IsChecked="{Binding Reprompt}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="FieldLabel" Text="Master password re-prompt" VerticalAlignment="Center" />
+                    <ToggleSwitch x:Name="RepromptSwitch" Grid.Column="1" MinWidth="0" IsChecked="{Binding Reprompt}" OnContent="{x:Null}" OffContent="{x:Null}" />
+                </Grid>
             </Border>
         </StackPanel>
 
@@ -265,7 +271,7 @@
                 <Border Classes="StackRow">
                     <StackPanel Spacing="4">
                         <TextBlock Classes="FieldLabel" Text="Private key" />
-                        <TextBox Text="{Binding PrivateKey}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" FontFamily="{StaticResource MonoFontFamily}" PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                        <TextBox x:Name="PrivateKeyBox" Classes="revealPasswordButton" PasswordChar="•" Text="{Binding PrivateKey}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" FontFamily="{StaticResource MonoFontFamily}" PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----" />
                         <Button x:Name="ImportKeyButton" Content="Import from private key" Command="{Binding ImportSshKeyCommand}" />
                     </StackPanel>
                 </Border>

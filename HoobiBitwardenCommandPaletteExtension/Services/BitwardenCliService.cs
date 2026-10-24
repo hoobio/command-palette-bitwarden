@@ -1223,6 +1223,7 @@ internal sealed partial class BitwardenCliService
 
     DebugLogService.Log("Cache", "RefreshCacheAsync started");
     var failed = false;
+    var writeVersion = WriteVersion;
     try
     {
       var foldersTask = RunCliAsync("list folders");
@@ -1240,6 +1241,14 @@ internal sealed partial class BitwardenCliService
           DebugLogService.Log("Cache", "RefreshCacheAsync dropped: vault locked or logged out during refresh");
           foreach (var item in items)
             item.DisposeSecrets();
+          return;
+        }
+        if (writeVersion != WriteVersion)
+        {
+          DebugLogService.Log("Cache", "RefreshCacheAsync dropped: a write completed during refresh");
+          foreach (var item in items)
+            item.DisposeSecrets();
+          Interlocked.Exchange(ref _refreshPending, 1);
           return;
         }
         DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations");
@@ -1494,7 +1503,7 @@ internal sealed partial class BitwardenCliService
     }
 
     try { return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, ReleaseOnce, stdin, verbOnlyLog); }
-    catch { ReleaseOnce(); throw; }
+    catch (Exception ex) when (ex is not TimeoutException || !IsItemWrite(args)) { ReleaseOnce(); throw; }
   }
 
   private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd, string? stdin = null, bool verbOnlyLog = false)
@@ -1593,7 +1602,11 @@ internal sealed partial class BitwardenCliService
     catch (OperationCanceledException ex)
     {
       DebugLogService.Log("CLI", $"RunCliAsync TIMEOUT: bw {logged} after {timeoutMs / 1000}s");
-      try { lease.Process.Kill(); } catch { }
+      // ponytail: a hung bw write keeps _syncGate until it exits; add a long backstop if that is ever seen.
+      if (IsItemWrite(args))
+        lease.Detach(backstop: false);
+      else
+        try { lease.Process.Kill(); } catch { }
       throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}", ex);
     }
   }
@@ -1608,10 +1621,10 @@ internal sealed partial class BitwardenCliService
     public CancellationToken Token => cts.Token;
     public Task<string> StderrTask { get; } = process.StandardError.ReadToEndAsync(cts.Token);
 
-    public void Detach()
+    public void Detach(bool backstop = true)
     {
       _detached = true;
-      DetachForBackgroundExit(args, process, StderrTask, cts, onProcessEnd);
+      DetachForBackgroundExit(args, process, StderrTask, cts, onProcessEnd, backstop);
     }
 
     public void Dispose()
@@ -1625,14 +1638,14 @@ internal sealed partial class BitwardenCliService
 
   // Detach rather than kill on early exit: killing `bw sync` mid-flush half-writes data.json and a later `bw list` emits "Vault is locked."
   private const int DetachExitGraceMs = 30_000;
-  private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts, Action? onProcessEnd)
+  private static void DetachForBackgroundExit(string args, ICliProcess process, Task<string> stderrTask, CancellationTokenSource cts, Action? onProcessEnd, bool backstop = true)
   {
     _ = Task.Run(async () =>
     {
       var sw = System.Diagnostics.Stopwatch.StartNew();
       try
       {
-        using var killCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(DetachExitGraceMs));
+        using var killCts = new CancellationTokenSource(backstop ? TimeSpan.FromMilliseconds(DetachExitGraceMs) : Timeout.InfiniteTimeSpan);
         var stdoutDrain = process.StandardOutput.ReadToEndAsync();
 #pragma warning disable VSTHRD003 // stderrTask was started by the caller; safe to await here as both run on the ThreadPool
         try { await Task.WhenAll(stdoutDrain, stderrTask).WaitAsync(killCts.Token).ConfigureAwait(false); }
@@ -1648,7 +1661,7 @@ internal sealed partial class BitwardenCliService
       }
       finally
       {
-        try { if (!process.HasExited) { process.Kill(true); DebugLogService.Log("CLI", $"Detached bw {args} backstop-killed after {sw.ElapsedMilliseconds}ms"); } } catch { }
+        try { if (backstop && !process.HasExited) { process.Kill(true); DebugLogService.Log("CLI", $"Detached bw {args} backstop-killed after {sw.ElapsedMilliseconds}ms"); } } catch { }
         try { process.Dispose(); } catch { }
         cts.Dispose();
         onProcessEnd?.Invoke();

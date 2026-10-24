@@ -13,7 +13,10 @@ internal sealed partial class ItemView : UserControl
     DataContextChanged += (_, _) =>
     {
       if (DataContext is ItemViewModel viewModel)
+      {
         viewModel.Confirm ??= ConfirmAsync;
+        viewModel.AskPassword ??= AskPasswordAsync;
+      }
     };
   }
 
@@ -42,14 +45,17 @@ internal sealed partial class ItemView : UserControl
 
   private async Task PromptRepromptAsync()
   {
-    if (DataContext is not ItemViewModel viewModel)
-      return;
+    if (DataContext is ItemViewModel viewModel && await AskPasswordAsync() is { Length: > 0 } password)
+      await viewModel.VerifyRepromptAsync(password);
+  }
 
+  private async Task<string?> AskPasswordAsync()
+  {
     var password = new TextBox { PasswordChar = '•', PlaceholderText = "Master password", MinWidth = 320 };
     var dialog = CreateRepromptDialog(password);
     password.AttachedToVisualTree += (_, _) => password.Focus();
-    if (await dialog.ShowAsync(TopLevel.GetTopLevel(this)) == FAContentDialogResult.Primary && !string.IsNullOrEmpty(password.Text))
-      await viewModel.VerifyRepromptAsync(password.Text);
+    var text = await dialog.ShowAsync(TopLevel.GetTopLevel(this)) == FAContentDialogResult.Primary ? password.Text : null;
     password.Text = null;
+    return text;
   }
 }

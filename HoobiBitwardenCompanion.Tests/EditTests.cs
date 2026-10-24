@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
@@ -40,6 +41,7 @@ public class EditTests(AvaloniaSession session)
     public string? FailWith { get; set; }
     public string? FailOp { get; set; }
     public bool Deleted { get; set; }
+    public TimeSpan Delay { get; set; }
 
     public List<JsonElement?> Payloads(string op)
     {
@@ -47,13 +49,24 @@ public class EditTests(AvaloniaSession session)
         return [.. Requests.Where(r => r.Op == op).Select(r => r.Payload)];
     }
 
-    public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
+    public async Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
     {
       lock (Requests)
         Requests.Add((op, payload));
       if (FailWith is { } code && (FailOp is null || FailOp == op))
         throw new IpcException(code);
-      return Task.FromResult<JsonElement?>(op switch
+      if (Delay > TimeSpan.Zero)
+        await Task.Delay(Delay, cancellationToken);
+      if (op == Ops.VerifyReprompt)
+      {
+        var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
+        if (verify.Password != "correct")
+          return IpcJson.ToElement(new RepromptResponse(false, 0), IpcJson.Default.RepromptResponse);
+        FailWith = null;
+        return IpcJson.ToElement(new RepromptResponse(true, 0, await HandleAsync(verify.Op!, verify.Payload, cancellationToken)), IpcJson.Default.RepromptResponse);
+      }
+
+      return op switch
       {
         Ops.ListFilters => IpcJson.ToElement(Filters, IpcJson.Default.FiltersResponse),
         Ops.ListItems => IpcJson.ToElement(new ItemListResponse([.. Items.Values.Select(i => new ItemSummary(
@@ -66,7 +79,7 @@ public class EditTests(AvaloniaSession session)
           IpcJson.ToElement(new SavedResponse(IpcJson.Read(payload, IpcJson.Default.WriteRequest).Id, Revision.AddDays(2)), IpcJson.Default.SavedResponse),
         Ops.GetPasswordHistory => IpcJson.ToElement(new PasswordHistoryResponse([Revision.AddDays(-1), Revision.AddDays(-30)]), IpcJson.Default.PasswordHistoryResponse),
         _ => null,
-      });
+      };
     }
 
     private JsonElement Save(EditableItem item)
@@ -88,11 +101,16 @@ public class EditTests(AvaloniaSession session)
     private readonly ChannelPair _pair;
 
     public Harness(params EditableItem[] items)
+      : this(null, items)
+    {
+    }
+
+    public Harness(TimeSpan? requestTimeout, params EditableItem[] items)
     {
       foreach (var item in items)
         Extension.Items[item.Id!] = item;
       _pair = new ChannelPair(Extension.HandleAsync);
-      Channel = new PipeChannel(_pair.CompanionInput, _pair.CompanionOutput, (_, _, _) => Task.FromResult<JsonElement?>(null));
+      Channel = new PipeChannel(_pair.CompanionInput, _pair.CompanionOutput, (_, _, _) => Task.FromResult<JsonElement?>(null), requestTimeout: requestTimeout);
       _ = Task.Run(Channel.RunAsync);
     }
 
@@ -104,9 +122,11 @@ public class EditTests(AvaloniaSession session)
 
     public bool Answer { get; set; }
 
+    public string? Password { get; set; }
+
     public ItemViewModel Item(string id)
     {
-      var vm = new ItemViewModel(id, Channel) { Confirm = Ask };
+      var vm = new ItemViewModel(id, Channel) { Confirm = Ask, AskPassword = () => Task.FromResult(Password) };
       return vm;
     }
 
@@ -248,13 +268,12 @@ public class EditTests(AvaloniaSession session)
     editor.Name = " ";
     Assert.Equal("Name is required.", editor.Validate());
     editor.Name = "x";
-    editor.Uris[0].Uri = "http://[bad";
-    Assert.Equal("Website 1 is not a valid URI.", editor.Validate());
-    editor.Uris[0].SelectedMatch = ItemEditorViewModel.MatchChoices[5];
-    editor.Uris[0].SelectedMatch = ItemEditorViewModel.MatchChoices[^2];
+    editor.Uris[0].Uri = "My router";
+    editor.Uris[1].Uri = null;
     Assert.Null(editor.Validate());
+    Assert.Equal(["My router", null], editor.ToDto().Login!.Uris.Select(u => u.Uri));
     editor.AddFieldCommand.Execute("0");
-    Assert.Equal("Every custom field needs a name.", editor.Validate());
+    Assert.Equal("Every new custom field needs a name.", editor.Validate());
     editor.Fields[^1].Name = "n";
     editor.AddFieldCommand.Execute("3");
     editor.Fields[^1].Name = "l";
@@ -487,6 +506,157 @@ public class EditTests(AvaloniaSession session)
     await vm.ArchiveCommand.ExecuteAsync(null);
 
     AvaloniaSession.WaitFor(() => coordinator.ItemWindows.Count == 0);
+  });
+
+  [Fact]
+  public Task CloneOfAnOrgItem_CreatesInTheOrg_InOneCreate() => session.RunAsync(async () =>
+  {
+    var item = Sample(1) with { OrganizationId = OrgId, CollectionIds = [CollectionId] };
+    using var h = new Harness(item);
+    using var vault = new VaultViewModel(h.Channel, _ => { });
+    vault.Apply([new ItemSummary(item.Id!, 1, item.Name, null, false, FolderId, OrgId, [CollectionId], false, false, Revision, false, false, false, [])], Filters);
+    vault.SelectedRow = vault.Rows.Single();
+    await vault.Detail!.LoadAsync();
+
+    await vault.CloneCommand.ExecuteAsync(null);
+    var clone = vault.Detail!;
+    clone.Confirm = h.Ask;
+    await clone.SaveCommand.ExecuteAsync(null);
+
+    var sent = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.CreateItem)), IpcJson.Default.EditableItem);
+    Assert.Equal((OrgId, CollectionId), (sent.OrganizationId, Assert.Single(sent.CollectionIds)));
+    Assert.Empty(h.Extension.Payloads(Ops.MoveItem));
+    Assert.Empty(h.Extension.Payloads(Ops.SetCollections));
+    Assert.False(clone.IsNew);
+  });
+
+  [Fact]
+  public Task Create_WithAnUnknownOutcome_IsNotSentAgainWithoutConsent() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    using var vault = new VaultViewModel(h.Channel, _ => { });
+    await vault.NewItemCommand.ExecuteAsync("2");
+    var created = vault.Detail!;
+    created.Confirm = h.Ask;
+    created.Editor!.Name = "Note";
+    h.Extension.FailWith = IpcErrors.Unknown;
+    h.Extension.FailOp = Ops.CreateItem;
+
+    await created.SaveCommand.ExecuteAsync(null);
+    Assert.Equal("Bitwarden did not confirm the save. Check the vault before you save again.", created.ErrorMessage);
+    Assert.True(created.IsNew);
+
+    h.Extension.FailWith = null;
+    h.Answer = false;
+    await created.SaveCommand.ExecuteAsync(null);
+    Assert.Single(h.Extension.Payloads(Ops.CreateItem));
+    Assert.Equal(["Save another copy?|Save copy|Cancel"], h.Prompts);
+
+    h.Answer = true;
+    await created.SaveCommand.ExecuteAsync(null);
+    Assert.Equal(2, h.Extension.Payloads(Ops.CreateItem).Count);
+    Assert.False(created.IsNew);
+  });
+
+  [Fact]
+  public Task Writes_OutlastTheDefaultRequestTimeout() => session.RunAsync(async () =>
+  {
+    var item = Sample(2);
+    using var h = new Harness(TimeSpan.FromMilliseconds(100), item);
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+    await vm.EditCommand.ExecuteAsync(null);
+    vm.Editor!.Notes = "slow save";
+    h.Extension.Delay = TimeSpan.FromMilliseconds(400);
+
+    await vm.SaveCommand.ExecuteAsync(null);
+
+    Assert.Single(h.Extension.Payloads(Ops.UpdateItem));
+    Assert.Equal("Saved", vm.StatusMessage);
+  });
+
+  [Fact]
+  public Task RepromptOnAWrite_AsksForThePassword_AndWrapsTheWrite() => session.RunAsync(async () =>
+  {
+    var item = Sample(1);
+    using var h = new Harness(item);
+    using var vm = h.Item(item.Id!);
+    var removed = 0;
+    vm.Removed += () => removed++;
+    await vm.LoadAsync();
+    h.Answer = true;
+    h.Extension.FailWith = IpcErrors.Reprompt;
+    h.Extension.FailOp = Ops.DeleteItem;
+
+    h.Password = "wrong";
+    await vm.DeleteCommand.ExecuteAsync(null);
+    Assert.Equal(0, removed);
+    Assert.Equal("Incorrect master password.", vm.ErrorMessage);
+
+    h.Password = "correct";
+    await vm.DeleteCommand.ExecuteAsync(null);
+    var verify = IpcJson.Read(h.Extension.Payloads(Ops.VerifyReprompt)[^1], IpcJson.Default.RepromptRequest);
+    Assert.Equal((item.Id, Ops.DeleteItem), (verify.Id, verify.Op));
+    Assert.Equal(1, removed);
+  });
+
+  [Fact]
+  public void BooleanField_KeepsItsStoredString_UntilToggled()
+  {
+    var editor = new ItemEditorViewModel(Sample(2) with { Fields = [new CustomFieldEdit("flag", "1", 2)] }, Filters);
+    Assert.Equal("1", editor.ToDto().Fields[0].Value);
+    Assert.False(editor.IsDirty);
+    editor.Fields[0].BoolValue = true;
+    Assert.Equal("true", editor.ToDto().Fields[0].Value);
+    editor.Fields[0].BoolValue = false;
+    Assert.Equal("1", editor.ToDto().Fields[0].Value);
+  }
+
+  [Fact]
+  public void OrgItem_NeedsAtLeastOneCollection()
+  {
+    var editor = new ItemEditorViewModel(Sample(2) with { OrganizationId = OrgId, CollectionIds = [CollectionId] }, Filters);
+    Assert.Null(editor.Validate());
+    editor.Collections[0].IsChecked = false;
+    Assert.Equal("Choose at least one collection for the organisation.", editor.Validate());
+  }
+
+  [Fact]
+  public Task UnsupportedType_IsReadOnly() => session.RunAsync(async () =>
+  {
+    var item = Sample(6);
+    using var h = new Harness(item);
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+
+    Assert.Equal(6, vm.ItemType);
+    Assert.False(vm.CanEdit);
+    Assert.True(vm.CanArchive);
+  });
+
+  [Fact]
+  public Task EditForm_MasksTheSshKey_AndMatchesComboBoxTextToTextBoxText() => session.RunAsync(async () =>
+  {
+    var item = Sample(5);
+    using var h = new Harness(item);
+    var vm = h.Item(item.Id!);
+    var window = new ItemWindow(vm) { Height = 900 };
+    window.Show();
+    await vm.LoadAsync();
+    await vm.EditCommand.ExecuteAsync(null);
+    window.UpdateLayout();
+
+    var key = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PrivateKeyBox");
+    Assert.Equal('•', key.PasswordChar);
+    Assert.Contains("revealPasswordButton", key.Classes);
+    Assert.Contains('\n', key.Text!);
+
+    var folder = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "FolderBox");
+    var selected = folder.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Work");
+    var name = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "NameBox").GetVisualDescendants().OfType<TextPresenter>().Single();
+    Assert.Equal((name.FontWeight, name.FontSize, name.FontFamily), (selected.FontWeight, selected.FontSize, selected.FontFamily));
+    Assert.Equal((name.Foreground as Avalonia.Media.ISolidColorBrush)?.Color, (selected.Foreground as Avalonia.Media.ISolidColorBrush)?.Color);
+    window.Close();
   });
 
   private static void SaveScreenshot(Avalonia.Media.Imaging.WriteableBitmap frame, string name)

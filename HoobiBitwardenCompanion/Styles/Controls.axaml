@@ -11,6 +11,10 @@
         <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="Transparent" />
         <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="Transparent" />
         <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="Transparent" />
+        <SolidColorBrush x:Key="ComboBoxForeground" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxForegroundPointerOver" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxForegroundPressed" Color="#FFCBCCC6" />
+        <SolidColorBrush x:Key="ComboBoxForegroundFocused" Color="#FFCBCCC6" />
         <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF2B3140" />
         <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="Transparent" />
         <Thickness x:Key="ComboBoxBorderThemeThickness">0</Thickness>
@@ -283,6 +287,10 @@
 
     <Style Selector="Border.StackRow ComboBox">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="ComboBox">
+        <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
     </Style>
 
     <Style Selector="ComboBox /template/ Border#PopupBorder">
