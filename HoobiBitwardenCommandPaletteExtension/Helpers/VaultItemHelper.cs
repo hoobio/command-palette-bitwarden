@@ -99,6 +99,14 @@ internal static partial class VaultItemHelper
         Icon = new IconInfo(""),
         RequestedShortcut = Chord(VirtualKey.O, shift: true),
       });
+      if (item.Type == BitwardenItemType.Login)
+      {
+        items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.RotateItem(id)) { Name = "Rotate password", Result = CommandResult.Dismiss() }))
+        {
+          Title = "Rotate password",
+          Icon = new IconInfo(""),
+        });
+      }
     }
 
     var serverUrl = BitwardenCliService.ServerUrl;

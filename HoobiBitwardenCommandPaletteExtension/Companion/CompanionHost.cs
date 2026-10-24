@@ -37,6 +37,9 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void ShowVault() => _ = SendAsync(Ops.ShowVault, null);
 
+  public void RotateItem(string id) =>
+    _ = SendAsync(Ops.RotateItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
+
   internal async Task<JsonElement?> RequestAsync(string op, JsonElement? payload)
   {
     var channel = EnsureStarted();

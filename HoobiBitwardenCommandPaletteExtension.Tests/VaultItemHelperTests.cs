@@ -200,9 +200,11 @@ public class VaultItemHelperTests
     try
     {
       var contextItems = VaultItemHelper.BuildContextItems(item);
-      Assert.Equal(withoutCompanion.Select(ci => ci.Title), contextItems.SkipLast(1).Select(ci => ci.Title));
-      Assert.Equal("Open in window", contextItems[^1].Title);
+      Assert.Equal(withoutCompanion.Select(ci => ci.Title), contextItems.SkipLast(2).Select(ci => ci.Title));
+      Assert.Equal(["Open in window", "Rotate password"], contextItems.TakeLast(2).Select(ci => ci.Title));
       Assert.NotEqual("Open in window", contextItems[0].Title);
+      var card = new BitwardenItem { Id = Guid.NewGuid().ToString(), Type = BitwardenItemType.Card, CardBrand = "Visa" };
+      Assert.DoesNotContain(VaultItemHelper.BuildContextItems(card), ci => ci.Title == "Rotate password");
     }
     finally
     {
