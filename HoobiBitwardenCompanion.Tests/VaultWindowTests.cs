@@ -71,7 +71,7 @@ public class VaultWindowTests(AvaloniaSession session)
         new FieldDto(ItemFields.Username, "Username", "Login credentials", item.Subtext, false),
         new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true),
         new FieldDto(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://github.com", false, CanOpen: true),
-      ]);
+      ], IconPath: item.IconPath);
     }
   }
 
@@ -440,6 +440,51 @@ public class VaultWindowTests(AvaloniaSession session)
       Assert.False(new ItemRowViewModel(Summary("Broken") with { IconPath = bad }).HasIcon);
       Assert.False(new ItemRowViewModel(Summary("Missing") with { IconPath = Path.Combine(dir, "missing.png") }).HasIcon);
       Assert.False(new ItemRowViewModel(Summary("None")).HasIcon);
+    }
+    finally
+    {
+      Directory.Delete(dir, recursive: true);
+    }
+  });
+
+  [Fact]
+  public Task IconsChanged_ShowsALateIcoIcon_InTheRowAndHeader_WithoutReloadingTheDetail() => session.RunAsync(async () =>
+  {
+    var dir = Directory.CreateTempSubdirectory().FullName;
+    try
+    {
+      var png = Path.Combine(dir, "frame.png");
+      using (var bitmap = new Avalonia.Media.Imaging.WriteableBitmap(new Avalonia.PixelSize(16, 16), new Avalonia.Vector(96, 96)))
+        bitmap.Save(png, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+      var pngBytes = await File.ReadAllBytesAsync(png, TestContext.Current.CancellationToken);
+      var ico = Path.Combine(dir, "github.com.png");
+      byte[] header = [0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0, .. BitConverter.GetBytes(pngBytes.Length), 22, 0, 0, 0];
+      await File.WriteAllBytesAsync(ico, [.. header, .. pngBytes], TestContext.Current.CancellationToken);
+
+      var extension = new FakeExtension();
+      using var pair = new ChannelPair(extension.HandleAsync);
+      using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+      _ = coordinator.RunAsync(() => { });
+      var window = coordinator.ShowVault();
+      var vm = window.ViewModel!;
+      AvaloniaSession.WaitFor(() => vm.Rows.Count == 7);
+      vm.SelectedRow = vm.Rows.Single(r => r.Name == "GitHub");
+      AvaloniaSession.WaitFor(() => vm.Detail?.Title == "GitHub");
+      Assert.False(vm.SelectedRow.HasIcon);
+      Assert.False(vm.Detail!.HasIcon);
+      var loads = extension.Count(Ops.GetItem);
+
+      extension.Items[0] = extension.Items[0] with { IconPath = ico };
+      await pair.Extension.SendEventAsync(Ops.IconsChanged);
+      AvaloniaSession.WaitFor(() => vm.Rows.Single(r => r.Name == "GitHub").HasIcon);
+      AvaloniaSession.WaitFor(() => vm.Detail.HasIcon);
+      Assert.Equal(loads, extension.Count(Ops.GetItem));
+      Assert.NotNull(window.CaptureRenderedFrame());
+
+      var itemWindow = coordinator.ShowItem(extension.Items[0].Id);
+      AvaloniaSession.WaitFor(() => itemWindow.ViewModel!.HasIcon);
+      itemWindow.Close();
+      window.Close();
     }
     finally
     {

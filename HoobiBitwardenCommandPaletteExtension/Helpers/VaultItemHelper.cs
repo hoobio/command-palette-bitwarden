@@ -408,14 +408,22 @@ internal static partial class VaultItemHelper
       return new IconInfo("\uE8C7");
 
     var isDark = IsDarkTheme();
-    var slug = SanitizeBrandSlug(brand);
-    var theme = isDark ? "dark" : "light";
     return FaviconService.GetOrQueue(
-      $"card-brand:{slug}:{theme}",
+      CardBrandCacheKey(brand, isDark),
       GetCardBrandImageUrl(brand, isDark),
       new IconInfo("\uE8C7"),
       priority);
   }
+
+  private static string CardBrandCacheKey(string brand, bool isDark) =>
+    $"card-brand:{SanitizeBrandSlug(brand)}:{(isDark ? "dark" : "light")}";
+
+  internal static string? IconCacheKey(BitwardenItem item) => item.Type switch
+  {
+    BitwardenItemType.Login => item.FirstHost,
+    BitwardenItemType.Card when item.CardBrand is { } brand => CardBrandCacheKey(brand, IsDarkTheme()),
+    _ => null,
+  };
 
   internal static IconInfo GetFaviconIcon(BitwardenItem item, int priority = int.MaxValue)
   {
