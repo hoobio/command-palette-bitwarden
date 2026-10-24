@@ -152,7 +152,8 @@ internal partial interface IUIAutomationElement
   [PreserveSig]
   int get_CurrentProcessId(out int processId);
 
-  void _ReservedCurrentControlType();
+  [PreserveSig]
+  int get_CurrentControlType(out int controlType);
 
   void _ReservedCurrentLocalizedControlType();
   void _ReservedCurrentName();

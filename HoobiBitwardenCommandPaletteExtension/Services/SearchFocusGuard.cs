@@ -12,10 +12,13 @@ internal static partial class SearchFocusGuard
   private static readonly TimeSpan CheckInterval = TimeSpan.FromMilliseconds(20);
   private static readonly TimeSpan StableDuration = TimeSpan.FromMilliseconds(500);
   private static readonly TimeSpan MaxGuardDuration = TimeSpan.FromSeconds(5);
+  private static readonly TimeSpan ActivationGrace = TimeSpan.FromMilliseconds(300);
+  private static readonly TimeSpan ForegroundSettle = TimeSpan.FromMilliseconds(150);
   private static readonly Lock _startLock = new();
   private static bool _started;
   private static int _generation;
   private static volatile nint _lastShownHwnd;
+  private static long _lastForegroundChange;
 
   internal static void Start()
   {
@@ -32,7 +35,8 @@ internal static partial class SearchFocusGuard
   {
     var showHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, 0, &WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     var uncloakHook = SetWinEventHook(EVENT_OBJECT_UNCLOAKED, EVENT_OBJECT_UNCLOAKED, 0, &WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-    DebugLogService.Log("FocusGuard", showHook != 0 && uncloakHook != 0 ? "Watching Command Palette window" : "SetWinEventHook failed");
+    var foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, 0, &ForegroundEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+    DebugLogService.Log("FocusGuard", showHook != 0 && uncloakHook != 0 && foregroundHook != 0 ? "Watching Command Palette window" : "SetWinEventHook failed");
 
     while (GetMessageW(out var msg, 0, 0, 0) > 0)
       DispatchMessageW(in msg);
@@ -41,7 +45,13 @@ internal static partial class SearchFocusGuard
       UnhookWinEvent(showHook);
     if (uncloakHook != 0)
       UnhookWinEvent(uncloakHook);
+    if (foregroundHook != 0)
+      UnhookWinEvent(foregroundHook);
   }
+
+  [UnmanagedCallersOnly]
+  private static void ForegroundEventProc(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint idEventThread, uint dwmsEventTime) =>
+    Interlocked.Exchange(ref _lastForegroundChange, Stopwatch.GetTimestamp());
 
   [UnmanagedCallersOnly]
   private static void WinEventProc(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint idEventThread, uint dwmsEventTime)
@@ -62,7 +72,9 @@ internal static partial class SearchFocusGuard
   internal static void RestoreFocus()
   {
     var hwnd = _lastShownHwnd;
-    if (hwnd != 0 && IsWindowVisible(hwnd) && !IsCloaked(hwnd))
+    var visible = hwnd != 0 && IsWindowVisible(hwnd) && !IsCloaked(hwnd);
+    DebugLogService.Log("FocusGuard", visible ? "Windows Hello finished; guarding search box focus" : "Windows Hello finished; Command Palette is not visible");
+    if (visible)
       StartGuard(hwnd);
   }
 
@@ -84,15 +96,48 @@ internal static partial class SearchFocusGuard
       if (!IsWindowVisible(hwnd) || IsCloaked(hwnd))
         return;
       var foreground = GetForegroundWindow();
-      if (foreground == hwnd || EnterKeySubmitService.IsCommandPaletteWindow(foreground))
+      var foregroundIsCmdPal = foreground == hwnd || EnterKeySubmitService.IsCommandPaletteWindow(foreground);
+      if (foregroundIsCmdPal && TextBoxHasFocus(hwnd))
       {
         if (stableSince == 0)
           stableSince = Stopwatch.GetTimestamp();
         continue;
       }
       stableSince = 0;
+      // Forcing focus while Command Palette is still activating itself makes it see a deactivation and hide.
+      if (!foregroundIsCmdPal
+          && (Stopwatch.GetElapsedTime(started) < ActivationGrace
+              || Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastForegroundChange)) < ForegroundSettle))
+        continue;
       if (FocusSearchBox(hwnd))
-        DebugLogService.Log("FocusGuard", $"Command Palette was visible without focus; focused the search box after {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0}ms");
+        DebugLogService.Log("FocusGuard", $"Search box lacked focus ({(foregroundIsCmdPal ? "focus inside Command Palette" : "another window in front")}); focused it after {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0}ms");
+    }
+  }
+
+  private static bool TextBoxHasFocus(nint hwnd)
+  {
+    IUIAutomation? automation = null;
+    IUIAutomationElement? focused = null;
+    try
+    {
+      automation = UiaInterop.CreateAutomation();
+      if (automation == null
+          || automation.GetFocusedElement(out var focusedPtr) != 0
+          || (focused = UiaInterop.Wrap<IUIAutomationElement>(focusedPtr)) == null)
+        return false;
+      GetWindowThreadProcessId(hwnd, out var cmdPalPid);
+      return focused.get_CurrentProcessId(out var pid) == 0 && pid == (int)cmdPalPid
+          && focused.get_CurrentControlType(out var controlType) == 0 && controlType == UiaInterop.UIA_EditControlTypeId;
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("FocusGuard", $"Focus check failed: {ex.GetType().Name}: {ex.Message}");
+      return true;
+    }
+    finally
+    {
+      UiaInterop.Release(focused);
+      UiaInterop.Release(automation);
     }
   }
 
@@ -138,6 +183,7 @@ internal static partial class SearchFocusGuard
 
   private const uint EVENT_OBJECT_SHOW = 0x8002;
   private const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
+  private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
   private const uint WINEVENT_OUTOFCONTEXT = 0;
   private const uint WINEVENT_SKIPOWNPROCESS = 2;
   private const int OBJID_WINDOW = 0;
@@ -158,6 +204,9 @@ internal static partial class SearchFocusGuard
 
   [LibraryImport("user32.dll")]
   private static partial nint GetForegroundWindow();
+
+  [LibraryImport("user32.dll")]
+  private static partial uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
   [LibraryImport("user32.dll")]
   [return: MarshalAs(UnmanagedType.Bool)]
