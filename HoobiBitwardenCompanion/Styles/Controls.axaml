@@ -334,6 +334,11 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
     </Style>
 
+    <Style Selector="TextBlock.RowLabel">
+        <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+    </Style>
+
     <Style Selector="TextBlock.Caption">
         <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
