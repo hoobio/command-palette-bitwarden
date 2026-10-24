@@ -4,6 +4,7 @@
 - **Features**
   - [Search & Filtering](Search-and-Filtering)
   - [Vault Item Actions](Vault-Item-Actions)
+  - [Companion Window](Companion-Window)
   - [Context Awareness](Context-Awareness)
   - [TOTP Codes](TOTP-Codes)
   - [SSH Quick Connect](SSH-Quick-Connect)

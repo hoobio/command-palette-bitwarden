@@ -13,6 +13,7 @@ A free, open-source replacement for 1Password Quick Access, built for the [Power
 - [Watchtower Tags](Watchtower-Tags)
 - [Settings](Settings)
 - [Vault Item Actions](Vault-Item-Actions)
+- [Companion Window](Companion-Window)
 - [Architecture](Architecture)
 - [Release & Store Publishing](Release-and-Store-Publishing)
 

@@ -22,6 +22,9 @@ HoobiBitwardenCommandPaletteExtension/
 ├── BitwardenFallbackItem.cs            # Fallback search for short queries
 ├── Commands/
 │   └── CopyOtpCommand.cs              # TOTP computation and secure copy
+├── Companion/
+│   ├── CompanionHost.cs               # Starts and reuses the companion process, owns the pipes
+│   └── CompanionOps.cs                # Companion request handlers (validation, re-prompt, secrets)
 ├── Helpers/
 │   └── VaultItemHelper.cs             # Icons, tags, default commands, context menus
 ├── Models/
@@ -46,6 +49,13 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── SessionStore.cs               # Windows Credential Manager wrapper
 │   └── SvgRasterizer.cs              # SVG to PNG conversion via SkiaSharp
 └── Assets/                            # Icons and images
+HoobiBitwardenCompanion/               # Avalonia companion window app
+├── Program.cs                         # Reads the pipe handles, starts Avalonia
+├── Services/WindowCoordinator.cs      # Pipe requests from the extension, window registry
+├── ViewModels/                        # Item and field view models
+├── Views/                             # Main window and item window
+└── Styles/                            # Hoobi design tokens, control styles, glyphs, fonts
+Shared/                                # IPC contracts and PipeChannel, linked into both projects
 ```
 
 ## Data Flow
@@ -92,8 +102,19 @@ The Bitwarden apps get vault changes from the server's notifications hub, a Sign
 
 ## In-Memory Secret Protection
 
-Passwords, TOTP secrets, notes, card numbers, card security codes, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
+Passwords, TOTP secrets, notes, card numbers, card security codes, SSH private keys, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
 
 ## Extension Registration
 
 The extension is a COM out-of-process server. `Program.cs` registers it with the PowerToys host. The host calls `IExtension.GetProvider()` to get the `CommandsProvider`, which supplies the main vault page and the fallback search item.
+
+## Companion Window Process
+
+The companion window (see [Companion Window](Companion-Window)) is a separate Avalonia 12 app, `HoobiBitwardenCompanion`, with FluentAvaloniaUI and CommunityToolkit.Mvvm. It is a thin UI. The extension stays the package owner and the vault backend: the `bw` CLI, the session key, the item cache and the clipboard stay in the extension.
+
+- **Packaging.** The extension csproj references the companion project with `Targets="Build;Publish"` and adds the self-contained publish output under `Companion\` as content. The loose layout that `Add-AppxPackage -Register` reads and the MSIX payload both contain `Companion\HoobiBitwardenCompanion.exe`. The manifest is unchanged. The companion is a child process of the packaged extension, so it has the package identity.
+- **Process lifetime.** `Companion/CompanionHost.cs` starts one companion on first use and reuses it. If the companion has exited, the next request starts a new one. Closing a window does not stop the companion. The companion stops when its input pipe reaches end of file, which occurs when the extension process ends.
+- **Transport.** Two anonymous pipes, one for each direction. The client handles are passed as command-line arguments and inherited by the child. Each message is one line of JSON: `{ id, type: req|res|evt, op, payload, error }`, serialized with a source-generated `JsonSerializerContext`. `Shared/PipeChannel.cs` is the one channel class for both ends: it correlates responses by id, sends events, cancels pending requests and fails them on end of file. The contracts and the channel are in `Shared/` and compiled into both projects.
+- **Operations.** Only typed operations are accepted. Companion to extension: `getItem`, `reveal`, `copy`, `getTotp`, `openUri`, `verifyReprompt`. Extension to companion: `showItem`, `showVault`. `Companion/CompanionOps.cs` validates every item id with `Guid.TryParse`, reads the cached item, and decrypts a `ProtectedSecret` only for the response.
+- **Secrets.** `getItem` returns no secret values, only flags for the secret fields that exist. A secret crosses the pipe only for `reveal` (one field) and `getTotp` (the current code). `copy` runs in the extension with `SecureClipboardService`, so the secret does not go to the companion and the clipboard clear timer continues after a window closes. `openUri` opens only `http` and `https` addresses.
+- **Master password re-prompt.** For an item with re-prompt, the extension refuses `getItem` field data, `reveal`, `copy`, `getTotp` and `openUri` until `verifyReprompt` succeeds. Verification uses `BitwardenCliService.VerifyMasterPasswordAsync` and the same failure cooldown as the Command Palette re-prompt page. The grant is kept for each item for the companion session and is erased when the vault locks, auto-locks, logs out or the CLI configuration changes.
