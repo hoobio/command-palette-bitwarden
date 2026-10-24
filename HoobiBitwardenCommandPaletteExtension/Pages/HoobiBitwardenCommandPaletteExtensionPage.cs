@@ -19,6 +19,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private readonly BitwardenSettingsManager? _settings;
     private readonly Lock _itemsLock = new();
     private IListItem[] _currentItems = [];
+    private long _buildGeneration;
+    private long _publishedGeneration;
     private bool _initialLoadStarted;
     private volatile bool _initComplete;
     private volatile bool _handlingAction;
@@ -1237,13 +1239,15 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private bool TryPublishVaultList(out int resultCount)
     {
+        var generation = Interlocked.Increment(ref _buildGeneration);
         var text = _currentSearchText;
         var results = Search(text);
         resultCount = results.Count;
         var built = BuildListItems(results, text);
         lock (_itemsLock)
         {
-            if (text != _currentSearchText) return false;
+            if (text != _currentSearchText || generation <= _publishedGeneration) return false;
+            _publishedGeneration = generation;
             _currentItems = built;
             return true;
         }
