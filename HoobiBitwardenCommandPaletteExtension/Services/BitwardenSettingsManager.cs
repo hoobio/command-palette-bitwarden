@@ -146,7 +146,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "liveSync",
         "Live Sync",
         "Sync the vault as soon as it changes on another device, like the Bitwarden apps do. While the vault is unlocked, keeps a connection open to your server's notifications service, signed in with the access token the Bitwarden CLI stores in data.json",
-        false);
+        true);
     public ChoiceSetSetting ClipboardClearDelay { get; } = new(
         "clipboardClearDelay",
         "Clipboard Clear Delay",

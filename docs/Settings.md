@@ -110,8 +110,8 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | | |
 |---|---|
 | **Type** | Toggle |
-| **Default** | Off |
-| **Description** | Syncs the vault within a few seconds of a change on another device, the same way the Bitwarden apps do. While the vault is unlocked, the extension keeps a WebSocket connection open to your server's notifications service. This works with Bitwarden cloud (US and EU), self-hosted Bitwarden and Vaultwarden. It signs in with the access token that the Bitwarden CLI stores in plaintext in its `data.json`, so it is off by default. See [Architecture](Architecture#live-sync) for details. |
+| **Default** | On |
+| **Description** | Syncs the vault within a few seconds of a change on another device, the same way the Bitwarden apps do. While the vault is unlocked, the extension keeps a WebSocket connection open to your server's notifications service. This works with Bitwarden cloud (US and EU), self-hosted Bitwarden and Vaultwarden. It signs in with the access token that the Bitwarden CLI stores in plaintext in its `data.json`. Turn it off to keep the extension from reading that token. See [Architecture](Architecture#live-sync) for details. |
 
 ### Auto-Clear Clipboard
 
