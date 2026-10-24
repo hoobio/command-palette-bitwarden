@@ -1,0 +1,125 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.Views.ItemWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:ItemViewModel"
+    Title="{Binding Title}"
+    Width="440"
+    Height="620"
+    MinWidth="340"
+    MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid x:Name="Root" RowDefinitions="48,*,Auto" Background="Transparent">
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem
+                    x:Name="AlwaysOnTopItem"
+                    Header="Always on top"
+                    ToggleType="CheckBox"
+                    IsChecked="{Binding $parent[Window].Topmost, Mode=OneWay}"
+                    Click="OnAlwaysOnTopClick" />
+            </ContextMenu>
+        </Grid.ContextMenu>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Background="Transparent"
+            ColumnDefinitions="Auto,*,48"
+            chrome:WindowDecorationProperties.ElementRole="User">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Margin="{StaticResource PageGutter}">
+                <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,4">
+                    <Border Width="44" Height="44" CornerRadius="{StaticResource OverlayCornerRadius}" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                        <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{Binding Title}" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Classes="Caption" Text="{Binding Subtitle}" IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock
+                    x:Name="ErrorText"
+                    Margin="0,12,0,0"
+                    TextWrapping="Wrap"
+                    Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                    Text="{Binding ErrorMessage}"
+                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                <Border Classes="Card" Margin="0,16,0,0" Padding="16" IsVisible="{Binding RepromptRequired}">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="18" VerticalAlignment="Center" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                            <TextBlock Text="This item is protected" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Re-enter your master password to view and copy this item." />
+                        <Button x:Name="VerifyButton" Theme="{StaticResource AccentButtonStyle}" Content="Verify master password" Click="OnVerifyClick" />
+                    </StackPanel>
+                </Border>
+
+                <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FieldGroupViewModel">
+                            <StackPanel>
+                                <TextBlock Classes="GroupHeader" Text="{Binding Name}" />
+                                <Border Classes="Card">
+                                    <ItemsControl ItemsSource="{Binding Fields}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FieldViewModel">
+                                                <Grid ColumnDefinitions="*,Auto" Margin="{StaticResource CardRowPadding}">
+                                                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                        <TextBlock Classes="FieldLabel" Text="{Binding Label}" />
+                                                        <SelectableTextBlock
+                                                            Text="{Binding DisplayValue}"
+                                                            TextWrapping="Wrap"
+                                                            FontFamily="{StaticResource MonoFontFamily}"
+                                                            IsVisible="{Binding IsSecret}" />
+                                                        <SelectableTextBlock
+                                                            Text="{Binding DisplayValue}"
+                                                            TextWrapping="Wrap"
+                                                            IsVisible="{Binding !IsSecret}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                                                        <Panel Width="22" Height="22" Margin="0,0,6,0" IsVisible="{Binding IsTotp}">
+                                                            <Ellipse Stroke="{DynamicResource DividerStrokeColorDefaultBrush}" StrokeThickness="2" />
+                                                            <Arc StartAngle="-90" SweepAngle="{Binding TotpSweep}" Stroke="{DynamicResource AccentFillColorDefaultBrush}" StrokeThickness="2" />
+                                                            <TextBlock Text="{Binding TotpRemaining}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        </Panel>
+                                                        <Button Theme="{StaticResource IconButtonStyle}" Content="{Binding RevealGlyph}" Command="{Binding ToggleRevealCommand}" IsVisible="{Binding IsSecret}" ToolTip.Tip="Show or hide" />
+                                                        <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Open}" Command="{Binding OpenCommand}" IsVisible="{Binding CanOpen}" ToolTip.Tip="Open in browser" />
+                                                        <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" IsVisible="{Binding CanCopy}" ToolTip.Tip="Copy" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <TextBlock
+            Grid.Row="2"
+            Classes="Caption"
+            Margin="24,0,24,12"
+            Text="{Binding StatusMessage}"
+            IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </Grid>
+</Window>

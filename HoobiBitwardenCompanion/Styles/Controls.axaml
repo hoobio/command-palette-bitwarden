@@ -1,0 +1,183 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome">
+    <Styles.Resources>
+        <ControlTheme x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="{DynamicResource AccentButtonBackground}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentButtonForeground}" />
+        </ControlTheme>
+
+        <ControlTheme x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="{DynamicResource SubtleFillColorTransparentBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="CaptionButtonTheme" TargetType="Button" BasedOn="{StaticResource FluentDrawnCaptionButton}">
+            <Setter Property="Width" Value="{StaticResource CaptionButtonWidth}" />
+            <Style Selector="^.Close:pointerover /template/ Border">
+                <Setter Property="Background" Value="{DynamicResource CaptionCloseBackgroundPointerOver}" />
+            </Style>
+            <Style Selector="^.Close:pressed /template/ Border">
+                <Setter Property="Background" Value="{DynamicResource CaptionCloseBackgroundPressed}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="HoobiWindowDecorations" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource {x:Type chrome:WindowDrawnDecorations}}">
+            <Setter Property="Template">
+                <WindowDrawnDecorationsTemplate>
+                    <chrome:WindowDrawnDecorationsContent>
+                        <chrome:WindowDrawnDecorationsContent.Underlay>
+                            <Panel Name="PART_UnderlayWrapper">
+                                <Border
+                                    Name="PART_WindowBorder"
+                                    Background="Transparent"
+                                    BorderThickness="{TemplateBinding FrameThickness}"
+                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                    IsHitTestVisible="False" />
+                                <Panel
+                                    Name="PART_TitleBar"
+                                    VerticalAlignment="Top"
+                                    Height="{TemplateBinding TitleBarHeight}"
+                                    Background="Transparent"
+                                    IsVisible="{TemplateBinding HasTitleBar}"
+                                    chrome:WindowDecorationProperties.ElementRole="TitleBar" />
+                            </Panel>
+                        </chrome:WindowDrawnDecorationsContent.Underlay>
+                        <chrome:WindowDrawnDecorationsContent.Overlay>
+                            <Panel Name="PART_OverlayWrapper">
+                                <StackPanel
+                                    Name="PART_OverlayPanel"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Height="{TemplateBinding TitleBarHeight}"
+                                    IsVisible="{TemplateBinding HasTitleBar}">
+                                    <Button
+                                        Name="PART_MinimizeButton"
+                                        Classes="CaptionButton"
+                                        Theme="{StaticResource CaptionButtonTheme}"
+                                        Content="&#xE738;"
+                                        chrome:WindowDecorationProperties.ElementRole="MinimizeButton" />
+                                    <Button
+                                        Name="PART_MaximizeButton"
+                                        Classes="CaptionButton"
+                                        Theme="{StaticResource CaptionButtonTheme}"
+                                        Content="&#xE739;"
+                                        chrome:WindowDecorationProperties.ElementRole="MaximizeButton" />
+                                    <Button
+                                        Name="PART_CloseButton"
+                                        Classes="CaptionButton Close"
+                                        Theme="{StaticResource CaptionButtonTheme}"
+                                        FontSize="16"
+                                        Content="&#xE711;"
+                                        chrome:WindowDecorationProperties.ElementRole="CloseButton" />
+                                </StackPanel>
+                            </Panel>
+                        </chrome:WindowDrawnDecorationsContent.Overlay>
+                    </chrome:WindowDrawnDecorationsContent>
+                </WindowDrawnDecorationsTemplate>
+            </Setter>
+        </ControlTheme>
+
+        <ControlTheme x:Key="HoobiCloseOnlyDecorations" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource {x:Type chrome:WindowDrawnDecorations}}">
+            <Setter Property="Template">
+                <WindowDrawnDecorationsTemplate>
+                    <chrome:WindowDrawnDecorationsContent>
+                        <chrome:WindowDrawnDecorationsContent.Underlay>
+                            <Panel Name="PART_UnderlayWrapper">
+                                <Border
+                                    Name="PART_WindowBorder"
+                                    Background="Transparent"
+                                    BorderThickness="{TemplateBinding FrameThickness}"
+                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                    IsHitTestVisible="False" />
+                                <Panel
+                                    Name="PART_TitleBar"
+                                    VerticalAlignment="Top"
+                                    Height="{TemplateBinding TitleBarHeight}"
+                                    Background="Transparent"
+                                    IsVisible="{TemplateBinding HasTitleBar}"
+                                    chrome:WindowDecorationProperties.ElementRole="TitleBar" />
+                            </Panel>
+                        </chrome:WindowDrawnDecorationsContent.Underlay>
+                        <chrome:WindowDrawnDecorationsContent.Overlay>
+                            <Panel Name="PART_OverlayWrapper">
+                                <StackPanel
+                                    Name="PART_OverlayPanel"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Height="{TemplateBinding TitleBarHeight}"
+                                    IsVisible="{TemplateBinding HasTitleBar}">
+                                    <Button
+                                        Name="PART_CloseButton"
+                                        Classes="CaptionButton Close"
+                                        Theme="{StaticResource CaptionButtonTheme}"
+                                        FontSize="16"
+                                        Content="&#xE711;"
+                                        chrome:WindowDecorationProperties.ElementRole="CloseButton" />
+                                </StackPanel>
+                            </Panel>
+                        </chrome:WindowDrawnDecorationsContent.Overlay>
+                    </chrome:WindowDrawnDecorationsContent>
+                </WindowDrawnDecorationsTemplate>
+            </Setter>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <Style Selector=":is(TopLevel)">
+        <Setter Property="FontFamily" Value="{StaticResource ContentControlThemeFontFamily}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />
+    </Style>
+
+    <Style Selector="Button">
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+    </Style>
+
+    <Style Selector="Button.CaptionButton">
+        <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="Border.Card">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+    </Style>
+
+    <Style Selector="TextBlock.GroupHeader">
+        <Setter Property="FontSize" Value="{StaticResource BodyTextBlockFontSize}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,16,0,8" />
+    </Style>
+
+    <Style Selector="TextBlock.FieldLabel">
+        <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.Caption">
+        <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.Icon">
+        <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+    </Style>
+</Styles>
