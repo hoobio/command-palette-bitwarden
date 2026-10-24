@@ -2,6 +2,7 @@ using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
 using HoobiBitwardenCompanion.ViewModels;
@@ -139,6 +140,27 @@ public class ItemWindowTests(AvaloniaSession session)
     await vm.TickAsync();
     Assert.Equal(2, extension.TotpCalls);
     Assert.Equal("000002", totp.DisplayValue);
+  });
+
+  [Fact]
+  public Task ItemWindow_RevealedSecretsAndTotp_AreNotSelectable() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(ItemId, channel);
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+    await Field(vm, ItemFields.Password).ToggleRevealCommand.ExecuteAsync(null);
+    Assert.NotNull(window.CaptureRenderedFrame());
+
+    var texts = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).ToList();
+    Assert.Contains(texts, t => t is not SelectableTextBlock && t.Text == "hunter2");
+    Assert.Contains(texts, t => t is not SelectableTextBlock && t.Text == "000001");
+    Assert.DoesNotContain(texts, t => t is SelectableTextBlock && t.Text is "hunter2" or "000001");
+    Assert.Contains(texts, t => t is SelectableTextBlock && t.Text == "octocat");
+    window.Close();
   });
 
   [Fact]

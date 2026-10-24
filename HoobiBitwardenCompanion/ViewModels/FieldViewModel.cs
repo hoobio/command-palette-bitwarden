@@ -39,6 +39,8 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   public bool IsTotp => Key == ItemFields.Totp;
 
+  public bool IsSensitive => IsSecret || IsTotp;
+
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(DisplayValue))]
   public partial string? RevealedValue { get; set; }
