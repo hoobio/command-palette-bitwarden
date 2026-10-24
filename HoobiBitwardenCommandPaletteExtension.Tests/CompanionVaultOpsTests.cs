@@ -53,7 +53,7 @@ public class CompanionVaultOpsTests
           Uris = [new ItemUri("https://www.github.com/login", UriMatchType.Default), new ItemUri("github.com", UriMatchType.Default), new ItemUri("gist.github.com", UriMatchType.Default)],
         },
         new BitwardenItem { Id = NoteId, Name = "Note", Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("secret note body") },
-        new BitwardenItem { Id = CardId, Name = "Visa", Type = BitwardenItemType.Card, CardBrand = "Visa", CardNumber = ProtectedSecret.From("4111111111111111"), CardCode = ProtectedSecret.From("987") },
+        new BitwardenItem { Id = CardId, Name = "Visa", Type = BitwardenItemType.Card, CardBrand = "Visa", CardNumber = ProtectedSecret.From("4111111111111111"), CardCode = ProtectedSecret.From("cvc-sentinel-zq") },
       ],
         new() { ["f2"] = "Personal", ["f1"] = "Work" },
         new() { ["o1"] = "Acme" });
@@ -77,7 +77,7 @@ public class CompanionVaultOpsTests
     var list = await h.Ops.ListItemsAsync();
     var json = JsonSerializer.Serialize(list, IpcJson.Default.ItemListResponse);
 
-    foreach (var secret in new[] { "hunter2", "JBSWY3DPEHPK3PXP", "secret note body", "4111111111111111", "987", "trash-secret" })
+    foreach (var secret in new[] { "hunter2", "JBSWY3DPEHPK3PXP", "secret note body", "4111111111111111", "cvc-sentinel-zq", "trash-secret" })
       Assert.DoesNotContain(secret, json, StringComparison.Ordinal);
 
     var login = list.Items.Single(i => i.Id == LoginId);

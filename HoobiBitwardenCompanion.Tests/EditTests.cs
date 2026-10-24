@@ -483,6 +483,9 @@ public class EditTests(AvaloniaSession session)
     var edit = window.GetVisualDescendants().OfType<ItemEditView>().Single();
     Assert.True(edit.IsEffectivelyVisible);
     Assert.Equal(item.Name, edit.FindControl<TextBox>("NameBox")!.Text);
+    var favouriteLabel = edit.FindControl<TextBlock>("FavoriteLabel")!;
+    Assert.Equal(14, favouriteLabel.FontSize);
+    Assert.Equal(Avalonia.Media.Color.Parse("#CBCCC6"), ((Avalonia.Media.ISolidColorBrush)favouriteLabel.Foreground!).Color);
     Assert.True(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveButton").IsEffectivelyVisible);
     var frame = window.CaptureRenderedFrame();
     Assert.NotNull(frame);
