@@ -16,8 +16,8 @@ internal static partial class SearchFocusGuard
   private static readonly TimeSpan ForegroundSettle = TimeSpan.FromMilliseconds(150);
   private static readonly Lock _startLock = new();
   private static bool _started;
+  private const string MainWindowClass = "WinUIDesktopWin32WindowClass";
   private static int _generation;
-  private static volatile nint _lastShownHwnd;
   private static long _lastForegroundChange;
 
   internal static void Start()
@@ -60,22 +60,58 @@ internal static partial class SearchFocusGuard
     {
       if (idObject != OBJID_WINDOW || idChild != 0 || hwnd == 0 || GetAncestor(hwnd, GA_ROOT) != hwnd)
         return;
-      if (!EnterKeySubmitService.IsCommandPaletteWindow(hwnd))
+      if (!IsMainWindowClass(hwnd) || !EnterKeySubmitService.IsCommandPaletteWindow(hwnd))
         return;
-      _lastShownHwnd = hwnd;
       StartGuard(hwnd);
     }
     catch { }
   }
 
   // The Windows Hello prompt belongs to Bitwarden Desktop and takes the foreground; when it closes, focus goes to the previous app.
-  internal static void RestoreFocus()
+  internal static void RestoreFocus() => _ = Task.Run(async () =>
   {
-    var hwnd = _lastShownHwnd;
-    var visible = hwnd != 0 && IsWindowVisible(hwnd) && !IsCloaked(hwnd);
-    DebugLogService.Log("FocusGuard", visible ? "Windows Hello finished; guarding search box focus" : "Windows Hello finished; Command Palette is not visible");
-    if (visible)
-      StartGuard(hwnd);
+    var started = Stopwatch.GetTimestamp();
+    while (Stopwatch.GetElapsedTime(started) < MaxGuardDuration)
+    {
+      var hwnd = FindVisibleMainWindow();
+      if (hwnd != 0)
+      {
+        DebugLogService.Log("FocusGuard", $"Windows Hello finished; guarding search box focus (window found after {Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0}ms)");
+        StartGuard(hwnd);
+        return;
+      }
+      await Task.Delay(CheckInterval);
+    }
+    DebugLogService.Log("FocusGuard", "Windows Hello finished; Command Palette did not become visible");
+  });
+
+  private static unsafe nint FindVisibleMainWindow()
+  {
+    nint found = 0;
+    EnumWindows(&FindMainWindowProc, (nint)(&found));
+    return found;
+  }
+
+  [UnmanagedCallersOnly]
+  private static unsafe int FindMainWindowProc(nint hwnd, nint lParam)
+  {
+    try
+    {
+      if (IsWindowVisible(hwnd) && !IsCloaked(hwnd) && IsMainWindowClass(hwnd) && EnterKeySubmitService.IsCommandPaletteWindow(hwnd))
+      {
+        *(nint*)lParam = hwnd;
+        return 0;
+      }
+    }
+    catch { }
+    return 1;
+  }
+
+  private static unsafe bool IsMainWindowClass(nint hwnd)
+  {
+    var buffer = stackalloc char[64];
+    var length = GetClassNameW(hwnd, buffer, 64);
+    return new ReadOnlySpan<char>(buffer, length).SequenceEqual(MainWindowClass);
   }
 
   private static void StartGuard(nint hwnd)
@@ -214,6 +250,13 @@ internal static partial class SearchFocusGuard
 
   [LibraryImport("user32.dll")]
   private static partial nint GetAncestor(nint hwnd, uint gaFlags);
+
+  [LibraryImport("user32.dll")]
+  private static unsafe partial int GetClassNameW(nint hWnd, char* lpClassName, int nMaxCount);
+
+  [LibraryImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static unsafe partial bool EnumWindows(delegate* unmanaged<nint, nint, int> lpEnumFunc, nint lParam);
 
   [LibraryImport("dwmapi.dll")]
   private static partial int DwmGetWindowAttribute(nint hwnd, uint dwAttribute, out int pvAttribute, int cbAttribute);
