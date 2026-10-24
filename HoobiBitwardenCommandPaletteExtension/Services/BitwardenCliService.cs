@@ -1396,7 +1396,8 @@ internal sealed partial class BitwardenCliService
           || item.Uris.Any(u => u.Uri.Contains(query, StringComparison.OrdinalIgnoreCase)),
       BitwardenItemType.Card =>
           (item.CardholderName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-          || (item.CardBrand?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false),
+          || (item.CardBrand?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
+          || (item.CardLast4?.Contains(query, StringComparison.Ordinal) ?? false),
       BitwardenItemType.Identity =>
           (item.IdentityFullName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
           || (item.IdentityEmail?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)

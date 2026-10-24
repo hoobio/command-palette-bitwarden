@@ -94,6 +94,13 @@ public class BitwardenItemDetailTests
   }
 
   [Fact]
+  public void Subtitle_Card_NoBrandWithNumber_ShowsLast4()
+  {
+    var item = new BitwardenItem { Type = BitwardenItemType.Card, CardNumber = ProtectedSecret.From("4111111111111234") };
+    Assert.Equal("Card ····1234", item.Subtitle);
+  }
+
+  [Fact]
   public void SshHost_CaseInsensitive()
   {
     var item = new BitwardenItem

@@ -8,6 +8,8 @@ You can also type anywhere in the Command Palette; matching vault items appear a
 
 Notes of items with master password re-prompt are not searched outside the grace period.
 
+Cards match on brand, cardholder name and the last 4 digits of the card number (as shown in the subtitle). The rest of the card number is not searched.
+
 ## Search Filters
 
 Use prefix syntax to narrow results. Filters can be combined freely.
