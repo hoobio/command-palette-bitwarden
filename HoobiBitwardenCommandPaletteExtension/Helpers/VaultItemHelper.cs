@@ -9,6 +9,7 @@ using Microsoft.CommandPalette.Extensions.Toolkit;
 using Windows.System;
 using Windows.UI.ViewManagement;
 using HoobiBitwardenCommandPaletteExtension.Commands;
+using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -68,6 +69,16 @@ internal static partial class VaultItemHelper
     var items = new List<CommandContextItem>();
     var id = item.Id;
     var reprompt = item.Reprompt == 1 ? service : null;
+
+    if (CompanionHost.Current is { } companion)
+    {
+      items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.ShowItem(id)) { Name = "Open in window", Result = CommandResult.Dismiss() }))
+      {
+        Title = "Open in window",
+        Icon = new IconInfo(""),
+        RequestedShortcut = Chord(VirtualKey.O, shift: true),
+      });
+    }
 
     switch (item.Type)
     {

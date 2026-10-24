@@ -52,6 +52,7 @@ internal sealed class BitwardenItem
   public BitwardenItemType Type { get; init; }
   public ProtectedSecret? Notes { get; init; }
   public DateTime RevisionDate { get; init; }
+  public DateTime? CreationDate { get; init; }
   public bool Favorite { get; init; }
   public string? FolderId { get; init; }
   public string? OrganizationId { get; init; }
@@ -87,6 +88,7 @@ internal sealed class BitwardenItem
 
   public string? SshPublicKey { get; init; }
   public string? SshFingerprint { get; init; }
+  public ProtectedSecret? SshPrivateKey { get; init; }
 
   public Dictionary<string, CustomField> CustomFields { get; init; } = [];
   public string? SshHost => CustomFields.TryGetValue("host", out var h) ? h.Value : null;
@@ -100,6 +102,7 @@ internal sealed class BitwardenItem
     TotpSecret?.Dispose();
     CardNumber?.Dispose();
     CardCode?.Dispose();
+    SshPrivateKey?.Dispose();
     foreach (var field in CustomFields.Values)
       field.Secret?.Dispose();
   }
