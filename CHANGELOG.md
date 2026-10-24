@@ -1,5 +1,65 @@
 # Changelog
 
+## [1.12.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.2...v1.12.0) (2026-10-24)
+
+
+### Features
+
+* add a companion window for vault items ([#220](https://github.com/hoobio/command-palette-bitwarden/issues/220)) ([6d09dc6](https://github.com/hoobio/command-palette-bitwarden/commit/6d09dc6fea49a522afdacaf8a1b4afa88e300c6a))
+* add a Rotate password command to login items ([6d09dc6](https://github.com/hoobio/command-palette-bitwarden/commit/6d09dc6fea49a522afdacaf8a1b4afa88e300c6a))
+* keep vault secrets and the session key encrypted in memory ([#213](https://github.com/hoobio/command-palette-bitwarden/issues/213)) ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* match card search on the last 4 digits of the card number ([#215](https://github.com/hoobio/command-palette-bitwarden/issues/215)) ([c1246e8](https://github.com/hoobio/command-palette-bitwarden/commit/c1246e829dc17a3a0d2e6deec80f58569d632098))
+* open notes, cards and identities in the companion window on Enter ([6d09dc6](https://github.com/hoobio/command-palette-bitwarden/commit/6d09dc6fea49a522afdacaf8a1b4afa88e300c6a))
+* sync the vault live from the server notifications hub ([#216](https://github.com/hoobio/command-palette-bitwarden/issues/216)) ([16f88cc](https://github.com/hoobio/command-palette-bitwarden/commit/16f88cc02657a75f913dd51347658ca3c6508daf))
+
+
+### Bug Fixes
+
+* delete cached icons on logout ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* detect Bitwarden cloud by exact host ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* drop vault refreshes that finish after the vault locks ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* hide live TOTP codes for reprompt-protected items ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* honour the otpauth algorithm for TOTP codes ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* keep Command Palette open during a Windows Hello prompt ([16f88cc](https://github.com/hoobio/command-palette-bitwarden/commit/16f88cc02657a75f913dd51347658ca3c6508daf))
+* keep search text and secrets out of the debug log ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* kill bw processes that time out during login or unlock ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* match the exact Bitwarden signing certificate subject ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* never overwrite the CLI data file after a failed read ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* open only http and https item URIs ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* recover the list when the post-login sync times out ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* refuse SVG icons that reference external resources ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* reject empty TOTP secrets ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* require the master password reprompt for fallback results ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* retry a live sync when bw sync fails ([16f88cc](https://github.com/hoobio/command-palette-bitwarden/commit/16f88cc02657a75f913dd51347658ca3c6508daf))
+* retry clearing the clipboard when another app holds it ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* show sync and lock commands when the vault list failed to load ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* stop a lock during a list rebuild from crashing the extension ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* stop an invalid RegEx URI match from breaking the vault list ([5ed3889](https://github.com/hoobio/command-palette-bitwarden/commit/5ed3889b7bbfc785281f25ceb5689a7b744c905a))
+* stop an older search from overwriting newer results ([16f88cc](https://github.com/hoobio/command-palette-bitwarden/commit/16f88cc02657a75f913dd51347658ca3c6508daf))
+* stop Enter double-submitting the login email field on PowerToys 0.101+ ([#212](https://github.com/hoobio/command-palette-bitwarden/issues/212)) ([5ed3889](https://github.com/hoobio/command-palette-bitwarden/commit/5ed3889b7bbfc785281f25ceb5689a7b744c905a))
+* stop search matching inside reprompt-protected notes ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* stop winget checks hanging the CLI install ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+* verify the biometric IPC pipe belongs to Bitwarden Desktop ([6168bef](https://github.com/hoobio/command-palette-bitwarden/commit/6168bef430db909f262a8760562ad52d4d815566))
+
+
+### Miscellaneous Chores
+
+* 🔧 enable Renovate and retire Dependabot version updates ([#217](https://github.com/hoobio/command-palette-bitwarden/issues/217)) ([59b72e3](https://github.com/hoobio/command-palette-bitwarden/commit/59b72e3a2ad275d740e3b717707463fac1e87e9f))
+* **deps:** pin dependencies ([#218](https://github.com/hoobio/command-palette-bitwarden/issues/218)) ([95e9a8b](https://github.com/hoobio/command-palette-bitwarden/commit/95e9a8badb3bd4ca4aaa32b7984ce0a39ddd7380))
+* guard local deploys against stopping only the extension process ([#214](https://github.com/hoobio/command-palette-bitwarden/issues/214)) ([5caa7b8](https://github.com/hoobio/command-palette-bitwarden/commit/5caa7b81727b4a17d06d33adb39f97f7ebcb223f))
+
+
+### Build System
+
+* **deps:** bump github/codeql-action from 4.37.3 to 4.37.6 ([#200](https://github.com/hoobio/command-palette-bitwarden/issues/200)) ([689832b](https://github.com/hoobio/command-palette-bitwarden/commit/689832bc8ab3dcc60012cbd268195805d6ab5d04))
+* **deps:** bump github/codeql-action from 4.37.6 to 4.37.8 ([#202](https://github.com/hoobio/command-palette-bitwarden/issues/202)) ([49589bf](https://github.com/hoobio/command-palette-bitwarden/commit/49589bf1ab48797cfa9d9e4d2a4a15f469c934a1))
+* **deps:** bump github/codeql-action from 4.37.8 to 4.38.0 ([#204](https://github.com/hoobio/command-palette-bitwarden/issues/204)) ([67eba89](https://github.com/hoobio/command-palette-bitwarden/commit/67eba894f2989797b1ef9c068ee33eabcc5bda6b))
+* **deps:** bump github/codeql-action from 4.38.0 to 4.38.1 ([#205](https://github.com/hoobio/command-palette-bitwarden/issues/205)) ([4714684](https://github.com/hoobio/command-palette-bitwarden/commit/47146849c2f57bed83acd2eac7498506b9d60f51))
+* **deps:** bump github/codeql-action from 4.38.1 to 4.38.2 ([#207](https://github.com/hoobio/command-palette-bitwarden/issues/207)) ([c2a9157](https://github.com/hoobio/command-palette-bitwarden/commit/c2a9157cb4ad444d3f41b436aa509e1d01f738c7))
+* **deps:** bump github/codeql-action from 4.38.2 to 4.39.0 ([#210](https://github.com/hoobio/command-palette-bitwarden/issues/210)) ([90f57c6](https://github.com/hoobio/command-palette-bitwarden/commit/90f57c62885ee133a83fde7e3dc8d20b47123604))
+* **deps:** bump hoobio/pipeline-tools from 2.3.1 to 2.3.2 ([#206](https://github.com/hoobio/command-palette-bitwarden/issues/206)) ([95836ad](https://github.com/hoobio/command-palette-bitwarden/commit/95836ad3e6a54ebf05ec7c06534d511766d6768e))
+* **deps:** bump hoobio/pipeline-tools from 2.3.2 to 2.4.0 ([#211](https://github.com/hoobio/command-palette-bitwarden/issues/211)) ([262ad9a](https://github.com/hoobio/command-palette-bitwarden/commit/262ad9a43ad9d655b2ee1440f9554394c1095e52))
+
 ## [1.11.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.1...v1.11.2) (2026-08-07)
 
 
