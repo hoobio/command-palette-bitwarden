@@ -1265,17 +1265,20 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  public async Task SyncVaultAsync()
+  public async Task<bool> SyncVaultAsync()
   {
     DebugLogService.Log("Sync", "SyncVaultAsync started");
-    await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
+    var synced = (await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.")).Contains("Syncing complete", StringComparison.OrdinalIgnoreCase);
+    if (!synced)
+      DebugLogService.Log("Sync", "SyncVaultAsync: bw sync did not report completion");
     if (!IsUnlocked)
     {
       DebugLogService.Log("Sync", "SyncVaultAsync: session lost during sync, skipping cache refresh");
-      return;
+      return false;
     }
     await RefreshCacheAsync();
     DebugLogService.Log("Sync", "SyncVaultAsync completed");
+    return synced;
   }
 
   public void TriggerBackgroundRefreshIfStale()
@@ -1563,7 +1566,8 @@ internal sealed partial class BitwardenCliService
         throw new InvalidOperationException("Session expired - vault is locked");
       }
 
-      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms)");
+      var syncError = args == "sync" && stderr.Length > 0 ? $", stderr: {stderr[..Math.Min(stderr.Length, 300)]}" : "";
+      DebugLogService.Log("CLI", $"RunCliAsync completed: bw {args} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms{syncError})");
       return fallbackStr;
     }
     catch (OperationCanceledException ex)

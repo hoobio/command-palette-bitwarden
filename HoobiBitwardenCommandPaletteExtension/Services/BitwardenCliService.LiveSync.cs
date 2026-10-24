@@ -10,7 +10,9 @@ internal sealed partial class BitwardenCliService
     private readonly Lock _liveSyncLock = new();
     private NotificationsService? _notifications;
     private Timer? _liveSyncTimer;
+    private const int MaxLiveSyncRetries = 3;
     private int _liveSyncRunning;
+    private int _liveSyncFailures;
 
     internal bool IsLiveSyncActive => _notifications != null;
 
@@ -58,7 +60,15 @@ internal sealed partial class BitwardenCliService
         try
         {
             DebugLogService.Log("LiveSync", "Vault changed on the server; syncing");
-            await SyncVaultAsync();
+            if (await SyncVaultAsync())
+                _liveSyncFailures = 0;
+            else if (Interlocked.Increment(ref _liveSyncFailures) <= MaxLiveSyncRetries)
+                QueueLiveSync();
+            else
+            {
+                DebugLogService.Log("LiveSync", $"Sync failed {MaxLiveSyncRetries + 1} times; waiting for the next change");
+                _liveSyncFailures = 0;
+            }
         }
         catch (Exception ex)
         {
