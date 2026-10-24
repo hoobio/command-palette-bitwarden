@@ -123,27 +123,35 @@ internal sealed partial class BitwardenCliService
       await _syncGate.WaitAsync();
       _syncGate.Release();
 
-      if (timedOut)
-        await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
-
       var savedId = id ?? (result?["id"]?.GetValue<string>() is { } created && Guid.TryParse(created, out _) ? created : null);
-      if (savedId is null)
+      if (savedId is null && !timedOut)
+        throw new VaultWriteException(VaultWriteError.Failed);
+
+      try
       {
         if (timedOut)
-          await RefreshCacheAsync();
-        throw new VaultWriteException(timedOut ? VaultWriteError.Unknown : VaultWriteError.Failed);
-      }
+          await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
+        if (savedId is null)
+          throw new VaultWriteException(VaultWriteError.Unknown);
 
-      var savedOutput = await RunCliAsync($"get item {savedId}", verbOnlyLog: true);
-      var saved = ParseObject(savedOutput);
-      if (gone ? saved is not null || !savedOutput.Contains("Not found", StringComparison.OrdinalIgnoreCase) : !verify(current, saved))
+        var savedOutput = await RunCliAsync($"get item {savedId}", verbOnlyLog: true);
+        var saved = ParseObject(savedOutput);
+        if (gone ? saved is not null || !savedOutput.Contains("Not found", StringComparison.OrdinalIgnoreCase) : !verify(current, saved))
+        {
+          DebugLogService.Log("CLI", "Write verification failed");
+          throw new VaultWriteException(timedOut ? VaultWriteError.Unknown : VaultWriteError.Failed);
+        }
+
+        UpdateCachedItem(savedId, saved, generation);
+        return saved ?? new JsonObject();
+      }
+      catch (Exception ex) when (id is null)
       {
-        DebugLogService.Log("CLI", "Write verification failed");
-        throw new VaultWriteException(timedOut ? VaultWriteError.Unknown : VaultWriteError.Failed);
+        DebugLogService.Log("CLI", $"Create outcome unknown: {ex.GetType().Name}");
+        try { await RefreshCacheAsync(); }
+        catch (Exception refresh) { DebugLogService.Log("CLI", $"Refresh after an unknown create failed: {refresh.GetType().Name}"); }
+        throw new VaultWriteException(VaultWriteError.Unknown);
       }
-
-      UpdateCachedItem(savedId, saved, generation);
-      return saved ?? new JsonObject();
     }
     finally
     {
