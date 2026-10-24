@@ -83,15 +83,15 @@
                                                 <Grid ColumnDefinitions="*,Auto" Margin="{StaticResource CardRowPadding}">
                                                     <StackPanel Spacing="2" VerticalAlignment="Center">
                                                         <TextBlock Classes="FieldLabel" Text="{Binding Label}" />
-                                                        <SelectableTextBlock
+                                                        <TextBlock
                                                             Text="{Binding DisplayValue}"
                                                             TextWrapping="Wrap"
                                                             FontFamily="{StaticResource MonoFontFamily}"
-                                                            IsVisible="{Binding IsSecret}" />
+                                                            IsVisible="{Binding IsSensitive}" />
                                                         <SelectableTextBlock
                                                             Text="{Binding DisplayValue}"
                                                             TextWrapping="Wrap"
-                                                            IsVisible="{Binding !IsSecret}" />
+                                                            IsVisible="{Binding !IsSensitive}" />
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                                                         <Panel Width="22" Height="22" Margin="0,0,6,0" IsVisible="{Binding IsTotp}">

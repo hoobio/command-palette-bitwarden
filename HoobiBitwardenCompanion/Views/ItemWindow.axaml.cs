@@ -1,4 +1,3 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -25,13 +24,6 @@ internal sealed partial class ItemWindow : Window
 
   internal ItemViewModel? ViewModel => DataContext as ItemViewModel;
 
-  protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-  {
-    base.OnPropertyChanged(change);
-    if (change.Property == TopmostProperty)
-      AlwaysOnTop = Topmost;
-  }
-
   // The title row takes the User role so a right-click reaches the context menu instead of the system menu.
   private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
   {
@@ -39,7 +31,7 @@ internal sealed partial class ItemWindow : Window
       BeginMoveDrag(e);
   }
 
-  private void OnAlwaysOnTopClick(object? sender, RoutedEventArgs e) => Topmost = !Topmost;
+  private void OnAlwaysOnTopClick(object? sender, RoutedEventArgs e) => Topmost = AlwaysOnTop = !Topmost;
 
   private void OnVerifyClick(object? sender, RoutedEventArgs e) => _ = PromptRepromptAsync();
 
