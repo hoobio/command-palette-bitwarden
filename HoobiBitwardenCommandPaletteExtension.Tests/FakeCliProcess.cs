@@ -50,10 +50,12 @@ internal sealed class FakeCliProcess : ICliProcess
   public bool Disposed { get; private set; }
   public bool HasExited { get; set; }
 
-  public Task WaitForExitAsync(CancellationToken cancellationToken = default)
+  public TaskCompletionSource? ExitSignal { get; set; }
+
+  public async Task WaitForExitAsync(CancellationToken cancellationToken = default)
   {
+    if (ExitSignal != null) await ExitSignal.Task.WaitAsync(cancellationToken);
     HasExited = true;
-    return Task.CompletedTask;
   }
   public void Kill(bool entireProcessTree = false) { Killed = true; HasExited = true; }
   public void Dispose() => Disposed = true;

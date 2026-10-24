@@ -34,10 +34,13 @@ HoobiBitwardenCommandPaletteExtension/
 ├── Services/
 │   ├── AccessTracker.cs               # Access history + recent item tracking
 │   ├── BitwardenCliService.cs         # CLI interaction, caching, search, sorting
+│   ├── BitwardenCliService.LiveSync.cs  # Starts/stops the notifications listener, debounced sync
 │   ├── BitwardenSettingsManager.cs    # Extension settings (toggles + choices)
 │   ├── ContextAwarenessService.cs     # Window detection, URL extraction, context scoring
 │   ├── FaviconService.cs              # Favicon download, disk/memory cache, icon refresh events
+│   ├── HubProtocol.cs                 # SignalR MessagePack framing, CLI state and hub URL parsing
 │   ├── ICliProcess.cs                 # Process abstraction for unit testing
+│   ├── NotificationsService.cs        # WebSocket connection to the notifications hub
 │   ├── ProtectedSecret.cs             # In-memory encryption for secrets (CryptProtectMemory)
 │   ├── SecureClipboardService.cs      # Clipboard security + auto-clear
 │   ├── SessionStore.cs               # Windows Credential Manager wrapper
@@ -74,6 +77,18 @@ User selects an action
 | `AccessTracker` | Static | Tracks item access times (persisted to JSON) and recent-copy state (5-min in-memory timer) |
 | `BitwardenSettingsManager` | Instance | Manages user-configurable settings via Command Palette settings UI |
 | `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; fires `IconCached` to refresh the list UI |
+| `NotificationsService` | Instance (while unlocked, Live Sync on) | Listens to the server's notifications hub and requests a sync when the vault changes |
+
+## Live Sync
+
+The Bitwarden apps get vault changes from the server's notifications hub, a SignalR endpoint at `{notificationsUrl}/hub`. The `bw` CLI does not listen to it. With the **Live Sync** setting on, `NotificationsService` connects to the hub while the vault is unlocked:
+
+- The hub URL comes from the CLI environment in `data.json`: an explicit notifications URL, else `{base}/notifications` for a self-hosted server, else `notifications.bitwarden.com` or `notifications.bitwarden.eu` for the cloud region.
+- The access token is read from `user_<id>_token_accessToken` for the active account and sent in the `Authorization` header, so it does not appear in proxy access logs. The token stays in memory as plaintext for the life of the connection, unlike the session key, and is not logged. The refresh token is not read.
+- The hub protocol is SignalR MessagePack, because Vaultwarden does not support the JSON protocol. The client sends a SignalR ping every 15 seconds.
+- Vault change types (cipher, folder, vault, settings and organization syncs) start a `bw sync` after a 2-second debounce. Sends, auth requests and logout notifications are ignored. All `bw sync` runs in the extension are serialised, because two concurrent runs can interleave their `data.json` writes.
+- When the token expires within 5 minutes, after a 401, or after a connection that stayed up for at least a minute drops, the client runs `bw sync` before it reconnects. `bw sync` refreshes the token in `data.json` and gets changes missed while offline. Reconnects use a jittered backoff up to 10 minutes.
+- Locking, logging out, changing the CLI configuration or turning the setting off stops the listener.
 
 ## In-Memory Secret Protection
 

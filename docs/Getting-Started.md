@@ -47,3 +47,4 @@ Select **Set Bitwarden Server** from the vault browser to pick a preset (**Bitwa
 - Pressing Enter in a password field submits the form. Pressing Enter in the login email field needs PowerToys 0.101 or later.
 - When the extension downloads the Bitwarden CLI, it accepts the file only if the Authenticode signature is valid (with a revocation check) and the signer is exactly `Bitwarden Inc.`.
 - For biometric unlock, the extension checks that the pipe server is a Bitwarden-signed binary and writes the result to the debug log. The extension drops unencrypted responses from the pipe.
+- During a Windows Hello prompt, Command Palette stays open, so you can type in the search box as soon as the prompt closes.

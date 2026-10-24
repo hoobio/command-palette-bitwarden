@@ -44,6 +44,7 @@ public class BitwardenSettingsManagerTests : IDisposable
         Assert.Equal("3", m.ContextItemLimit.Value);
         Assert.Equal("static", m.TotpTagStyle.Value);
         Assert.Equal("5", m.BackgroundRefresh.Value);
+        Assert.True(m.LiveSync.Value);
     }
 
     [Fact]

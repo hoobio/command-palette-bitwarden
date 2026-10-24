@@ -105,6 +105,14 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Options** | Never, 5 minutes, 15 minutes, 30 minutes, 1 hour |
 | **Description** | How often vault items are automatically refreshed in the background while the vault is open. The time since last sync is shown on the Sync Vault item. Set to **Never** to only sync manually. |
 
+### Live Sync
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | On |
+| **Description** | Syncs the vault within a few seconds of a change on another device, the same way the Bitwarden apps do. While the vault is unlocked, the extension keeps a WebSocket connection open to your server's notifications service. This works with Bitwarden cloud (US and EU), self-hosted Bitwarden and Vaultwarden. It signs in with the access token that the Bitwarden CLI stores in plaintext in its `data.json`. Turn it off to keep the extension from reading that token. See [Architecture](Architecture#live-sync) for details. |
+
 ### Auto-Clear Clipboard
 
 | | |

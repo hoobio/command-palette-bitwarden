@@ -142,6 +142,11 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             new("30 minutes", "30"),
             new("1 hour", "60"),
         ]);
+    public ToggleSetting LiveSync { get; } = new(
+        "liveSync",
+        "Live Sync",
+        "Sync the vault as soon as it changes on another device, like the Bitwarden apps do. While the vault is unlocked, keeps a connection open to your server's notifications service, signed in with the access token the Bitwarden CLI stores in data.json",
+        true);
     public ChoiceSetSetting ClipboardClearDelay { get; } = new(
         "clipboardClearDelay",
         "Clipboard Clear Delay",
@@ -214,6 +219,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         Settings.Add(TotpTagStyle);
         Settings.Add(OrganizationTagStyle);
         Settings.Add(BackgroundRefresh);
+        Settings.Add(LiveSync);
 
         Settings.Add(new SectionHeaderSetting("_section_context", "Context Awareness"));
         Settings.Add(ContextAwareness);
@@ -341,6 +347,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (TotpTagStyle.Key, TotpTagStyle.Value);
         yield return (OrganizationTagStyle.Key, OrganizationTagStyle.Value);
         yield return (BackgroundRefresh.Key, BackgroundRefresh.Value);
+        yield return (LiveSync.Key, (object?)LiveSync.Value);
         yield return (ContextAwareness.Key, ContextAwareness.Value);
         yield return (ShowContextTag.Key, ShowContextTag.Value);
         yield return (ContextItemLimit.Key, ContextItemLimit.Value);
