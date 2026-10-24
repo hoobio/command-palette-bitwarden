@@ -11,6 +11,7 @@ Each vault item type exposes different actions. Select an item to trigger the de
 | Copy Password | Copies the password | Secure (excluded + auto-clear) |
 | Copy TOTP Code | Copies the current TOTP code (if configured) | Secure |
 | Copy Custom Fields | One action per custom field | Secure for hidden fields, standard for others |
+| Rotate password | Opens the companion window and asks before it replaces the password with a generated one (see [Quick Rotate](Companion-Window#quick-rotate)) | Secure, after a confirmed save |
 
 ## Card Items
 
