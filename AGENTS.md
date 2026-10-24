@@ -10,7 +10,7 @@ VS Code task **Build, Kill & Deploy (Debug x64)** (`.vscode/tasks.json`) runs th
 
 ```powershell
 # 1. Stop PowerToys, Command Palette, and the extension host so files unlock
-@('PowerToys','Microsoft.CmdPal.UI','HoobiBitwardenCommandPaletteExtension') +
+@('PowerToys','Microsoft.CmdPal.UI','HoobiBitwardenCommandPaletteExtension','HoobiBitwardenCompanion') +
   ((Get-Process | Where-Object ProcessName -like 'Microsoft.CmdPal.Ext.*').ProcessName | Select-Object -Unique) |
   Select-Object -Unique | ForEach-Object { Get-Process $_ -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue }
 
@@ -25,6 +25,8 @@ Start-Process 'shell:AppsFolder\Microsoft.PowerToysWin32'
 ```
 
 **Never stop only the extension process.** Command Palette keeps its connection to a dead extension process and fails every call with `0x800706BA` (RPC server unavailable) until PowerToys restarts. A build or test that hits a locked `HoobiBitwardenCommandPaletteExtension.exe` uses the full cycle above, which stops and restarts PowerToys as well. Package install, update and uninstall do not need a restart, because Command Palette reloads the extension on those package events.
+
+The extension build also publishes the `HoobiBitwardenCompanion` window app (self-contained, same RID) into `$out\Companion\`, so the loose layout and the MSIX both contain it. The companion exits on its own when the extension process ends. It is in the stop list because a build that starts before it exits finds `Companion\*` locked.
 
 Debug builds install as a separate **Dev** channel (`Hoobi.BitwardenCommandPaletteExtension.Dev`, display name suffixed `(Dev)`) so they sit side by side with a production install. Test against the **(Dev)** entry in Command Palette.
 

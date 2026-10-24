@@ -25,7 +25,7 @@
     {
       "label": "Kill PowerToys",
       "type": "shell",
-      "command": "$names = @('PowerToys','Microsoft.CmdPal.UI','HoobiBitwardenCommandPaletteExtension') + ((Get-Process -ErrorAction SilentlyContinue | Where-Object ProcessName -like 'Microsoft.CmdPal.Ext.*' | Select-Object -ExpandProperty ProcessName -Unique)); foreach ($n in ($names | Select-Object -Unique)) { $procs = Get-Process $n -ErrorAction SilentlyContinue; if ($procs) { foreach ($p in $procs) { try { $p.CloseMainWindow() | Out-Null } catch {} }; Start-Sleep -Milliseconds 500; $procs | Where-Object { -not $_.HasExited } | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host \"Stopped: $n\" } }; exit 0",
+      "command": "$names = @('PowerToys','Microsoft.CmdPal.UI','HoobiBitwardenCommandPaletteExtension','HoobiBitwardenCompanion') + ((Get-Process -ErrorAction SilentlyContinue | Where-Object ProcessName -like 'Microsoft.CmdPal.Ext.*' | Select-Object -ExpandProperty ProcessName -Unique)); foreach ($n in ($names | Select-Object -Unique)) { $procs = Get-Process $n -ErrorAction SilentlyContinue; if ($procs) { foreach ($p in $procs) { try { $p.CloseMainWindow() | Out-Null } catch {} }; Start-Sleep -Milliseconds 500; $procs | Where-Object { -not $_.HasExited } | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host \"Stopped: $n\" } }; exit 0",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
