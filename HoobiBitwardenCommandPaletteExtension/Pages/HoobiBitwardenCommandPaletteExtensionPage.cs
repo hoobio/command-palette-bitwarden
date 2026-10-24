@@ -248,7 +248,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _initComplete = true;
         IsLoading = false;
         if (published) RaiseItemsChanged();
-        ReverifyIfSuspiciouslyEmpty(count);
+        if (published) ReverifyIfSuspiciouslyEmpty(count);
     }
 
     // A session that went stale without erroring lists zero items (the "No items found" symptom)
@@ -298,8 +298,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _autoBiometricTriggered = false;
                 HideBiometricStatus();
                 _emptyVaultReverifyArmed = true;
-                TryPublishVaultList(out var rebuiltCount);
-                ReverifyIfSuspiciouslyEmpty(rebuiltCount);
+                if (TryPublishVaultList(out var rebuiltCount))
+                    ReverifyIfSuspiciouslyEmpty(rebuiltCount);
                 break;
             case VaultStatus.Unlocked when _service.IsRefreshing:
                 IsLoading = true;
