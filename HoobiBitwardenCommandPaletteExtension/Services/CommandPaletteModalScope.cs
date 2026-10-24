@@ -12,20 +12,33 @@ internal static partial class CommandPaletteModalScope
   private const string HostProcessName = "Microsoft.CmdPal.UI";
   private const string MainWindowClass = "WinUIDesktopWin32WindowClass";
   private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(20);
-  private static readonly TimeSpan DialogWait = TimeSpan.FromSeconds(30);
+  private static readonly TimeSpan DialogWait = TimeSpan.FromSeconds(15);
   private static readonly TimeSpan DeactivationSettle = TimeSpan.FromSeconds(1);
+  private static readonly Lock Gate = new();
+  private static int _disableCount;
+  private static nint _disabledHwnd;
 
   internal static IDisposable Enter()
   {
-    var hwnd = FindVisibleMainWindow();
+    var hwnd = GetForegroundMainWindow();
     if (hwnd == 0)
     {
-      DebugLogService.Log("ModalScope", "Command Palette window not visible; not holding it open");
+      DebugLogService.Log("ModalScope", "Command Palette window is not the foreground window; not holding it open");
       return new Scope(0);
     }
 
-    EnableWindow(hwnd, false);
-    DebugLogService.Log("ModalScope", IsWindowEnabled(hwnd) ? "Could not disable the Command Palette window" : "Command Palette window disabled for the Windows Hello prompt");
+    lock (Gate)
+    {
+      if (_disableCount++ == 0)
+      {
+        _disabledHwnd = hwnd;
+        EnableWindow(hwnd, false);
+        DebugLogService.Log("ModalScope", IsWindowEnabled(hwnd) ? "Could not disable the Command Palette window" : "Command Palette window disabled for the Windows Hello prompt");
+      }
+
+      hwnd = _disabledHwnd;
+    }
+
     var scope = new Scope(hwnd);
     _ = Task.Run(() => ReenableAfterDialogTakesForegroundAsync(scope));
     return scope;
@@ -55,7 +68,13 @@ internal static partial class CommandPaletteModalScope
     {
       if (Hwnd == 0 || Interlocked.Exchange(ref _released, 1) != 0)
         return;
-      EnableWindow(Hwnd, true);
+      lock (Gate)
+      {
+        if (--_disableCount != 0)
+          return;
+        EnableWindow(Hwnd, true);
+      }
+
       DebugLogService.Log("ModalScope", $"Command Palette window re-enabled ({reason})");
     }
 
@@ -74,26 +93,17 @@ internal static partial class CommandPaletteModalScope
     }
   }
 
-  private static unsafe nint FindVisibleMainWindow()
+  private static nint GetForegroundMainWindow()
   {
-    nint found = 0;
-    EnumWindows(&FindMainWindowProc, (nint)(&found));
-    return found;
-  }
-
-  [UnmanagedCallersOnly]
-  private static unsafe int FindMainWindowProc(nint hwnd, nint lParam)
-  {
+    var hwnd = GetForegroundWindow();
     try
     {
-      if (IsWindowVisible(hwnd) && !IsCloaked(hwnd) && HasClass(hwnd, MainWindowClass) && IsHostProcess(hwnd))
-      {
-        *(nint*)lParam = hwnd;
-        return 0;
-      }
+      return hwnd != 0 && IsWindowVisible(hwnd) && !IsCloaked(hwnd) && HasClass(hwnd, MainWindowClass) && IsHostProcess(hwnd) ? hwnd : 0;
     }
-    catch { }
-    return 1;
+    catch
+    {
+      return 0;
+    }
   }
 
   private static unsafe bool HasClass(nint hwnd, string className)
@@ -135,10 +145,6 @@ internal static partial class CommandPaletteModalScope
 
   [LibraryImport("user32.dll")]
   private static unsafe partial int GetClassNameW(nint hWnd, char* lpClassName, int nMaxCount);
-
-  [LibraryImport("user32.dll")]
-  [return: MarshalAs(UnmanagedType.Bool)]
-  private static unsafe partial bool EnumWindows(delegate* unmanaged<nint, nint, int> lpEnumFunc, nint lParam);
 
   [LibraryImport("dwmapi.dll")]
   private static partial int DwmGetWindowAttribute(nint hwnd, uint dwAttribute, out int pvAttribute, int cbAttribute);
