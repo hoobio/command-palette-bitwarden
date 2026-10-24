@@ -1588,7 +1588,7 @@ internal sealed partial class BitwardenCliService
 
       var syncError = args == "sync" && stderr.Length > 0 ? $", stderr: {stderr[..Math.Min(stderr.Length, 300)]}" : "";
       DebugLogService.Log("CLI", $"RunCliAsync completed: bw {logged} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms{syncError})");
-      return fallbackStr;
+      return verbOnlyLog ? errorText : fallbackStr;
     }
     catch (OperationCanceledException ex)
     {

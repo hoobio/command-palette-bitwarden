@@ -90,9 +90,10 @@ internal sealed partial class BitwardenCliService
       }
 
       var output = await write(current);
-      if (output.Contains("out of date", StringComparison.OrdinalIgnoreCase))
+      var result = ParseObject(output);
+      if (result is null && output.Contains("out of date", StringComparison.OrdinalIgnoreCase))
         throw new VaultWriteException(VaultWriteError.Conflict);
-      var savedId = id ?? (ParseObject(output)?["id"]?.GetValue<string>() is { } created && Guid.TryParse(created, out _) ? created : throw new VaultWriteException(VaultWriteError.Failed));
+      var savedId = id ?? (result?["id"]?.GetValue<string>() is { } created && Guid.TryParse(created, out _) ? created : throw new VaultWriteException(VaultWriteError.Failed));
 
       // The write process holds the sync gate until it exits, and bw flushes data.json after printing its result.
       await _syncGate.WaitAsync();

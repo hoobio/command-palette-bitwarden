@@ -28,6 +28,8 @@ public class CompanionWriteOpsTests
     public List<string> Stdin { get; } = [];
     public Func<string, JsonObject, JsonObject>? OnWrite { get; set; }
     public string? WriteOutput { get; set; }
+    public string? WriteError { get; set; }
+    public string? EchoOutput { get; set; }
 
     public FakeCliProcess Create(ProcessStartInfo psi)
     {
@@ -46,7 +48,7 @@ public class CompanionWriteOpsTests
           return created;
         }
 
-        var process = new FakeCliProcess(WriteOutput ?? "");
+        var process = new FakeCliProcess(WriteOutput ?? EchoOutput ?? "", WriteError ?? "");
         _pending.Add((args, process, null));
         return process;
       }
@@ -62,7 +64,7 @@ public class CompanionWriteOpsTests
         var parts = args.Split(' ');
         var body = stdin.Length > 0 ? JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(stdin))) : null;
         var stamp = RevisionDate.AddMinutes(++_tick).ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
-        if (WriteOutput is not null)
+        if (WriteOutput is not null || WriteError is not null)
           continue;
         switch (parts[0])
         {
@@ -234,9 +236,25 @@ public class CompanionWriteOpsTests
     var id = NewId();
     var h = new Harness(Login(id));
     var editable = await h.Ops.GetEditableItemAsync(id);
-    h.Vault.WriteOutput = "The cipher you are updating is out of date. Please save your work, sync your vault, and try again.";
+    h.Vault.WriteError = "The cipher you are updating is out of date. Please save your work, sync your vault, and try again.";
 
     Assert.Equal(IpcErrors.Conflict, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.UpdateItem, Edited(editable), IpcJson.Default.EditableItem))).Code);
+    Assert.Equal(0, h.CacheUpdates);
+  }
+
+  [Fact]
+  public async Task Edit_WhoseSavedItemMentionsOutOfDate_StillSucceeds()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id));
+    var editable = await h.Ops.GetEditableItemAsync(id);
+    var echoed = Login(id);
+    echoed["notes"] = "this password is out of date";
+    h.Vault.EchoOutput = echoed.ToJsonString() + "\n";
+
+    await h.Handle(Ops.UpdateItem, Edited(editable) with { Notes = "this password is out of date" }, IpcJson.Default.EditableItem);
+
+    Assert.Equal(1, h.CacheUpdates);
   }
 
   [Fact]
