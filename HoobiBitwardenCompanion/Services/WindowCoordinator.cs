@@ -13,7 +13,7 @@ internal sealed class WindowCoordinator : IDisposable
   private MainWindow? _mainWindow;
 
   public WindowCoordinator(Stream input, Stream output) =>
-    Channel = new PipeChannel(input, output, HandleRequestAsync);
+    Channel = new PipeChannel(input, output, HandleRequestAsync, OnEvent);
 
   public PipeChannel Channel { get; }
 
@@ -21,8 +21,26 @@ internal sealed class WindowCoordinator : IDisposable
 
   public async Task RunAsync(Action onClosed)
   {
-    await Channel.RunAsync();
-    Dispatcher.UIThread.Post(onClosed);
+    try
+    {
+      await Channel.RunAsync();
+    }
+    finally
+    {
+      Dispatcher.UIThread.Post(onClosed);
+    }
+  }
+
+  private void OnEvent(string op, JsonElement? payload)
+  {
+    if (op == Ops.Locked)
+      Dispatcher.UIThread.Post(OnLocked);
+  }
+
+  internal void OnLocked()
+  {
+    foreach (var window in _itemWindows.Values)
+      window.ViewModel?.OnLocked();
   }
 
   private async Task<JsonElement?> HandleRequestAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
@@ -55,9 +73,9 @@ internal sealed class WindowCoordinator : IDisposable
         viewModel.Dispose();
       };
       _itemWindows[id] = window;
-      _ = viewModel.LoadAsync();
     }
 
+    _ = window.ViewModel?.LoadAsync();
     BringToFront(window);
     return window;
   }

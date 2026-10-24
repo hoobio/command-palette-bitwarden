@@ -44,6 +44,22 @@ public class PipeChannelTests
   }
 
   [Fact]
+  public async Task ThrowingEventHandler_IsLogged_AndTheLoopKeepsReading()
+  {
+    var logs = new List<string>();
+    using var pair = new ChannelPair(Echo);
+    using var companion = new PipeChannel(pair.CompanionInput, pair.CompanionOutput, Echo, (_, _) => throw new InvalidOperationException("boom"), logs.Add);
+    _ = Task.Run(companion.RunAsync, Ct);
+
+    await pair.Extension.SendEventAsync("evt");
+    var reply = await pair.Extension.RequestAsync("echo", IpcJson.ToElement(new ItemRequest("still"), IpcJson.Default.ItemRequest), Ct);
+
+    Assert.Equal("still", IpcJson.Read(reply, IpcJson.Default.ItemRequest).Id);
+    Assert.False(companion.IsClosed);
+    Assert.Equal(["Event evt handler failed: InvalidOperationException"], logs);
+  }
+
+  [Fact]
   public async Task Eof_EndsTheLoopAndFailsRequests()
   {
     var pair = new ChannelPair(Echo, Echo);

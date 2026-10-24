@@ -20,6 +20,8 @@ public class CompanionHostTests
       Assert.Equal(IpcErrors.Invalid, error.Code);
       Assert.Same(host.EnsureStarted(), host.EnsureStarted());
       using var companion = System.Diagnostics.Process.GetProcessById(host.Process!.Id);
+      host.NotifyLocked();
+      Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => host.RequestAsync("unknown", null))).Code);
 
       host.Dispose();
 
@@ -30,6 +32,28 @@ public class CompanionHostTests
     {
       host.Dispose();
     }
+  }
+
+  [Fact]
+  public void NotifyLocked_DoesNotStartTheCompanion()
+  {
+    using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()));
+    host.NotifyLocked();
+    Assert.Null(host.Process);
+  }
+
+  [Fact]
+  public async Task TimedOutRequest_MarksTheCompanionDead_AndItExits()
+  {
+    using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), requestTimeout: TimeSpan.FromMilliseconds(1));
+    host.EnsureStarted();
+    using var companion = System.Diagnostics.Process.GetProcessById(host.Process!.Id);
+
+    var ex = await Assert.ThrowsAsync<TimeoutException>(() => host.RequestAsync(Ops.ShowVault, null).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+
+    Assert.Equal($"{Ops.ShowVault} timed out", ex.Message);
+    Assert.Null(host.Process);
+    await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
   }
 
   [Fact]

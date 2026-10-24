@@ -4,10 +4,12 @@ using System.Text.Json;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
+[Collection("SessionStore")]
 public class CompanionOpsTests
 {
   private const string TotpSecret = "JBSWY3DPEHPK3PXP";
@@ -241,10 +243,10 @@ public class CompanionOpsTests
 
     Assert.False((await h.Ops.VerifyRepromptAsync(id, "wrong")).Verified);
     Assert.False((await h.Ops.VerifyRepromptAsync(id, "")).Verified);
-    Assert.False(h.Ops.HasGrant(id));
+    Assert.True(h.Ops.GetItem(id).RepromptRequired);
 
     Assert.True((await h.Ops.VerifyRepromptAsync(id, "correct")).Verified);
-    Assert.True(h.Ops.HasGrant(id));
+    Assert.True(RepromptPage.IsWithinGracePeriod(id));
     Assert.False(h.Ops.GetItem(id).RepromptRequired);
     Assert.Equal("hunter2", h.Ops.Reveal(id, ItemFields.Password));
     h.Ops.Copy(id, ItemFields.Username);
@@ -257,22 +259,67 @@ public class CompanionOpsTests
     var id = NewId();
     var h = new Harness(Login(id)) { ExpectedPassword = "never" };
     Assert.True((await h.Ops.VerifyRepromptAsync(id, "anything")).Verified);
-    Assert.False(h.Ops.HasGrant(id));
+    Assert.False(RepromptPage.IsWithinGracePeriod(id));
   }
 
   [Fact]
-  public async Task Grants_AreWipedWhenTheVaultLocks()
+  public async Task GraceZero_PromptsOnEveryOp_AndVerifyRunsTheWrappedOpOnce()
   {
     var id = NewId();
     var h = new Harness(Login(id, reprompt: 1));
-    await h.Ops.VerifyRepromptAsync(id, "correct");
+    var revision = h.Service.GetCachedItem(id)!.RevisionDate;
+    RepromptPage.GracePeriodSeconds = 0;
+    try
+    {
+      var verified = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password, revision), IpcJson.Default.FieldRequest));
+      Assert.Equal("hunter2", IpcJson.Read(verified.Result, IpcJson.Default.SecretResponse).Value);
+      Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.Reveal(id, ItemFields.Password))));
+      Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.Copy(id, ItemFields.Totp))));
+      Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.GetTotp(id))));
+      Assert.True(h.Ops.GetItem(id).RepromptRequired);
 
-    h.Ops.ClearGrantsIfLocked();
-    Assert.True(h.Ops.HasGrant(id));
+      var item = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.GetItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
+      Assert.NotEmpty(IpcJson.Read(item.Result, IpcJson.Default.ItemDto).Fields);
+
+      var otherId = NewId();
+      await Assert.ThrowsAsync<IpcException>(() => h.Ops.VerifyRepromptAsync(id, "correct", Ops.Reveal, IpcJson.ToElement(new FieldRequest(otherId, ItemFields.Password, revision), IpcJson.Default.FieldRequest)));
+      var nested = await Assert.ThrowsAsync<IpcException>(() => h.Ops.VerifyRepromptAsync(id, "correct", Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(id, "correct"), IpcJson.Default.RepromptRequest)));
+      Assert.Equal(IpcErrors.Invalid, nested.Code);
+    }
+    finally
+    {
+      RepromptPage.GracePeriodSeconds = 60;
+    }
+  }
+
+  [Fact]
+  public void StaleRevision_IsRejected()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id));
+    var stale = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    Assert.Equal(IpcErrors.Stale, Code(Assert.Throws<IpcException>(() => h.Ops.Reveal(id, ItemFields.Password, stale))));
+    Assert.Equal(IpcErrors.Stale, Code(Assert.Throws<IpcException>(() => h.Ops.Copy(id, ItemFields.Password, stale))));
+    Assert.Equal(IpcErrors.Stale, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, 0, stale))));
+    Assert.Equal("hunter2", h.Ops.Reveal(id, ItemFields.Password, h.Service.GetCachedItem(id)!.RevisionDate));
+    Assert.Empty(h.SecretCopies);
+    Assert.Empty(h.Opened);
+  }
+
+  [Fact]
+  public void Locked_IsRaisedOnlyWhenTheVaultIsLocked()
+  {
+    var h = new Harness(Login(NewId()));
+    var raised = 0;
+    h.Ops.Locked += () => raised++;
+
+    h.Ops.RaiseIfLocked();
+    Assert.Equal(0, raised);
 
     h.Service.ClearSession();
-    h.Ops.ClearGrantsIfLocked();
-    Assert.False(h.Ops.HasGrant(id));
+    h.Ops.RaiseIfLocked();
+    Assert.Equal(1, raised);
   }
 
   [Fact]
@@ -283,7 +330,7 @@ public class CompanionOpsTests
     var h = new Harness(item);
     item.Password!.Dispose();
 
-    var ex = await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password), IpcJson.Default.FieldRequest), TestContext.Current.CancellationToken));
+    var ex = await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password, item.RevisionDate), IpcJson.Default.FieldRequest), TestContext.Current.CancellationToken));
     Assert.Equal(IpcErrors.Locked, ex.Code);
   }
 
@@ -296,11 +343,12 @@ public class CompanionOpsTests
     var ct = TestContext.Current.CancellationToken;
 
     var item = IpcJson.Read(await pair.Client.RequestAsync(Ops.GetItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest), ct), IpcJson.Default.ItemDto);
-    var secret = IpcJson.Read(await pair.Client.RequestAsync(Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password), IpcJson.Default.FieldRequest), ct), IpcJson.Default.SecretResponse);
-    await pair.Client.RequestAsync(Ops.Copy, IpcJson.ToElement(new FieldRequest(id, ItemFields.Username), IpcJson.Default.FieldRequest), ct);
+    var secret = IpcJson.Read(await pair.Client.RequestAsync(Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password, item.RevisionDate), IpcJson.Default.FieldRequest), ct), IpcJson.Default.SecretResponse);
+    await pair.Client.RequestAsync(Ops.Copy, IpcJson.ToElement(new FieldRequest(id, ItemFields.Username, item.RevisionDate), IpcJson.Default.FieldRequest), ct);
     var totp = IpcJson.Read(await pair.Client.RequestAsync(Ops.GetTotp, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest), ct), IpcJson.Default.TotpResponse);
-    await pair.Client.RequestAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(id, 0), IpcJson.Default.UriRequest), ct);
+    await pair.Client.RequestAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(id, 0, item.RevisionDate), IpcJson.Default.UriRequest), ct);
     var verify = IpcJson.Read(await pair.Client.RequestAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(id, "x"), IpcJson.Default.RepromptRequest), ct), IpcJson.Default.RepromptResponse);
+    var stale = await Assert.ThrowsAsync<IpcException>(() => pair.Client.RequestAsync(Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password, item.RevisionDate.AddSeconds(-1)), IpcJson.Default.FieldRequest), ct));
     var unknown = await Assert.ThrowsAsync<IpcException>(() => pair.Client.RequestAsync("runBw", null, ct));
     var badPayload = await Assert.ThrowsAsync<IpcException>(() => pair.Client.RequestAsync(Ops.GetItem, null, ct));
 
@@ -310,6 +358,7 @@ public class CompanionOpsTests
     Assert.Equal(30, totp.Period);
     Assert.Single(h.Opened);
     Assert.True(verify.Verified);
+    Assert.Equal(IpcErrors.Stale, stale.Code);
     Assert.Equal(IpcErrors.Invalid, unknown.Code);
     Assert.Equal(IpcErrors.Invalid, badPayload.Code);
   }
@@ -366,6 +415,14 @@ public class CompanionOpsTests
     await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
   }
 
+  [Fact]
+  public async Task PipeChannel_UnansweredRequest_TimesOut()
+  {
+    using var pair = new ChannelPair(NeverAnswers, requestTimeout: TimeSpan.FromMilliseconds(200));
+    var ex = await Assert.ThrowsAsync<TimeoutException>(() => pair.Client.RequestAsync("never", null, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+    Assert.Equal("never timed out", ex.Message);
+  }
+
   private static async Task WaitForAsync(Func<bool> condition)
   {
     for (var i = 0; i < 200 && !condition(); i++)
@@ -375,13 +432,13 @@ public class CompanionOpsTests
 
   private sealed class ChannelPair : IDisposable
   {
-    public ChannelPair(IpcRequestHandler serverHandler, Action<string, JsonElement?>? clientEvents = null)
+    public ChannelPair(IpcRequestHandler serverHandler, Action<string, JsonElement?>? clientEvents = null, TimeSpan? requestTimeout = null)
     {
       var toServer = new AnonymousPipeServerStream(PipeDirection.Out);
       var fromServer = new AnonymousPipeServerStream(PipeDirection.In);
       var serverIn = new AnonymousPipeClientStream(PipeDirection.In, toServer.ClientSafePipeHandle);
       var serverOut = new AnonymousPipeClientStream(PipeDirection.Out, fromServer.ClientSafePipeHandle);
-      Client = new PipeChannel(fromServer, toServer, (_, _, _) => throw new IpcException(IpcErrors.Invalid), clientEvents);
+      Client = new PipeChannel(fromServer, toServer, (_, _, _) => throw new IpcException(IpcErrors.Invalid), clientEvents, requestTimeout: requestTimeout);
       Server = new PipeChannel(serverIn, serverOut, serverHandler);
       ClientLoop = Task.Run(Client.RunAsync);
       _ = Task.Run(Server.RunAsync);

@@ -16,6 +16,7 @@ internal static class Ops
   public const string VerifyReprompt = "verifyReprompt";
   public const string ShowItem = "showItem";
   public const string ShowVault = "showVault";
+  public const string Locked = "locked";
 }
 
 internal static class IpcErrors
@@ -25,6 +26,7 @@ internal static class IpcErrors
   public const string NotFound = "notFound";
   public const string Invalid = "invalid";
   public const string Failed = "failed";
+  public const string Stale = "stale";
 }
 
 internal static class MessageTypes
@@ -73,17 +75,17 @@ internal sealed record Envelope(long Id, string Type, string? Op = null, JsonEle
 
 internal sealed record ItemRequest(string Id);
 
-internal sealed record FieldRequest(string Id, string Field);
+internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDate);
 
-internal sealed record UriRequest(string Id, int Index);
+internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
-internal sealed record RepromptRequest(string Id, string Password);
+internal sealed record RepromptRequest(string Id, string Password, string? Op = null, JsonElement? Payload = null);
 
 internal sealed record SecretResponse(string Value);
 
 internal sealed record TotpResponse(string Code, int Remaining, int Period);
 
-internal sealed record RepromptResponse(bool Verified, int CooldownSeconds);
+internal sealed record RepromptResponse(bool Verified, int CooldownSeconds, JsonElement? Result = null);
 
 internal sealed record FieldDto(string Key, string Label, string Group, string? Value, bool IsSecret, bool CanOpen = false, bool IsMultiline = false);
 

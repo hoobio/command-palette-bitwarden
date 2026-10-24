@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -33,7 +32,6 @@ internal sealed partial class CompanionOps : IDisposable
   private readonly Action<ProtectedSecret> _copySecret;
   private readonly Action<string, bool> _copyText;
   private readonly Action<string> _openUrl;
-  private readonly ConcurrentDictionary<string, byte> _grants = new(StringComparer.OrdinalIgnoreCase);
 
   public CompanionOps(
     BitwardenCliService service,
@@ -47,48 +45,26 @@ internal sealed partial class CompanionOps : IDisposable
     _copySecret = copySecret ?? SecureClipboardService.CopySensitive;
     _copyText = copyText ?? CopyText;
     _openUrl = openUrl ?? OpenUrl;
-    _service.StatusChanged += ClearGrantsIfLocked;
-    _service.AutoLocked += ClearGrantsIfLocked;
-    _service.CliConfigChanged += ClearGrants;
+    _service.StatusChanged += RaiseIfLocked;
+    _service.AutoLocked += RaiseIfLocked;
   }
 
-  internal bool HasGrant(string id) => _grants.ContainsKey(id);
+  internal event Action? Locked;
 
-  internal void ClearGrants() => _grants.Clear();
-
-  internal void ClearGrantsIfLocked()
+  internal void RaiseIfLocked()
   {
     if (!_service.IsUnlocked)
-      ClearGrants();
+      Locked?.Invoke();
   }
 
   public async Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
   {
     try
     {
-      switch (op)
-      {
-        case Ops.GetItem:
-          return IpcJson.ToElement(GetItem(IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id), IpcJson.Default.ItemDto);
-        case Ops.Reveal:
-          var reveal = IpcJson.Read(payload, IpcJson.Default.FieldRequest);
-          return IpcJson.ToElement(new SecretResponse(Reveal(reveal.Id, reveal.Field)), IpcJson.Default.SecretResponse);
-        case Ops.Copy:
-          var copy = IpcJson.Read(payload, IpcJson.Default.FieldRequest);
-          Copy(copy.Id, copy.Field);
-          return null;
-        case Ops.GetTotp:
-          return IpcJson.ToElement(GetTotp(IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id), IpcJson.Default.TotpResponse);
-        case Ops.OpenUri:
-          var open = IpcJson.Read(payload, IpcJson.Default.UriRequest);
-          OpenUri(open.Id, open.Index);
-          return null;
-        case Ops.VerifyReprompt:
-          var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
-          return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password), IpcJson.Default.RepromptResponse);
-        default:
-          throw new IpcException(IpcErrors.Invalid);
-      }
+      if (op != Ops.VerifyReprompt)
+        return Dispatch(op, payload, null);
+      var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
+      return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password, verify.Op, verify.Payload), IpcJson.Default.RepromptResponse);
     }
     catch (ObjectDisposedException ex)
     {
@@ -101,10 +77,40 @@ internal sealed partial class CompanionOps : IDisposable
     }
   }
 
-  internal ItemDto GetItem(string? id)
+  private JsonElement? Dispatch(string op, JsonElement? payload, string? verifiedId)
+  {
+    switch (op)
+    {
+      case Ops.GetItem:
+        var get = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
+        return IpcJson.ToElement(GetItem(get.Id, IsVerified(get.Id, verifiedId)), IpcJson.Default.ItemDto);
+      case Ops.Reveal:
+        var reveal = IpcJson.Read(payload, IpcJson.Default.FieldRequest);
+        return IpcJson.ToElement(new SecretResponse(Reveal(reveal.Id, reveal.Field, reveal.RevisionDate, IsVerified(reveal.Id, verifiedId))), IpcJson.Default.SecretResponse);
+      case Ops.Copy:
+        var copy = IpcJson.Read(payload, IpcJson.Default.FieldRequest);
+        Copy(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
+        return null;
+      case Ops.GetTotp:
+        var totp = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
+        return IpcJson.ToElement(GetTotp(totp.Id, IsVerified(totp.Id, verifiedId)), IpcJson.Default.TotpResponse);
+      case Ops.OpenUri:
+        var open = IpcJson.Read(payload, IpcJson.Default.UriRequest);
+        OpenUri(open.Id, open.Index, open.RevisionDate, IsVerified(open.Id, verifiedId));
+        return null;
+      default:
+        throw new IpcException(IpcErrors.Invalid);
+    }
+  }
+
+  private static bool IsVerified(string? id, string? verifiedId) =>
+    verifiedId is not null
+    && (string.Equals(id, verifiedId, StringComparison.OrdinalIgnoreCase) ? true : throw new IpcException(IpcErrors.Invalid));
+
+  internal ItemDto GetItem(string? id, bool verified = false)
   {
     var item = Find(id);
-    var locked = item.Reprompt == 1 && !IsGranted(item.Id);
+    var locked = item.Reprompt == 1 && !verified && !RepromptPage.IsWithinGracePeriod(item.Id);
     return new ItemDto(
       item.Id,
       item.Name,
@@ -171,18 +177,18 @@ internal sealed partial class CompanionOps : IDisposable
     return fields;
   }
 
-  internal string Reveal(string? id, string? field)
+  internal string Reveal(string? id, string? field, DateTime? revisionDate = null, bool verified = false)
   {
-    var item = FindGranted(id);
+    var item = FindGranted(id, revisionDate, verified);
     if (field == ItemFields.Totp)
       throw new IpcException(IpcErrors.Invalid);
     var (secret, _) = Resolve(item, field);
     return (secret ?? throw new IpcException(IpcErrors.Invalid)).Reveal();
   }
 
-  internal void Copy(string? id, string? field)
+  internal void Copy(string? id, string? field, DateTime? revisionDate = null, bool verified = false)
   {
-    var item = FindGranted(id);
+    var item = FindGranted(id, revisionDate, verified);
     if (field == ItemFields.Totp)
     {
       _copyText(ComputeTotp(item).Code, true);
@@ -196,38 +202,36 @@ internal sealed partial class CompanionOps : IDisposable
       _copyText(text!, item.Reprompt == 1);
   }
 
-  internal TotpResponse GetTotp(string? id) => ComputeTotp(FindGranted(id));
+  internal TotpResponse GetTotp(string? id, bool verified = false) => ComputeTotp(FindGranted(id, null, verified));
 
-  internal void OpenUri(string? id, int index)
+  internal void OpenUri(string? id, int index, DateTime? revisionDate = null, bool verified = false)
   {
-    var item = FindGranted(id);
+    var item = FindGranted(id, revisionDate, verified);
     if (index < 0 || index >= item.Uris.Count)
       throw new IpcException(IpcErrors.Invalid);
     _openUrl(VaultItemHelper.ToSafeWebUrl(item.Uris[index].Uri) ?? throw new IpcException(IpcErrors.Invalid));
   }
 
-  internal async Task<RepromptResponse> VerifyRepromptAsync(string? id, string? password)
+  internal async Task<RepromptResponse> VerifyRepromptAsync(string? id, string? password, string? op = null, JsonElement? payload = null)
   {
     var item = Find(id);
-    if (item.Reprompt != 1)
-      return new RepromptResponse(true, 0);
-
-    var cooldown = RepromptPage.GetCooldownSecondsRemaining();
-    if (cooldown > 0 || string.IsNullOrEmpty(password))
-      return new RepromptResponse(false, cooldown);
-
-    if (!await _verifyPassword(password))
+    if (item.Reprompt == 1)
     {
-      RepromptPage.RecordFailure();
-      return new RepromptResponse(false, RepromptPage.GetCooldownSecondsRemaining());
+      var cooldown = RepromptPage.GetCooldownSecondsRemaining();
+      if (cooldown > 0 || string.IsNullOrEmpty(password))
+        return new RepromptResponse(false, cooldown);
+
+      if (!await _verifyPassword(password))
+      {
+        RepromptPage.RecordFailure();
+        return new RepromptResponse(false, RepromptPage.GetCooldownSecondsRemaining());
+      }
+
+      RepromptPage.RecordVerification(item.Id);
     }
 
-    _grants[item.Id] = 0;
-    RepromptPage.RecordVerification(item.Id);
-    return new RepromptResponse(true, 0);
+    return new RepromptResponse(true, 0, op is null ? null : Dispatch(op, payload, item.Id));
   }
-
-  private bool IsGranted(string id) => _grants.ContainsKey(id) || RepromptPage.IsWithinGracePeriod(id);
 
   private BitwardenItem Find(string? id)
   {
@@ -238,10 +242,12 @@ internal sealed partial class CompanionOps : IDisposable
     return _service.GetCachedItem(id) ?? throw new IpcException(IpcErrors.NotFound);
   }
 
-  private BitwardenItem FindGranted(string? id)
+  private BitwardenItem FindGranted(string? id, DateTime? revisionDate, bool verified)
   {
     var item = Find(id);
-    return item.Reprompt == 1 && !IsGranted(item.Id) ? throw new IpcException(IpcErrors.Reprompt) : item;
+    if (revisionDate is { } revision && revision != item.RevisionDate)
+      throw new IpcException(IpcErrors.Stale);
+    return item.Reprompt == 1 && !verified && !RepromptPage.IsWithinGracePeriod(item.Id) ? throw new IpcException(IpcErrors.Reprompt) : item;
   }
 
   internal static (ProtectedSecret? Secret, string? Text) Resolve(BitwardenItem item, string? field)
@@ -323,9 +329,7 @@ internal sealed partial class CompanionOps : IDisposable
 
   public void Dispose()
   {
-    _service.StatusChanged -= ClearGrantsIfLocked;
-    _service.AutoLocked -= ClearGrantsIfLocked;
-    _service.CliConfigChanged -= ClearGrants;
-    ClearGrants();
+    _service.StatusChanged -= RaiseIfLocked;
+    _service.AutoLocked -= RaiseIfLocked;
   }
 }
