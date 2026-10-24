@@ -17,6 +17,9 @@ internal static class Ops
   public const string ShowItem = "showItem";
   public const string ShowVault = "showVault";
   public const string Locked = "locked";
+  public const string ListItems = "listItems";
+  public const string ListFilters = "listFilters";
+  public const string VaultChanged = "vaultChanged";
 }
 
 internal static class IpcErrors
@@ -103,6 +106,30 @@ internal sealed record ItemDto(
   DateTime? PasswordRevisionDate,
   IReadOnlyList<FieldDto> Fields);
 
+internal sealed record ItemSummary(
+  string Id,
+  int Type,
+  string Name,
+  string? Subtext,
+  bool Favorite,
+  string? FolderId,
+  string? OrganizationId,
+  IReadOnlyList<string> CollectionIds,
+  bool Deleted,
+  bool Archived,
+  DateTime RevisionDate,
+  bool HasTotp,
+  bool Reprompt,
+  bool HasNotes,
+  IReadOnlyList<string> Hosts,
+  string? IconPath = null);
+
+internal sealed record ItemListResponse(IReadOnlyList<ItemSummary> Items);
+
+internal sealed record FilterRef(string Id, string Name, string? OrganizationId = null);
+
+internal sealed record FiltersResponse(IReadOnlyList<FilterRef> Folders, IReadOnlyList<FilterRef> Collections, IReadOnlyList<FilterRef> Organizations);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(Envelope))]
 [JsonSerializable(typeof(ItemRequest))]
@@ -113,6 +140,8 @@ internal sealed record ItemDto(
 [JsonSerializable(typeof(TotpResponse))]
 [JsonSerializable(typeof(RepromptResponse))]
 [JsonSerializable(typeof(ItemDto))]
+[JsonSerializable(typeof(ItemListResponse))]
+[JsonSerializable(typeof(FiltersResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);

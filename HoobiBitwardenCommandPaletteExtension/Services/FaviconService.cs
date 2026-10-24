@@ -199,6 +199,9 @@ internal static partial class FaviconService
         catch { return true; }
     }
 
+    internal static string? TryGetCachedIconPath(string host) =>
+        GetPositivePath(host) is var path && File.Exists(path) ? path : null;
+
     private static string GetPositivePath(string host) =>
         Path.Combine(CacheDir, $"{Sanitize(host)}.png");
 

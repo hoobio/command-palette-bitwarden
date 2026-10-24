@@ -32,39 +32,61 @@ internal sealed partial class CompanionOps : IDisposable
   private readonly Action<ProtectedSecret> _copySecret;
   private readonly Action<string, bool> _copyText;
   private readonly Action<string> _openUrl;
+  private readonly Func<Task<VaultExtras?>> _loadExtras;
+  private readonly SemaphoreSlim _extrasGate = new(1, 1);
+  private readonly Lock _extrasLock = new();
+  private VaultExtras? _extras;
+  private DateTime _extrasStamp;
 
   public CompanionOps(
     BitwardenCliService service,
     Func<string, Task<bool>>? verifyPassword = null,
     Action<ProtectedSecret>? copySecret = null,
     Action<string, bool>? copyText = null,
-    Action<string>? openUrl = null)
+    Action<string>? openUrl = null,
+    Func<Task<VaultExtras?>>? loadExtras = null)
   {
     _service = service;
     _verifyPassword = verifyPassword ?? service.VerifyMasterPasswordAsync;
     _copySecret = copySecret ?? SecureClipboardService.CopySensitive;
     _copyText = copyText ?? CopyText;
     _openUrl = openUrl ?? OpenUrl;
+    _loadExtras = loadExtras ?? service.LoadVaultExtrasAsync;
     _service.StatusChanged += RaiseIfLocked;
     _service.AutoLocked += RaiseIfLocked;
+    _service.CacheUpdated += RaiseVaultChanged;
   }
 
   internal event Action? Locked;
 
+  internal event Action? VaultChanged;
+
   internal void RaiseIfLocked()
   {
-    if (!_service.IsUnlocked)
-      Locked?.Invoke();
+    if (_service.IsUnlocked)
+      return;
+    ClearExtras();
+    Locked?.Invoke();
   }
+
+  internal void RaiseVaultChanged() => VaultChanged?.Invoke();
 
   public async Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
   {
     try
     {
-      if (op != Ops.VerifyReprompt)
-        return Dispatch(op, payload, null);
-      var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
-      return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password, verify.Op, verify.Payload), IpcJson.Default.RepromptResponse);
+      switch (op)
+      {
+        case Ops.VerifyReprompt:
+          var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
+          return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password, verify.Op, verify.Payload), IpcJson.Default.RepromptResponse);
+        case Ops.ListItems:
+          return IpcJson.ToElement(await ListItemsAsync(), IpcJson.Default.ItemListResponse);
+        case Ops.ListFilters:
+          return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
+        default:
+          return Dispatch(op, payload, null);
+      }
     }
     catch (ObjectDisposedException ex)
     {
@@ -124,6 +146,106 @@ internal sealed partial class CompanionOps : IDisposable
       item.RevisionDate,
       item.PasswordRevisionDate,
       locked ? [] : MapFields(item));
+  }
+
+  internal async Task<ItemListResponse> ListItemsAsync()
+  {
+    var extras = await EnsureExtrasAsync();
+    var showIcons = _service.ShowWebsiteIcons;
+    return new ItemListResponse(_service.GetCachedItems().Concat(extras.Items).Select(i => Summarize(i, showIcons)).ToList());
+  }
+
+  internal async Task<FiltersResponse> ListFiltersAsync()
+  {
+    var extras = await EnsureExtrasAsync();
+    return new FiltersResponse(
+      ToRefs(_service.GetFolders()),
+      extras.Collections.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).Select(c => new FilterRef(c.Id, c.Name, c.OrganizationId)).ToList(),
+      ToRefs(_service.GetOrganizations()));
+  }
+
+  private static List<FilterRef> ToRefs(Dictionary<string, string> names) =>
+    [.. names.OrderBy(n => n.Value, StringComparer.CurrentCultureIgnoreCase).Select(n => new FilterRef(n.Key, n.Value))];
+
+  internal static ItemSummary Summarize(BitwardenItem item, bool showIcons = false) => new(
+    item.Id,
+    (int)item.Type,
+    item.Name,
+    SubtextOf(item),
+    item.Favorite,
+    item.FolderId,
+    item.OrganizationId,
+    item.CollectionIds,
+    item.DeletedDate != null,
+    item.ArchivedDate != null,
+    item.RevisionDate,
+    item.HasTotp,
+    item.Reprompt == 1,
+    item.Notes != null,
+    item.Uris.Select(u => u.Host).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+    showIcons && item.Type == BitwardenItemType.Login && item.FirstHost is { Length: > 0 } host ? FaviconService.TryGetCachedIconPath(host) : null);
+
+  // The palette subtitle of a secure note is the first line of its notes, which are secret.
+  private static string? SubtextOf(BitwardenItem item) =>
+    item.Type == BitwardenItemType.SecureNote || string.IsNullOrEmpty(item.Subtitle) ? null : item.Subtitle;
+
+  private async Task<VaultExtras> EnsureExtrasAsync()
+  {
+    if (!_service.IsUnlocked)
+      throw new IpcException(IpcErrors.Locked);
+    await _extrasGate.WaitAsync();
+    try
+    {
+      var stamp = _service.LastRefresh;
+      lock (_extrasLock)
+      {
+        if (_extras is { } current && _extrasStamp == stamp)
+          return current;
+      }
+
+      VaultExtras? loaded;
+      try
+      {
+        loaded = await _loadExtras();
+      }
+      catch (Exception ex) when (ex is not IpcException && _service.IsUnlocked)
+      {
+        DebugLogService.Log("Companion", $"Trash, archive and collections load failed: {ex.GetType().Name}");
+        return new VaultExtras([], []);
+      }
+
+      lock (_extrasLock)
+      {
+        if (loaded is null || !_service.IsUnlocked)
+        {
+          loaded?.Items.ForEach(i => i.DisposeSecrets());
+          throw new IpcException(IpcErrors.Locked);
+        }
+
+        _extras = loaded;
+        _extrasStamp = stamp;
+        return loaded;
+      }
+    }
+    finally
+    {
+      _extrasGate.Release();
+    }
+  }
+
+  private void ClearExtras()
+  {
+    lock (_extrasLock)
+    {
+      _extras?.Items.ForEach(i => i.DisposeSecrets());
+      _extras = null;
+    }
+  }
+
+  private BitwardenItem? FindExtra(string id)
+  {
+    lock (_extrasLock)
+      return _extras?.Items.Find(i => string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
   }
 
   internal static List<FieldDto> MapFields(BitwardenItem item)
@@ -239,7 +361,7 @@ internal sealed partial class CompanionOps : IDisposable
       throw new IpcException(IpcErrors.Invalid);
     if (!_service.IsUnlocked)
       throw new IpcException(IpcErrors.Locked);
-    return _service.GetCachedItem(id) ?? throw new IpcException(IpcErrors.NotFound);
+    return _service.GetCachedItem(id) ?? FindExtra(id) ?? throw new IpcException(IpcErrors.NotFound);
   }
 
   private BitwardenItem FindGranted(string? id, DateTime? revisionDate, bool verified)
@@ -331,5 +453,7 @@ internal sealed partial class CompanionOps : IDisposable
   {
     _service.StatusChanged -= RaiseIfLocked;
     _service.AutoLocked -= RaiseIfLocked;
+    _service.CacheUpdated -= RaiseVaultChanged;
+    _extrasGate.Dispose();
   }
 }
