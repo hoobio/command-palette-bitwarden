@@ -3,12 +3,15 @@ using System.Globalization;
 using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCompanion.ViewModels;
 
 internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 {
+  private const string HistoryGroup = "Password history";
+
   private readonly PipeChannel _channel;
   private readonly DispatcherTimer _totpTimer;
   private FieldViewModel? _totpField;
@@ -25,9 +28,63 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _totpTimer.Tick += (_, _) => _ = TickAsync();
   }
 
-  public string Id { get; }
+  internal static ItemViewModel ForNew(PipeChannel channel, EditableItem item, FiltersResponse filters) => new(string.Empty, channel)
+  {
+    IsNew = true,
+    IsLoading = false,
+    ItemType = item.Type,
+    Title = item.Name.Length > 0 ? item.Name : "New item",
+    TypeGlyph = GlyphFor(item.Type),
+    Editor = new ItemEditorViewModel(item, filters),
+  };
+
+  public string Id { get; private set; }
 
   internal bool IsTotpRunning => _totpTimer.IsEnabled;
+
+  internal Func<string, string, string, string, Task<bool>>? Confirm { get; set; }
+
+  internal Action<EditableItem, FiltersResponse>? CloneRequested { get; set; }
+
+  internal event Action? Removed;
+
+  internal event Action? Saved;
+
+  internal event Action? Discarded;
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
+  public partial ItemEditorViewModel? Editor { get; private set; }
+
+  public bool IsEditing => Editor is not null;
+
+  public bool IsReadOnly => Editor is null && !IsNew;
+
+  public bool CanEdit => IsReadOnly && !IsDeleted && !IsArchived;
+
+  public bool CanRestore => IsReadOnly && (IsDeleted || IsArchived);
+
+  public bool CanDelete => IsReadOnly && !IsDeleted;
+
+  public bool CanDeletePermanently => IsReadOnly && IsDeleted;
+
+  public bool CanShowHistory => IsReadOnly && ItemType == 1;
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently), nameof(CanShowHistory))]
+  public partial bool IsNew { get; private set; }
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanDeletePermanently))]
+  public partial bool IsDeleted { get; private set; }
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore))]
+  public partial bool IsArchived { get; private set; }
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(CanShowHistory))]
+  public partial int ItemType { get; private set; }
 
   public ObservableCollection<FieldGroupViewModel> Groups { get; } = [];
 
@@ -54,6 +111,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public async Task LoadAsync()
   {
+    if (IsEditing || IsNew)
+      return;
     IsLoading = true;
     try
     {
@@ -86,6 +145,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     Groups.Clear();
     _totpField = null;
     _repromptRetry = null;
+    Editor = null;
     RepromptRequired = false;
     StatusMessage = null;
     ErrorMessage = Describe(new IpcException(IpcErrors.Locked));
@@ -98,6 +158,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     Title = item.Name;
     Subtitle = string.Join("  ·  ", new[] { item.FolderName, item.OrganizationName }.Where(s => !string.IsNullOrEmpty(s)));
     TypeGlyph = GlyphFor(item.Type);
+    ItemType = item.Type;
+    IsDeleted = item.Deleted;
+    IsArchived = item.Archived;
     RepromptRequired = item.RepromptRequired;
 
     Groups.Clear();
@@ -172,6 +235,150 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     return true;
   }
 
+  [RelayCommand]
+  private async Task EditAsync()
+  {
+    if (await LoadFiltersAsync() is { } filters)
+      await RunAsync(Ops.GetEditableItem, ItemPayload, reply => Editor = new ItemEditorViewModel(IpcJson.Read(reply, IpcJson.Default.EditableItem), filters));
+  }
+
+  [RelayCommand]
+  private async Task CloneAsync()
+  {
+    if (await LoadFiltersAsync() is { } filters)
+    {
+      await RunAsync(Ops.GetEditableItem, ItemPayload, reply =>
+      {
+        var source = IpcJson.Read(reply, IpcJson.Default.EditableItem);
+        CloneRequested?.Invoke(source with { Id = null, Name = source.Name + " - Clone", RevisionDate = null }, filters);
+      });
+    }
+  }
+
+  [RelayCommand]
+  private async Task SaveAsync()
+  {
+    if (Editor is not { } editor || editor.Validate() is not null)
+      return;
+    var item = editor.ToDto();
+    var (ok, reply, error) = await SendAsync(editor.Id is null ? Ops.CreateItem : Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem));
+    if (!ok)
+    {
+      await OnEditFailedAsync(error);
+      return;
+    }
+
+    var saved = IpcJson.Read(reply, IpcJson.Default.SavedResponse);
+    Id = saved.Id;
+    IsNew = false;
+    editor.MarkSaved(saved.Id, saved.RevisionDate);
+    if (item.OrganizationId is { } organization
+      && (organization != editor.OriginalOrganizationId || !item.CollectionIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(editor.OriginalCollectionIds)))
+    {
+      var request = new WriteRequest(saved.Id, saved.RevisionDate, OrganizationId: organization, CollectionIds: item.CollectionIds);
+      (ok, reply, error) = await SendAsync(editor.OriginalOrganizationId is null ? Ops.MoveItem : Ops.SetCollections, IpcJson.ToElement(request, IpcJson.Default.WriteRequest));
+      if (!ok)
+      {
+        await OnEditFailedAsync(error);
+        return;
+      }
+
+      editor.MarkMoved(IpcJson.Read(reply, IpcJson.Default.SavedResponse).RevisionDate);
+    }
+
+    Editor = null;
+    await LoadAsync();
+    StatusMessage = "Saved";
+    Saved?.Invoke();
+  }
+
+  private async Task OnEditFailedAsync(string? error)
+  {
+    if (error == IpcErrors.Failed)
+      ErrorMessage = "Bitwarden did not save the change.";
+    if (error != IpcErrors.Conflict)
+      return;
+    ErrorMessage = null;
+    if (await AskAsync("Item changed", "This item changed in the vault after you started editing.", "Reload", "Keep editing"))
+    {
+      Editor = null;
+      await LoadAsync();
+    }
+    else
+    {
+      ErrorMessage = Describe(new IpcException(IpcErrors.Conflict));
+    }
+  }
+
+  [RelayCommand]
+  private async Task CancelEditAsync() => await TryEndEditAsync();
+
+  internal async Task<bool> TryEndEditAsync()
+  {
+    if (Editor is { IsDirty: true } && !await AskAsync("Discard changes?", "Your changes to this item are not saved.", "Discard", "Keep editing"))
+      return false;
+    Editor = null;
+    ErrorMessage = null;
+    if (IsNew)
+      Discarded?.Invoke();
+    return true;
+  }
+
+  [RelayCommand]
+  private async Task DeleteAsync()
+  {
+    if (await AskAsync("Delete item", $"Move \"{Title}\" to the trash?", "Delete", "Cancel"))
+      await WriteStateAsync(Ops.DeleteItem);
+  }
+
+  [RelayCommand]
+  private async Task DeletePermanentlyAsync()
+  {
+    if (await AskAsync("Delete permanently", $"\"{Title}\" will be deleted permanently. You cannot undo this.", "Delete permanently", "Cancel"))
+      await WriteStateAsync(Ops.DeleteItem, permanent: true);
+  }
+
+  [RelayCommand]
+  private Task RestoreAsync() => WriteStateAsync(Ops.RestoreItem);
+
+  [RelayCommand]
+  private Task ArchiveAsync() => WriteStateAsync(Ops.ArchiveItem);
+
+  private async Task WriteStateAsync(string op, bool permanent = false)
+  {
+    var (ok, _, error) = await SendAsync(op, IpcJson.ToElement(new WriteRequest(Id, _revisionDate, permanent), IpcJson.Default.WriteRequest));
+    if (ok)
+      Removed?.Invoke();
+    else if (error == IpcErrors.Conflict)
+      await ReloadStaleAsync();
+  }
+
+  [RelayCommand]
+  private Task ShowPasswordHistoryAsync() => RunAsync(Ops.GetPasswordHistory, ItemPayload, reply =>
+  {
+    var history = IpcJson.Read(reply, IpcJson.Default.PasswordHistoryResponse);
+    var existing = Groups.FirstOrDefault(g => g.Name == HistoryGroup);
+    if (existing is not null)
+      Groups.Remove(existing);
+    if (history.LastUsed.Count == 0)
+    {
+      StatusMessage = "This item has no password history.";
+      return;
+    }
+
+    Groups.Add(new FieldGroupViewModel(HistoryGroup, [.. history.LastUsed.Select((used, i) => new FieldViewModel(this, new FieldDto(
+      ItemFields.HistoryPrefix + i.ToString(CultureInfo.InvariantCulture), used.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), HistoryGroup, FieldViewModel.Mask, false)))]));
+  });
+
+  private async Task<FiltersResponse?> LoadFiltersAsync()
+  {
+    var (ok, reply, _) = await SendAsync(Ops.ListFilters, null);
+    return ok ? IpcJson.Read(reply, IpcJson.Default.FiltersResponse) : null;
+  }
+
+  private Task<bool> AskAsync(string title, string message, string primary, string close) =>
+    Confirm?.Invoke(title, message, primary, close) ?? Task.FromResult(false);
+
   private async Task RunAsync(string op, JsonElement payload, Action<JsonElement?> onSuccess)
   {
     var (ok, reply, error) = await SendAsync(op, payload);
@@ -238,7 +445,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
   }
 
-  private async Task<(bool Ok, JsonElement? Reply, string? Error)> SendAsync(string op, JsonElement payload)
+  private async Task<(bool Ok, JsonElement? Reply, string? Error)> SendAsync(string op, JsonElement? payload)
   {
     try
     {
@@ -267,7 +474,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IpcException { Code: IpcErrors.NotFound } => "This item is no longer in the vault.",
     IpcException { Code: IpcErrors.Invalid } => "The request was not valid.",
     IpcException { Code: IpcErrors.Stale } => "This item changed in the vault. The window shows the new version.",
-    IOException => "The connection to Command Palette was lost.",
+    IpcException { Code: IpcErrors.Conflict } => "This item changed in the vault. Cancel and edit again to apply your changes.",    IOException => "The connection to Command Palette was lost.",
     TimeoutException => "Command Palette did not respond.",
     _ => "Something went wrong.",
   };
@@ -286,5 +493,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     _disposed = true;
     _totpTimer.Stop();
+    Editor = null;
   }
 }

@@ -53,4 +53,10 @@ internal sealed partial class MainWindow : Window
   }
 
   private void OnItemDoubleTapped(object? sender, TappedEventArgs e) => ViewModel?.OpenSelectedCommand.Execute(null);
+
+  protected override void OnClosing(WindowClosingEventArgs e)
+  {
+    base.OnClosing(e);
+    ItemWindow.GuardUnsavedEdits(this, ViewModel?.Detail, e);
+  }
 }

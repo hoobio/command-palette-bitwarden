@@ -74,9 +74,12 @@ internal sealed class WindowCoordinator : IDisposable
     {
       var viewModel = new ItemViewModel(id, Channel);
       window = new ItemWindow(viewModel);
+      Action removed = window.Close;
+      viewModel.Removed += removed;
       window.Closed += (_, _) =>
       {
         _itemWindows.Remove(id);
+        viewModel.Removed -= removed;
         viewModel.Dispose();
       };
       _itemWindows[id] = window;
