@@ -128,15 +128,6 @@ public class ItemWindowTests(AvaloniaSession session)
   });
 
   [Fact]
-  public Task MainWindow_KeepsMinimiseAndMaximise() => session.RunAsync(() =>
-  {
-    var window = new MainWindow();
-    Assert.True(window.CanMinimize);
-    Assert.True(window.CanMaximize);
-    Assert.Same(window.FindResource("HoobiWindowDecorations"), window.WindowDecorationsTheme);
-  });
-
-  [Fact]
   public Task ItemViewModel_LoadsRevealsCopiesOpensAndTicksTotp() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();
@@ -369,11 +360,6 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.Equal(IpcErrors.Invalid, invalid.Code);
     var unknown = await Assert.ThrowsAsync<IpcException>(() => pair.Extension.RequestAsync("getItem", null, TestContext.Current.CancellationToken));
     Assert.Equal(IpcErrors.Invalid, unknown.Code);
-
-    await pair.Extension.RequestAsync(Ops.ShowVault, null, TestContext.Current.CancellationToken);
-    var vault = coordinator.ShowVault();
-    Assert.True(vault.IsVisible);
-    vault.Close();
 
     window.Close();
     Assert.Empty(coordinator.ItemWindows);

@@ -20,7 +20,7 @@ public class CompanionWriteOpsTests
 
   private sealed class FakeVault
   {
-    private readonly List<(string Args, FakeCliProcess Process, string? Id)> _pending = [];
+    private readonly List<(string Args, FakeCliProcess Process)> _pending = [];
     private int _tick;
 
     public Dictionary<string, JsonObject> Items { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -49,23 +49,16 @@ public class CompanionWriteOpsTests
         }
         if (args.StartsWith("get item ", StringComparison.Ordinal))
           return new FakeCliProcess(Items.TryGetValue(args[9..], out var item) ? item.ToJsonString() + "\n" : "Not found.\n");
-        if (args == "create item")
-        {
-          var id = Guid.NewGuid().ToString();
-          var created = new FakeCliProcess(WriteOutput ?? $"{{\"id\":\"{id}\"}}\n");
-          _pending.Add((args, created, id));
-          return created;
-        }
 
         var process = new FakeCliProcess(WriteOutput ?? EchoOutput ?? "", WriteError ?? "");
-        _pending.Add((args, process, null));
+        _pending.Add((args, process));
         return process;
       }
     }
 
     private void Flush()
     {
-      foreach (var (args, process, createdId) in _pending)
+      foreach (var (args, process) in _pending)
       {
         var stdin = process.GetStdinContent();
         if (stdin.Length > 0)
@@ -77,12 +70,6 @@ public class CompanionWriteOpsTests
           continue;
         switch (parts[0])
         {
-          case "create":
-            var created = (JsonObject)body!;
-            created["id"] = createdId;
-            created["revisionDate"] = stamp;
-            Items[createdId!] = OnWrite?.Invoke(args, created) ?? created;
-            break;
           case "edit" when parts[1] == "item":
             var edited = (JsonObject)body!;
             edited["revisionDate"] = stamp;
@@ -103,9 +90,6 @@ public class CompanionWriteOpsTests
             break;
           case "archive":
             Items[parts[2]]["archivedDate"] = stamp;
-            break;
-          case "restore":
-            Items[parts[2]][Items[parts[2]]["deletedDate"] is null ? "archivedDate" : "deletedDate"] = null;
             break;
         }
 
@@ -136,7 +120,7 @@ public class CompanionWriteOpsTests
       Service.SetSession("session-key");
       Service.CacheUpdated += () => CacheUpdates++;
       Ops = new CompanionOps(Service, verifyPassword: p => Task.FromResult(p == "correct"), copyText: (t, s) => TextCopies.Add((t, s)),
-        loadExtras: () => Task.FromResult<VaultExtras?>(new VaultExtras([], [])));
+        loadCollections: () => Task.FromResult<List<VaultCollection>?>([]));
     }
 
     public Task<JsonElement?> Handle<T>(string op, T payload, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> info) =>
@@ -172,18 +156,24 @@ public class CompanionWriteOpsTests
   private static string NewId() => Guid.NewGuid().ToString();
 
   [Fact]
-  public async Task Create_SendsBase64JsonOnStdin_AndNeverInTheArguments()
+  public async Task Edit_SendsBase64JsonOnStdin_AndNeverInTheArguments()
   {
-    var h = new Harness();
-    var item = new EditableItem(null, 1, "New login", null, null, [], false, false, "a note", null, [new CustomFieldEdit("api", "field-secret", 1)],
-      Login: new LoginEdit("jane", "brand-new-secret", "JBSWY3DPEHPK3PXP", [new UriEdit("example.com")]));
+    var id = NewId();
+    var h = new Harness(Login(id));
+    var editable = await h.Ops.GetEditableItemAsync(id);
+    var item = editable with
+    {
+      Name = "New login",
+      Fields = [new CustomFieldEdit("api", "field-secret", 1)],
+      Login = editable.Login! with { Password = "brand-new-secret", Totp = "JBSWY3DPEHPK3PXP" },
+    };
 
-    var saved = IpcJson.Read(await h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem), IpcJson.Default.SavedResponse);
+    IpcJson.Read(await h.Handle(Ops.UpdateItem, item, IpcJson.Default.EditableItem), IpcJson.Default.SavedResponse);
 
-    var create = Assert.Single(h.Vault.Started, p => p.Arguments.StartsWith("create", StringComparison.Ordinal));
-    Assert.Equal("create item", create.Arguments);
-    Assert.Empty(create.ArgumentList);
-    Assert.True(create.RedirectStandardInput);
+    var edit = Assert.Single(h.Vault.Started, p => p.Arguments.StartsWith("edit", StringComparison.Ordinal));
+    Assert.Equal($"edit item {id}", edit.Arguments);
+    Assert.Empty(edit.ArgumentList);
+    Assert.True(edit.RedirectStandardInput);
     foreach (var psi in h.Vault.Started)
     {
       foreach (var secret in new[] { "brand-new-secret", "field-secret", "JBSWY3DPEHPK3PXP", "{", "New login" })
@@ -193,8 +183,7 @@ public class CompanionWriteOpsTests
     var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Vault.Stdin))))!;
     Assert.Equal("New login", sent["name"]!.GetValue<string>());
     Assert.Equal("brand-new-secret", sent["login"]!["password"]!.GetValue<string>());
-    Assert.Equal(saved.Id, h.Service.GetCachedItem(saved.Id)!.Id);
-    Assert.Equal(1, h.CacheUpdates);
+    Assert.Equal("New login", h.Service.GetCachedItem(id)!.Name);
   }
 
   [Fact]
@@ -386,10 +375,10 @@ public class CompanionWriteOpsTests
     await Invalid(() => h.Handle(Ops.UpdateItem, editable with { Id = "not-a-guid" }, IpcJson.Default.EditableItem));
     await Invalid(() => h.Handle(Ops.UpdateItem, editable with { FolderId = "../x" }, IpcJson.Default.EditableItem));
     await Invalid(() => h.Handle(Ops.UpdateItem, editable with { RevisionDate = null }, IpcJson.Default.EditableItem));
-    await Invalid(() => h.Handle(Ops.CreateItem, editable with { Name = " " }, IpcJson.Default.EditableItem));
+    await Invalid(() => h.Handle(Ops.UpdateItem, editable with { Name = " " }, IpcJson.Default.EditableItem));
     await Invalid(() => h.Handle(Ops.GetEditableItem, new ItemRequest("x"), IpcJson.Default.ItemRequest));
     await Invalid(() => h.Handle(Ops.GetPasswordHistory, new ItemRequest("x; rm"), IpcJson.Default.ItemRequest));
-    foreach (var op in new[] { Ops.DeleteItem, Ops.RestoreItem, Ops.ArchiveItem, Ops.MoveItem, Ops.SetCollections })
+    foreach (var op in new[] { Ops.DeleteItem, Ops.ArchiveItem, Ops.MoveItem, Ops.SetCollections })
       await Invalid(() => h.Handle(op, new WriteRequest("--permanent", RevisionDate, OrganizationId: OrgId, CollectionIds: [CollectionId]), IpcJson.Default.WriteRequest));
     await Invalid(() => h.Handle(Ops.MoveItem, new WriteRequest(id, RevisionDate, OrganizationId: "org", CollectionIds: [CollectionId]), IpcJson.Default.WriteRequest));
     await Invalid(() => h.Handle(Ops.MoveItem, new WriteRequest(id, RevisionDate, OrganizationId: OrgId, CollectionIds: ["c1"]), IpcJson.Default.WriteRequest));
@@ -455,36 +444,34 @@ public class CompanionWriteOpsTests
   }
 
   [Fact]
-  public async Task DeleteRestoreArchiveMoveAndCollections_VerifyStateAndUpdateTheCache()
+  public async Task DeleteArchiveMoveAndCollections_VerifyStateAndUpdateTheCache()
   {
     var id = NewId();
-    var h = new Harness(Login(id));
+    var trashed = NewId();
+    var h = new Harness(Login(id), Login(trashed));
     async Task<SavedResponse?> Write(string op, WriteRequest request) =>
       await h.Handle(op, request, IpcJson.Default.WriteRequest) is { } reply ? IpcJson.Read(reply, IpcJson.Default.SavedResponse) : null;
 
-    var deleted = await Write(Ops.DeleteItem, new WriteRequest(id, RevisionDate));
-    Assert.Null(h.Service.GetCachedItem(id));
-    Assert.NotNull(h.Vault.Items[id]["deletedDate"]);
-    var restored = await Write(Ops.RestoreItem, new WriteRequest(id, deleted!.RevisionDate));
-    Assert.Equal(restored!.RevisionDate, h.Ops.GetItem(id).RevisionDate);
-    Assert.Equal(IpcErrors.Conflict, (await Assert.ThrowsAsync<IpcException>(() => Write(Ops.ArchiveItem, new WriteRequest(id, deleted.RevisionDate)))).Code);
-    var archived = await Write(Ops.ArchiveItem, new WriteRequest(id, restored.RevisionDate));
-    Assert.Null(h.Service.GetCachedItem(id));
-    var unarchived = await Write(Ops.RestoreItem, new WriteRequest(id, archived!.RevisionDate));
-    Assert.Null(h.Vault.Items[id]["archivedDate"]);
+    await Write(Ops.DeleteItem, new WriteRequest(trashed, RevisionDate));
+    Assert.Null(h.Service.GetCachedItem(trashed));
+    Assert.NotNull(h.Vault.Items[trashed]["deletedDate"]);
 
-    var moved = await Write(Ops.MoveItem, new WriteRequest(id, unarchived!.RevisionDate, OrganizationId: OrgId, CollectionIds: [CollectionId]));
+    var moved = await Write(Ops.MoveItem, new WriteRequest(id, RevisionDate, OrganizationId: OrgId, CollectionIds: [CollectionId]));
     Assert.Equal(OrgId, h.Service.GetCachedItem(id)!.OrganizationId);
     var other = NewId();
-    await Write(Ops.SetCollections, new WriteRequest(id, moved!.RevisionDate, CollectionIds: [CollectionId, other]));
+    var collected = await Write(Ops.SetCollections, new WriteRequest(id, moved!.RevisionDate, CollectionIds: [CollectionId, other]));
     Assert.Equal([CollectionId, other], h.Service.GetCachedItem(id)!.CollectionIds);
 
-    await Write(Ops.DeleteItem, new WriteRequest(id, h.Ops.GetItem(id).RevisionDate, Permanent: true));
-    Assert.False(h.Vault.Items.ContainsKey(id));
+    Assert.Equal(IpcErrors.Conflict, (await Assert.ThrowsAsync<IpcException>(() => Write(Ops.ArchiveItem, new WriteRequest(id, moved.RevisionDate)))).Code);
+    var archived = await Write(Ops.ArchiveItem, new WriteRequest(id, collected!.RevisionDate));
     Assert.Null(h.Service.GetCachedItem(id));
+    Assert.NotNull(h.Vault.Items[id]["archivedDate"]);
+
+    await Write(Ops.DeleteItem, new WriteRequest(id, archived!.RevisionDate, Permanent: true));
+    Assert.False(h.Vault.Items.ContainsKey(id));
     Assert.Contains(h.Vault.Started, p => p.Arguments == $"delete item {id} --permanent");
-    Assert.Equal(IpcErrors.NotFound, (await Assert.ThrowsAsync<IpcException>(() => Write(Ops.RestoreItem, new WriteRequest(id, RevisionDate)))).Code);
-    Assert.True(h.Service.WriteVersion >= 7);
+    Assert.Equal(IpcErrors.NotFound, (await Assert.ThrowsAsync<IpcException>(() => Write(Ops.DeleteItem, new WriteRequest(id, RevisionDate)))).Code);
+    Assert.True(h.Service.WriteVersion >= 5);
   }
 
   [Fact]
@@ -495,8 +482,8 @@ public class CompanionWriteOpsTests
     h.Vault.WriteOutput = "Premium required.";
 
     Assert.Equal(IpcErrors.Failed, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.ArchiveItem, new WriteRequest(id, RevisionDate), IpcJson.Default.WriteRequest))).Code);
-    Assert.Equal(IpcErrors.Failed, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem,
-      new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem))).Code);
+    Assert.Equal(IpcErrors.Failed, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.UpdateItem,
+      Edited(CompanionOps.ToEditable(Login(id))), IpcJson.Default.EditableItem))).Code);
   }
 
   [Fact]
@@ -507,8 +494,8 @@ public class CompanionWriteOpsTests
     h.Service.ClearSession();
 
     Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.DeleteItem, new WriteRequest(id, RevisionDate), IpcJson.Default.WriteRequest))).Code);
-    Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem,
-      new EditableItem(null, 2, "Note", null, null, [], false, false, null, null, []), IpcJson.Default.EditableItem))).Code);
+    Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.UpdateItem,
+      CompanionOps.ToEditable(Login(id)), IpcJson.Default.EditableItem))).Code);
   }
 
   [Theory]
@@ -525,7 +512,7 @@ public class CompanionWriteOpsTests
       Card: type == 3 ? new CardEdit("Jane", "Visa", "4111", "04", "2030", "123") : null,
       Identity: type == 4 ? new IdentityEdit("Ms", "Jane", "Q", "Doe", "1 Road", "Flat 2", "Floor 3", "Leeds", "Yorks", "LS1", "GB", "Acme", "j@x", "01", "AB123", "jdoe", "P1", "L1") : null,
       SshKey: type == 5 ? new SshKeyEdit("PRIVATE", "ssh-ed25519 AAAA", "SHA256:x") : null);
-    var node = CompanionOps.NewItemJson(type);
+    var node = new JsonObject { ["type"] = type };
     CompanionOps.Apply(node, item);
     node["revisionDate"] = Revision;
 
@@ -536,79 +523,15 @@ public class CompanionWriteOpsTests
   }
 
   [Fact]
-  public async Task Create_InAnOrganisation_IsOneCreateCarryingTheOwnerAndCollections()
-  {
-    var h = new Harness();
-    var item = new EditableItem(null, 2, "Org note", null, OrgId, [CollectionId], false, false, "n", null, []);
-
-    var saved = IpcJson.Read(await h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem), IpcJson.Default.SavedResponse);
-
-    Assert.Equal("create item", Assert.Single(h.Vault.Started, p => BitwardenCliService.IsDataWrite(p.Arguments)).Arguments);
-    var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Vault.Stdin))))!;
-    Assert.Equal(OrgId, sent["organizationId"]!.GetValue<string>());
-    Assert.Equal(CollectionId, Assert.Single(sent["collectionIds"]!.AsArray())!.GetValue<string>());
-    Assert.Equal(OrgId, h.Service.GetCachedItem(saved.Id)!.OrganizationId);
-
-    h.Vault.Started.Clear();
-    Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item with { CollectionIds = [] }, IpcJson.Default.EditableItem))).Code);
-    Assert.Empty(h.Vault.Started);
-
-    h.Vault.OnWrite = (_, created) =>
-    {
-      created["organizationId"] = null;
-      return created;
-    };
-    h.Vault.Override = args => args.StartsWith("list ", StringComparison.Ordinal) ? new FakeCliProcess("[]\n") : null;
-    Assert.Equal(IpcErrors.Unknown, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem))).Code);
-    Assert.Contains(h.Vault.Started, p => p.Arguments == "list items");
-  }
-
-  [Fact]
-  public async Task Create_WhoseFollowUpSyncFails_IsUnknown_NotFailed()
-  {
-    var h = new Harness();
-    h.Service.WriteTimeoutMs = 50;
-    var never = new FakeCliProcess(0);
-    h.Vault.Override = args => args switch
-    {
-      "create item" => never,
-      "sync" => throw new InvalidOperationException("sync could not start"),
-      "list items" or "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
-      _ => null,
-    };
-    var save = h.Handle(Ops.CreateItem, new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem);
-    await Task.Delay(200, TestContext.Current.CancellationToken);
-    never.StdoutStream.Complete();
-    never.StderrStream.Complete();
-
-    string? code = null;
-    try
-    {
-      await save;
-    }
-    catch (IpcException ex)
-    {
-      code = ex.Code;
-    }
-
-    Assert.Equal(IpcErrors.Unknown, code);
-    Assert.Single(h.Vault.Started, p => p.Arguments == "create item");
-  }
-
-  [Fact]
   public async Task Write_ThatTimesOut_IsNotStopped_ThenSyncs_AndReportsAnUnknownOutcome()
   {
-    var h = new Harness();
+    var id = NewId();
+    var h = new Harness(Login(id));
     h.Service.WriteTimeoutMs = 50;
     var hung = new FakeCliProcess(0) { ExitSignal = new TaskCompletionSource() };
-    h.Vault.Override = args => args switch
-    {
-      "create item" => hung,
-      "list items" or "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
-      _ => null,
-    };
+    h.Vault.Override = args => args == $"edit item {id}" ? hung : null;
 
-    var save = h.Handle(Ops.CreateItem, new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem);
+    var save = h.Handle(Ops.UpdateItem, Edited(CompanionOps.ToEditable(Login(id))), IpcJson.Default.EditableItem);
     await Task.Delay(300, TestContext.Current.CancellationToken);
     Assert.False(save.IsCompleted);
     Assert.False(hung.Killed);
@@ -629,7 +552,7 @@ public class CompanionWriteOpsTests
 
     Assert.Equal(IpcErrors.Unknown, code);
     Assert.False(hung.Killed);
-    Assert.Single(h.Vault.Started, p => p.Arguments == "create item");
+    Assert.Single(h.Vault.Started, p => p.Arguments == $"edit item {id}");
     Assert.Contains(h.Vault.Started, p => p.Arguments == "sync");
   }
 
@@ -641,11 +564,7 @@ public class CompanionWriteOpsTests
     try
     {
       var id = NewId();
-      var trashed = NewId();
       var h = new Harness(Login(id, reprompt: 1));
-      var deleted = Login(trashed, reprompt: 1);
-      deleted["deletedDate"] = Revision;
-      h.Vault.Items[trashed] = deleted;
       var editable = CompanionOps.ToEditable(Login(id, reprompt: 1));
 
       async Task Gated(string op, JsonElement payload) =>
@@ -658,7 +577,6 @@ public class CompanionWriteOpsTests
       await Gated(Ops.ArchiveItem, Write(new WriteRequest(id, RevisionDate)));
       await Gated(Ops.MoveItem, Write(new WriteRequest(id, RevisionDate, OrganizationId: OrgId, CollectionIds: [CollectionId])));
       await Gated(Ops.SetCollections, Write(new WriteRequest(id, RevisionDate, CollectionIds: [CollectionId])));
-      await Gated(Ops.RestoreItem, Write(new WriteRequest(trashed, RevisionDate)));
       Assert.Equal(0, h.Vault.Writes);
 
       Assert.False((await h.Ops.VerifyRepromptAsync(id, "wrong", Ops.ArchiveItem, Write(new WriteRequest(id, RevisionDate)))).Verified);

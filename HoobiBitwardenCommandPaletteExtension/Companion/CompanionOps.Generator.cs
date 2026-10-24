@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,24 +14,16 @@ namespace HoobiBitwardenCommandPaletteExtension.Companion;
 internal sealed partial class CompanionOps
 {
   internal const int HistoryLimit = 50;
-  private const string RandomAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   private const string SeparatorAllowlist = "-_.,:;+=#!@$~";
 
   private readonly Lock _historyLock = new();
   private readonly List<(GeneratedEntry Entry, ProtectedSecret Value)> _history = [];
   private long _historyId;
 
-  private static string RandomPart(int length) => RandomNumberGenerator.GetString(RandomAlphabet, length);
-
   internal async Task<GeneratedResponse> GenerateAsync(GeneratorOptions options)
   {
     RequireUnlocked();
-    var value = options.Kind switch
-    {
-      GeneratorKinds.PlusAddress => PlusAddress(options.Email),
-      GeneratorKinds.CatchAll => CatchAll(options.Domain),
-      _ => RequireGenerated(options, await _service.GenerateAsync(BuildGenerateArgs(options))),
-    };
+    var value = RequireGenerated(options, await _service.GenerateAsync(BuildGenerateArgs(options)));
     return new GeneratedResponse(value, Remember(value, options.Kind));
   }
 
@@ -129,23 +120,6 @@ internal sealed partial class CompanionOps
         ? options.Separator == " " || !value.Contains(' ', StringComparison.Ordinal)
         : value.Length == options.Length && !value.Any(char.IsWhiteSpace));
     return valid ? value : throw new IpcException(IpcErrors.Failed);
-  }
-
-  internal static string PlusAddress(string? email)
-  {
-    var address = email?.Trim() ?? string.Empty;
-    var at = address.IndexOf('@', StringComparison.Ordinal);
-    if (at <= 0 || at != address.LastIndexOf('@') || at == address.Length - 1 || address.Any(char.IsWhiteSpace))
-      throw new IpcException(IpcErrors.Invalid);
-    return $"{address[..at]}+{RandomPart(8)}{address[at..]}";
-  }
-
-  internal static string CatchAll(string? domain)
-  {
-    var host = domain?.Trim().TrimStart('@') ?? string.Empty;
-    if (host.Length == 0 || host.Contains('@', StringComparison.Ordinal) || host.Any(char.IsWhiteSpace))
-      throw new IpcException(IpcErrors.Invalid);
-    return $"{RandomPart(8)}@{host}";
   }
 
   private long Remember(string value, string kind)

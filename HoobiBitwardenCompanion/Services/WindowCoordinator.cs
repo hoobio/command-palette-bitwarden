@@ -10,7 +10,6 @@ namespace HoobiBitwardenCompanion.Services;
 internal sealed class WindowCoordinator : IDisposable
 {
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
-  private MainWindow? _mainWindow;
 
   public WindowCoordinator(Stream input, Stream output) =>
     Channel = new PipeChannel(input, output, HandleRequestAsync, OnEvent);
@@ -37,21 +36,16 @@ internal sealed class WindowCoordinator : IDisposable
       Dispatcher.UIThread.Post(OnLocked);
     else if (op == Ops.VaultChanged)
       Dispatcher.UIThread.Post(() => _ = OnVaultChangedAsync());
-    else if (op == Ops.IconsChanged)
-      Dispatcher.UIThread.Post(() => _ = _mainWindow?.ViewModel?.ReloadAsync(iconsOnly: true));
   }
 
   internal void OnLocked()
   {
     foreach (var window in _itemWindows.Values)
       window.ViewModel?.OnLocked();
-    _mainWindow?.ViewModel?.OnLocked();
     GeneratorView.OnLocked();
   }
 
-  internal Task OnVaultChangedAsync() => Task.WhenAll(
-    _itemWindows.Values.Select(w => w.ViewModel?.LoadAsync() ?? Task.CompletedTask)
-      .Append(_mainWindow?.ViewModel?.ReloadAsync() ?? Task.CompletedTask));
+  internal Task OnVaultChangedAsync() => Task.WhenAll(_itemWindows.Values.Select(w => w.ViewModel?.LoadAsync() ?? Task.CompletedTask));
 
   private async Task<JsonElement?> HandleRequestAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
   {
@@ -65,9 +59,6 @@ internal sealed class WindowCoordinator : IDisposable
           await Dispatcher.UIThread.InvokeAsync(() => ShowItem(request.Id));
         else
           Dispatcher.UIThread.Post(() => RotateItem(request.Id));
-        return null;
-      case Ops.ShowVault:
-        await Dispatcher.UIThread.InvokeAsync(ShowVault);
         return null;
       default:
         throw new IpcException(IpcErrors.Invalid);
@@ -105,24 +96,6 @@ internal sealed class WindowCoordinator : IDisposable
       _ = window.ViewModel?.LoadAsync();
     BringToFront(window);
     return window;
-  }
-
-  public MainWindow ShowVault()
-  {
-    if (_mainWindow is null)
-    {
-      var viewModel = new VaultViewModel(Channel, id => ShowItem(id));
-      _mainWindow = new MainWindow(viewModel);
-      _mainWindow.Closed += (_, _) =>
-      {
-        _mainWindow = null;
-        viewModel.Dispose();
-      };
-    }
-
-    _ = _mainWindow.ViewModel?.ReloadAsync();
-    BringToFront(_mainWindow);
-    return _mainWindow;
   }
 
   // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused.

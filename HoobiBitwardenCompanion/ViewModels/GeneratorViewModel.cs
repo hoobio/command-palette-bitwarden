@@ -9,22 +9,14 @@ namespace HoobiBitwardenCompanion.ViewModels;
 
 internal sealed partial class GeneratorViewModel : ObservableObject
 {
-  public static readonly Choice[] UsernameKinds = [new(GeneratorKinds.PlusAddress, "Plus-addressed email"), new(GeneratorKinds.CatchAll, "Catch-all email")];
-
   private readonly PipeChannel _channel;
   private long? _entryId;
 
-  public GeneratorViewModel(PipeChannel channel, bool canUse = false)
+  public GeneratorViewModel(PipeChannel channel)
   {
     _channel = channel;
-    CanUse = canUse;
     var options = CompanionSettings.LoadGenerator();
-    SelectedTab = options.Kind switch
-    {
-      GeneratorKinds.Passphrase => 1,
-      GeneratorKinds.PlusAddress or GeneratorKinds.CatchAll when !canUse => 2,
-      _ => 0,
-    };
+    SelectedTab = options.Kind == GeneratorKinds.Passphrase ? 1 : 0;
     Length = options.Length;
     Uppercase = options.Uppercase;
     Lowercase = options.Lowercase;
@@ -37,30 +29,23 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     Separator = options.Separator;
     Capitalize = options.Capitalize;
     IncludeNumber = options.IncludeNumber;
-    Email = options.Email;
-    Domain = options.Domain;
-    SelectedUsernameKind = UsernameKinds.FirstOrDefault(k => k.Value == options.Kind) ?? UsernameKinds[0];
   }
 
-  public bool CanUse { get; }
-
-  public bool ShowUsernameTab => !CanUse;
-
   internal Action<string>? UseRequested { get; set; }
+
+  internal Action<string>? Toast { get; set; }
 
   public ObservableCollection<GeneratedRowViewModel> History { get; } = [];
 
   public bool HasHistory => History.Count > 0;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsPassword), nameof(IsPassphrase), nameof(IsUsername))]
+  [NotifyPropertyChangedFor(nameof(IsPassword), nameof(IsPassphrase))]
   public partial int SelectedTab { get; set; }
 
   public bool IsPassword => SelectedTab == 0;
 
   public bool IsPassphrase => SelectedTab == 1;
-
-  public bool IsUsername => SelectedTab == 2;
 
   [ObservableProperty]
   public partial decimal? Length { get; set; }
@@ -99,18 +84,6 @@ internal sealed partial class GeneratorViewModel : ObservableObject
   public partial bool IncludeNumber { get; set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsPlusAddress))]
-  public partial Choice SelectedUsernameKind { get; set; }
-
-  public bool IsPlusAddress => SelectedUsernameKind.Value == GeneratorKinds.PlusAddress;
-
-  [ObservableProperty]
-  public partial string? Email { get; set; }
-
-  [ObservableProperty]
-  public partial string? Domain { get; set; }
-
-  [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(HasValue))]
   [NotifyCanExecuteChangedFor(nameof(CopyCommand), nameof(UseCommand))]
   public partial string? Value { get; private set; }
@@ -123,12 +96,7 @@ internal sealed partial class GeneratorViewModel : ObservableObject
   [ObservableProperty]
   public partial string? StatusMessage { get; private set; }
 
-  public string Kind => SelectedTab switch
-  {
-    1 => GeneratorKinds.Passphrase,
-    2 => SelectedUsernameKind.Value!,
-    _ => GeneratorKinds.Password,
-  };
+  public string Kind => SelectedTab == 1 ? GeneratorKinds.Passphrase : GeneratorKinds.Password;
 
   public GeneratorOptions ToOptions() => new(
     Kind,
@@ -143,9 +111,7 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     (int)(Words ?? 0),
     Separator ?? string.Empty,
     Capitalize,
-    IncludeNumber,
-    Email,
-    Domain);
+    IncludeNumber);
 
   partial void OnSelectedTabChanged(int value)
   {
@@ -155,8 +121,7 @@ internal sealed partial class GeneratorViewModel : ObservableObject
 
   public async Task InitializeAsync()
   {
-    if (!IsUsername)
-      await RegenerateAsync();
+    await RegenerateAsync();
     await LoadHistoryAsync();
   }
 
@@ -205,8 +170,8 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     try
     {
       await _channel.RequestAsync(Ops.CopyGenerated, IpcJson.ToElement(new HistoryEntryRequest(id), IpcJson.Default.HistoryEntryRequest));
-      StatusMessage = "Copied";
       ErrorMessage = null;
+      Toast?.Invoke("Copied");
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
@@ -243,7 +208,7 @@ internal sealed partial class GeneratorViewModel : ObservableObject
 
   private static string Describe(Exception ex) => ex switch
   {
-    IpcException { Code: IpcErrors.Invalid } => "Check the generator options. A password needs 5 to 128 characters and at least one character type, a passphrase 3 to 20 words, a username a valid email or domain.",
+    IpcException { Code: IpcErrors.Invalid } => "Check the generator options. A password needs 5 to 128 characters and at least one character type, a passphrase 3 to 20 words.",
     IpcException { Code: IpcErrors.Failed } => "Bitwarden did not generate a value.",
     _ => ItemViewModel.Describe(ex),
   };
@@ -251,13 +216,7 @@ internal sealed partial class GeneratorViewModel : ObservableObject
 
 internal sealed partial class GeneratedRowViewModel(GeneratorViewModel owner, GeneratedEntry entry)
 {
-  public string Label => entry.Kind switch
-  {
-    GeneratorKinds.Passphrase => "Passphrase",
-    GeneratorKinds.PlusAddress => "Plus-addressed email",
-    GeneratorKinds.CatchAll => "Catch-all email",
-    _ => "Password",
-  };
+  public string Label => entry.Kind == GeneratorKinds.Passphrase ? "Passphrase" : "Password";
 
   public string Created => entry.Created.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
 

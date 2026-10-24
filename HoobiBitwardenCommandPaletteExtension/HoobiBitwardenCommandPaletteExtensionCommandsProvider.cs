@@ -27,19 +27,12 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         _settingsManager = new BitwardenSettingsManager();
         _service = new BitwardenCliService(_settingsManager);
         _fallbackItem = new BitwardenFallbackItem(_service, _settingsManager);
-        var companion = new CompanionHost(new CompanionOps(_service));
-        CompanionHost.Current = companion;
+        CompanionHost.Current = new CompanionHost(new CompanionOps(_service));
         _commands = [
             new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(_service, _settingsManager))
             {
                 Title = DisplayName,
                 Subtitle = "Search your vault",
-            },
-            new CommandItem(new AnonymousCommand(companion.ShowVault) { Name = "Open vault", Result = CommandResult.Dismiss() })
-            {
-                Title = "Open vault",
-                Subtitle = "Open the Bitwarden window",
-                Icon = new IconInfo(""),
             },
         ];
 

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -13,6 +14,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 {
   private const string HistoryGroup = "Password history";
 
+  private static readonly Dictionary<string, Bitmap?> Icons = new(StringComparer.OrdinalIgnoreCase);
+
   private readonly PipeChannel _channel;
   private readonly DispatcherTimer _totpTimer;
   private FieldViewModel? _totpField;
@@ -20,7 +23,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private bool _disposed;
   private DateTime _revisionDate;
   private (string Op, JsonElement Payload, Action<JsonElement?> OnSuccess)? _repromptRetry;
-  private bool _createUncertain;
   private bool _inOrganization;
   private bool _archiveUnavailable;
   private FiltersResponse? _filters;
@@ -38,25 +40,13 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _totpTimer.Tick += (_, _) => _ = TickAsync();
   }
 
-  internal static ItemViewModel ForNew(PipeChannel channel, EditableItem item, FiltersResponse filters) => new(string.Empty, channel)
-  {
-    IsNew = true,
-    IsLoading = false,
-    ItemType = item.Type,
-    Title = item.Name.Length > 0 ? item.Name : "New item",
-    TypeGlyph = GlyphFor(item.Type),
-    Editor = new ItemEditorViewModel(item, filters),
-  };
-
-  public string Id { get; private set; }
+  public string Id { get; }
 
   internal bool IsTotpRunning => _totpTimer.IsEnabled;
 
   internal Func<string, string, string, string, Task<bool>>? Confirm { get; set; }
 
   internal Func<ActionDialogRequest, Task<bool>>? ConfirmAction { get; set; }
-
-  internal Action<EditableItem, FiltersResponse>? CloneRequested { get; set; }
 
   internal Func<string, Task<string?>>? PickSavePath { get; set; }
 
@@ -72,18 +62,14 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public bool ShowAttachments => IsReadOnly && !IsPrompting && (Attachments.Count > 0 || CanAttach);
 
-  public bool CanAttach => IsReadOnly && !IsDeleted && !IsArchived && !IsPrompting && ItemType is >= 1 and <= 5;
+  public bool CanAttach => IsReadOnly && !IsPrompting && ItemType is >= 1 and <= 5;
 
-  public bool CanRotate => IsReadOnly && ItemType == 1 && !IsDeleted && !IsArchived;
+  public bool CanRotate => IsReadOnly && ItemType == 1;
 
   internal event Action? Removed;
 
-  internal event Action? Saved;
-
-  internal event Action? Discarded;
-
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
+  [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial ItemEditorViewModel? Editor { get; private set; }
 
   partial void OnEditorChanged(ItemEditorViewModel? value)
@@ -94,29 +80,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public bool IsEditing => Editor is not null;
 
-  public bool IsReadOnly => Editor is null && !IsNew;
+  public bool IsReadOnly => Editor is null;
 
-  public bool CanEdit => IsReadOnly && !IsDeleted && !IsArchived && ItemType is >= 1 and <= 5;
-
-  public bool CanRestore => IsReadOnly && (IsDeleted || IsArchived);
-
-  public bool CanDelete => IsReadOnly;
-
-  public string DeleteLabel => IsDeleted || IsArchived ? "Delete permanently" : "Delete";
+  public bool CanEdit => IsReadOnly && ItemType is >= 1 and <= 5;
 
   public bool CanShowHistory => IsReadOnly && ItemType == 1;
-
-  [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanRestore), nameof(CanDelete), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
-  public partial bool IsNew { get; private set; }
-
-  [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
-  public partial bool IsDeleted { get; private set; }
-
-  [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanEdit), nameof(CanRestore), nameof(DeleteLabel), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
-  public partial bool IsArchived { get; private set; }
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(CanShowHistory), nameof(CanEdit), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
@@ -143,9 +111,29 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   [NotifyPropertyChangedFor(nameof(Icon), nameof(HasIcon))]
   public partial string? IconPath { get; set; }
 
-  public Avalonia.Media.Imaging.Bitmap? Icon => IconPath is { } path ? ItemRowViewModel.LoadIcon(path) : null;
+  public Bitmap? Icon => IconPath is { } path ? LoadIcon(path) : null;
 
   public bool HasIcon => Icon is not null;
+
+  internal static Bitmap? LoadIcon(string path)
+  {
+    if (Icons.TryGetValue(path, out var icon))
+      return icon;
+    try
+    {
+      icon = new Bitmap(path);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    {
+      return null;
+    }
+    catch (Exception ex) when (ex is ArgumentException or NotSupportedException or InvalidOperationException)
+    {
+      icon = null;
+    }
+
+    return Icons[path] = icon;
+  }
 
   [ObservableProperty]
   public partial string TypeGlyph { get; set; } = "";
@@ -289,7 +277,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public async Task LoadAsync()
   {
-    if (IsEditing || IsNew)
+    if (IsEditing)
       return;
     IsLoading = true;
     try
@@ -348,8 +336,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     TypeGlyph = GlyphFor(item.Type);
     IconPath = item.IconPath;
     ItemType = item.Type;
-    IsDeleted = item.Deleted;
-    IsArchived = item.Archived;
     _inOrganization = item.OrganizationName is not null;
     RepromptRequired = item.RepromptRequired;
     SetGrace(item.Grace);
@@ -440,49 +426,21 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   }
 
   [RelayCommand]
-  private async Task CloneAsync()
-  {
-    if (await LoadFiltersAsync() is { } filters)
-    {
-      await RunAsync(Ops.GetEditableItem, ItemPayload, reply =>
-      {
-        var source = IpcJson.Read(reply, IpcJson.Default.EditableItem);
-        CloneRequested?.Invoke(source with { Id = null, Name = source.Name + " - Clone", RevisionDate = null }, filters);
-      });
-    }
-  }
-
-  [RelayCommand]
   private async Task SaveAsync()
   {
     if (Editor is not { } editor || editor.Validate() is not null)
       return;
-    var creating = editor.Id is null;
-    if (creating && _createUncertain
-      && !await AskAsync("Save another copy?", "Bitwarden may have saved this item already. Check the vault list before you save it again.", "Save copy", "Cancel"))
-      return;
     var item = editor.ToDto();
-    var (ok, reply, error) = await WriteAsync(creating ? Ops.CreateItem : Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem));
+    var (ok, reply, error) = await WriteAsync(Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem));
     if (!ok)
     {
-      if (creating && error is null or IpcErrors.Unknown)
-      {
-        _createUncertain = true;
-        ErrorMessage = Describe(new IpcException(IpcErrors.Unknown));
-        Saved?.Invoke();
-        return;
-      }
-
       await OnEditFailedAsync(error);
       return;
     }
 
     var saved = IpcJson.Read(reply, IpcJson.Default.SavedResponse);
-    _createUncertain = false;
-    Id = saved.Id;
-    IsNew = false;
-    editor.MarkSaved(saved.Id, saved.RevisionDate, creating ? item.OrganizationId : editor.OriginalOrganizationId, creating ? item.CollectionIds : editor.OriginalCollectionIds);
-    if (!creating && item.OrganizationId is { } organization
+    editor.MarkSaved(saved.RevisionDate);
+    if (item.OrganizationId is { } organization
       && (organization != editor.OriginalOrganizationId || !item.CollectionIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(editor.OriginalCollectionIds)))
     {
       var request = new WriteRequest(saved.Id, saved.RevisionDate, OrganizationId: organization, CollectionIds: item.CollectionIds);
@@ -499,7 +457,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     Editor = null;
     await LoadAsync();
     Notify("Saved");
-    Saved?.Invoke();
   }
 
   private async Task OnEditFailedAsync(string? error)
@@ -532,8 +489,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       return false;
     Editor = null;
     ErrorMessage = null;
-    if (IsNew)
-      Discarded?.Invoke();
     return true;
   }
 
@@ -543,19 +498,15 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     if (ConfirmAction is null)
       return;
     (string Op, JsonElement Payload)? repromptFor = null;
-    var active = !IsDeleted && !IsArchived;
     var request = new ActionDialogRequest(
-      active ? "Remove item" : "Delete permanently",
-      active
-        ? $"Archive \"{Title}\" or move it to the trash to keep it recoverable, or delete it permanently. You cannot undo a permanent delete."
-        : $"\"{Title}\" will be deleted permanently. You cannot undo this.",
-      "Permanently delete");
-    request.Danger = () => AttemptAsync(Ops.DeleteItem, permanent: true);
-    if (active)
+      "Remove item",
+      $"Archive \"{Title}\" or move it to the trash to keep it recoverable, or delete it permanently. You cannot undo a permanent delete.",
+      "Permanently delete")
     {
-      request.PrimaryLabel = ArchiveLabel;
-      request.Primary = () => _archiveUnavailable || _inOrganization ? AttemptAsync(Ops.DeleteItem, permanent: false) : AttemptAsync(Ops.ArchiveItem, permanent: false);
-    }
+      PrimaryLabel = ArchiveLabel,
+    };
+    request.Danger = () => AttemptAsync(Ops.DeleteItem, permanent: true);
+    request.Primary = () => _archiveUnavailable || _inOrganization ? AttemptAsync(Ops.DeleteItem, permanent: false) : AttemptAsync(Ops.ArchiveItem, permanent: false);
 
     if (!await ConfirmAction(request))
       return;
@@ -599,18 +550,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private string ArchiveLabel => _archiveUnavailable || _inOrganization ? "Move to Trash" : "Archive";
 
-  [RelayCommand]
-  private Task RestoreAsync() => WriteStateAsync(Ops.RestoreItem);
-
-  private async Task WriteStateAsync(string op)
-  {
-    var (ok, _, error) = await WriteAsync(op, IpcJson.ToElement(new WriteRequest(Id, _revisionDate), IpcJson.Default.WriteRequest));
-    if (ok)
-      Removed?.Invoke();
-    else if (error is IpcErrors.Conflict or IpcErrors.Unknown)
-      await ReloadStaleAsync();
-  }
-
   private async Task<(bool Ok, JsonElement? Reply, string? Error)> WriteAsync(string op, JsonElement payload)
   {
     var sent = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
@@ -645,7 +584,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     {
       await LoadAsync();
       Notify("Password replaced and copied");
-      Saved?.Invoke();
       return;
     }
 
@@ -754,7 +692,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     return ok ? _filters = IpcJson.Read(reply, IpcJson.Default.FiltersResponse) : null;
   }
 
-  // The extension lists trash, archive and collections with bw for the filters, so Edit would otherwise wait on three bw processes.
+  // The extension lists collections with bw for the filters, so Edit would otherwise wait on a bw process.
   private async Task PrefetchFiltersAsync()
   {
     try

@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.Json;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Models;
@@ -11,49 +10,21 @@ namespace HoobiBitwardenCommandPaletteExtension.Tests;
 public class CompanionVaultOpsTests
 {
   private static readonly string LoginId = Guid.NewGuid().ToString();
-  private static readonly string NoteId = Guid.NewGuid().ToString();
   private static readonly string CardId = Guid.NewGuid().ToString();
-  private static readonly string TrashId = Guid.NewGuid().ToString();
-  private static readonly string ArchivedId = Guid.NewGuid().ToString();
 
   private sealed class Harness
   {
     public BitwardenCliService Service { get; } = new();
     public CompanionOps Ops { get; }
     public int Loads { get; private set; }
-    public Func<Task<VaultExtras?>> Load { get; set; }
-    public BitwardenItem Trash { get; } = new()
-    {
-      Id = TrashId,
-      Name = "Old login",
-      Type = BitwardenItemType.Login,
-      Username = "former",
-      Password = ProtectedSecret.From("trash-secret"),
-      DeletedDate = DateTime.UtcNow,
-    };
+    public Func<Task<List<VaultCollection>?>> Load { get; set; }
 
     public Harness()
     {
       Service.LoadTestData(
       [
-        new BitwardenItem
-        {
-          Id = LoginId,
-          Name = "GitHub",
-          Type = BitwardenItemType.Login,
-          Reprompt = 1,
-          Favorite = true,
-          FolderId = "f1",
-          OrganizationId = "o1",
-          CollectionIds = ["c1"],
-          Username = "octocat",
-          Password = ProtectedSecret.From("hunter2"),
-          HasTotp = true,
-          TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
-          Uris = [new ItemUri("https://www.github.com/login", UriMatchType.Default), new ItemUri("github.com", UriMatchType.Default), new ItemUri("gist.github.com", UriMatchType.Default)],
-        },
-        new BitwardenItem { Id = NoteId, Name = "Note", Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("secret note body") },
-        new BitwardenItem { Id = CardId, Name = "Visa", Type = BitwardenItemType.Card, CardBrand = "Visa", CardNumber = ProtectedSecret.From("4111111111111111"), CardCode = ProtectedSecret.From("cvc-sentinel-zq") },
+        new BitwardenItem { Id = LoginId, Name = "GitHub", Type = BitwardenItemType.Login, Username = "octocat", Password = ProtectedSecret.From("hunter2") },
+        new BitwardenItem { Id = CardId, Name = "Visa", Type = BitwardenItemType.Card, CardBrand = "Visa", CardNumber = ProtectedSecret.From("4111111111111111") },
       ],
         new() { ["f2"] = "Personal", ["f1"] = "Work" },
         new() { ["o1"] = "Acme" });
@@ -61,45 +32,10 @@ public class CompanionVaultOpsTests
       Load = () =>
       {
         Loads++;
-        return Task.FromResult<VaultExtras?>(new VaultExtras(
-          [Trash, new BitwardenItem { Id = ArchivedId, Name = "Archived", Type = BitwardenItemType.Identity, IdentityEmail = "a@b.c", ArchivedDate = DateTime.UtcNow }],
-          [new VaultCollection("c2", "Shared", "o1"), new VaultCollection("c1", "Engineering", "o1")]));
+        return Task.FromResult<List<VaultCollection>?>([new VaultCollection("c2", "Shared", "o1"), new VaultCollection("c1", "Engineering", "o1")]);
       };
-      Ops = new CompanionOps(Service, loadExtras: () => Load());
+      Ops = new CompanionOps(Service, loadCollections: () => Load());
     }
-  }
-
-  [Fact]
-  public async Task ListItems_IsSecretFree_AndMatchesThePaletteSubtitles()
-  {
-    var h = new Harness();
-
-    var list = await h.Ops.ListItemsAsync();
-    var json = JsonSerializer.Serialize(list, IpcJson.Default.ItemListResponse);
-
-    foreach (var secret in new[] { "hunter2", "JBSWY3DPEHPK3PXP", "secret note body", "4111111111111111", "cvc-sentinel-zq", "trash-secret" })
-      Assert.DoesNotContain(secret, json, StringComparison.Ordinal);
-
-    var login = list.Items.Single(i => i.Id == LoginId);
-    Assert.Equal("octocat", login.Subtext);
-    Assert.True(login.Reprompt);
-    Assert.True(login.Favorite);
-    Assert.True(login.HasTotp);
-    Assert.Equal(["c1"], login.CollectionIds);
-    Assert.Equal(["github.com", "gist.github.com"], login.Hosts);
-    Assert.False(login.Deleted);
-
-    var note = list.Items.Single(i => i.Id == NoteId);
-    Assert.Null(note.Subtext);
-    Assert.True(note.HasNotes);
-    Assert.Equal("Visa ····1111", list.Items.Single(i => i.Id == CardId).Subtext);
-
-    var trash = list.Items.Single(i => i.Id == TrashId);
-    Assert.True(trash.Deleted);
-    Assert.Equal("former", trash.Subtext);
-    var archived = list.Items.Single(i => i.Id == ArchivedId);
-    Assert.True(archived.Archived);
-    Assert.Equal("a@b.c", archived.Subtext);
   }
 
   [Fact]
@@ -116,52 +52,47 @@ public class CompanionVaultOpsTests
   }
 
   [Fact]
-  public async Task Extras_AreLoadedOnce_ServeTheDetailPane_AndAreWipedOnLock()
+  public async Task Collections_AreLoadedOnce_AndAreDroppedOnLock()
   {
     var h = new Harness();
     var locked = 0;
     h.Ops.Locked += () => locked++;
 
-    await h.Ops.ListItemsAsync();
+    await h.Ops.ListFiltersAsync();
     await h.Ops.ListFiltersAsync();
     Assert.Equal(1, h.Loads);
-
-    Assert.Equal("Old login", h.Ops.GetItem(TrashId).Name);
-    Assert.Equal("trash-secret", h.Ops.Reveal(TrashId, ItemFields.Password));
 
     h.Service.ClearSession();
     h.Ops.RaiseIfLocked();
 
     Assert.Equal(1, locked);
-    Assert.Throws<ObjectDisposedException>(() => h.Trash.Password!.Reveal());
-    Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(h.Ops.ListItemsAsync)).Code);
+    Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(h.Ops.ListFiltersAsync)).Code);
 
     h.Service.SetSession("session-key");
-    Assert.Equal(IpcErrors.NotFound, Assert.Throws<IpcException>(() => h.Ops.GetItem(TrashId)).Code);
+    await h.Ops.ListFiltersAsync();
+    Assert.Equal(2, h.Loads);
   }
 
   [Fact]
-  public async Task Extras_LoadFailure_StillListsTheCache_AndALockDuringLoadIsReported()
+  public async Task Collections_LoadFailure_StillListsFolders_AndALockDuringLoadIsReported()
   {
     var h = new Harness { Load = () => throw new InvalidOperationException("bw failed") };
 
-    var list = await h.Ops.ListItemsAsync();
-    Assert.Equal(3, list.Items.Count);
+    var filters = await h.Ops.ListFiltersAsync();
+    Assert.Empty(filters.Collections);
+    Assert.Equal(2, filters.Folders.Count);
 
-    h.Load = () => Task.FromResult<VaultExtras?>(null);
-    Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(h.Ops.ListItemsAsync)).Code);
+    h.Load = () => Task.FromResult<List<VaultCollection>?>(null);
+    Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(h.Ops.ListFiltersAsync)).Code);
   }
 
   [Fact]
-  public async Task HandleAsync_RoutesTheListOps()
+  public async Task HandleAsync_RoutesListFilters()
   {
     var h = new Harness();
-    var ct = TestContext.Current.CancellationToken;
 
-    var items = IpcJson.Read(await h.Ops.HandleAsync(Ops.ListItems, null, ct), IpcJson.Default.ItemListResponse);
-    var filters = IpcJson.Read(await h.Ops.HandleAsync(Ops.ListFilters, null, ct), IpcJson.Default.FiltersResponse);
+    var filters = IpcJson.Read(await h.Ops.HandleAsync(Ops.ListFilters, null, TestContext.Current.CancellationToken), IpcJson.Default.FiltersResponse);
 
-    Assert.Equal(5, items.Items.Count);
     Assert.Equal(2, filters.Folders.Count);
   }
 
@@ -170,7 +101,7 @@ public class CompanionVaultOpsTests
   {
     var service = new BitwardenCliService(processFactory: new ScriptedCliFactory().Create);
     service.SetSession("session-key");
-    using var ops = new CompanionOps(service, loadExtras: () => Task.FromResult<VaultExtras?>(null));
+    using var ops = new CompanionOps(service, loadCollections: () => Task.FromResult<List<VaultCollection>?>(null));
     var raised = 0;
     ops.VaultChanged += () => raised++;
 
@@ -180,19 +111,20 @@ public class CompanionVaultOpsTests
   }
 
   [Fact]
-  public void Summarize_UsesACachedFaviconOnlyWhenIconsAreOn()
+  public void GetItem_SendsACachedFaviconOnlyWhenOneExists()
   {
+    var h = new Harness();
     var host = $"{Guid.NewGuid():N}.test";
-    var item = new BitwardenItem { Id = LoginId, Type = BitwardenItemType.Login, Uris = [new ItemUri($"https://{host}", UriMatchType.Default)] };
-    Assert.Null(CompanionOps.Summarize(item, true).IconPath);
+    var id = Guid.NewGuid().ToString();
+    h.Service.LoadTestData([new BitwardenItem { Id = id, Name = "Site", Type = BitwardenItemType.Login, Uris = [new ItemUri($"https://{host}", UriMatchType.Default)] }], [], []);
+    Assert.Null(h.Ops.GetItem(id).IconPath);
 
     Directory.CreateDirectory(FaviconService.CacheDir);
     var path = Path.Combine(FaviconService.CacheDir, host + ".png");
     File.WriteAllBytes(path, [0x89, 0x50, 0x4E, 0x47]);
     try
     {
-      Assert.Equal(path, CompanionOps.Summarize(item, true).IconPath);
-      Assert.Null(CompanionOps.Summarize(item, false).IconPath);
+      Assert.Equal(path, h.Ops.GetItem(id).IconPath);
     }
     finally
     {
@@ -201,7 +133,7 @@ public class CompanionVaultOpsTests
   }
 
   [Fact]
-  public void CardBrandIcon_IsSentInTheSummaryAndTheDetail()
+  public void CardBrandIcon_IsSentInTheDetail()
   {
     var h = new Harness();
     var card = new BitwardenItem { Id = CardId, Type = BitwardenItemType.Card, CardBrand = "Visa" };
@@ -216,7 +148,6 @@ public class CompanionVaultOpsTests
       File.WriteAllBytes(path, [0x89, 0x50, 0x4E, 0x47]);
     try
     {
-      Assert.Equal(path, CompanionOps.Summarize(card, true).IconPath);
       Assert.Equal(path, h.Ops.GetItem(CardId).IconPath);
     }
     finally
@@ -227,69 +158,24 @@ public class CompanionVaultOpsTests
   }
 
   [Fact]
-  public async Task IconCached_PushesOneIconsChangedPerThrottleWindow()
-  {
-    var throttle = CompanionOps.IconsThrottle;
-    CompanionOps.IconsThrottle = TimeSpan.FromMilliseconds(50);
-    using var ops = new CompanionOps(new BitwardenCliService());
-    FaviconService.IconCached -= ops.OnIconCached;
-    var raised = 0;
-    ops.IconsChanged += () => Interlocked.Increment(ref raised);
-    try
-    {
-      ops.OnIconCached();
-      ops.OnIconCached();
-      ops.OnIconCached();
-      await WaitForAsync(() => Volatile.Read(ref raised) == 1);
-      await Task.Delay(150, TestContext.Current.CancellationToken);
-      Assert.Equal(1, Volatile.Read(ref raised));
-
-      ops.OnIconCached();
-      await WaitForAsync(() => Volatile.Read(ref raised) == 2);
-    }
-    finally
-    {
-      CompanionOps.IconsThrottle = throttle;
-    }
-  }
-
-  private static async Task WaitForAsync(Func<bool> condition)
-  {
-    var deadline = DateTime.UtcNow.AddSeconds(5);
-    while (!condition() && DateTime.UtcNow < deadline)
-      await Task.Delay(10, TestContext.Current.CancellationToken);
-    Assert.True(condition());
-  }
-
-  [Fact]
   public void CompanionHost_NotifyVaultChanged_DoesNotStartTheCompanion()
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()));
     host.NotifyVaultChanged();
-    host.NotifyIconsChanged();
     Assert.Null(host.Process);
   }
 
   [Fact]
-  public async Task LoadVaultExtras_KeepsOnlyTrashAndArchivedItems_AndParsesCollections()
+  public async Task LoadCollections_ParsesCollections_AndSkipsInvalidEntries()
   {
-    var service = new BitwardenCliService(processFactory: psi => new FakeCliProcess(stdout: psi.Arguments switch
-    {
-      "list items --trash" => $"[{{\"id\":\"{TrashId}\",\"name\":\"Old\",\"type\":1,\"deletedDate\":\"2025-01-01T00:00:00Z\",\"collectionIds\":[\"c1\"],\"login\":{{\"password\":\"p\"}}}}]\n",
-      "list items --archived" => $"[{{\"id\":\"{ArchivedId}\",\"name\":\"Kept\",\"type\":2,\"archivedDate\":\"2025-01-01T00:00:00Z\"}},{{\"id\":\"{LoginId}\",\"name\":\"Active\",\"type\":1}}]\n",
-      "list collections" => "[{\"id\":\"c1\",\"name\":\"Engineering\",\"organizationId\":\"o1\"},{\"id\":\"\",\"name\":\"bad\"}]\n",
-      _ => "[]\n",
-    }));
+    var service = new BitwardenCliService(processFactory: psi => new FakeCliProcess(stdout: psi.Arguments == "list collections"
+      ? "[{\"id\":\"c1\",\"name\":\"Engineering\",\"organizationId\":\"o1\"},{\"id\":\"\",\"name\":\"bad\"}]\n"
+      : "[]\n"));
     service.SetSession("session-key");
 
-    var extras = await service.LoadVaultExtrasAsync();
+    var collections = await service.LoadCollectionsAsync();
 
-    Assert.NotNull(extras);
-    Assert.Equal([TrashId, ArchivedId], extras.Items.Select(i => i.Id));
-    Assert.Equal(["c1"], extras.Items[0].CollectionIds);
-    Assert.NotNull(extras.Items[0].DeletedDate);
-    Assert.NotNull(extras.Items[1].ArchivedDate);
-    Assert.Equal(new VaultCollection("c1", "Engineering", "o1"), Assert.Single(extras.Collections));
+    Assert.Equal(new VaultCollection("c1", "Engineering", "o1"), Assert.Single(collections!));
     Assert.Empty(BitwardenCliService.ParseCollections("not json"));
     Assert.Empty(BitwardenCliService.ParseCollections("{}"));
   }

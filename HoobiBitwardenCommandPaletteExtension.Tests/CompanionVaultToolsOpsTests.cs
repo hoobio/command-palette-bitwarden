@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Pages;
@@ -13,7 +12,7 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
 [Collection("SessionStore")]
-public sealed partial class CompanionVaultToolsOpsTests : IDisposable
+public sealed class CompanionVaultToolsOpsTests : IDisposable
 {
   private const string Revision = "2025-01-02T00:00:00.000Z";
   private const string FileBytes = "attachment-bytes-sentinel-qz";
@@ -24,7 +23,7 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
 
   private sealed class FakeBw
   {
-    private readonly List<(string Args, FakeCliProcess Process, string? Id)> _pending = [];
+    private readonly List<(string Args, FakeCliProcess Process)> _pending = [];
     private int _tick;
 
     public Dictionary<string, JsonObject> Items { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -61,8 +60,6 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
             }).ToJsonString() + "\n");
           case "get" when parts[1] == "item":
             return new FakeCliProcess(Items.TryGetValue(parts[2], out var item) ? item.ToJsonString() + "\n" : "Not found.\n");
-          case "get" when parts[1] == "folder":
-            return new FakeCliProcess(Folders.TryGetValue(parts[2], out var name) ? new JsonObject { ["id"] = parts[2], ["name"] = name }.ToJsonString() + "\n" : "Not found.\n");
           case "get" when parts[1] == "attachment":
             if (AttachmentError is { } downloadError)
               return new FakeCliProcess(stderr: downloadError);
@@ -83,46 +80,28 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
             list.Remove(list.First(a => a!["id"]!.GetValue<string>() == parts[2]));
             owner["revisionDate"] = Stamp();
             return new FakeCliProcess(string.Empty);
-          case "create" when parts[1] == "folder":
-            var folderId = Guid.NewGuid().ToString();
-            var created = new FakeCliProcess($"{{\"id\":\"{folderId}\",\"name\":\"pending\"}}\n");
-            _pending.Add((args, created, folderId));
-            return created;
         }
 
         var process = new FakeCliProcess("{}\n");
-        _pending.Add((args, process, null));
+        _pending.Add((args, process));
         return process;
       }
     }
 
     private void Flush()
     {
-      foreach (var (args, process, id) in _pending)
+      foreach (var (args, process) in _pending)
       {
         var stdin = process.GetStdinContent();
         if (stdin.Length > 0)
           Stdin.Add(stdin);
-        var body = stdin.Length > 0 ? JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(stdin)))!.AsObject() : null;
         var parts = args.Split(' ');
-        switch (parts[0], parts[1])
+        if ((parts[0], parts[1]) == ("edit", "item"))
         {
-          case ("create", "folder"):
-            Folders[id!] = body!["name"]!.GetValue<string>();
-            break;
-          case ("edit", "folder"):
-            Folders[parts[2]] = body!["name"]!.GetValue<string>();
-            break;
-          case ("delete", "folder"):
-            Folders.Remove(parts[2]);
-            foreach (var item in Items.Values.Where(i => i["folderId"]?.GetValue<string>() == parts[2]))
-              item["folderId"] = null;
-            break;
-          case ("edit", "item"):
-            body!["revisionDate"] = Stamp();
-            OnEdit?.Invoke(body);
-            Items[parts[2]] = body;
-            break;
+          var body = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(stdin)))!.AsObject();
+          body["revisionDate"] = Stamp();
+          OnEdit?.Invoke(body);
+          Items[parts[2]] = body;
         }
       }
 
@@ -150,7 +129,7 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
       Load();
       Service.SetSession("session-key");
       Ops = new CompanionOps(Service, verifyPassword: p => Task.FromResult(p == "correct"), copySecret: s => SecretCopies.Add(s.Reveal()),
-        copyText: (t, s) => TextCopies.Add((t, s)), loadExtras: () => Task.FromResult<VaultExtras?>(new VaultExtras([], [])));
+        copyText: (t, s) => TextCopies.Add((t, s)), loadCollections: () => Task.FromResult<List<VaultCollection>?>([]));
     }
 
     public void Load() => Service.LoadTestData(
@@ -175,63 +154,6 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
       "attachments": [{ "id": "att1", "fileName": "report.pdf", "size": "4096", "sizeName": "4 KB", "url": "https://files.example/secret-url" }]
     }
     """)!.AsObject();
-
-  [Fact]
-  public async Task CreateFolder_SendsTheTrimmedNameOnStdin_AndUpdatesTheRail()
-  {
-    var h = new Harness();
-    var changed = 0;
-    h.Service.CacheUpdated += () => changed++;
-
-    var reply = IpcJson.Read(await h.Handle(Ops.CreateFolder, new FolderRequest(null, "  Work  "), IpcJson.Default.FolderRequest), IpcJson.Default.FilterRef);
-
-    Assert.Equal("Work", reply.Name);
-    Assert.True(Guid.TryParse(reply.Id, out _));
-    Assert.Equal("Work", h.Service.GetFolders()[reply.Id]);
-    Assert.Equal(1, changed);
-    Assert.Contains("create folder", h.Bw.Args);
-    Assert.DoesNotContain(h.Bw.Args, a => a.Contains("Work", StringComparison.Ordinal));
-    Assert.Equal("{\"name\":\"Work\"}", Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Bw.Stdin))));
-  }
-
-  [Fact]
-  public async Task RenameAndDeleteFolder_UseTheGuid_VerifyAndMoveItemsToNoFolder()
-  {
-    var folder = NewId();
-    var item = NewId();
-    var h = new Harness(Login(item, folderId: folder));
-    h.Bw.Folders[folder] = "Old";
-    h.Load();
-
-    await h.Handle(Ops.RenameFolder, new FolderRequest(folder, "New"), IpcJson.Default.FolderRequest);
-    Assert.Equal("New", h.Service.GetFolders()[folder]);
-    Assert.Contains($"edit folder {folder}", h.Bw.Args);
-
-    await h.Handle(Ops.DeleteFolder, new FolderRequest(folder, null), IpcJson.Default.FolderRequest);
-    Assert.Contains($"delete folder {folder}", h.Bw.Args);
-    Assert.False(h.Service.GetFolders().ContainsKey(folder));
-    Assert.Null(h.Service.GetCachedItem(item)!.FolderId);
-  }
-
-  [Fact]
-  public async Task FolderOps_RejectBadIdsAndNames_BeforeRunningBw()
-  {
-    var folder = NewId();
-    var h = new Harness();
-    h.Bw.Folders[folder] = "Work";
-    h.Load();
-
-    foreach (var name in new[] { null, "", "   ", "a\nb" })
-      Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.CreateFolder, new FolderRequest(null, name), IpcJson.Default.FolderRequest));
-    Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.RenameFolder, new FolderRequest("not-a-guid", "x"), IpcJson.Default.FolderRequest));
-    Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.DeleteFolder, new FolderRequest($"{folder} --permanent", null), IpcJson.Default.FolderRequest));
-    Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.DeleteFolder, new FolderRequest(NewId(), null), IpcJson.Default.FolderRequest));
-    Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.RenameFolder, new FolderRequest(folder, " "), IpcJson.Default.FolderRequest));
-    Assert.Empty(h.Bw.Args);
-
-    h.Service.ClearSession();
-    Assert.Equal(IpcErrors.Locked, await h.Fails(Ops.CreateFolder, new FolderRequest(null, "x"), IpcJson.Default.FolderRequest));
-  }
 
   [Theory]
   [InlineData(@"C:\Users\jane\report.pdf", true)]
@@ -405,7 +327,7 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
     Assert.Equal("generate --passphrase --words 3 --separator space", CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 3, Separator: " ")));
     Assert.Equal("generate --passphrase --words 3 --separator empty", CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 3, Separator: "")));
 
-    var noisy = new GeneratorOptions(GeneratorKinds.Password, Length: 64, Special: true, MinNumber: 9, MinSpecial: 9, AvoidAmbiguous: true, Email: "--raw", Domain: "--session x");
+    var noisy = new GeneratorOptions(GeneratorKinds.Password, Length: 64, Special: true, MinNumber: 9, MinSpecial: 9, AvoidAmbiguous: true);
     Assert.All(CompanionOps.BuildGenerateArgs(noisy).Split(' ').Skip(1).Where(t => t.StartsWith('-')), t => Assert.Contains(t, AllowedFlags));
   }
 
@@ -451,38 +373,13 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
     Assert.Equal(IpcErrors.Failed, await h.Fails(Ops.Generate, new GeneratorOptions(GeneratorKinds.Passphrase), IpcJson.Default.GeneratorOptions));
   }
 
-  [GeneratedRegex("^jane\\+[a-z0-9]{8}@example\\.com$", RegexOptions.None, 1000)]
-  private static partial Regex PlusAddressPattern();
-
-  [GeneratedRegex("^[a-z0-9]{8}@example\\.com$", RegexOptions.None, 1000)]
-  private static partial Regex CatchAllPattern();
-
-  [Fact]
-  public async Task UsernameGenerators_RunLocally_WithCryptoRandomParts()
-  {
-    var h = new Harness();
-    var plus = new List<string>();
-    for (var i = 0; i < 20; i++)
-      plus.Add(IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(GeneratorKinds.PlusAddress, Email: " jane@example.com "), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).Value);
-    var catchAll = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(GeneratorKinds.CatchAll, Domain: "@example.com"), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).Value;
-
-    Assert.All(plus, p => Assert.Matches(PlusAddressPattern(), p));
-    Assert.Equal(20, plus.Distinct().Count());
-    Assert.Matches(CatchAllPattern(), catchAll);
-    Assert.Empty(h.Bw.Args);
-    foreach (var email in new[] { null, "", "jane", "@example.com", "jane@", "a@b@c", "ja ne@example.com" })
-      Assert.Equal(IpcErrors.Invalid, Assert.Throws<IpcException>(() => CompanionOps.PlusAddress(email)).Code);
-    foreach (var domain in new[] { null, "", "a@b.com", "exa mple.com" })
-      Assert.Equal(IpcErrors.Invalid, Assert.Throws<IpcException>(() => CompanionOps.CatchAll(domain)).Code);
-  }
-
   [Fact]
   public async Task History_KeepsTheLatestFifty_AndIsWipedOnLock()
   {
     var h = new Harness();
     var ids = new List<long>();
     for (var i = 0; i < CompanionOps.HistoryLimit + 5; i++)
-      ids.Add(IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(GeneratorKinds.CatchAll, Domain: "example.com"), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).EntryId);
+      ids.Add(IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).EntryId);
 
     var entries = h.Ops.ListGeneratorHistory().Entries;
     Assert.Equal(CompanionOps.HistoryLimit, entries.Count);
@@ -572,7 +469,7 @@ public sealed partial class CompanionVaultToolsOpsTests : IDisposable
 
     Assert.Equal(IpcErrors.Reprompt, await h.Fails(Ops.RotatePassword, Rotate(id), IpcJson.Default.RotateRequest));
     Assert.Empty(h.Bw.Args);
-    Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.RotatePassword, Rotate(id) with { Options = new GeneratorOptions(GeneratorKinds.CatchAll, Domain: "x.com") }, IpcJson.Default.RotateRequest));
+    Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.RotatePassword, Rotate(id) with { Options = new GeneratorOptions("username") }, IpcJson.Default.RotateRequest));
 
     RepromptPage.GracePeriodSeconds = 0;
     try

@@ -40,7 +40,6 @@ public class EditTests(AvaloniaSession session)
     public List<(string Op, JsonElement? Payload)> Requests { get; } = [];
     public string? FailWith { get; set; }
     public string? FailOp { get; set; }
-    public bool Deleted { get; set; }
     public TimeSpan Delay { get; set; }
 
     public List<JsonElement?> Payloads(string op)
@@ -69,13 +68,10 @@ public class EditTests(AvaloniaSession session)
       return op switch
       {
         Ops.ListFilters => IpcJson.ToElement(Filters, IpcJson.Default.FiltersResponse),
-        Ops.ListItems => IpcJson.ToElement(new ItemListResponse([.. Items.Values.Select(i => new ItemSummary(
-          i.Id!, i.Type, i.Name, null, i.Favorite, i.FolderId, i.OrganizationId, i.CollectionIds, false, false, i.RevisionDate ?? Revision, false, false, false, []))]), IpcJson.Default.ItemListResponse),
         Ops.GetItem => IpcJson.ToElement(Dto(IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id), IpcJson.Default.ItemDto),
         Ops.GetEditableItem => IpcJson.ToElement(Items[IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id], IpcJson.Default.EditableItem),
-        Ops.CreateItem => Save(IpcJson.Read(payload, IpcJson.Default.EditableItem) with { Id = Guid.NewGuid().ToString() }),
         Ops.UpdateItem => Save(IpcJson.Read(payload, IpcJson.Default.EditableItem)),
-        Ops.MoveItem or Ops.SetCollections or Ops.DeleteItem or Ops.RestoreItem or Ops.ArchiveItem =>
+        Ops.MoveItem or Ops.SetCollections or Ops.DeleteItem or Ops.ArchiveItem =>
           IpcJson.ToElement(new SavedResponse(IpcJson.Read(payload, IpcJson.Default.WriteRequest).Id, Revision.AddDays(2)), IpcJson.Default.SavedResponse),
         Ops.GetPasswordHistory => IpcJson.ToElement(new PasswordHistoryResponse([Revision.AddDays(-1), Revision.AddDays(-30)]), IpcJson.Default.PasswordHistoryResponse),
         _ => null,
@@ -92,7 +88,7 @@ public class EditTests(AvaloniaSession session)
     {
       var item = Items[id];
       return new ItemDto(id, item.Name, item.Type, null, item.OrganizationId is null ? null : "Acme", item.Favorite, false, false, Revision, item.RevisionDate ?? Revision, null,
-        [new FieldDto(ItemFields.Username, "Username", "Login credentials", item.Login?.Username, false)], Deleted);
+        [new FieldDto(ItemFields.Username, "Username", "Login credentials", item.Login?.Username, false)]);
     }
   }
 
@@ -258,8 +254,6 @@ public class EditTests(AvaloniaSession session)
     var item = Sample(1);
     using var h = new Harness(item);
     using var vm = h.Item(item.Id!);
-    var saved = 0;
-    vm.Saved += () => saved++;
     await vm.LoadAsync();
     await vm.EditCommand.ExecuteAsync(null);
     var editor = vm.Editor!;
@@ -296,7 +290,6 @@ public class EditTests(AvaloniaSession session)
     Assert.Equal((item.Id, OrgId, Revision.AddDays(1)), (move.Id, move.OrganizationId, move.RevisionDate));
     Assert.Equal([CollectionId], move.CollectionIds);
     Assert.Null(vm.Editor);
-    Assert.Equal(1, saved);
     Assert.Equal(["Saved"], h.Toasts);
   });
 
@@ -376,7 +369,6 @@ public class EditTests(AvaloniaSession session)
     Assert.False(editor.CanChangeOwner);
     Assert.Equal(JsonSerializer.Serialize(editor.ToDto(), IpcJson.Default.EditableItem),
       JsonSerializer.Serialize(new ItemEditorViewModel(editor.ToDto(), Filters).ToDto(), IpcJson.Default.EditableItem));
-    Assert.Equal(type, new ItemEditorViewModel(ItemEditorViewModel.Blank(type), Filters).ToDto().Type);
   }
 
   [Fact]
@@ -388,7 +380,7 @@ public class EditTests(AvaloniaSession session)
       .Concat(BitConverter.GetBytes(System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(1))).Concat(Str(blob)).Concat(Str(new byte[8])).ToArray();
     var pem = $"-----BEGIN OPENSSH PRIVATE KEY-----\n{Convert.ToBase64String(body)}\n-----END OPENSSH PRIVATE KEY-----\n";
 
-    var editor = new ItemEditorViewModel(ItemEditorViewModel.Blank(5), Filters) { PrivateKey = pem };
+    var editor = new ItemEditorViewModel(Sample(5) with { Name = string.Empty, SshKey = new SshKeyEdit(null, null, null) }, Filters) { PrivateKey = pem };
     editor.ImportSshKeyCommand.Execute(null);
 
     Assert.Equal("ssh-ed25519 " + Convert.ToBase64String(blob), editor.PublicKey);
@@ -408,7 +400,7 @@ public class EditTests(AvaloniaSession session)
   }
 
   [Fact]
-  public Task DeleteRestoreArchiveAndHistory_SendTheirOps() => session.RunAsync(async () =>
+  public Task DeleteArchiveAndHistory_SendTheirOps() => session.RunAsync(async () =>
   {
     var item = Sample(1);
     using var h = new Harness(item);
@@ -417,7 +409,6 @@ public class EditTests(AvaloniaSession session)
     vm.Removed += () => removed++;
     await vm.LoadAsync();
 
-    Assert.Equal("Delete", vm.DeleteLabel);
     await vm.DeleteCommand.ExecuteAsync(null);
     Assert.Equal("Remove item|Archive|Permanently delete", Assert.Single(h.Prompts));
     Assert.Empty(h.Extension.Payloads(Ops.ArchiveItem));
@@ -445,65 +436,17 @@ public class EditTests(AvaloniaSession session)
     await history.Fields[1].CopyCommand.ExecuteAsync(null);
     Assert.Equal(ItemFields.HistoryPrefix + "1", IpcJson.Read(h.Extension.Payloads(Ops.Copy).Single(), IpcJson.Default.FieldRequest).Field);
 
-    h.Extension.Deleted = true;
-    await vm.LoadAsync();
-    Assert.True(vm.CanRestore);
-    Assert.True(vm.CanDelete);
-    Assert.Equal("Delete permanently", vm.DeleteLabel);
-    Assert.False(vm.CanEdit);
-    await vm.RestoreCommand.ExecuteAsync(null);
     h.Pick = "danger";
     await vm.DeleteCommand.ExecuteAsync(null);
-    Assert.Equal("Delete permanently||Permanently delete", h.Prompts[^1]);
-    Assert.Null(h.LastRequest!.Primary);
     Assert.True(IpcJson.Read(h.Extension.Payloads(Ops.DeleteItem)[^1], IpcJson.Default.WriteRequest).Permanent);
+    Assert.Equal(3, removed);
 
     h.Extension.FailWith = IpcErrors.Failed;
     h.Extension.FailOp = Ops.DeleteItem;
     await vm.DeleteCommand.ExecuteAsync(null);
     Assert.Equal("Bitwarden did not save the change.", h.ActionFailures[^1]);
     Assert.Null(vm.ErrorMessage);
-    Assert.Equal(4, removed);
-  });
-
-  [Fact]
-  public Task Vault_NewAndClone_OpenACreateForm_AndSaveCreates() => session.RunAsync(async () =>
-  {
-    var item = Sample(1);
-    using var h = new Harness(item);
-    using var vault = new VaultViewModel(h.Channel, _ => { });
-    vault.Apply([new ItemSummary(item.Id!, 1, item.Name, null, false, FolderId, null, [], false, false, Revision, false, false, false, [])], Filters);
-
-    await vault.NewItemCommand.ExecuteAsync("3");
-    var created = vault.Detail!;
-    created.Confirm = h.Ask;
-    Assert.True(created.IsNew);
-    Assert.True(created.Editor!.IsCard);
-    created.Editor.Name = "New card";
-    created.Editor.CardExpMonth = "05";
-    await created.SaveCommand.ExecuteAsync(null);
-    var sent = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.CreateItem)), IpcJson.Default.EditableItem);
-    Assert.Null(sent.Id);
-    Assert.Equal("05", sent.Card!.ExpMonth);
-    Assert.False(created.IsNew);
-    Assert.False(string.IsNullOrEmpty(created.Id));
-    AvaloniaSession.WaitFor(() => vault.SelectedRow?.Id == created.Id);
-    Assert.Same(created, vault.Detail);
-
-    vault.SelectedRow = vault.Rows.Single(r => r.Name == item.Name);
-    vault.Detail!.Confirm = h.Ask;
-    await vault.Detail.LoadAsync();
-    await vault.CloneCommand.ExecuteAsync(null);
-    Assert.True(vault.Detail!.IsNew);
-    Assert.Equal("Sample 1 - Clone", vault.Detail.Editor!.Name);
-    Assert.Null(vault.Detail.Editor.ToDto().Id);
-
-    vault.SelectedRow = null;
-    Assert.True(vault.Detail.IsNew);
-    vault.Detail.Confirm = h.Ask;
-    h.Answer = true;
-    await vault.Detail.CancelEditCommand.ExecuteAsync(null);
-    Assert.Null(vault.Detail);
+    Assert.Equal(3, removed);
   });
 
   [Fact]
@@ -511,15 +454,14 @@ public class EditTests(AvaloniaSession session)
   {
     var item = Sample(1);
     using var h = new Harness(item);
-    using var vault = new VaultViewModel(h.Channel, _ => { });
-    await vault.NewItemCommand.ExecuteAsync("1");
-    var detail = vault.Detail!;
-    detail.Editor!.Password = "typed-secret";
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+    await vm.EditCommand.ExecuteAsync(null);
+    vm.Editor!.Password = "typed-secret";
 
-    vault.OnLocked();
+    vm.OnLocked();
 
-    Assert.Null(detail.Editor);
-    Assert.Null(vault.Detail);
+    Assert.Null(vm.Editor);
   });
 
   [Theory]
@@ -609,56 +551,6 @@ public class EditTests(AvaloniaSession session)
   });
 
   [Fact]
-  public Task CloneOfAnOrgItem_CreatesInTheOrg_InOneCreate() => session.RunAsync(async () =>
-  {
-    var item = Sample(1) with { OrganizationId = OrgId, CollectionIds = [CollectionId] };
-    using var h = new Harness(item);
-    using var vault = new VaultViewModel(h.Channel, _ => { });
-    vault.Apply([new ItemSummary(item.Id!, 1, item.Name, null, false, FolderId, OrgId, [CollectionId], false, false, Revision, false, false, false, [])], Filters);
-    vault.SelectedRow = vault.Rows.Single();
-    await vault.Detail!.LoadAsync();
-
-    await vault.CloneCommand.ExecuteAsync(null);
-    var clone = vault.Detail!;
-    clone.Confirm = h.Ask;
-    await clone.SaveCommand.ExecuteAsync(null);
-
-    var sent = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.CreateItem)), IpcJson.Default.EditableItem);
-    Assert.Equal((OrgId, CollectionId), (sent.OrganizationId, Assert.Single(sent.CollectionIds)));
-    Assert.Empty(h.Extension.Payloads(Ops.MoveItem));
-    Assert.Empty(h.Extension.Payloads(Ops.SetCollections));
-    Assert.False(clone.IsNew);
-  });
-
-  [Fact]
-  public Task Create_WithAnUnknownOutcome_IsNotSentAgainWithoutConsent() => session.RunAsync(async () =>
-  {
-    using var h = new Harness();
-    using var vault = new VaultViewModel(h.Channel, _ => { });
-    await vault.NewItemCommand.ExecuteAsync("2");
-    var created = vault.Detail!;
-    created.Confirm = h.Ask;
-    created.Editor!.Name = "Note";
-    h.Extension.FailWith = IpcErrors.Unknown;
-    h.Extension.FailOp = Ops.CreateItem;
-
-    await created.SaveCommand.ExecuteAsync(null);
-    Assert.Equal("Bitwarden did not confirm the save. Check the vault before you save again.", created.ErrorMessage);
-    Assert.True(created.IsNew);
-
-    h.Extension.FailWith = null;
-    h.Answer = false;
-    await created.SaveCommand.ExecuteAsync(null);
-    Assert.Single(h.Extension.Payloads(Ops.CreateItem));
-    Assert.Equal(["Save another copy?|Save copy|Cancel"], h.Prompts);
-
-    h.Answer = true;
-    await created.SaveCommand.ExecuteAsync(null);
-    Assert.Equal(2, h.Extension.Payloads(Ops.CreateItem).Count);
-    Assert.False(created.IsNew);
-  });
-
-  [Fact]
   public Task Writes_OutlastTheDefaultRequestTimeout() => session.RunAsync(async () =>
   {
     var item = Sample(2);
@@ -732,7 +624,7 @@ public class EditTests(AvaloniaSession session)
 
     Assert.Equal(6, vm.ItemType);
     Assert.False(vm.CanEdit);
-    Assert.True(vm.CanDelete);
+    Assert.True(vm.IsReadOnly);
   });
 
   [Fact]
@@ -820,7 +712,7 @@ public class EditTests(AvaloniaSession session)
     Assert.True(await ItemView.RunActionAsync(dialog, error, busy, request, () => Task.FromResult<string?>(null)));
     Assert.False(error.IsVisible);
 
-    var (permanent, _, _) = ItemView.CreateActionDialog(new ActionDialogRequest("Delete permanently", "Gone?", "Permanently delete"));
+    var (permanent, _, _) = ItemView.CreateActionDialog(new ActionDialogRequest("Delete attachment", "Gone?", "Delete attachment"));
     Assert.Equal(string.Empty, permanent.PrimaryButtonText);
   });
 

@@ -23,6 +23,6 @@ internal static class CompanionSettings
   public static void SaveGenerator(GeneratorOptions options)
   {
     Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-    File.WriteAllText(FilePath, JsonSerializer.Serialize(options with { Email = options.Email?.Trim(), Domain = options.Domain?.Trim() }, IpcJson.Default.GeneratorOptions));
+    File.WriteAllText(FilePath, JsonSerializer.Serialize(options, IpcJson.Default.GeneratorOptions));
   }
 }

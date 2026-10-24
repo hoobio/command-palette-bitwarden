@@ -3,8 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chrome="using:Avalonia.Controls.Chrome"
     xmlns:styles="using:HoobiBitwardenCompanion.Styles"
-    xmlns:ui="using:FluentAvalonia.UI.Controls"
-    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels">
+    xmlns:ui="using:FluentAvalonia.UI.Controls">
     <Styles.Resources>
         <SolidColorBrush x:Key="ComboBoxBackground" Color="#FF15181F" />
         <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#FF15181F" />
@@ -90,11 +89,6 @@
             </Style>
         </ControlTheme>
 
-        <ControlTheme x:Key="GhostButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#00242936" />
-            <Setter Property="Padding" Value="8,0" />
-        </ControlTheme>
-
         <ControlTheme x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Width" Value="32" />
             <Setter Property="Height" Value="32" />
@@ -140,73 +134,6 @@
             </Style>
         </ControlTheme>
 
-        <ControlTheme x:Key="StackListItemTheme" TargetType="ListBoxItem">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="Height" Value="56" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Margin" Value="0,0,0,1" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Panel>
-                        <Border
-                            Name="PART_Root"
-                            Background="{TemplateBinding Background}"
-                            Padding="{TemplateBinding Padding}">
-                            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center" />
-                        </Border>
-                        <Rectangle Name="Indicator" Classes="Indicator" IsVisible="False" />
-                        <Border Name="FocusRing" BorderBrush="{DynamicResource AccentTextFillColorPrimaryBrush}" BorderThickness="2" IsVisible="False" />
-                    </Panel>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover">
-                <Setter Property="Background" Value="{DynamicResource LayerFillColorAltBrush}" />
-            </Style>
-            <Style Selector="^:selected">
-                <Setter Property="Background" Value="{DynamicResource LayerFillColorAltBrush}" />
-                <Style Selector="^ /template/ Rectangle#Indicator">
-                    <Setter Property="IsVisible" Value="True" />
-                </Style>
-            </Style>
-            <Style Selector="^:selected:focus-within /template/ Border#FocusRing">
-                <Setter Property="IsVisible" Value="True" />
-            </Style>
-            <Style Selector="^:nth-child(1) /template/ Border">
-                <Setter Property="CornerRadius" Value="8,8,0,0" />
-            </Style>
-            <Style Selector="^:nth-last-child(1) /template/ Border">
-                <Setter Property="CornerRadius" Value="0,0,8,8" />
-            </Style>
-            <Style Selector="^:nth-child(1):nth-last-child(1) /template/ Border">
-                <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
-            </Style>
-        </ControlTheme>
-
-        <ControlTheme x:Key="RailItemTheme" TargetType="ListBoxItem">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Panel>
-                        <Border Name="PART_Root" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="{StaticResource ControlCornerRadius}">
-                            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center" />
-                        </Border>
-                        <Rectangle Name="Indicator" Classes="Indicator" IsVisible="False" />
-                    </Panel>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover">
-                <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            </Style>
-            <Style Selector="^:selected">
-                <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-                <Setter Property="FontWeight" Value="SemiBold" />
-                <Style Selector="^ /template/ Rectangle#Indicator">
-                    <Setter Property="IsVisible" Value="True" />
-                </Style>
-            </Style>
-        </ControlTheme>
-
         <ControlTheme x:Key="CaptionButtonTheme" TargetType="Button" BasedOn="{StaticResource FluentDrawnCaptionButton}">
             <Setter Property="Width" Value="{StaticResource CaptionButtonWidth}" />
             <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
@@ -217,62 +144,6 @@
             <Style Selector="^.Close:pressed /template/ Border">
                 <Setter Property="Background" Value="{DynamicResource CaptionCloseBackgroundPressed}" />
             </Style>
-        </ControlTheme>
-
-        <ControlTheme x:Key="HoobiWindowDecorations" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource {x:Type chrome:WindowDrawnDecorations}}">
-            <Setter Property="Template">
-                <WindowDrawnDecorationsTemplate>
-                    <chrome:WindowDrawnDecorationsContent>
-                        <chrome:WindowDrawnDecorationsContent.Underlay>
-                            <Panel Name="PART_UnderlayWrapper">
-                                <Border
-                                    Name="PART_WindowBorder"
-                                    Background="Transparent"
-                                    BorderThickness="{TemplateBinding FrameThickness}"
-                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
-                                    IsHitTestVisible="False" />
-                                <Panel
-                                    Name="PART_TitleBar"
-                                    VerticalAlignment="Top"
-                                    Height="{TemplateBinding TitleBarHeight}"
-                                    Background="Transparent"
-                                    IsVisible="{TemplateBinding HasTitleBar}"
-                                    chrome:WindowDecorationProperties.ElementRole="TitleBar" />
-                            </Panel>
-                        </chrome:WindowDrawnDecorationsContent.Underlay>
-                        <chrome:WindowDrawnDecorationsContent.Overlay>
-                            <Panel Name="PART_OverlayWrapper">
-                                <StackPanel
-                                    Name="PART_OverlayPanel"
-                                    Orientation="Horizontal"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Top"
-                                    Height="{TemplateBinding TitleBarHeight}"
-                                    IsVisible="{TemplateBinding HasTitleBar}">
-                                    <Button
-                                        Name="PART_MinimizeButton"
-                                        Classes="CaptionButton"
-                                        Theme="{StaticResource CaptionButtonTheme}"
-                                        Content="{StaticResource Glyph.Minimize}"
-                                        chrome:WindowDecorationProperties.ElementRole="MinimizeButton" />
-                                    <Button
-                                        Name="PART_MaximizeButton"
-                                        Classes="CaptionButton"
-                                        Theme="{StaticResource CaptionButtonTheme}"
-                                        Content="{StaticResource Glyph.Maximize}"
-                                        chrome:WindowDecorationProperties.ElementRole="MaximizeButton" />
-                                    <Button
-                                        Name="PART_CloseButton"
-                                        Classes="CaptionButton Close"
-                                        Theme="{StaticResource CaptionButtonTheme}"
-                                        Content="{StaticResource Glyph.Dismiss}"
-                                        chrome:WindowDecorationProperties.ElementRole="CloseButton" />
-                                </StackPanel>
-                            </Panel>
-                        </chrome:WindowDrawnDecorationsContent.Overlay>
-                    </chrome:WindowDrawnDecorationsContent>
-                </WindowDrawnDecorationsTemplate>
-            </Setter>
         </ControlTheme>
 
         <ControlTheme x:Key="HoobiCloseOnlyDecorations" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource {x:Type chrome:WindowDrawnDecorations}}">
@@ -481,36 +352,14 @@
         <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
     </Style>
 
-    <Style Selector="TextBlock.Icon.Mute">
-        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-    </Style>
-
     <Style Selector="Button.CaptionButton">
         <Setter Property="CornerRadius" Value="0" />
-    </Style>
-
-    <Style Selector="Rectangle.Indicator">
-        <Setter Property="Width" Value="3" />
-        <Setter Property="Height" Value="16" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="RadiusX" Value="1.5" />
-        <Setter Property="RadiusY" Value="1.5" />
-        <Setter Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}" />
     </Style>
 
     <Style Selector="Border.Row.Switch ToggleSwitch">
         <Setter Property="Margin" Value="0,0,-12,0" />
     </Style>
 
-    <Style Selector="ListBox.Rail, ListBox.Stack">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Padding" Value="0" />
-    </Style>
-
-    <Style Selector="ListBox.Rail ListBoxItem" x:DataType="vm:FilterViewModel">
-        <Setter Property="IsEnabled" Value="{Binding IsEnabledInRail}" />
-    </Style>
     <Style Selector="Border.Group">
         <Setter Property="Background" Value="{DynamicResource WindowGroundBrush}" />
         <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
@@ -578,10 +427,6 @@
 
     <Style Selector="TextBox /template/ ToggleButton:checked /template/ ui|FAFontIcon#Glyph">
         <Setter Property="Glyph" Value="{StaticResource Glyph.EyeOff}" />
-    </Style>
-
-    <Style Selector="TextBox.Search">
-        <Setter Property="Height" Value="36" />
     </Style>
 
     <Style Selector="ComboBox">
@@ -667,14 +512,6 @@
     <Style Selector="MenuItem TextBlock.Icon">
         <Setter Property="FontSize" Value="16" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-    </Style>
-
-    <Style Selector="MenuItem.Danger">
-        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-    </Style>
-
-    <Style Selector="MenuItem.Danger TextBlock.Icon">
-        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
     </Style>
 
     <Style Selector="NumericUpDown">
@@ -787,36 +624,12 @@
         <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
     </Style>
 
-    <Style Selector="Border.Keycap">
-        <Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
-        <Setter Property="Padding" Value="5,0" />
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="TextElement.FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
-        <Setter Property="TextElement.FontWeight" Value="SemiBold" />
-    </Style>
-
     <Style Selector="Border.Alert">
         <Setter Property="Background" Value="{DynamicResource AlertWarnFillBrush}" />
         <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="TextElement.FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
         <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-    </Style>
-
-    <Style Selector="Border.Disc">
-        <Setter Property="Width" Value="64" />
-        <Setter Property="Height" Value="64" />
-        <Setter Property="CornerRadius" Value="32" />
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-        <Setter Property="Margin" Value="0,0,0,8" />
-        <Setter Property="HorizontalAlignment" Value="Center" />
-    </Style>
-
-    <Style Selector="Border.Disc TextBlock.Icon">
-        <Setter Property="FontSize" Value="28" />
-        <Setter Property="HorizontalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Panel.Ring">
@@ -838,9 +651,5 @@
 
     <Style Selector="Panel.Ring.Warn TextBlock">
         <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-    </Style>
-
-    <Style Selector="ListBox.Rail ListBoxItem:selected TextBlock.Icon, ListBox.Stack ListBoxItem:selected TextBlock.Tile">
-        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
     </Style>
 </Styles>

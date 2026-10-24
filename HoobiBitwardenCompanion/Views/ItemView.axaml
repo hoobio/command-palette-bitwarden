@@ -69,8 +69,7 @@
                         <Border Classes="Badge Accent" IsVisible="{Binding IsEditing}">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Edit}" />
-                                <TextBlock Text="Editing" VerticalAlignment="Center" IsVisible="{Binding !IsNew}" />
-                                <TextBlock Text="New item" VerticalAlignment="Center" IsVisible="{Binding IsNew}" />
+                                <TextBlock Text="Editing" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
                     </WrapPanel>
@@ -79,48 +78,19 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <UserControl.Styles>
-        <Style Selector="ContentControl.VaultHeader, Panel.VaultOnly">
-            <Setter Property="IsVisible" Value="False" />
-        </Style>
-        <Style Selector="views|ItemView.InVault ContentControl.VaultHeader, views|ItemView.InVault Panel.VaultOnly">
-            <Setter Property="IsVisible" Value="True" />
-        </Style>
-        <Style Selector="views|ItemView.InVault ContentControl.WindowHeader">
-            <Setter Property="IsVisible" Value="False" />
-        </Style>
-        <Style Selector="views|ItemView.InVault ItemsControl#GroupList > ContentPresenter:nth-child(1) TextBlock.GroupHeader">
-            <Setter Property="Margin" Value="4,8,4,8" />
-        </Style>
-    </UserControl.Styles>
-
-    <Grid RowDefinitions="Auto,Auto,Auto,*">
-        <ContentControl Classes="VaultHeader" Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,0,16,0" />
-
-        <Grid x:Name="Toolbar" Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,0,24,4">
+    <Grid RowDefinitions="Auto,Auto,*">
+        <Grid x:Name="Toolbar" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,24,4">
             <WrapPanel ItemSpacing="8" LineSpacing="8">
-                <Button x:Name="RestoreButton" Content="Restore" Command="{Binding RestoreCommand}" IsVisible="{Binding CanRestore}" />
                 <Button x:Name="EditButton" Content="Edit" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" />
-                <Panel Classes="VaultOnly">
-                    <Button x:Name="CloneButton" Content="Clone" Command="{Binding CloneCommand}" IsVisible="{Binding CanEdit}" />
-                </Panel>
                 <Button x:Name="HistoryButton" Content="Password history" Command="{Binding ShowPasswordHistoryCommand}" IsVisible="{Binding CanShowHistory}" />
                 <Button x:Name="RotateButton" Content="Rotate password" Command="{Binding RotateCommand}" IsVisible="{Binding CanRotate}" />
                 <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditing}" />
                 <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelEditCommand}" IsVisible="{Binding IsEditing}" />
             </WrapPanel>
-            <Panel Grid.Column="1" Classes="VaultOnly" VerticalAlignment="Top">
-                <Button x:Name="OpenWindowButton" Theme="{StaticResource GhostButtonStyle}" Command="{Binding $parent[views:ItemView].OpenInWindowCommand}" IsVisible="{Binding IsReadOnly}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.WindowNew}" FontSize="16" />
-                        <TextBlock Text="Open in own window" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-            </Panel>
-            <Button x:Name="DeleteButton" Grid.Column="2" VerticalAlignment="Top" Theme="{StaticResource DangerIconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding CanDelete}" ToolTip.Tip="{Binding DeleteLabel}" AutomationProperties.Name="{Binding DeleteLabel}" />
+            <Button x:Name="DeleteButton" Grid.Column="1" VerticalAlignment="Top" Theme="{StaticResource DangerIconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
         </Grid>
 
-        <StackPanel Grid.Row="2" Margin="0,0,24,0">
+        <StackPanel Grid.Row="1" Margin="0,0,24,0">
             <Border x:Name="ErrorAlert" Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
             </Border>
@@ -132,9 +102,9 @@
             </Border>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="3" IsVisible="{Binding !IsEditing}">
+        <ScrollViewer Grid.Row="2" IsVisible="{Binding !IsEditing}">
             <StackPanel Margin="{StaticResource PageGutter}">
-                <ContentControl Classes="WindowHeader" Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,8,-8,0" />
+                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,8,-8,0" />
 
                 <Border x:Name="PasswordPanel" Classes="Group" Margin="0,8,0,0" IsVisible="{Binding IsPrompting}">
                     <Border Classes="Row" Padding="16,20">
@@ -264,7 +234,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <ScrollViewer x:Name="EditorScroll" Grid.Row="3" IsVisible="{Binding IsEditing}">
+        <ScrollViewer x:Name="EditorScroll" Grid.Row="2" IsVisible="{Binding IsEditing}">
             <views:ItemEditView x:Name="EditView" Margin="{StaticResource PageGutter}" DataContext="{Binding Editor}" />
         </ScrollViewer>
     </Grid>

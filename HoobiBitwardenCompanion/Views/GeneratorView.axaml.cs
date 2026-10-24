@@ -23,7 +23,7 @@ internal sealed partial class GeneratorView : UserControl
     {
       Title = "Generator",
       Content = new ScrollViewer { MaxHeight = 560, Content = new GeneratorView { DataContext = viewModel } },
-      PrimaryButtonText = viewModel.CanUse ? "Use password" : string.Empty,
+      PrimaryButtonText = "Use password",
       CloseButtonText = "Close",
       DefaultButton = FAContentDialogButton.Close,
     };
@@ -35,9 +35,9 @@ internal sealed partial class GeneratorView : UserControl
     return dialog;
   }
 
-  internal static async Task<string?> ShowAsync(TopLevel? owner, PipeChannel channel, bool canUse)
+  internal static async Task<string?> ShowAsync(TopLevel? owner, PipeChannel channel)
   {
-    var viewModel = new GeneratorViewModel(channel, canUse);
+    var viewModel = new GeneratorViewModel(channel) { Toast = message => ToastWindow.Show(owner, message) };
     var dialog = CreateDialog(viewModel);
     string? used = null;
     viewModel.UseRequested = value => used = value;

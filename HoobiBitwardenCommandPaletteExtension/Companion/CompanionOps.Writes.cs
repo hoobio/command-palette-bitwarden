@@ -78,19 +78,6 @@ internal sealed partial class CompanionOps
     _copyText(history[index].Password, true);
   }
 
-  internal async Task<SavedResponse> CreateItemAsync(EditableItem item)
-  {
-    Validate(item);
-    var organizationId = item.OrganizationId is null ? null : RequireGuid(item.OrganizationId);
-    var collectionIds = organizationId is null ? null : RequireIds(item.CollectionIds, atLeastOne: true);
-    RequireUnlocked();
-    var node = NewItemJson(item.Type);
-    Apply(node, item);
-    node["organizationId"] = organizationId;
-    node["collectionIds"] = collectionIds is null ? null : new JsonArray([.. collectionIds.Select(c => (JsonNode?)JsonValue.Create(c))]);
-    return Saved(await _service.CreateItemAsync(node)) ?? throw new IpcException(IpcErrors.Failed);
-  }
-
   internal async Task<SavedResponse> UpdateItemAsync(EditableItem item, bool verified = false)
   {
     Validate(item);
@@ -113,14 +100,13 @@ internal sealed partial class CompanionOps
     var id = RequireGuid(request.Id);
     var organizationId = op == Ops.MoveItem ? RequireGuid(request.OrganizationId) : null;
     var collectionIds = op is Ops.MoveItem or Ops.SetCollections ? RequireIds(request.CollectionIds, atLeastOne: true) : null;
-    if (op is not (Ops.DeleteItem or Ops.RestoreItem or Ops.ArchiveItem or Ops.MoveItem or Ops.SetCollections))
+    if (op is not (Ops.DeleteItem or Ops.ArchiveItem or Ops.MoveItem or Ops.SetCollections))
       throw new IpcException(IpcErrors.Invalid);
     RequireUnlocked();
     await RequireWriteGrantAsync(id, verified);
     return Saved(op switch
     {
       Ops.DeleteItem => await _service.DeleteItemAsync(id, request.RevisionDate, request.Permanent),
-      Ops.RestoreItem => await _service.RestoreItemAsync(id, request.RevisionDate),
       Ops.ArchiveItem => await _service.ArchiveItemAsync(id, request.RevisionDate),
       Ops.MoveItem => await _service.MoveItemAsync(id, request.RevisionDate, organizationId!, collectionIds!),
       _ => await _service.SetCollectionsAsync(id, request.RevisionDate, collectionIds!),
@@ -131,7 +117,7 @@ internal sealed partial class CompanionOps
   {
     if (verified || RepromptPage.IsWithinGracePeriod(id))
       return;
-    var reprompt = (_service.GetCachedItem(id) ?? FindExtra(id))?.Reprompt ?? Int(await _service.GetItemJsonAsync(id), "reprompt");
+    var reprompt = _service.GetCachedItem(id)?.Reprompt ?? Int(await _service.GetItemJsonAsync(id), "reprompt");
     if (reprompt == 1)
       throw new IpcException(IpcErrors.Reprompt);
   }
@@ -162,20 +148,6 @@ internal sealed partial class CompanionOps
     if (!valid)
       throw new IpcException(IpcErrors.Invalid);
   }
-
-  internal static JsonObject NewItemJson(int type) => new()
-  {
-    ["organizationId"] = null,
-    ["collectionIds"] = null,
-    ["folderId"] = null,
-    ["type"] = type,
-    ["name"] = string.Empty,
-    ["notes"] = null,
-    ["favorite"] = false,
-    ["fields"] = new JsonArray(),
-    ["reprompt"] = 0,
-    ["passwordHistory"] = new JsonArray(),
-  };
 
   internal static void Apply(JsonObject node, EditableItem item)
   {

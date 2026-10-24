@@ -60,9 +60,6 @@ public class VaultToolsTests(AvaloniaSession session)
           return IpcJson.ToElement(new ItemDto(ItemId, "GitHub", Type, "Work", null, false, false, false, Revision, Revision, null,
             [new FieldDto(ItemFields.Username, "Username", "Login credentials", "octocat", false), new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true)],
             Attachments: [.. Attachments]), IpcJson.Default.ItemDto);
-        case Ops.ListItems:
-          return IpcJson.ToElement(new ItemListResponse([new ItemSummary(ItemId, 1, "GitHub", "octocat", false, FolderId, null, [], false, false, Revision, false, false, false, [])]),
-            IpcJson.Default.ItemListResponse);
         case Ops.ListFilters:
           return IpcJson.ToElement(new FiltersResponse([new FilterRef(FolderId, "Work"), new FilterRef(Guid.NewGuid().ToString(), "Personal")], [], []), IpcJson.Default.FiltersResponse);
         case Ops.GetEditableItem:
@@ -75,8 +72,6 @@ public class VaultToolsTests(AvaloniaSession session)
           return IpcJson.ToElement(new GeneratedResponse(value, entry.Id), IpcJson.Default.GeneratedResponse);
         case Ops.ListGeneratorHistory:
           return IpcJson.ToElement(new GeneratorHistoryResponse([.. History]), IpcJson.Default.GeneratorHistoryResponse);
-        case Ops.CreateFolder:
-          return IpcJson.ToElement(new FilterRef(Guid.NewGuid().ToString(), IpcJson.Read(payload, IpcJson.Default.FolderRequest).Name!), IpcJson.Default.FilterRef);
         case Ops.UploadAttachment or Ops.DeleteAttachment or Ops.RotatePassword:
           return IpcJson.ToElement(new SavedResponse(ItemId, Revision.AddDays(1)), IpcJson.Default.SavedResponse);
         default:
@@ -157,10 +152,10 @@ public class VaultToolsTests(AvaloniaSession session)
   {
     File.Delete(CompanionSettings.FilePath);
     using var h = new Harness();
-    var vm = new GeneratorViewModel(h.Channel, canUse: true);
+    var toasts = new List<string>();
+    var vm = new GeneratorViewModel(h.Channel) { Toast = toasts.Add };
     string? used = null;
     vm.UseRequested = v => used = v;
-    Assert.False(vm.ShowUsernameTab);
     Assert.Equal(((decimal?)20m, true, false), (vm.Length, vm.Numbers, vm.Special));
 
     vm.Length = 24;
@@ -177,7 +172,8 @@ public class VaultToolsTests(AvaloniaSession session)
     await vm.CopyCommand.ExecuteAsync(null);
     await vm.History[0].CopyCommand.ExecuteAsync(null);
     Assert.All(h.Extension.Payloads(Ops.CopyGenerated), p => Assert.Equal(1, IpcJson.Read(p, IpcJson.Default.HistoryEntryRequest).Id));
-    Assert.Equal("Copied", vm.StatusMessage);
+    Assert.Equal(["Copied", "Copied"], toasts);
+    Assert.Null(vm.StatusMessage);
     vm.UseCommand.Execute(null);
     Assert.Equal(new string('x', 24), used);
 
@@ -198,31 +194,10 @@ public class VaultToolsTests(AvaloniaSession session)
   });
 
   [Fact]
-  public Task Generator_UsernameTab_SendsTheEmailOrDomain() => session.RunAsync(async () =>
-  {
-    using var h = new Harness();
-    var vm = new GeneratorViewModel(h.Channel) { SelectedTab = 2, Email = "jane@example.com" };
-    Assert.True(vm.ShowUsernameTab && vm.IsUsername && vm.IsPlusAddress);
-    await vm.InitializeAsync();
-    Assert.Empty(h.Extension.Payloads(Ops.Generate));
-
-    await vm.RegenerateCommand.ExecuteAsync(null);
-    vm.SelectedUsernameKind = GeneratorViewModel.UsernameKinds[1];
-    vm.Domain = "example.com";
-    await vm.RegenerateCommand.ExecuteAsync(null);
-
-    var sent = h.Extension.Payloads(Ops.Generate).Select(p => IpcJson.Read(p, IpcJson.Default.GeneratorOptions)).ToList();
-    Assert.Equal((GeneratorKinds.PlusAddress, "jane@example.com"), (sent[0].Kind, sent[0].Email));
-    Assert.Equal((GeneratorKinds.CatchAll, "example.com"), (sent[1].Kind, sent[1].Domain));
-    Assert.Equal(GeneratorKinds.CatchAll, CompanionSettings.LoadGenerator().Kind);
-    File.Delete(CompanionSettings.FilePath);
-  });
-
-  [Fact]
   public Task GeneratorPanel_Renders_WithMaskedHistory() => session.RunAsync(async () =>
   {
     using var h = new Harness();
-    var vm = new GeneratorViewModel(h.Channel, canUse: true) { Special = true };
+    var vm = new GeneratorViewModel(h.Channel) { Special = true };
     await vm.InitializeAsync();
     await vm.RegenerateCommand.ExecuteAsync(null);
     var window = new Window { Width = 460, Height = 900, Background = Avalonia.Media.Brushes.Transparent, Content = new GeneratorView { DataContext = vm, Margin = new Avalonia.Thickness(24) } };
@@ -257,9 +232,11 @@ public class VaultToolsTests(AvaloniaSession session)
     var window = new Window { Width = 600, Height = 900 };
     window.Show();
 
-    var shown = GeneratorView.ShowAsync(window, h.Channel, canUse: true);
+    var shown = GeneratorView.ShowAsync(window, h.Channel);
     AvaloniaSession.WaitFor(() => window.GetVisualDescendants().OfType<GeneratorView>().FirstOrDefault()?.DataContext is GeneratorViewModel { HasValue: true });
     var vm = (GeneratorViewModel)window.GetVisualDescendants().OfType<GeneratorView>().Single().DataContext!;
+    await vm.CopyCommand.ExecuteAsync(null);
+    Assert.Equal("Copied", ToastWindow.Current!.Text);
     GeneratorView.OnLocked();
     Assert.False(vm.HasValue);
     await vm.RegenerateCommand.ExecuteAsync(null);
@@ -357,7 +334,7 @@ public class VaultToolsTests(AvaloniaSession session)
     Assert.Equal((ItemId, Revision, GeneratorKinds.Password), (rotate.Id, rotate.RevisionDate, rotate.Options.Kind));
     Assert.Equal("Password replaced and copied", h.Toasts[^1]);
 
-    CompanionSettings.SaveGenerator(new GeneratorOptions(GeneratorKinds.CatchAll, Domain: "example.com"));
+    CompanionSettings.SaveGenerator(new GeneratorOptions("username"));
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Unknown;
     await vm.RotateCommand.ExecuteAsync(null);
     Assert.Equal(GeneratorKinds.Password, IpcJson.Read(h.Extension.Payloads(Ops.RotatePassword)[^1], IpcJson.Default.RotateRequest).Options.Kind);
@@ -434,104 +411,12 @@ public class VaultToolsTests(AvaloniaSession session)
   });
 
   [Fact]
-  public Task FolderRail_HasAddButton_AndAContextMenuOnUserFoldersOnly() => session.RunAsync(async () =>
-  {
-    using var h = new Harness();
-    using var vm = new VaultViewModel(h.Channel, _ => { });
-    var window = new MainWindow(vm) { Width = 1100, Height = 700 };
-    window.Show();
-    await vm.ReloadAsync();
-    window.UpdateLayout();
-
-    var header = vm.Filters.Single(f => f.Label == "Folders");
-    Assert.True(header.CanAdd && header.IsEnabledInRail);
-    Assert.False(vm.Filters.Single(f => f.Label == "Types").IsEnabledInRail);
-    Assert.Single(window.GetVisualDescendants().OfType<Button>(), b => (string?)ToolTip.GetTip(b) == "New folder" && b.IsEffectivelyVisible);
-
-    var rail = window.FindControl<ListBox>("FilterList")!;
-    var work = RailRow(rail, "Work");
-    var none = RailRow(rail, "No folder");
-    none.RaiseEvent(new Avalonia.Input.ContextRequestedEventArgs());
-    RailRow(rail, "All items").RaiseEvent(new Avalonia.Input.ContextRequestedEventArgs());
-    Assert.DoesNotContain(rail.GetVisualDescendants().OfType<StackPanel>(), s => FlyoutBase.GetAttachedFlyout(s) is not null);
-    work.RaiseEvent(new Avalonia.Input.ContextRequestedEventArgs());
-    var menu = Assert.IsType<MenuFlyout>(FlyoutBase.GetAttachedFlyout(work));
-    Assert.True(menu.IsOpen);
-    Assert.Equal(["Rename", "Delete"], menu.Items.OfType<MenuItem>().Select(m => (string)m.Header!));
-    menu.Hide();
-    var popup = (Popup)typeof(PopupFlyoutBase).GetProperty("Popup", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!.GetValue(menu)!;
-    popup.ShouldUseOverlayLayer = true;
-    menu.ShowAt(work);
-    window.UpdateLayout();
-    AvaloniaSession.WaitFor(() => menu.Items.OfType<MenuItem>().All(m => m.IsEffectivelyVisible && m.Bounds.Height > 0));
-    var frame = window.CaptureRenderedFrame();
-    Assert.NotNull(frame);
-    SaveScreenshot(frame, "folders-rail.png");
-
-    var renamed = new List<string?>();
-    vm.AskText = (_, _, current) =>
-    {
-      renamed.Add(current);
-      return Task.FromResult<string?>(null);
-    };
-    var rename = menu.Items.OfType<MenuItem>().First();
-    rename.Command!.Execute(rename.CommandParameter);
-    Assert.Equal(["Work"], renamed);
-    menu.Hide();
-
-    vm.SelectedFilter = header;
-    AvaloniaSession.WaitFor(() => vm.SelectedFilter is { IsHeader: false });
-    window.Close();
-  });
-
-  private static StackPanel RailRow(ListBox rail, string label) =>
-    rail.GetVisualDescendants().OfType<StackPanel>().Single(s => s.DataContext is FilterViewModel f && f.Label == label && s.Orientation == Avalonia.Layout.Orientation.Horizontal);
-
-  [Fact]
-  public Task FolderCommands_ValidateTheName_AndConfirmDeletesAsDanger() => session.RunAsync(async () =>
-  {
-    using var h = new Harness();
-    using var vm = new VaultViewModel(h.Channel, _ => { });
-    await vm.ReloadAsync();
-    var answer = (string?)"   ";
-    vm.AskText = (_, _, _) => Task.FromResult(answer);
-    vm.ConfirmAction = h.ConfirmActionAsync;
-    var work = vm.Filters.Single(f => f.Label == "Work");
-
-    await vm.NewFolderCommand.ExecuteAsync(null);
-    Assert.Equal("Enter a folder name.", vm.ErrorMessage);
-    Assert.Empty(h.Extension.Payloads(Ops.CreateFolder));
-
-    answer = "  Travel ";
-    await vm.NewFolderCommand.ExecuteAsync(null);
-    Assert.Equal(new FolderRequest(null, "Travel"), IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.CreateFolder)), IpcJson.Default.FolderRequest));
-
-    answer = "Work";
-    await vm.RenameFolderCommand.ExecuteAsync(work);
-    Assert.Empty(h.Extension.Payloads(Ops.RenameFolder));
-    answer = "Office";
-    await vm.RenameFolderCommand.ExecuteAsync(work);
-    Assert.Equal(new FolderRequest(FolderId, "Office"), IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.RenameFolder)), IpcJson.Default.FolderRequest));
-
-    await vm.DeleteFolderCommand.ExecuteAsync(work);
-    Assert.Equal("Delete folder|Delete the folder \"Work\"? Its items move to No folder. You cannot undo this.||Delete folder", h.Prompts[^1]);
-    Assert.Equal(FolderId, IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.DeleteFolder)), IpcJson.Default.FolderRequest).Id);
-
-    h.Extension.FailWith[Ops.DeleteFolder] = IpcErrors.Failed;
-    await vm.DeleteFolderCommand.ExecuteAsync(work);
-    Assert.Equal("Bitwarden did not save the folder change.", h.DangerFailure);
-
-    await vm.DeleteFolderCommand.ExecuteAsync(vm.Filters.Single(f => f.Label == "No folder"));
-    Assert.Equal(2, h.Extension.Payloads(Ops.DeleteFolder).Count);
-  });
-
-  [Fact]
   public void CompanionSettings_FallBackToDefaults_AndRoundTrip()
   {
     File.WriteAllText(CompanionSettings.FilePath, "{not json");
     Assert.Equal(new GeneratorOptions(), CompanionSettings.LoadGenerator());
-    CompanionSettings.SaveGenerator(new GeneratorOptions(GeneratorKinds.PlusAddress, Email: " jane@example.com "));
-    Assert.Equal(new GeneratorOptions(GeneratorKinds.PlusAddress, Email: "jane@example.com"), CompanionSettings.LoadGenerator());
+    CompanionSettings.SaveGenerator(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 6));
+    Assert.Equal(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 6), CompanionSettings.LoadGenerator());
     Assert.DoesNotContain("correct-horse", File.ReadAllText(CompanionSettings.FilePath), StringComparison.Ordinal);
     File.Delete(CompanionSettings.FilePath);
     Assert.Equal(new GeneratorOptions(), CompanionSettings.LoadGenerator());

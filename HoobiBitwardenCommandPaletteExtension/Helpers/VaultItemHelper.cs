@@ -39,13 +39,13 @@ internal static partial class VaultItemHelper
     {
       BitwardenItemType.Login when ToSafeWebUrl(item.FirstUri) is { } url => new OpenUrlCommand(url),
       BitwardenItemType.SshKey when HasSshHost(item) => BuildSshCommand(item),
-      _ when CompanionHost.Current is { } companion => BuildOpenInVaultCommand(companion, item.Id),
+      _ when CompanionHost.Current is { } companion => BuildOpenInWindowCommand(companion, item.Id),
       _ => BuildOpenInWebVaultCommand(item.Id),
     });
   }
 
-  private static AnonymousCommand BuildOpenInVaultCommand(CompanionHost companion, string id) =>
-    new(() => companion.ShowItem(id)) { Name = "Open in Vault", Result = CommandResult.Dismiss() };
+  private static AnonymousCommand BuildOpenInWindowCommand(CompanionHost companion, string id) =>
+    new(() => companion.ShowItem(id)) { Name = "Open in window", Result = CommandResult.Dismiss() };
 
   internal static string? ToSafeWebUrl(string? uri)
   {
@@ -78,9 +78,9 @@ internal static partial class VaultItemHelper
 
     if (companion is not null)
     {
-      items.Add(new CommandContextItem(Track(id, BuildOpenInVaultCommand(companion, id)))
+      items.Add(new CommandContextItem(Track(id, BuildOpenInWindowCommand(companion, id)))
       {
-        Title = "Open in Vault",
+        Title = "Open in window",
         Icon = new IconInfo(""),
         RequestedShortcut = Chord(VirtualKey.O, shift: true),
       });

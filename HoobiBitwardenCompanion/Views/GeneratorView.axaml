@@ -8,7 +8,6 @@
         <TabStrip x:Name="KindTabs" SelectedIndex="{Binding SelectedTab}">
             <TabStripItem Content="Password" />
             <TabStripItem Content="Passphrase" />
-            <TabStripItem Content="Username" IsVisible="{Binding ShowUsernameTab}" />
         </TabStrip>
 
         <Border Classes="Group" Margin="0,8,0,0">
@@ -102,27 +101,6 @@
                             <TextBlock Text="Include number" VerticalAlignment="Center" />
                             <ToggleSwitch Grid.Column="1" MinWidth="0" IsChecked="{Binding IncludeNumber}" OnContent="{x:Null}" OffContent="{x:Null}" />
                         </Grid>
-                    </Border>
-                </StackPanel>
-
-                <StackPanel x:Name="UsernameOptions" Classes="Rows" IsVisible="{Binding IsUsername}">
-                    <Border Classes="Row Edit">
-                        <StackPanel>
-                            <TextBlock Classes="FieldLabel" Text="Type" />
-                            <ComboBox x:Name="UsernameKindBox" ItemsSource="{x:Static vm:GeneratorViewModel.UsernameKinds}" SelectedItem="{Binding SelectedUsernameKind}" />
-                        </StackPanel>
-                    </Border>
-                    <Border Classes="Row Edit" IsVisible="{Binding IsPlusAddress}">
-                        <StackPanel>
-                            <TextBlock Classes="FieldLabel" Text="Email" />
-                            <TextBox Text="{Binding Email}" PlaceholderText="jane@example.com" />
-                        </StackPanel>
-                    </Border>
-                    <Border Classes="Row Edit" IsVisible="{Binding !IsPlusAddress}">
-                        <StackPanel>
-                            <TextBlock Classes="FieldLabel" Text="Domain" />
-                            <TextBox Text="{Binding Domain}" PlaceholderText="example.com" />
-                        </StackPanel>
                     </Border>
                 </StackPanel>
             </Panel>

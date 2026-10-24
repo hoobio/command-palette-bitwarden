@@ -16,24 +16,16 @@ internal static class Ops
   public const string OpenUri = "openUri";
   public const string VerifyReprompt = "verifyReprompt";
   public const string ShowItem = "showItem";
-  public const string ShowVault = "showVault";
   public const string Locked = "locked";
-  public const string ListItems = "listItems";
   public const string ListFilters = "listFilters";
   public const string VaultChanged = "vaultChanged";
-  public const string IconsChanged = "iconsChanged";
   public const string GetEditableItem = "getEditableItem";
   public const string GetPasswordHistory = "getPasswordHistory";
-  public const string CreateItem = "createItem";
   public const string UpdateItem = "updateItem";
   public const string DeleteItem = "deleteItem";
-  public const string RestoreItem = "restoreItem";
   public const string ArchiveItem = "archiveItem";
   public const string MoveItem = "moveItem";
   public const string SetCollections = "setCollections";
-  public const string CreateFolder = "createFolder";
-  public const string RenameFolder = "renameFolder";
-  public const string DeleteFolder = "deleteFolder";
   public const string DownloadAttachment = "downloadAttachment";
   public const string UploadAttachment = "uploadAttachment";
   public const string DeleteAttachment = "deleteAttachment";
@@ -48,8 +40,6 @@ internal static class GeneratorKinds
 {
   public const string Password = "password";
   public const string Passphrase = "passphrase";
-  public const string PlusAddress = "plusAddress";
-  public const string CatchAll = "catchAll";
 }
 
 internal static class IpcErrors
@@ -164,8 +154,6 @@ internal sealed record ItemDto(
   DateTime RevisionDate,
   DateTime? PasswordRevisionDate,
   IReadOnlyList<FieldDto> Fields,
-  bool Deleted = false,
-  bool Archived = false,
   IReadOnlyList<AttachmentDto>? Attachments = null,
   string? IconPath = null,
   GraceDto? Grace = null);
@@ -173,8 +161,6 @@ internal sealed record ItemDto(
 internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
 
 internal sealed record AttachmentRequest(string Id, DateTime RevisionDate, string? AttachmentId = null, string? Path = null);
-
-internal sealed record FolderRequest(string? Id, string? Name);
 
 internal sealed record GeneratorOptions(
   string Kind = GeneratorKinds.Password,
@@ -189,9 +175,7 @@ internal sealed record GeneratorOptions(
   int Words = 4,
   string Separator = "-",
   bool Capitalize = false,
-  bool IncludeNumber = false,
-  string? Email = null,
-  string? Domain = null);
+  bool IncludeNumber = false);
 
 internal sealed record GeneratedResponse(string Value, long EntryId);
 
@@ -202,26 +186,6 @@ internal sealed record GeneratorHistoryResponse(IReadOnlyList<GeneratedEntry> En
 internal sealed record HistoryEntryRequest(long Id);
 
 internal sealed record RotateRequest(string Id, DateTime RevisionDate, GeneratorOptions Options);
-
-internal sealed record ItemSummary(
-  string Id,
-  int Type,
-  string Name,
-  string? Subtext,
-  bool Favorite,
-  string? FolderId,
-  string? OrganizationId,
-  IReadOnlyList<string> CollectionIds,
-  bool Deleted,
-  bool Archived,
-  DateTime RevisionDate,
-  bool HasTotp,
-  bool Reprompt,
-  bool HasNotes,
-  IReadOnlyList<string> Hosts,
-  string? IconPath = null);
-
-internal sealed record ItemListResponse(IReadOnlyList<ItemSummary> Items);
 
 internal sealed record FilterRef(string Id, string Name, string? OrganizationId = null);
 
@@ -290,15 +254,12 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 [JsonSerializable(typeof(TotpResponse))]
 [JsonSerializable(typeof(RepromptResponse))]
 [JsonSerializable(typeof(ItemDto))]
-[JsonSerializable(typeof(ItemListResponse))]
 [JsonSerializable(typeof(FiltersResponse))]
 [JsonSerializable(typeof(EditableItem))]
 [JsonSerializable(typeof(WriteRequest))]
 [JsonSerializable(typeof(SavedResponse))]
 [JsonSerializable(typeof(PasswordHistoryResponse))]
 [JsonSerializable(typeof(AttachmentRequest))]
-[JsonSerializable(typeof(FolderRequest))]
-[JsonSerializable(typeof(FilterRef))]
 [JsonSerializable(typeof(GeneratorOptions))]
 [JsonSerializable(typeof(GeneratedResponse))]
 [JsonSerializable(typeof(GeneratorHistoryResponse))]

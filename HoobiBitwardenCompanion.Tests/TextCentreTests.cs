@@ -9,6 +9,8 @@ using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using HoobiBitwarden.Ipc;
+using HoobiBitwardenCompanion.ViewModels;
 using HoobiBitwardenCompanion.Views;
 
 namespace HoobiBitwardenCompanion.Tests;
@@ -53,29 +55,23 @@ public class TextCentreTests(AvaloniaSession session)
     return button;
   }
 
-  private static ListBoxItem Row(string theme, Control content) => new() { Theme = Theme(theme), Content = content, Width = 320 };
-
   private static List<(string Name, Control Box)> Gallery() =>
   [
     ("button", Button("Edit")),
     ("button accent", Button("Save", "AccentButtonStyle")),
     ("button danger", Button("Delete", "DangerButtonStyle")),
-    ("button ghost", Button(Pair(8, Icon("Glyph.WindowNew"), Label("Detach in own window")), "GhostButtonStyle")),
     ("button dialog", Button("Cancel", "DialogCloseButtonStyle", 36)),
-    ("button icon+text", Button(Pair(8, Icon("Glyph.Add"), Label("New item"), Icon("Glyph.ChevronDown")), "AccentButtonStyle", 36)),
+    ("button icon+text", Button(Pair(10, Icon("Glyph.Add"), Label("Add field"), Icon("Glyph.ChevronDown")), "AddRowButtonStyle")),
     ("button add row", Button(Pair(10, Icon("Glyph.Add"), Label("Add attachment")), "AddRowButtonStyle")),
     ("button icon", Button(Resource("Glyph.Copy"), "IconButtonStyle")),
     ("badge", Boxed("Badge", Pair(4, Icon("Glyph.Folder", 14, "BadgeIcon"), Label("Work")))),
     ("badge accent", Boxed("Badge Accent", Pair(4, Icon("Glyph.StarFilled", 14, "BadgeIcon"), Label("Favourite")))),
-    ("keycap", Boxed("Keycap", new TextBlock { Text = "Enter" })),
     ("text box", new TextBox { Text = "Work", Width = 240, HorizontalAlignment = HorizontalAlignment.Left }),
-    ("search box", new TextBox { Classes = { "Search" }, PlaceholderText = "Search vault", Width = 240, Padding = default, HorizontalAlignment = HorizontalAlignment.Left, InnerLeftContent = new TextBlock { Classes = { "Icon" }, Text = (string)Resource("Glyph.Search"), FontSize = 16, Margin = new Thickness(10, 0, 8, 0) } }),
+    ("password box", new TextBox { Classes = { "revealPasswordButton" }, PasswordChar = '•', PlaceholderText = "Master", Width = 240, HorizontalAlignment = HorizontalAlignment.Left }),
     ("number box", new NumericUpDown { Value = 20, FormatString = "0", HorizontalAlignment = HorizontalAlignment.Left }),
     ("combo box", new ComboBox { ItemsSource = new[] { "Work" }, SelectedIndex = 0, Width = 240 }),
     ("combo item", new ComboBoxItem { Content = "Work", Width = 240 }),
-    ("tab", new TabStrip { ItemsSource = new[] { "Password", "Username" }, SelectedIndex = 1, HorizontalAlignment = HorizontalAlignment.Left }),
-    ("rail row", Row("RailItemTheme", Pair(12, Icon("Glyph.Folder", 20), Label("Work")))),
-    ("list row", Row("StackListItemTheme", new TextBlock { Text = "GitHub", FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center })),
+    ("tab", new TabStrip { ItemsSource = new[] { "Password", "Passphrase" }, SelectedIndex = 1, HorizontalAlignment = HorizontalAlignment.Left }),
     ("key value row", Boxed("Row KeyValue", new TextBlock { Text = "Brand", FontSize = 13, VerticalAlignment = VerticalAlignment.Center })),
     ("mono text box", new TextBox { Text = "SHA256", FontFamily = (Avalonia.Media.FontFamily)Resource("MonoFontFamily"), Width = 240, HorizontalAlignment = HorizontalAlignment.Left }),
     ("mono value", Boxed("Row KeyValue", new TextBlock { Text = "4821 AB", FontFamily = (Avalonia.Media.FontFamily)Resource("MonoFontFamily"), FontSize = 13, VerticalAlignment = VerticalAlignment.Center })),
@@ -83,7 +79,7 @@ public class TextCentreTests(AvaloniaSession session)
     ("alert", Boxed("Alert", new TextBlock { Text = "Item edited in the vault", TextWrapping = Avalonia.Media.TextWrapping.Wrap })),
     ("reprompt title", Pair(10, Icon("Glyph.Lock", 20), new TextBlock { Text = "Master lock", FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center })),
     ("verify button", Button(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = "Unlock" } } }, "AccentButtonStyle")),
-    ("menu item", new MenuFlyoutPresenter { ItemsSource = new[] { new MenuItem { Header = "Card", Icon = new TextBlock { Classes = { "Icon" }, Text = (string)Resource("Glyph.Card") } } } }),
+    ("menu item", new MenuFlyoutPresenter { ItemsSource = new[] { new MenuItem { Header = "Edit", Icon = new TextBlock { Classes = { "Icon" }, Text = (string)Resource("Glyph.Pin") } } } }),
   ];
 
   private sealed record Offset(string Name, string Text, double Pixels);
@@ -191,10 +187,11 @@ public class TextCentreTests(AvaloniaSession session)
   [Fact]
   public Task TitleBar_TextIsCentredOnTheBar() => session.RunAsync(() =>
   {
-    var window = new MainWindow { Width = 1100, Height = 700 };
+    using var channel = new PipeChannel(new MemoryStream(), new MemoryStream(), (_, _, _) => Task.FromResult<System.Text.Json.JsonElement?>(null));
+    var window = new ItemWindow(new ItemViewModel(Guid.NewGuid().ToString(), channel) { Title = "GitHub" }) { Width = 440, Height = 620 };
     var offsets = Render(window, [("title bar", window.FindControl<Grid>("AppTitleBar")!)]);
 
-    Assert.Contains(offsets, o => o.Text == "Bitwarden");
+    Assert.Contains(offsets, o => o.Text == "GitHub");
     AssertCentred(offsets);
   });
 }

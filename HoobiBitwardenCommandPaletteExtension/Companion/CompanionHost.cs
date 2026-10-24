@@ -32,7 +32,6 @@ internal sealed partial class CompanionHost : IDisposable
     _ops.Locked += NotifyLocked;
     _ops.VaultChanged += NotifyVaultChanged;
     _ops.VaultChanged += Prewarm;
-    _ops.IconsChanged += NotifyIconsChanged;
   }
 
   internal Process? Process => _process;
@@ -54,8 +53,6 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void ShowItem(string id) =>
     _ = SendAsync(Ops.ShowItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
-
-  public void ShowVault() => _ = SendAsync(Ops.ShowVault, null);
 
   public void RotateItem(string id) =>
     _ = SendAsync(Ops.RotateItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
@@ -88,8 +85,6 @@ internal sealed partial class CompanionHost : IDisposable
   internal void NotifyLocked() => Notify(Ops.Locked);
 
   internal void NotifyVaultChanged() => Notify(Ops.VaultChanged);
-
-  internal void NotifyIconsChanged() => Notify(Ops.IconsChanged);
 
   private void Notify(string op)
   {
@@ -217,7 +212,6 @@ internal sealed partial class CompanionHost : IDisposable
     _ops.Locked -= NotifyLocked;
     _ops.VaultChanged -= NotifyVaultChanged;
     _ops.VaultChanged -= Prewarm;
-    _ops.IconsChanged -= NotifyIconsChanged;
     lock (_lock)
       Stop();
     _ops.Dispose();

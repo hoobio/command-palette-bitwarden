@@ -1,6 +1,4 @@
 using System.ComponentModel;
-using System.Windows.Input;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -13,14 +11,6 @@ namespace HoobiBitwardenCompanion.Views;
 
 internal sealed partial class ItemView : UserControl
 {
-  public static readonly StyledProperty<ICommand?> OpenInWindowCommandProperty = AvaloniaProperty.Register<ItemView, ICommand?>(nameof(OpenInWindowCommand));
-
-  public ICommand? OpenInWindowCommand
-  {
-    get => GetValue(OpenInWindowCommandProperty);
-    set => SetValue(OpenInWindowCommandProperty, value);
-  }
-
   private ItemViewModel? _subscribed;
 
   public ItemView()
@@ -41,7 +31,7 @@ internal sealed partial class ItemView : UserControl
         viewModel.PickSavePath ??= PickSavePathAsync;
         viewModel.PickOpenPath ??= PickOpenPathAsync;
         viewModel.Toast ??= (message, success) => ToastWindow.Show(TopLevel.GetTopLevel(this), message, success);
-        viewModel.OpenGenerator ??=() => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this), viewModel.Channel, canUse: true);
+        viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this), viewModel.Channel);
       }
     };
   }
