@@ -99,7 +99,12 @@
                                                             <Arc StartAngle="-90" SweepAngle="{Binding TotpSweep}" Stroke="{DynamicResource AccentFillColorDefaultBrush}" StrokeThickness="2" />
                                                             <TextBlock Text="{Binding TotpRemaining}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                         </Panel>
-                                                        <Button Theme="{StaticResource IconButtonStyle}" Content="{Binding RevealGlyph}" Command="{Binding ToggleRevealCommand}" IsVisible="{Binding IsSecret}" ToolTip.Tip="Show or hide" />
+                                                        <Button Theme="{StaticResource IconButtonStyle}" Command="{Binding ToggleRevealCommand}" IsVisible="{Binding IsSecret}" ToolTip.Tip="Show or hide">
+                                                            <Panel>
+                                                                <TextBlock Text="{StaticResource Glyph.Eye}" IsVisible="{Binding !IsRevealed}" />
+                                                                <TextBlock Text="{StaticResource Glyph.EyeOff}" IsVisible="{Binding IsRevealed}" />
+                                                            </Panel>
+                                                        </Button>
                                                         <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Open}" Command="{Binding OpenCommand}" IsVisible="{Binding CanOpen}" ToolTip.Tip="Open in browser" />
                                                         <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" IsVisible="{Binding CanCopy}" ToolTip.Tip="Copy" />
                                                     </StackPanel>

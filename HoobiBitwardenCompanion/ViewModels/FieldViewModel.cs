@@ -47,7 +47,6 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(DisplayValue))]
-  [NotifyPropertyChangedFor(nameof(RevealGlyph))]
   public partial bool IsRevealed { get; set; }
 
   [ObservableProperty]
@@ -64,11 +63,16 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   public double TotpSweep => TotpPeriod > 0 ? 360.0 * TotpRemaining / TotpPeriod : 0;
 
-  public string RevealGlyph => IsRevealed ? "" : "";
-
   public string DisplayValue => IsTotp
     ? TotpCode ?? Mask
     : IsSecret ? (IsRevealed ? RevealedValue ?? string.Empty : Mask) : _value ?? string.Empty;
+
+  internal void Wipe()
+  {
+    IsRevealed = false;
+    RevealedValue = null;
+    TotpCode = null;
+  }
 
   [RelayCommand]
   private Task ToggleRevealAsync() => _owner?.ToggleRevealAsync(this) ?? Task.CompletedTask;
