@@ -799,13 +799,12 @@
         <Setter Property="TextElement.FontWeight" Value="SemiBold" />
     </Style>
 
-    <Style Selector="Border.Banner">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCautionBrush}" />
-        <Setter Property="BorderThickness" Value="3,0,0,0" />
-        <Setter Property="Padding" Value="13,12,16,12" />
+    <Style Selector="Border.Alert">
+        <Setter Property="Background" Value="{DynamicResource AlertWarnFillBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
+        <Setter Property="Padding" Value="12,8" />
         <Setter Property="TextElement.FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
     </Style>
 
     <Style Selector="Border.Disc">

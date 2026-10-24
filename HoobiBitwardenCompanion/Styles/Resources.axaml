@@ -12,6 +12,7 @@
     <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="#FFBAE67E" />
     <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="#FFFFD580" />
     <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="#FFF28779" />
+    <SolidColorBrush x:Key="AlertWarnFillBrush" Color="#26FFD580" />
 
     <SolidColorBrush x:Key="WindowGroundBrush" Color="#FF181C26" />
     <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#FF181C26" />
