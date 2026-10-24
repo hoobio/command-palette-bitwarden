@@ -24,11 +24,16 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private bool _inOrganization;
   private bool _archiveUnavailable;
   private FiltersResponse? _filters;
+  private readonly DispatcherTimer _graceTimer;
+  private GraceDto? _grace;
+  private (string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done)? _pendingWrite;
 
   public ItemViewModel(string id, PipeChannel channel)
   {
     Id = id;
     _channel = channel;
+    _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+    _graceTimer.Tick += (_, _) => TickGrace();
     _totpTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
     _totpTimer.Tick += (_, _) => _ = TickAsync();
   }
@@ -49,8 +54,6 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Func<string, string, string, string, Task<bool>>? Confirm { get; set; }
 
-  internal Func<Task<string?>>? AskPassword { get; set; }
-
   internal Func<ActionDialogRequest, Task<bool>>? ConfirmAction { get; set; }
 
   internal Action<EditableItem, FiltersResponse>? CloneRequested { get; set; }
@@ -65,9 +68,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public ObservableCollection<AttachmentViewModel> Attachments { get; } = [];
 
-  public bool ShowAttachments => IsReadOnly && !RepromptRequired && (Attachments.Count > 0 || CanAttach);
+  public bool ShowAttachments => IsReadOnly && !IsPrompting && (Attachments.Count > 0 || CanAttach);
 
-  public bool CanAttach => IsReadOnly && !IsDeleted && !IsArchived && !RepromptRequired && ItemType is >= 1 and <= 5;
+  public bool CanAttach => IsReadOnly && !IsDeleted && !IsArchived && !IsPrompting && ItemType is >= 1 and <= 5;
 
   public bool CanRotate => IsReadOnly && ItemType == 1 && !IsDeleted && !IsArchived;
 
@@ -149,8 +152,132 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public partial bool IsLoading { get; set; } = true;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(CanAttach), nameof(ShowAttachments))]
+  [NotifyPropertyChangedFor(nameof(IsPrompting), nameof(CanAttach), nameof(ShowAttachments))]
   public partial bool RepromptRequired { get; set; }
+
+  public bool IsPrompting => RepromptRequired || _pendingWrite is not null;
+
+  [ObservableProperty]
+  public partial bool IsVerifying { get; private set; }
+
+  [ObservableProperty]
+  public partial string? PasswordError { get; private set; }
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(GraceVisible), nameof(GraceCaption), nameof(GraceFraction))]
+  public partial TimeSpan GraceRemaining { get; private set; }
+
+  public bool GraceVisible => _grace is not null && !IsPrompting;
+
+  public string GraceCaption => $"Locks in {(int)Math.Ceiling(GraceRemaining.TotalSeconds) / 60}:{(int)Math.Ceiling(GraceRemaining.TotalSeconds) % 60:00}";
+
+  public double GraceFraction => _grace is { Seconds: > 0 } grace ? Math.Clamp(GraceRemaining.TotalSeconds / grace.Seconds, 0, 1) : 0;
+
+  internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
+
+  partial void OnRepromptRequiredChanged(bool value) => OnPropertyChanged(nameof(GraceVisible));
+
+  private void SetGrace(GraceDto? grace)
+  {
+    _grace = grace;
+    OnPropertyChanged(nameof(GraceVisible));
+    if (grace is null)
+    {
+      _graceTimer.Stop();
+      GraceRemaining = TimeSpan.Zero;
+      return;
+    }
+
+    GraceRemaining = grace.ExpiresUtc - UtcNow();
+    _graceTimer.Start();
+  }
+
+  internal void TickGrace()
+  {
+    if (_grace is not { } grace)
+      return;
+    GraceRemaining = grace.ExpiresUtc - UtcNow();
+    if (GraceRemaining > TimeSpan.Zero)
+      return;
+    GraceRemaining = TimeSpan.Zero;
+    SetGrace(null);
+    if (Editor is null)
+      Relock();
+  }
+
+  private void Relock()
+  {
+    _totpTimer.Stop();
+    foreach (var field in Groups.SelectMany(g => g.Fields))
+      field.Wipe();
+    Groups.Clear();
+    Attachments.Clear();
+    _totpField = null;
+    _repromptRetry = null;
+    RepromptRequired = true;
+  }
+
+  private void SetPending((string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done)? pending)
+  {
+    _pendingWrite = pending;
+    PasswordError = null;
+    OnPropertyChanged(nameof(IsPrompting));
+    OnPropertyChanged(nameof(CanAttach));
+    OnPropertyChanged(nameof(ShowAttachments));
+    OnPropertyChanged(nameof(GraceVisible));
+  }
+
+  internal void CancelPrompt()
+  {
+    ErrorMessage = null;
+    _pendingWrite?.Done.TrySetResult((false, null, IpcErrors.Reprompt));
+  }
+
+  internal async Task SubmitPasswordAsync(string? password)
+  {
+    if (IsVerifying || string.IsNullOrEmpty(password))
+      return;
+    IsVerifying = true;
+    PasswordError = null;
+    try
+    {
+      if (_pendingWrite is { } pending)
+        await VerifyPendingAsync(pending, password);
+      else
+        await VerifyRepromptAsync(password);
+    }
+    finally
+    {
+      IsVerifying = false;
+    }
+  }
+
+  private async Task VerifyPendingAsync((string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done) pending, string password)
+  {
+    var (ok, reply, _) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, pending.Op, pending.Payload), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
+    if (!ok)
+    {
+      FailPassword(ErrorMessage);
+      return;
+    }
+
+    var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
+    if (!result.Verified)
+    {
+      FailPassword(DescribeFailedReprompt(result));
+      return;
+    }
+
+    ErrorMessage = null;
+    SetGrace(result.Grace);
+    pending.Done.TrySetResult((true, result.Result, null));
+  }
+
+  private void FailPassword(string? message)
+  {
+    ErrorMessage = null;
+    PasswordError = message;
+  }
 
   [ObservableProperty]
   public partial string? ErrorMessage { get; set; }
@@ -201,6 +328,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _filters = null;
     Editor = null;
     RepromptRequired = false;
+    SetGrace(null);
+    _pendingWrite?.Done.TrySetResult((false, null, IpcErrors.Locked));
     StatusMessage = null;
     ErrorMessage = Describe(new IpcException(IpcErrors.Locked));
   }
@@ -221,6 +350,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IsArchived = item.Archived;
     _inOrganization = item.OrganizationName is not null;
     RepromptRequired = item.RepromptRequired;
+    SetGrace(item.Grace);
 
     Groups.Clear();
     foreach (var group in item.Fields.GroupBy(f => f.Group))
@@ -279,13 +409,15 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     {
       if (error == IpcErrors.Stale)
         await ReloadStaleAsync();
+      else
+        FailPassword(ErrorMessage);
       return false;
     }
 
     var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
     if (!result.Verified)
     {
-      ErrorMessage = DescribeFailedReprompt(result);
+      PasswordError = DescribeFailedReprompt(result);
       return false;
     }
 
@@ -293,6 +425,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _repromptRetry = null;
     RepromptRequired = false;
     onSuccess(result.Result);
+    SetGrace(result.Grace);
     await RefreshTotpIfShownAsync();
     return true;
   }
@@ -484,21 +617,17 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private async Task<(bool Ok, JsonElement? Reply, string? Error)> RetryWithPasswordAsync(string op, JsonElement payload)
   {
-    if (AskPassword is null || await AskPassword() is not { Length: > 0 } password)
-      return (false, null, IpcErrors.Reprompt);
-
-    var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
-    if (!ok)
-      return (false, null, error);
-    var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
-    if (!result.Verified)
-    {
-      ErrorMessage = DescribeFailedReprompt(result);
-      return (false, null, IpcErrors.Reprompt);
-    }
-
+    var done = new TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)>(TaskCreationOptions.RunContinuationsAsynchronously);
     ErrorMessage = null;
-    return (true, result.Result, null);
+    SetPending((op, payload, done));
+    try
+    {
+      return await done.Task;
+    }
+    finally
+    {
+      SetPending(null);
+    }
   }
 
   [RelayCommand]
@@ -651,6 +780,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     if (error == IpcErrors.Reprompt)
     {
       _repromptRetry = (op, payload, onSuccess);
+      ErrorMessage = null;
       RepromptRequired = true;
     }
     else if (error == IpcErrors.Stale)
@@ -762,6 +892,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     _disposed = true;
     _totpTimer.Stop();
+    _graceTimer.Stop();
+    _pendingWrite?.Done.TrySetResult((false, null, IpcErrors.Reprompt));
     Editor = null;
   }
 }

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
@@ -30,8 +31,12 @@ public class ItemWindowTests(AvaloniaSession session)
         return Requests.Count(r => r == op);
     }
 
-    public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken) =>
-      Task.FromResult(Handle(op, payload, verified: false));
+    public async Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
+    {
+      if (op == Ops.VerifyReprompt && VerifyGate is { } gate)
+        await gate.WaitAsync(cancellationToken);
+      return Handle(op, payload, verified: false);
+    }
 
     private JsonElement? Handle(string op, JsonElement? payload, bool verified)
     {
@@ -61,10 +66,20 @@ public class ItemWindowTests(AvaloniaSession session)
     {
       var ok = request.Password == "correct";
       if (ok)
+      {
         RepromptRequired = false;
+        _grace = GraceSeconds > 0 ? new GraceDto(DateTime.UtcNow.AddSeconds(GraceSeconds), GraceSeconds) : null;
+      }
+
       var result = ok && request.Op is { } op ? Handle(op, request.Payload, verified: true) : null;
-      return IpcJson.ToElement(new RepromptResponse(ok, 0, result), IpcJson.Default.RepromptResponse);
+      return IpcJson.ToElement(new RepromptResponse(ok, 0, result, _grace), IpcJson.Default.RepromptResponse);
     }
+
+    private GraceDto? _grace;
+
+    public int GraceSeconds { get; set; }
+
+    public SemaphoreSlim? VerifyGate { get; set; }
 
     private ItemDto Item() => new(
       ItemId, "GitHub", 1, "Work", "Acme", false, true, RepromptRequired,
@@ -75,7 +90,8 @@ public class ItemWindowTests(AvaloniaSession session)
         new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true),
         new FieldDto(ItemFields.Totp, "Verification code (TOTP)", "Login credentials", null, true),
         new FieldDto(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://github.com", false, CanOpen: true),
-      ]);
+      ],
+      Grace: RepromptRequired ? null : _grace);
   }
 
   private static FieldViewModel Field(ItemViewModel vm, string key) => vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == key);
@@ -200,7 +216,7 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.Empty(vm.Groups);
 
     Assert.False(await vm.VerifyRepromptAsync("wrong"));
-    Assert.Equal("Incorrect master password.", vm.ErrorMessage);
+    Assert.Equal("Incorrect master password.", vm.PasswordError);
 
     Assert.True(await vm.VerifyRepromptAsync("correct"));
     Assert.False(vm.RepromptRequired);
@@ -209,25 +225,106 @@ public class ItemWindowTests(AvaloniaSession session)
   });
 
   [Fact]
-  public Task ItemView_VerifyButton_PromptsAndVerifies() => session.RunAsync(async () =>
+  public Task PasswordPanel_ShowsAlone_FocusesTheBox_ShowsBusy_ReportsAWrongPassword_AndUnlocks() => session.RunAsync(async () =>
   {
-    var extension = new FakeExtension { RepromptRequired = true };
+    var extension = new FakeExtension { RepromptRequired = true, VerifyGate = new SemaphoreSlim(0) };
     using var pair = new ChannelPair(extension.HandleAsync);
     using var channel = CompanionChannel(pair);
     var vm = new ItemViewModel(ItemId, channel);
     var window = new ItemWindow(vm);
     window.Show();
     await vm.LoadAsync();
+    var panel = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PasswordPanel");
+    var box = window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "PasswordBox");
+    var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "VerifyButton");
+    var ring = window.GetLogicalDescendants().OfType<FluentAvalonia.UI.Controls.FAProgressRing>().Single(r => r.Name == "VerifyRing");
+    var error = window.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "PasswordErrorText");
 
-    window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "VerifyButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-    AvaloniaSession.WaitFor(() => window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Any());
-    var dialog = window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Single();
-    dialog.GetVisualDescendants().OfType<TextBox>().Single().Text = "correct";
-    dialog.Hide(FluentAvalonia.UI.Controls.FAContentDialogResult.Primary);
+    AvaloniaSession.WaitFor(() => box.IsFocused);
+    Assert.True(panel.IsEffectivelyVisible);
+    Assert.False(window.GetVisualDescendants().OfType<ItemsControl>().Single(c => c.Name == "GroupList").IsEffectivelyVisible);
+    Assert.False(window.GetLogicalDescendants().OfType<Border>().Single(b => b.Name == "ErrorAlert").IsEffectivelyVisible);
 
+    box.Text = "wrong";
+    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    AvaloniaSession.WaitFor(() => vm.IsVerifying);
+    Assert.False(box.IsEnabled || button.IsEnabled);
+    Assert.True(ring.IsEffectivelyVisible);
+    extension.VerifyGate.Release();
+
+    AvaloniaSession.WaitFor(() => !vm.IsVerifying && box.IsFocused);
+    Assert.True(box.IsEnabled && button.IsEnabled);
+    Assert.False(ring.IsEffectivelyVisible);
+    Assert.Equal("Incorrect master password.", error.Text);
+    Assert.True(error.IsEffectivelyVisible);
+    Assert.Equal("wrong".Length, box.SelectionEnd - box.SelectionStart);
+    Assert.True(vm.RepromptRequired);
+
+    box.Text = "correct";
+    extension.VerifyGate.Release();
+    box.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
     AvaloniaSession.WaitFor(() => !vm.RepromptRequired && vm.Groups.Count > 0);
-    Assert.Equal(1, extension.Count(Ops.VerifyReprompt));
+    Assert.False(panel.IsEffectivelyVisible);
+    Assert.True(window.GetVisualDescendants().OfType<ItemsControl>().Single(c => c.Name == "GroupList").IsEffectivelyVisible);
+    Assert.Equal(2, extension.Count(Ops.VerifyReprompt));
     window.Close();
+  });
+
+  [Fact]
+  public Task Grace_CountsDownFromTheExpiry_AndRelocksAtZero() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { RepromptRequired = true, GraceSeconds = 60 };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var now = DateTime.UtcNow;
+    using var vm = new ItemViewModel(ItemId, channel) { UtcNow = () => now };
+    await vm.LoadAsync();
+    Assert.False(vm.GraceVisible);
+
+    Assert.True(await vm.VerifyRepromptAsync("correct"));
+    now = DateTime.UtcNow;
+    vm.TickGrace();
+    Assert.True(vm.GraceVisible);
+    Assert.Equal(1, vm.GraceFraction, 2);
+    Assert.Equal("Locks in 1:00", vm.GraceCaption);
+
+    now = now.AddSeconds(18);
+    vm.TickGrace();
+    Assert.Equal(0.7, vm.GraceFraction, 2);
+    Assert.Equal("Locks in 0:42", vm.GraceCaption);
+    Assert.NotEmpty(vm.Groups);
+
+    var password = Field(vm, ItemFields.Password);
+    await password.ToggleRevealCommand.ExecuteAsync(null);
+    Assert.Equal("hunter2", password.RevealedValue);
+    now = now.AddSeconds(60);
+    vm.TickGrace();
+    Assert.True(vm.RepromptRequired);
+    Assert.True(vm.IsPrompting);
+    Assert.False(vm.GraceVisible);
+    Assert.Empty(vm.Groups);
+    Assert.Null(password.RevealedValue);
+
+    extension.GraceSeconds = 0;
+    Assert.True(await vm.VerifyRepromptAsync("correct"));
+    Assert.False(vm.GraceVisible);
+    Assert.NotEmpty(vm.Groups);
+  });
+
+  [Fact]
+  public Task Grace_SurvivesAReload() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { RepromptRequired = true, GraceSeconds = 60 };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    using var vm = new ItemViewModel(ItemId, channel);
+    await vm.LoadAsync();
+    await vm.VerifyRepromptAsync("correct");
+
+    await vm.LoadAsync();
+
+    Assert.True(vm.GraceVisible);
+    Assert.InRange(vm.GraceRemaining.TotalSeconds, 50, 60);
   });
 
   [Fact]

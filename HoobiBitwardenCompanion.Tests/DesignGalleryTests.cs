@@ -397,7 +397,6 @@ public class DesignGalleryTests(AvaloniaSession session)
     errorVm.ErrorMessage = ItemViewModel.Describe(new IpcException(IpcErrors.Conflict));
     Save(errorWindow, "29-item-error-line.png");
     errorVm.ErrorMessage = null;
-    ShowDialog(errorWindow, ItemView.CreateRepromptDialog("Google", new TextBox { PasswordChar = '•', PlaceholderText = "Master password", Classes = { "revealPasswordButton" } }), "30-dialog-reprompt.png");
     ShowDialog(errorWindow, ItemView.CreateActionDialog(new ActionDialogRequest("Remove item",
       "Archive \"Google\" or move it to the trash to keep it recoverable, or delete it permanently. You cannot undo a permanent delete.", "Permanently delete") { PrimaryLabel = "Archive" }).Dialog,
       "31-dialog-delete.png");

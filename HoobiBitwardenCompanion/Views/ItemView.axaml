@@ -2,6 +2,7 @@
     x:Class="HoobiBitwardenCompanion.Views.ItemView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:FluentAvalonia.UI.Controls"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     xmlns:views="using:HoobiBitwardenCompanion.Views"
     x:DataType="vm:ItemViewModel">
@@ -120,17 +121,11 @@
         </Grid>
 
         <StackPanel Grid.Row="2" Margin="0,0,24,0">
-            <Border x:Name="ErrorBanner" Classes="Banner" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Warning}" Foreground="{DynamicResource SystemFillColorCautionBrush}" VerticalAlignment="Top" />
-                    <TextBlock x:Name="ErrorText" Grid.Column="1" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
-                </Grid>
+            <Border x:Name="ErrorAlert" Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
             </Border>
-            <Border Classes="Banner" Margin="0,4,0,8" IsVisible="{Binding Editor.FormMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Warning}" Foreground="{DynamicResource SystemFillColorCautionBrush}" VerticalAlignment="Top" />
-                    <TextBlock x:Name="ValidationText" Grid.Column="1" TextWrapping="Wrap" Text="{Binding Editor.FormMessage, FallbackValue={x:Null}}" />
-                </Grid>
+            <Border Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding Editor.FormMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}">
+                <TextBlock x:Name="ValidationText" TextWrapping="Wrap" Text="{Binding Editor.FormMessage, FallbackValue={x:Null}}" />
             </Border>
         </StackPanel>
 
@@ -138,20 +133,31 @@
             <StackPanel Margin="{StaticResource PageGutter}">
                 <ContentControl Classes="WindowHeader" Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,8,-8,0" />
 
-                <Border Classes="Group" Margin="0,8,0,0" IsVisible="{Binding RepromptRequired}">
+                <Border x:Name="PasswordPanel" Classes="Group" Margin="0,8,0,0" IsVisible="{Binding IsPrompting}">
                     <Border Classes="Row" Padding="16,20">
                         <StackPanel Spacing="8">
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                <TextBlock Text="This item is protected" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Text="Master password required" FontWeight="SemiBold" VerticalAlignment="Center" />
                             </StackPanel>
-                            <TextBlock Classes="Caption" FontSize="13" TextWrapping="Wrap" Text="Enter your master password to view and copy this item." />
-                            <Button x:Name="VerifyButton" Margin="0,8,0,0" Theme="{StaticResource AccentButtonStyle}" Content="Verify master password" Click="OnVerifyClick" />
+                            <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Master password" IsEnabled="{Binding !IsVerifying}" KeyDown="OnPasswordKeyDown" />
+                            <TextBlock x:Name="PasswordErrorText" Classes="Caption Warn" TextWrapping="Wrap" Text="{Binding PasswordError}" IsVisible="{Binding PasswordError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <Button x:Name="VerifyButton" Margin="0,8,0,0" Theme="{StaticResource AccentButtonStyle}" IsEnabled="{Binding !IsVerifying}" Click="OnVerifyClick">
+                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                    <ui:FAProgressRing x:Name="VerifyRing" Width="14" Height="14" IsIndeterminate="True" IsVisible="{Binding IsVerifying}" />
+                                    <TextBlock Text="Verify" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Border>
                 </Border>
 
-                <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}">
+                <StackPanel x:Name="GracePanel" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding GraceVisible}">
+                    <ProgressBar x:Name="GraceBar" Height="3" Minimum="0" Maximum="1" Value="{Binding GraceFraction}" />
+                    <TextBlock x:Name="GraceText" Classes="Caption" Text="{Binding GraceCaption}" />
+                </StackPanel>
+
+                <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}" IsVisible="{Binding !IsPrompting}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:FieldGroupViewModel">
                             <StackPanel>

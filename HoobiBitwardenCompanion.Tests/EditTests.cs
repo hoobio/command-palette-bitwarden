@@ -124,9 +124,12 @@ public class EditTests(AvaloniaSession session)
 
     public string? Password { get; set; }
 
+    public string? PasswordFailure { get; private set; }
+
     public ItemViewModel Item(string id)
     {
-      var vm = new ItemViewModel(id, Channel) { Confirm = Ask, AskPassword = () => Task.FromResult(Password), ConfirmAction = ConfirmActionAsync };
+      var vm = new ItemViewModel(id, Channel) { Confirm = Ask, ConfirmAction = ConfirmActionAsync };
+      RepromptDriver.Attach(vm, () => Password, failure => PasswordFailure = failure);
       return vm;
     }
 
@@ -686,7 +689,8 @@ public class EditTests(AvaloniaSession session)
     h.Password = "wrong";
     await vm.DeleteCommand.ExecuteAsync(null);
     Assert.Equal(0, removed);
-    Assert.Equal("Incorrect master password.", vm.ErrorMessage);
+    Assert.Equal("Incorrect master password.", h.PasswordFailure);
+    Assert.False(vm.IsPrompting);
 
     h.Password = "correct";
     await vm.DeleteCommand.ExecuteAsync(null);

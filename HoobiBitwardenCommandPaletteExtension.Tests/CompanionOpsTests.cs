@@ -254,6 +254,33 @@ public class CompanionOpsTests
   }
 
   [Fact]
+  public async Task Verify_SendsTheGraceExpiry_OnTheResponseAndTheReloadedItem_AndNoneWhenGraceIsZero()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id, reprompt: 1));
+    var before = DateTime.UtcNow;
+
+    Assert.Null(h.Ops.GetItem(id).Grace);
+    var verified = await h.Ops.VerifyRepromptAsync(id, "correct");
+
+    Assert.Equal(RepromptPage.GracePeriodSeconds, verified.Grace!.Seconds);
+    Assert.InRange(verified.Grace.ExpiresUtc, before.AddSeconds(RepromptPage.GracePeriodSeconds - 2), DateTime.UtcNow.AddSeconds(RepromptPage.GracePeriodSeconds));
+    Assert.Equal(verified.Grace.Seconds, h.Ops.GetItem(id).Grace!.Seconds);
+
+    RepromptPage.GracePeriodSeconds = 0;
+    try
+    {
+      Assert.Null((await h.Ops.VerifyRepromptAsync(id, "correct")).Grace);
+      Assert.Null(h.Ops.GetItem(id, verified: true).Grace);
+    }
+    finally
+    {
+      RepromptPage.GracePeriodSeconds = 60;
+      RepromptPage.ClearGracePeriod();
+    }
+  }
+
+  [Fact]
   public async Task VerifyReprompt_ItemWithoutReprompt_IsAlwaysVerified()
   {
     var id = NewId();

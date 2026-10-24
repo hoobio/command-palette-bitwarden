@@ -110,18 +110,22 @@ public class VaultToolsTests(AvaloniaSession session)
 
     public string? DangerFailure { get; private set; }
 
-    public ItemViewModel Item() => new(ItemId, Channel)
+    public ItemViewModel Item()
     {
-      Confirm = (title, message, primary, close) =>
+      var vm = new ItemViewModel(ItemId, Channel)
       {
-        Prompts.Add($"{title}|{message}|{primary}|{close}");
-        return Task.FromResult(Answer);
-      },
-      AskPassword = () => Task.FromResult(Password),
-      ConfirmAction = ConfirmActionAsync,
-      PickSavePath = _ => Task.FromResult(Picked),
-      PickOpenPath = () => Task.FromResult(Picked),
-    };
+        Confirm = (title, message, primary, close) =>
+        {
+          Prompts.Add($"{title}|{message}|{primary}|{close}");
+          return Task.FromResult(Answer);
+        },
+        ConfirmAction = ConfirmActionAsync,
+        PickSavePath = _ => Task.FromResult(Picked),
+        PickOpenPath = () => Task.FromResult(Picked),
+      };
+      RepromptDriver.Attach(vm, () => Password, _ => { });
+      return vm;
+    }
 
     public async Task<bool> ConfirmActionAsync(ActionDialogRequest request)
     {
