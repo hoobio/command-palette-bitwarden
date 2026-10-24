@@ -2,7 +2,7 @@
 
 The companion window shows a vault item in its own window next to Command Palette. You can keep the window open beside another app and copy fields from it.
 
-## Opening a window
+## Window commands
 
 - **Open in window** is the first command in the more-commands menu of each vault item (`Ctrl+Shift+O`). The primary Enter action of the item does not change.
 - **Open vault** is a top-level command. In this release it opens a placeholder vault window. The vault list comes in a later release.
@@ -25,10 +25,10 @@ All item types also show Custom fields, Additional options (notes) and Item hist
 
 - Secret fields (password, card number, security code, SSH private key, hidden custom fields, notes) are masked. Select the eye button to show or hide one value.
 - The copy button copies through the extension. Secrets are excluded from clipboard history and cleared after the time set in [Settings](Settings), also after you close the window.
-- The verification code updates automatically. The ring shows the seconds left in the current period.
+- The verification code changes at the end of each period. The ring shows the seconds left in the current period.
 - The open button on a website opens it in your browser. Only `http` and `https` addresses open.
 
-The window has a close button only, so it does not minimize or maximize. You can resize it.
+The window has a close button only, so it does not minimise or maximise. You can resize it.
 
 ### Always on top
 
