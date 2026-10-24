@@ -1,7 +1,10 @@
+using System.ComponentModel;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.Platform.Storage;
 using FluentAvalonia.UI.Controls;
 using HoobiBitwardenCompanion.ViewModels;
@@ -18,15 +21,22 @@ internal sealed partial class ItemView : UserControl
     set => SetValue(OpenInWindowCommandProperty, value);
   }
 
+  private ItemViewModel? _subscribed;
+
   public ItemView()
   {
     InitializeComponent();
     DataContextChanged += (_, _) =>
     {
+      if (_subscribed is not null)
+        _subscribed.PropertyChanged -= OnPromptingChanged;
+      _subscribed = DataContext as ItemViewModel;
       if (DataContext is ItemViewModel viewModel)
       {
+        viewModel.PropertyChanged += OnPromptingChanged;
+        if (viewModel.IsPrompting)
+          FocusPasswordBox();
         viewModel.Confirm ??= ConfirmAsync;
-        viewModel.AskPassword ??= AskPasswordAsync;
         viewModel.ConfirmAction ??= request => ConfirmActionAsync(TopLevel.GetTopLevel(this), request);
         viewModel.PickSavePath ??= PickSavePathAsync;
         viewModel.PickOpenPath ??= PickOpenPathAsync;
@@ -113,15 +123,6 @@ internal sealed partial class ItemView : UserControl
     }
   }
 
-  internal static FAContentDialog CreateRepromptDialog(string itemName, TextBox password) => new()
-  {
-    Title = "Master password required",
-    Content = new StackPanel { Spacing = 12, Children = { new TextBlock { Text = $"{itemName} is protected. Enter your master password to continue.", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, password } },
-    PrimaryButtonText = "Verify",
-    CloseButtonText = "Cancel",
-    DefaultButton = FAContentDialogButton.Primary,
-  };
-
   internal static FAContentDialog CreateConfirmDialog(string title, string message, string primary, string close) => new()
   {
     Title = title,
@@ -134,21 +135,42 @@ internal sealed partial class ItemView : UserControl
   private async Task<bool> ConfirmAsync(string title, string message, string primary, string close) =>
     await CreateConfirmDialog(title, message, primary, close).ShowAsync(TopLevel.GetTopLevel(this)) == FAContentDialogResult.Primary;
 
-  private void OnVerifyClick(object? sender, RoutedEventArgs e) => _ = PromptRepromptAsync();
+  private void OnVerifyClick(object? sender, RoutedEventArgs e) => _ = SubmitPasswordAsync();
 
-  private async Task PromptRepromptAsync()
+  private void OnPasswordKeyDown(object? sender, KeyEventArgs e)
   {
-    if (DataContext is ItemViewModel viewModel && await AskPasswordAsync() is { Length: > 0 } password)
-      await viewModel.VerifyRepromptAsync(password);
+    if (e.Key == Key.Enter)
+    {
+      e.Handled = true;
+      _ = SubmitPasswordAsync();
+    }
+    else if (e.Key == Key.Escape && DataContext is ItemViewModel viewModel)
+    {
+      e.Handled = true;
+      viewModel.CancelPrompt();
+    }
   }
 
-  private async Task<string?> AskPasswordAsync()
+  internal async Task SubmitPasswordAsync()
   {
-    var password = new TextBox { PasswordChar = '•', PlaceholderText = "Master password", Classes = { "revealPasswordButton" } };
-    var dialog = CreateRepromptDialog((DataContext as ItemViewModel)?.Title ?? "This item", password);
-    password.AttachedToVisualTree += (_, _) => password.Focus();
-    var text = await dialog.ShowAsync(TopLevel.GetTopLevel(this)) == FAContentDialogResult.Primary ? password.Text : null;
-    password.Text = null;
-    return text;
+    if (DataContext is not ItemViewModel viewModel)
+      return;
+    await viewModel.SubmitPasswordAsync(PasswordBox.Text);
+    if (viewModel.PasswordError is null)
+    {
+      PasswordBox.Text = null;
+      return;
+    }
+
+    FocusPasswordBox();
+    PasswordBox.SelectAll();
+  }
+
+  private void FocusPasswordBox() => Dispatcher.UIThread.Post(() => PasswordBox.Focus(), DispatcherPriority.Input);
+
+  private void OnPromptingChanged(object? sender, PropertyChangedEventArgs e)
+  {
+    if (e.PropertyName == nameof(ItemViewModel.IsPrompting) && sender is ItemViewModel { IsPrompting: true })
+      FocusPasswordBox();
   }
 }

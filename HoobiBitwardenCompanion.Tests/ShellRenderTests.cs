@@ -23,11 +23,10 @@ public class ShellRenderTests(AvaloniaSession session)
   {
     var window = new MainWindow();
     window.Show();
-    var password = new TextBox();
-    var dialog = ItemView.CreateRepromptDialog("GitHub", password);
+    var dialog = ItemView.CreateConfirmDialog("Discard changes?", "Your changes to this item are not saved.", "Discard", "Keep editing");
 
     var shown = dialog.ShowAsync(window);
-    AvaloniaSession.WaitFor(() => TopLevel.GetTopLevel(password) is not null);
+    AvaloniaSession.WaitFor(() => TopLevel.GetTopLevel(dialog) is not null && dialog.IsLoaded);
 
     Assert.NotNull(window.CaptureRenderedFrame());
     dialog.Hide();

@@ -145,7 +145,9 @@ internal sealed record SecretResponse(string Value);
 
 internal sealed record TotpResponse(string Code, int Remaining, int Period);
 
-internal sealed record RepromptResponse(bool Verified, int CooldownSeconds, JsonElement? Result = null);
+internal sealed record GraceDto(DateTime ExpiresUtc, int Seconds);
+
+internal sealed record RepromptResponse(bool Verified, int CooldownSeconds, JsonElement? Result = null, GraceDto? Grace = null);
 
 internal sealed record FieldDto(string Key, string Label, string Group, string? Value, bool IsSecret, bool CanOpen = false, bool IsMultiline = false);
 
@@ -165,7 +167,8 @@ internal sealed record ItemDto(
   bool Deleted = false,
   bool Archived = false,
   IReadOnlyList<AttachmentDto>? Attachments = null,
-  string? IconPath = null);
+  string? IconPath = null,
+  GraceDto? Grace = null);
 
 internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
 

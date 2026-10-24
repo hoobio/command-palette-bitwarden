@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using System.Text.Json.Nodes;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Pages;
@@ -34,6 +35,13 @@ internal sealed partial class RepromptPage : ContentPage
 
     _verifiedItems.TryRemove(itemId, out _);
     return false;
+  }
+
+  internal static GraceDto? GetGrace(string itemId)
+  {
+    if (!IsWithinGracePeriod(itemId) || !_verifiedItems.TryGetValue(itemId, out var ts)) return null;
+    var remaining = TimeSpan.FromSeconds(GracePeriodSeconds) - Stopwatch.GetElapsedTime(ts);
+    return new GraceDto(DateTime.UtcNow + remaining, GracePeriodSeconds);
   }
 
   internal static void RecordVerification(string itemId)

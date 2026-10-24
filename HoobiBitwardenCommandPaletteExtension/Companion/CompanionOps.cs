@@ -232,7 +232,8 @@ internal sealed partial class CompanionOps : IDisposable
       item.DeletedDate != null,
       item.ArchivedDate != null,
       locked ? null : item.Attachments.Select(a => new AttachmentDto(a.Id, a.FileName, a.SizeName)).ToList(),
-      _service.ShowWebsiteIcons ? CachedIconPath(item) : null);
+      _service.ShowWebsiteIcons ? CachedIconPath(item) : null,
+      item.Reprompt == 1 && !locked ? RepromptPage.GetGrace(item.Id) : null);
   }
 
   internal async Task<ItemListResponse> ListItemsAsync()
@@ -449,7 +450,7 @@ internal sealed partial class CompanionOps : IDisposable
       RepromptPage.RecordVerification(item.Id);
     }
 
-    return new RepromptResponse(true, 0, op is null ? null : await DispatchAsync(op, payload, item.Id));
+    return new RepromptResponse(true, 0, op is null ? null : await DispatchAsync(op, payload, item.Id), RepromptPage.GetGrace(item.Id));
   }
 
   private BitwardenItem Find(string? id)
