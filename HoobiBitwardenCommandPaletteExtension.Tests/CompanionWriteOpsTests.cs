@@ -477,7 +477,41 @@ public class CompanionWriteOpsTests
       created["organizationId"] = null;
       return created;
     };
-    Assert.Equal(IpcErrors.Failed, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem))).Code);
+    h.Vault.Override = args => args.StartsWith("list ", StringComparison.Ordinal) ? new FakeCliProcess("[]\n") : null;
+    Assert.Equal(IpcErrors.Unknown, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem))).Code);
+    Assert.Contains(h.Vault.Started, p => p.Arguments == "list items");
+  }
+
+  [Fact]
+  public async Task Create_WhoseFollowUpSyncFails_IsUnknown_NotFailed()
+  {
+    var h = new Harness();
+    h.Service.WriteTimeoutMs = 50;
+    var never = new FakeCliProcess(0);
+    h.Vault.Override = args => args switch
+    {
+      "create item" => never,
+      "sync" => throw new InvalidOperationException("sync could not start"),
+      "list items" or "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
+      _ => null,
+    };
+    var save = h.Handle(Ops.CreateItem, new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem);
+    await Task.Delay(200, TestContext.Current.CancellationToken);
+    never.StdoutStream.Complete();
+    never.StderrStream.Complete();
+
+    string? code = null;
+    try
+    {
+      await save;
+    }
+    catch (IpcException ex)
+    {
+      code = ex.Code;
+    }
+
+    Assert.Equal(IpcErrors.Unknown, code);
+    Assert.Single(h.Vault.Started, p => p.Arguments == "create item");
   }
 
   [Fact]
