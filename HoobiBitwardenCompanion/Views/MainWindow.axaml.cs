@@ -51,23 +51,27 @@ internal sealed partial class MainWindow : Window
 
   internal VaultViewModel? ViewModel => DataContext as VaultViewModel;
 
-  internal static FAContentDialog CreateTextDialog(string title, string primary, TextBox input) => new()
+  internal static FAContentDialog CreateTextDialog(string title, string primary, TextBox input)
   {
-    Title = title,
-    Content = new StackPanel { Spacing = 6, Children = { new TextBlock { Text = "Folder name", Classes = { "FieldLabel" } }, input } },
-    PrimaryButtonText = primary,
-    CloseButtonText = "Cancel",
-    DefaultButton = FAContentDialogButton.Primary,
-  };
-
-  private async Task<string?> AskTextAsync(string title, string primary, string? current)
-  {
-    var input = new TextBox { Text = current, PlaceholderText = "Work" };
-    input.AttachedToVisualTree += (_, _) =>
+    var dialog = new FAContentDialog
+    {
+      Title = title,
+      Content = new StackPanel { Spacing = 6, Children = { new TextBlock { Text = "Folder name", Classes = { "FieldLabel" } }, input } },
+      PrimaryButtonText = primary,
+      CloseButtonText = "Cancel",
+      DefaultButton = FAContentDialogButton.Primary,
+    };
+    dialog.Opened += (_, _) =>
     {
       input.Focus();
       input.SelectAll();
     };
+    return dialog;
+  }
+
+  private async Task<string?> AskTextAsync(string title, string primary, string? current)
+  {
+    var input = new TextBox { Text = current, PlaceholderText = "Work" };
     return await CreateTextDialog(title, primary, input).ShowAsync(this) == FAContentDialogResult.Primary ? input.Text : null;
   }
 
