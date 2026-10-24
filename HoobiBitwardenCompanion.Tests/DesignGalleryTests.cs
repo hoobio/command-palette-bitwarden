@@ -369,6 +369,126 @@ public class DesignGalleryTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task NoHoverOrPressFade_PassesThroughALighterColour() => session.RunAsync(async () =>
+  {
+    using var host = new Host(Build());
+    var flashes = new SortedSet<string>(StringComparer.Ordinal);
+    var window = await VaultAsync(host);
+    var vm = window.ViewModel!;
+    Select(vm, "GitHub");
+    HoverFlashProbe.Probe(window, flashes);
+
+    await vm.Detail!.EditCommand.ExecuteAsync(null);
+    Settle(window);
+    HoverFlashProbe.Probe(window, flashes);
+    await vm.Detail.CancelEditCommand.ExecuteAsync(null);
+
+    var newItem = window.FindControl<Button>("NewItemButton")!;
+    OpenFlyoutInOverlay((PopupFlyoutBase)newItem.Flyout!, newItem);
+    Settle(window);
+    HoverFlashProbe.Probe(window, flashes);
+    HoverFlashProbe.ProbePopups(window, flashes);
+    newItem.Flyout!.Hide();
+
+    var rail = window.FindControl<ListBox>("FilterList")!;
+    var work = rail.GetVisualDescendants().OfType<StackPanel>().Single(s => s.DataContext is FilterViewModel { Label: "Work" } && s.Orientation == Avalonia.Layout.Orientation.Horizontal);
+    work.RaiseEvent(new Avalonia.Input.ContextRequestedEventArgs());
+    var menu = (MenuFlyout)FlyoutBase.GetAttachedFlyout(work)!;
+    menu.Hide();
+    OpenFlyoutInOverlay(menu, work);
+    Settle(window);
+    HoverFlashProbe.Probe(window, flashes);
+    HoverFlashProbe.ProbePopups(window, flashes);
+    menu.Hide();
+
+    foreach (var dialog in new[]
+    {
+      MainWindow.CreateTextDialog("New folder", "Create", new TextBox { PlaceholderText = "Work" }),
+      ItemView.CreateActionDialog(new ActionDialogRequest("Remove item", "Archive or delete.", "Permanently delete") { PrimaryLabel = "Archive" }).Dialog,
+      ItemView.CreateConfirmDialog("Discard changes?", "Your changes to this item are not saved.", "Discard", "Keep editing"),
+    })
+    {
+      var shown = dialog.ShowAsync(window);
+      AvaloniaSession.WaitFor(() => dialog.IsAttachedToVisualTree());
+      Settle(window);
+      HoverFlashProbe.Probe(window, flashes);
+      dialog.Hide();
+      AvaloniaSession.WaitFor(() => shown.IsCompleted);
+    }
+
+    window.Close();
+
+    foreach (var name in FlashItems)
+    {
+      var (itemWindow, itemVm) = await ItemAsync(host, name);
+      HoverFlashProbe.Probe(itemWindow, flashes);
+      if (itemVm.CanEdit)
+      {
+        await itemVm.EditCommand.ExecuteAsync(null);
+        Settle(itemWindow);
+        HoverFlashProbe.Probe(itemWindow, flashes);
+        var combo = itemWindow.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.IsEffectivelyVisible);
+        if (combo is not null)
+        {
+          combo.ApplyTemplate();
+          combo.GetVisualDescendants().OfType<Popup>().Single().ShouldUseOverlayLayer = true;
+          combo.IsDropDownOpen = true;
+          Settle(itemWindow);
+          HoverFlashProbe.Probe(itemWindow, flashes);
+          combo.IsDropDownOpen = false;
+        }
+      }
+
+      itemWindow.Close();
+    }
+
+    var themes = new Window { Width = 600, Height = 900, Content = ThemeGallery() };
+    themes.Show();
+    Settle(themes);
+    HoverFlashProbe.Probe(themes, flashes);
+    themes.Close();
+
+    Assert.True(flashes.Count == 0, string.Join(Environment.NewLine, flashes));
+  });
+
+  private static readonly string[] FlashItems = ["GitHub", "Bank of Example"];
+
+  private static readonly string[] Options = ["One", "Two"];
+
+  private static StackPanel ThemeGallery()
+  {
+    Button Themed(string key) => new() { Content = key, Theme = (Avalonia.Styling.ControlTheme)Avalonia.Application.Current!.FindResource(key)! };
+
+    return new StackPanel
+    {
+      Spacing = 4,
+      Children =
+      {
+        new Button { Content = "Default" },
+        Themed("AccentButtonStyle"),
+        Themed("DangerButtonStyle"),
+        Themed("DialogCloseButtonStyle"),
+        Themed("GhostButtonStyle"),
+        Themed("IconButtonStyle"),
+        Themed("DangerIconButtonStyle"),
+        Themed("AddRowButtonStyle"),
+        new ToggleButton { Content = "Toggle" },
+        new ToggleButton { Content = "Toggled", IsChecked = true },
+        new RepeatButton { Content = "Repeat" },
+        new CheckBox { Content = "Check" },
+        new CheckBox { Content = "Checked", IsChecked = true },
+        new RadioButton { Content = "Radio" },
+        new ToggleSwitch(),
+        new ToggleSwitch { IsChecked = true },
+        new ComboBox { ItemsSource = Options, SelectedIndex = 0 },
+        new TextBox { Text = "Text" },
+        new ListBox { ItemsSource = Options, SelectedIndex = 0 },
+        new ListBox { ItemsSource = Options, SelectedIndex = 0, Theme = (Avalonia.Styling.ControlTheme)Avalonia.Application.Current!.FindResource("StackListItemTheme")! },
+      },
+    };
+  }
+
+  [Fact]
   public Task Gallery_ItemWindows() => Dir is null ? Task.CompletedTask : session.RunAsync(async () =>
   {
     using var host = new Host(Build());

@@ -71,6 +71,7 @@
     <SolidColorBrush x:Key="TextControlButtonForeground" Color="#FF8A9199" />
     <SolidColorBrush x:Key="TextControlButtonForegroundPointerOver" Color="#FFCBCCC6" />
     <SolidColorBrush x:Key="TextControlButtonForegroundPressed" Color="#FF73D0FF" />
+    <SolidColorBrush x:Key="TextControlButtonBackground" Color="#00242936" />
     <SolidColorBrush x:Key="TextControlButtonBackgroundPointerOver" Color="#FF242936" />
     <SolidColorBrush x:Key="TextControlButtonBackgroundPressed" Color="#FF242936" />
 
@@ -99,14 +100,15 @@
     <Thickness x:Key="MenuFlyoutPresenterThemePadding">4</Thickness>
     <Thickness x:Key="FlyoutBorderThemePadding">0</Thickness>
     <Thickness x:Key="MenuFlyoutItemThemePaddingNarrow">12,6</Thickness>
+    <SolidColorBrush x:Key="MenuFlyoutItemBackground" Color="#001F2430" />
     <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#FF1F2430" />
     <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#FF1F2430" />
     <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="#FFCBCCC6" />
     <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="#FFCBCCC6" />
     <SolidColorBrush x:Key="MenuFlyoutSeparatorBackground" Color="#FF343B4C" />
 
-    <SolidColorBrush x:Key="CaptionButtonBackground" Color="Transparent" />
-    <SolidColorBrush x:Key="CaptionButtonBackgroundInactive" Color="Transparent" />
+    <SolidColorBrush x:Key="CaptionButtonBackground" Color="#00242936" />
+    <SolidColorBrush x:Key="CaptionButtonBackgroundInactive" Color="#00242936" />
     <SolidColorBrush x:Key="CaptionButtonBackgroundPointerOver" Color="#FF242936" />
     <SolidColorBrush x:Key="CaptionButtonBackgroundPressed" Color="#FF1F2430" />
     <SolidColorBrush x:Key="CaptionButtonForeground" Color="#FFCBCCC6" />
