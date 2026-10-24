@@ -40,7 +40,8 @@ internal sealed partial class ItemView : UserControl
         viewModel.ConfirmAction ??= request => ConfirmActionAsync(TopLevel.GetTopLevel(this), request);
         viewModel.PickSavePath ??= PickSavePathAsync;
         viewModel.PickOpenPath ??= PickOpenPathAsync;
-        viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this), viewModel.Channel, canUse: true);
+        viewModel.Toast ??= (message, success) => ToastWindow.Show(TopLevel.GetTopLevel(this), message, success);
+        viewModel.OpenGenerator ??=() => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this), viewModel.Channel, canUse: true);
       }
     };
   }

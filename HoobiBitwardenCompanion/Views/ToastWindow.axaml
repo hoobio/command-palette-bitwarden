@@ -1,0 +1,36 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.Views.ToastWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Bitwarden"
+    WindowDecorations="None"
+    ShowActivated="False"
+    ShowInTaskbar="False"
+    Topmost="True"
+    CanResize="False"
+    SizeToContent="WidthAndHeight"
+    TransparencyLevelHint="Transparent"
+    Background="#00242936">
+    <Border
+        x:Name="Card"
+        Margin="24,24,24,16"
+        Padding="12,10"
+        Opacity="0"
+        Background="{DynamicResource LayerFillColorAltBrush}"
+        CornerRadius="{StaticResource OverlayCornerRadius}"
+        BoxShadow="{StaticResource FlyoutShadow}">
+        <Border.Transitions>
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.15">
+                    <DoubleTransition.Easing>
+                        <SplineEasing X1="0.33" Y1="0" X2="0.67" Y2="1" />
+                    </DoubleTransition.Easing>
+                </DoubleTransition>
+            </Transitions>
+        </Border.Transitions>
+        <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock x:Name="Glyph" Classes="Icon" Text="{StaticResource Glyph.Checkmark}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" VerticalAlignment="Center" />
+            <TextBlock x:Name="Message" MaxWidth="480" FontSize="{StaticResource BodyTextBlockFontSize}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </StackPanel>
+    </Border>
+</Window>

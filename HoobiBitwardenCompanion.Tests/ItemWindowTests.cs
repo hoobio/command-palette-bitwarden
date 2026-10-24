@@ -142,7 +142,8 @@ public class ItemWindowTests(AvaloniaSession session)
     var extension = new FakeExtension();
     using var pair = new ChannelPair(extension.HandleAsync);
     using var channel = CompanionChannel(pair);
-    using var vm = new ItemViewModel(ItemId, channel);
+    var toasts = new List<string>();
+    using var vm = new ItemViewModel(ItemId, channel) { Toast = (message, _) => toasts.Add(message) };
 
     await vm.LoadAsync();
 
@@ -162,7 +163,7 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.Null(password.RevealedValue);
 
     await Field(vm, ItemFields.Username).CopyCommand.ExecuteAsync(null);
-    Assert.Equal("Copied Username", vm.StatusMessage);
+    Assert.Equal(["Copied Username"], toasts);
     await Field(vm, ItemFields.UriPrefix + "0").OpenCommand.ExecuteAsync(null);
     Assert.Contains(Ops.OpenUri, extension.Requests);
 
@@ -485,6 +486,86 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.Equal(2, extension.Count(Ops.GetItem));
     Assert.Equal(ItemViewModel.Describe(new IpcException(IpcErrors.Stale)), vm.StatusMessage);
   });
+
+  [Fact]
+  public Task Copy_ToastsTheLabel_NeverTheValue() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var toasts = new List<(string Message, bool Success)>();
+    using var vm = new ItemViewModel(ItemId, channel) { Toast = (message, success) => toasts.Add((message, success)) };
+    await vm.LoadAsync();
+    var password = Field(vm, ItemFields.Password);
+    await password.ToggleRevealCommand.ExecuteAsync(null);
+
+    await password.CopyCommand.ExecuteAsync(null);
+
+    Assert.Equal([("Copied Password", true)], toasts);
+    Assert.DoesNotContain(toasts, t => t.Message.Contains("hunter2", StringComparison.Ordinal));
+    Assert.Null(vm.StatusMessage);
+    Assert.Null(vm.ErrorMessage);
+  });
+
+  [Fact]
+  public Task CopyFailure_StaysInline_AndShowsNoToast() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var toasts = new List<string>();
+    using var vm = new ItemViewModel(ItemId, channel) { Toast = (message, _) => toasts.Add(message) };
+    await vm.LoadAsync();
+    extension.ErrorCode = IpcErrors.NotFound;
+
+    await Field(vm, ItemFields.Username).CopyCommand.ExecuteAsync(null);
+
+    Assert.Empty(toasts);
+    Assert.Equal(ItemViewModel.Describe(new IpcException(IpcErrors.NotFound)), vm.ErrorMessage);
+  });
+
+  [Fact]
+  public Task ItemWindow_Copy_ShowsTheSharedToast_AndANewMessageReplacesIt() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    using var vm = new ItemViewModel(ItemId, channel);
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+
+    await Field(vm, ItemFields.Username).CopyCommand.ExecuteAsync(null);
+
+    var toast = ToastWindow.Current!;
+    Assert.True(toast.IsVisible);
+    Assert.False(toast.ShowActivated);
+    Assert.False(toast.ShowInTaskbar);
+    Assert.True(toast.Topmost);
+    Assert.Equal(("Copied Username", true), (toast.Text, toast.IsSuccess));
+    Assert.True(toast.IsHideScheduled);
+    Assert.Equal(1, toast.CardOpacity);
+
+    toast.FadeOut();
+    Assert.True(toast.IsFading);
+    Assert.False(toast.IsHideScheduled);
+    Assert.Equal(0, toast.CardOpacity);
+
+    ToastWindow.Show(window, "No history", success: false);
+
+    Assert.Same(toast, ToastWindow.Current);
+    Assert.Equal(("No history", false), (toast.Text, toast.IsSuccess));
+    Assert.False(toast.IsFading);
+    Assert.True(toast.IsHideScheduled);
+    Assert.Equal(1, toast.CardOpacity);
+    window.Close();
+  });
+
+  [Theory]
+  [InlineData(1.0, 0, 0, 1920, 1032, 320, 60, 800, 972)]
+  [InlineData(1.5, 1920, 0, 2560, 1380, 320, 60, 2960, 1290)]
+  public void ToastPlacement_IsBottomCentreOfTheWorkArea(double scaling, int x, int y, int width, int height, double dipWidth, double dipHeight, int expectedX, int expectedY) =>
+    Assert.Equal(new Avalonia.PixelPoint(expectedX, expectedY), ToastWindow.Place(new Avalonia.PixelRect(x, y, width, height), new Avalonia.Size(dipWidth, dipHeight), scaling));
 
   [Fact]
   public Task Coordinator_ReadLoopFault_StillShutsDownTheCompanion() => session.RunAsync(async () =>

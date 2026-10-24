@@ -128,12 +128,14 @@ public class EditTests(AvaloniaSession session)
 
     public ItemViewModel Item(string id)
     {
-      var vm = new ItemViewModel(id, Channel) { Confirm = Ask, ConfirmAction = ConfirmActionAsync };
+      var vm = new ItemViewModel(id, Channel) { Confirm = Ask, ConfirmAction = ConfirmActionAsync, Toast = (message, _) => Toasts.Add(message) };
       RepromptDriver.Attach(vm, () => Password, failure => PasswordFailure = failure);
       return vm;
     }
 
     public List<string?> ActionFailures { get; } = [];
+
+    public List<string> Toasts { get; } = [];
 
     public string? Pick { get; set; }
 
@@ -295,7 +297,7 @@ public class EditTests(AvaloniaSession session)
     Assert.Equal([CollectionId], move.CollectionIds);
     Assert.Null(vm.Editor);
     Assert.Equal(1, saved);
-    Assert.Equal("Saved", vm.StatusMessage);
+    Assert.Equal(["Saved"], h.Toasts);
   });
 
   [Fact]
@@ -670,7 +672,7 @@ public class EditTests(AvaloniaSession session)
     await vm.SaveCommand.ExecuteAsync(null);
 
     Assert.Single(h.Extension.Payloads(Ops.UpdateItem));
-    Assert.Equal("Saved", vm.StatusMessage);
+    Assert.Equal(["Saved"], h.Toasts);
   });
 
   [Fact]

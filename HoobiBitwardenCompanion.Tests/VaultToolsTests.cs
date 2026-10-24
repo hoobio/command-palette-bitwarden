@@ -110,6 +110,8 @@ public class VaultToolsTests(AvaloniaSession session)
 
     public string? DangerFailure { get; private set; }
 
+    public List<string> Toasts { get; } = [];
+
     public ItemViewModel Item()
     {
       var vm = new ItemViewModel(ItemId, Channel)
@@ -122,6 +124,7 @@ public class VaultToolsTests(AvaloniaSession session)
         ConfirmAction = ConfirmActionAsync,
         PickSavePath = _ => Task.FromResult(Picked),
         PickOpenPath = () => Task.FromResult(Picked),
+        Toast = (message, _) => Toasts.Add(message),
       };
       RepromptDriver.Attach(vm, () => Password, _ => { });
       return vm;
@@ -295,7 +298,7 @@ public class VaultToolsTests(AvaloniaSession session)
     await vm.Attachments[0].DownloadCommand.ExecuteAsync(null);
     var request = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.DownloadAttachment)), IpcJson.Default.AttachmentRequest);
     Assert.Equal((ItemId, "att1", h.Picked, Revision), (request.Id, request.AttachmentId, request.Path, request.RevisionDate));
-    Assert.Equal("Saved report.pdf", vm.StatusMessage);
+    Assert.Equal("Saved report.pdf", h.Toasts[^1]);
 
     h.Extension.FailWith[Ops.DownloadAttachment] = IpcErrors.Premium;
     await vm.Attachments[0].DownloadCommand.ExecuteAsync(null);
@@ -317,13 +320,13 @@ public class VaultToolsTests(AvaloniaSession session)
     var upload = IpcJson.Read(h.Extension.Payloads(Ops.VerifyReprompt)[0], IpcJson.Default.RepromptRequest);
     Assert.Equal(Ops.UploadAttachment, upload.Op);
     Assert.Equal(h.Picked, IpcJson.Read(upload.Payload, IpcJson.Default.AttachmentRequest).Path);
-    Assert.Equal("Attached notes.txt", vm.StatusMessage);
+    Assert.Equal("Attached notes.txt", h.Toasts[^1]);
 
     h.Extension.Reprompt = true;
     await vm.Attachments[1].DeleteCommand.ExecuteAsync(null);
     Assert.Equal("Delete attachment|\"scan.png\" will be deleted permanently. You cannot undo this.||Delete attachment", h.Prompts[^1]);
     Assert.Equal(Ops.DeleteAttachment, IpcJson.Read(h.Extension.Payloads(Ops.VerifyReprompt)[^1], IpcJson.Default.RepromptRequest).Op);
-    Assert.Equal("Deleted scan.png", vm.StatusMessage);
+    Assert.Equal("Deleted scan.png", h.Toasts[^1]);
 
     h.Extension.FailWith[Ops.DeleteAttachment] = IpcErrors.Failed;
     await vm.Attachments[0].DeleteCommand.ExecuteAsync(null);
@@ -352,7 +355,7 @@ public class VaultToolsTests(AvaloniaSession session)
     await vm.RotateCommand.ExecuteAsync(null);
     var rotate = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.RotatePassword)), IpcJson.Default.RotateRequest);
     Assert.Equal((ItemId, Revision, GeneratorKinds.Password), (rotate.Id, rotate.RevisionDate, rotate.Options.Kind));
-    Assert.Equal("Password replaced and copied", vm.StatusMessage);
+    Assert.Equal("Password replaced and copied", h.Toasts[^1]);
 
     CompanionSettings.SaveGenerator(new GeneratorOptions(GeneratorKinds.CatchAll, Domain: "example.com"));
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Unknown;

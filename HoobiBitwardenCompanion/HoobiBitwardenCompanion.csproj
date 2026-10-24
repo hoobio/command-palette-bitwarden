@@ -15,6 +15,7 @@
     <PublishTrimmed>true</PublishTrimmed>
     <!-- FluentAvaloniaUI references Avalonia.Controls.DataGrid, which is not trim-safe and is never instantiated. -->
     <NoWarn>$(NoWarn);IL2104</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
