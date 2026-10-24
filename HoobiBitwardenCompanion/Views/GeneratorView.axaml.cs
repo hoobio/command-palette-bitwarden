@@ -29,8 +29,8 @@ internal sealed partial class GeneratorView : UserControl
     };
     dialog.PrimaryButtonClick += (_, e) =>
     {
-      e.Cancel = true;
       viewModel.UseCommand.Execute(null);
+      e.Cancel = !viewModel.HasValue;
     };
     return dialog;
   }
@@ -40,11 +40,7 @@ internal sealed partial class GeneratorView : UserControl
     var viewModel = new GeneratorViewModel(channel, canUse);
     var dialog = CreateDialog(viewModel);
     string? used = null;
-    viewModel.UseRequested = value =>
-    {
-      used = value;
-      dialog.Hide();
-    };
+    viewModel.UseRequested = value => used = value;
     Open.Add(viewModel);
     try
     {

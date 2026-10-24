@@ -9,7 +9,7 @@
         <DataTemplate x:Key="ItemHeader" x:DataType="vm:ItemViewModel">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Margin="0,0,8,12">
                 <Border Classes="Tile Large">
-                    <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="24" HorizontalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                    <TextBlock Classes="Icon Accent" Text="{Binding TypeGlyph}" FontSize="24" HorizontalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Title}" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
@@ -201,7 +201,7 @@
                                                                 <Button Theme="{StaticResource IconButtonStyle}" Command="{Binding ToggleRevealCommand}" IsVisible="{Binding IsSecret}" ToolTip.Tip="Show or hide">
                                                                     <Panel>
                                                                         <TextBlock Text="{StaticResource Glyph.Eye}" IsVisible="{Binding !IsRevealed}" />
-                                                                        <TextBlock Text="{StaticResource Glyph.EyeOff}" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" IsVisible="{Binding IsRevealed}" />
+                                                                        <TextBlock Classes="Icon Accent" Text="{StaticResource Glyph.EyeOff}" IsVisible="{Binding IsRevealed}" />
                                                                     </Panel>
                                                                 </Button>
                                                                 <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Open}" Command="{Binding OpenCommand}" IsVisible="{Binding CanOpen}" ToolTip.Tip="Open in browser" />

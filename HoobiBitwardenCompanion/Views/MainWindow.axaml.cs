@@ -25,7 +25,7 @@ internal sealed partial class MainWindow : Window
       viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(this, viewModel.Channel, canUse: false);
       viewModel.PropertyChanged += (_, e) =>
       {
-        if (e.PropertyName is nameof(VaultViewModel.SelectedFilter) or nameof(VaultViewModel.Filters))
+        if (e.PropertyName is nameof(VaultViewModel.SelectedFilter) or nameof(VaultViewModel.RailFilters) or nameof(VaultViewModel.FootFilters))
           SyncRailSelection();
       };
       DetailView.OpenInWindowCommand = viewModel.OpenSelectedCommand;

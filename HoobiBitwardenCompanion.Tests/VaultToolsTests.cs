@@ -256,7 +256,9 @@ public class VaultToolsTests(AvaloniaSession session)
     GeneratorView.OnLocked();
     Assert.False(vm.HasValue);
     await vm.RegenerateCommand.ExecuteAsync(null);
-    vm.UseCommand.Execute(null);
+    var use = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PrimaryButton");
+    Assert.Equal("Use password", use.Content);
+    use.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
     AvaloniaSession.WaitFor(() => shown.IsCompleted);
     Assert.Equal(new string('x', 20), await shown);
     window.Close();
