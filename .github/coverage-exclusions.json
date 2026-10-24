@@ -48,6 +48,10 @@
     "reason": "Named-pipe IPC to a live Bitwarden Desktop process"
   },
   {
+    "pattern": "CommandPaletteModalScope\\.cs$",
+    "reason": "Win32 EnableWindow on the live Command Palette host window, cannot be exercised in unit tests"
+  },
+  {
     "pattern": "NotificationsService\\.cs$",
     "reason": "WebSocket connection loop to a live notifications hub; framing and parsing live in HubProtocol.cs"
   }

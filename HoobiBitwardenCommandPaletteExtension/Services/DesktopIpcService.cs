@@ -114,6 +114,7 @@ internal static partial class DesktopIpcService
 
     DebugLogService.Log("Biometric", "Requesting Windows Hello prompt from Desktop app...");
     onStatus?.Invoke("Waiting for Windows Hello...");
+    using var modal = CommandPaletteModalScope.Enter();
     return await client.UnlockWithBiometricsForUserAsync(userId);
   }
 
