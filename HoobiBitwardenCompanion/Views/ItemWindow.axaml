@@ -37,7 +37,7 @@
         <Grid
             x:Name="AppTitleBar"
             Background="Transparent"
-            ColumnDefinitions="Auto,*,46"
+            ColumnDefinitions="Auto,*,Auto,46"
             chrome:WindowDecorationProperties.ElementRole="User">
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                 <Panel VerticalAlignment="Center">
@@ -46,6 +46,10 @@
                 </Panel>
                 <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 <TextBlock Classes="Icon" Text="{StaticResource Glyph.Pin}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" IsVisible="{Binding $parent[Window].Topmost}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button x:Name="EditButton" Classes="CaptionButton" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Edit}" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Edit" AutomationProperties.Name="Edit" />
+                <Button x:Name="DeleteButton" Classes="CaptionButton Danger" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
             </StackPanel>
         </Grid>
 

@@ -45,6 +45,8 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   public bool IsPlain => !IsSensitive && !IsMono;
 
+  public bool CanRotate => Key == ItemFields.Password && _owner is { CanRotate: true };
+
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(DisplayValue))]
   public partial string? RevealedValue { get; set; }
@@ -88,4 +90,7 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   [RelayCommand]
   private Task OpenAsync() => _owner?.OpenUriAsync(this) ?? Task.CompletedTask;
+
+  [RelayCommand]
+  private Task RotateAsync() => _owner?.RotateCommand.ExecuteAsync(null) ?? Task.CompletedTask;
 }

@@ -323,9 +323,12 @@ public class VaultToolsTests(AvaloniaSession session)
     var vm = h.Item();
     await vm.LoadAsync();
     Assert.True(vm.CanRotate);
+    var password = vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == ItemFields.Password);
+    Assert.True(password.CanRotate);
+    Assert.False(vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == ItemFields.Username).CanRotate);
 
     h.Answer = false;
-    await vm.RotateCommand.ExecuteAsync(null);
+    await password.RotateCommand.ExecuteAsync(null);
     Assert.Equal("Rotate password|Replace the password for GitHub? The old password is kept in password history.|Rotate|Cancel", Assert.Single(h.Prompts));
     Assert.Empty(h.Extension.Payloads(Ops.RotatePassword));
 
@@ -358,6 +361,7 @@ public class VaultToolsTests(AvaloniaSession session)
     h.Extension.HasPassword = false;
     await vm.LoadAsync();
     Assert.False(vm.CanRotate);
+    Assert.False(vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == ItemFields.Password).CanRotate);
 
     h.Extension.HasPassword = true;
     h.Extension.Type = 3;

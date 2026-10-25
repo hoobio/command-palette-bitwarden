@@ -161,6 +161,12 @@
             <Style Selector="^.Close:pressed /template/ Border">
                 <Setter Property="Background" Value="{DynamicResource CaptionCloseBackgroundPressed}" />
             </Style>
+            <Style Selector="^.Danger">
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </Style>
+            <Style Selector="^:disabled">
+                <Setter Property="Opacity" Value="0.4" />
+            </Style>
         </ControlTheme>
 
         <ControlTheme x:Key="HoobiCloseOnlyDecorations" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource {x:Type chrome:WindowDrawnDecorations}}">
