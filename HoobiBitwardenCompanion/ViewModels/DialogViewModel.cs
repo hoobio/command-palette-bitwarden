@@ -11,6 +11,10 @@ internal abstract partial class DialogViewModel(PipeChannel channel) : Observabl
 
   internal event Action? Completed;
 
+  internal event Action? InputFocusRequested;
+
+  protected void RequestInputFocus() => InputFocusRequested?.Invoke();
+
   [ObservableProperty]
   public partial string? ErrorMessage { get; protected set; }
 

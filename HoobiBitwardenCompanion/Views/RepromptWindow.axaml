@@ -40,7 +40,12 @@
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,8,24,24">
             <Button x:Name="VerifyButton" Theme="{StaticResource AccentButtonStyle}" Content="Verify" Command="{Binding SubmitCommand}" IsEnabled="{Binding !IsBusy}" />
-            <Button x:Name="HelloButton" Content="Use Windows Hello" Command="{Binding SubmitBiometricCommand}" IsVisible="{Binding WindowsHello}" IsEnabled="{Binding !IsBusy}" />
+            <Button x:Name="HelloButton" Command="{Binding SubmitBiometricCommand}" IsVisible="{Binding WindowsHello}" IsEnabled="{Binding !IsBusy}" AutomationProperties.Name="Verify with Windows Hello">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Fingerprint}" FontSize="16" VerticalAlignment="Center" />
+                    <TextBlock Text="Verify with Windows Hello" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
             <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
         </StackPanel>
     </Grid>

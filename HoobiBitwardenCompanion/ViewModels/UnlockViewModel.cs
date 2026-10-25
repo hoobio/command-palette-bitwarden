@@ -47,7 +47,11 @@ internal sealed partial class UnlockViewModel(PipeChannel channel, bool remember
     var reply = IpcJson.Read(await Channel.RequestAsync(Ops.Unlock, IpcJson.ToElement(request, IpcJson.Default.UnlockRequest), Timeout.InfiniteTimeSpan), IpcJson.Default.UnlockResponse);
     if (reply.Success || reply.LoggedOut)
       return true;
-    ErrorMessage = reply.Error ?? "Unlock failed";
+    // The Windows Hello prompt already showed its own outcome, so a cancel or failure returns to the password box without an error.
+    if (_biometric)
+      RequestInputFocus();
+    else
+      ErrorMessage = reply.Error ?? "Unlock failed";
     return false;
   }
 }

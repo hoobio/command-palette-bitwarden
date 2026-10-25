@@ -120,7 +120,7 @@ internal sealed partial class RepromptForm : FormContent
                     ,
                     {
                         "type": "Action.Submit",
-                        "title": "Use Windows Hello",
+                        "title": "Verify with Windows Hello",
                         "data": { "action": "biometric" }
                     }
 """ : "";

@@ -59,7 +59,10 @@ internal sealed partial class RepromptViewModel(PipeChannel channel, string toke
       return true;
     }
 
-    ErrorMessage = reply.Error ?? "Verification failed";
+    if (_biometric)
+      RequestInputFocus();
+    else
+      ErrorMessage = reply.Error ?? "Verification failed";
     return false;
   }
 }

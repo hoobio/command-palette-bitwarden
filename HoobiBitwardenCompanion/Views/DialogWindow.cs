@@ -21,7 +21,10 @@ internal abstract class DialogWindow : Window
     this.FindControl<Control>("AppTitleBar")!.PointerPressed += OnTitleBarPointerPressed;
     KeyDown += OnWindowKeyDown;
     if (viewModel is not null)
+    {
       viewModel.Completed += Close;
+      viewModel.InputFocusRequested += FocusFirstInput;
+    }
   }
 
   internal void FocusFirstInput() =>
@@ -32,6 +35,7 @@ internal abstract class DialogWindow : Window
     if (ViewModel is { } viewModel)
     {
       viewModel.Completed -= Close;
+      viewModel.InputFocusRequested -= FocusFirstInput;
       viewModel.ClearSecrets();
       viewModel.OnWindowClosed();
     }

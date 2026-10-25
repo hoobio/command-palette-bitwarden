@@ -32,6 +32,26 @@ public class DialogWindowTests(AvaloniaSession session)
   }
 
   [Fact]
+  public Task Unlock_WindowsHelloCancelled_ReturnsToThePasswordWithoutAnError() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { Unlock = new(false, "Biometric unlock was cancelled or unavailable") };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    coordinator.ReturnForeground = _ => { };
+    _ = coordinator.RunAsync(() => { });
+
+    var window = coordinator.ShowUnlock(0, rememberSession: false, windowsHello: true);
+    var focusRequests = 0;
+    window.ViewModel!.InputFocusRequested += () => focusRequests++;
+    await window.ViewModel.SubmitBiometricAsync();
+
+    Assert.Null(window.ViewModel.ErrorMessage);
+    Assert.Equal(1, focusRequests);
+    Assert.Same(window, coordinator.ShowUnlock());
+    window.Close();
+  });
+
+  [Fact]
   public Task ShowDialog_OpensOnTheCommandPaletteScreen() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();
