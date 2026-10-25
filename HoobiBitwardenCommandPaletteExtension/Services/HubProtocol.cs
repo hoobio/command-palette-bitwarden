@@ -35,10 +35,40 @@ internal static class HubProtocol
             || StringProperty(root, $"user_{userId}_token_accessToken") is not { } accessToken)
             return null;
 
-        var environment = root.TryGetProperty($"user_{userId}_environment_environment", out var userEnvironment) && userEnvironment.ValueKind == JsonValueKind.Object
+        return (ResolveHubUri(ActiveEnvironment(root, userId)), accessToken);
+    }
+
+    // global_account_activeAccountId first appears in CLI state version 60; older layouts misread as logged out.
+    public const int MinLoginStateVersion = 60;
+
+    public static (bool LoggedIn, string? ServerUrl)? ReadLoginState(string dataFile)
+    {
+        using var stream = new FileStream(dataFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var document = JsonDocument.Parse(stream);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("stateVersion", out var version)
+            || version.ValueKind != JsonValueKind.Number
+            || !version.TryGetInt32(out var stateVersion)
+            || stateVersion < MinLoginStateVersion)
+            return null;
+        var userId = StringProperty(root, "global_account_activeAccountId");
+        var loggedIn = userId != null && StringProperty(root, $"user_{userId}_token_accessToken") != null;
+        return (loggedIn, ResolveServerUrl(ActiveEnvironment(root, userId)));
+    }
+
+    private static JsonElement ActiveEnvironment(JsonElement root, string? userId) =>
+        userId != null && root.TryGetProperty($"user_{userId}_environment_environment", out var userEnvironment) && userEnvironment.ValueKind == JsonValueKind.Object
             ? userEnvironment
             : root.TryGetProperty("global_environment_environment", out var globalEnvironment) ? globalEnvironment : default;
-        return (ResolveHubUri(environment), accessToken);
+
+    // Matches `bw status` serverUrl (environment urls.base): the CLI cloud regions set base to null.
+    public static string? ResolveServerUrl(JsonElement environment)
+    {
+        var urls = environment.ValueKind == JsonValueKind.Object && environment.TryGetProperty("urls", out var u) ? u : default;
+        return StringProperty(environment, "region") is not ("US" or "EU") && StringProperty(urls, "base") is { Length: > 0 } baseUrl
+            ? baseUrl.TrimEnd('/')
+            : null;
     }
 
     public static Uri ResolveHubUri(JsonElement environment)

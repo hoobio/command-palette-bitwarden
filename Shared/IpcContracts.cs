@@ -161,7 +161,8 @@ internal sealed record ItemDto(
   string? IconPath = null,
   GraceDto? Grace = null,
   bool HasPassword = false,
-  bool BiometricAvailable = false);
+  bool BiometricAvailable = false,
+  int? PasswordHistoryCount = null);
 
 internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
 

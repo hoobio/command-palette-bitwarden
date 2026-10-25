@@ -99,6 +99,16 @@ User selects an action
 | `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; fires `IconCached` to refresh the list UI |
 | `NotificationsService` | Instance (while unlocked, Live Sync on) | Listens to the server's notifications hub and requests a sync when the vault changes |
 
+## CLI Process Use
+
+Each `bw` call starts a Node.js process, so the extension starts as few as it can:
+
+- **Version probe.** `bw --version` runs once for each CLI executable. The result is kept until the path or the last write time of the executable changes, the CLI configuration changes, or a probe fails.
+- **Login state.** When there is no session key and `data.json` has state version 60 or later, the vault status (locked or logged out) and the server URL come from the CLI `data.json`: the active account (`global_account_activeAccountId`) with an access token is locked, else logged out. The server URL is `urls.base` of the account or global environment, as `bw status` reports it, so it is empty for the cloud regions. When `data.json` is missing, cannot be read or has an older state version, `bw status` is used. A session key is always checked with `bw status`, `bw sync` and `bw list folders`, because only the CLI can confirm that the key decrypts the vault.
+- **Background refresh.** The item cache refreshes (`bw list folders`, `bw list items`, `bw list organizations`) after the background refresh interval only when the last write time or the size of `data.json` changed since the last refresh, or the last refresh is more than 30 minutes old. `bw list` reads only `data.json`, which changes after a sync or a write. A refresh after a sync, a write or an unlock always runs.
+- **Fallback search.** The root Command Palette fallback item searches the cache only when the vault is unlocked. While the vault is locked, it checks the vault status only when a saved session (**Remember Session**) or `BW_SESSION` can unlock it, and at most once every 30 seconds. Otherwise it starts no `bw` process.
+- **Password history.** `bw list items` includes the password history of each item, so the cache keeps the old passwords as `ProtectedSecret`. The companion lists and copies them with no `bw` process. `bw get item` runs only for an item whose cached data has no password history field.
+
 ## Live Sync
 
 The Bitwarden apps get vault changes from the server's notifications hub, a SignalR endpoint at `{notificationsUrl}/hub`. The `bw` CLI does not listen to it. With the **Live Sync** setting on, `NotificationsService` connects to the hub while the vault is unlocked:
@@ -112,7 +122,7 @@ The Bitwarden apps get vault changes from the server's notifications hub, a Sign
 
 ## In-Memory Secret Protection
 
-Passwords, TOTP secrets, notes, card numbers, card security codes, SSH private keys, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
+Passwords, old passwords from the password history, TOTP secrets, notes, card numbers, card security codes, SSH private keys, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
 
 ## Extension Registration
 

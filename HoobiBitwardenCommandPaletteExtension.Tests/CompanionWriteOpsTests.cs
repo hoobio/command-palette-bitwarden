@@ -525,6 +525,7 @@ public class CompanionWriteOpsTests
     var h = new Harness(Login(id, reprompt: 1));
     var payload = IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest);
 
+    Assert.Null(h.Ops.GetItem(id).PasswordHistoryCount);
     Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.GetEditableItem, payload, TestContext.Current.CancellationToken))).Code);
     Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.GetPasswordHistory, payload, TestContext.Current.CancellationToken))).Code);
     Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.CopyPasswordHistoryAsync(id, ItemFields.HistoryPrefix + "0", RevisionDate))).Code);
@@ -535,6 +536,7 @@ public class CompanionWriteOpsTests
     {
       var verified = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.GetEditableItem, payload);
       Assert.Equal("hunter2", IpcJson.Read(verified.Result, IpcJson.Default.EditableItem).Login!.Password);
+      Assert.Equal(2, h.Ops.GetItem(id, verified: true).PasswordHistoryCount);
       var history = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.GetPasswordHistory, payload);
       Assert.Equal([new DateTime(2024, 12, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2024, 11, 1, 0, 0, 0, DateTimeKind.Utc)],
         IpcJson.Read(history.Result, IpcJson.Default.PasswordHistoryResponse).LastUsed);
@@ -548,6 +550,62 @@ public class CompanionWriteOpsTests
     {
       RepromptPage.GracePeriodSeconds = 60;
     }
+  }
+
+  [Fact]
+  public async Task PasswordHistory_CachedItem_ServesAndCopiesWithoutCli()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id));
+
+    Assert.Equal(2, h.Ops.GetItem(id).PasswordHistoryCount);
+    Assert.Equal([new DateTime(2024, 12, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2024, 11, 1, 0, 0, 0, DateTimeKind.Utc)],
+      (await h.Ops.GetPasswordHistoryAsync(id)).LastUsed);
+    await h.Ops.CopyPasswordHistoryAsync(id, ItemFields.HistoryPrefix + "1", RevisionDate);
+    await Assert.ThrowsAsync<IpcException>(() => h.Ops.CopyPasswordHistoryAsync(id, ItemFields.HistoryPrefix + "2", RevisionDate));
+    Assert.Equal(IpcErrors.Stale, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.CopyPasswordHistoryAsync(id, ItemFields.HistoryPrefix + "0", RevisionDate.AddDays(1)))).Code);
+
+    Assert.Equal(("oldest-pass", true), Assert.Single(h.TextCopies));
+    Assert.Empty(h.Vault.Started);
+  }
+
+  [Fact]
+  public async Task PasswordHistory_NoParsedHistoryField_FallsBackToGetItem()
+  {
+    var id = NewId();
+    var item = Login(id);
+    var history = item["passwordHistory"]!.DeepClone();
+    item.Remove("passwordHistory");
+    var h = new Harness(item);
+    h.Vault.Items[id]["passwordHistory"] = history;
+
+    Assert.Null(h.Ops.GetItem(id).PasswordHistoryCount);
+    Assert.Equal(2, (await h.Ops.GetPasswordHistoryAsync(id)).LastUsed.Count);
+    await h.Ops.CopyPasswordHistoryAsync(id, ItemFields.HistoryPrefix + "0", RevisionDate);
+
+    Assert.Equal(("older-pass", true), Assert.Single(h.TextCopies));
+    Assert.Equal(2, h.Vault.Started.Count(p => p.Arguments == $"get item {id}"));
+  }
+
+  [Fact]
+  public void ParseItems_PasswordHistory_SkipsEmptyAndTreatsNullAsEmpty()
+  {
+    var items = BitwardenCliService.ParseItems("""
+      [
+        { "id": "a", "name": "A", "type": 1, "login": {}, "passwordHistory": [{ "lastUsedDate": "2024-12-01T00:00:00.000Z", "password": "old" }, { "lastUsedDate": null, "password": "" }] },
+        { "id": "b", "name": "B", "type": 1, "login": {}, "passwordHistory": null },
+        { "id": "c", "name": "C", "type": 1, "login": {} }
+      ]
+      """);
+
+    var entry = Assert.Single(items[0].PasswordHistory!);
+    Assert.Equal("old", entry.Password.Reveal());
+    Assert.Equal(new DateTime(2024, 12, 1, 0, 0, 0, DateTimeKind.Utc), entry.LastUsed);
+    Assert.Empty(items[1].PasswordHistory!);
+    Assert.Null(items[2].PasswordHistory);
+
+    items[0].DisposeSecrets();
+    Assert.Throws<ObjectDisposedException>(() => entry.Password.Reveal());
   }
 
   [Fact]

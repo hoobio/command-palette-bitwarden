@@ -45,6 +45,8 @@ internal sealed record CustomField(string? Value, ProtectedSecret? Secret = null
   public bool IsHidden => Secret != null;
 }
 
+internal sealed record PasswordHistoryEntry(ProtectedSecret Password, DateTime LastUsed);
+
 internal sealed record ItemAttachment(string Id, string FileName, long Size, string? SizeName);
 
 internal sealed class BitwardenItem
@@ -75,6 +77,7 @@ internal sealed class BitwardenItem
   public string? FirstUri => Uris.Count > 0 ? Uris[0].Uri : null;
   public string? FirstHost => Uris.Count > 0 ? Uris[0].Host : null;
   public DateTime? PasswordRevisionDate { get; init; }
+  public IReadOnlyList<PasswordHistoryEntry>? PasswordHistory { get; init; }
 
   public string? CardholderName { get; init; }
   public string? CardBrand { get; init; }
@@ -112,6 +115,8 @@ internal sealed class BitwardenItem
     SshPrivateKey?.Dispose();
     foreach (var field in CustomFields.Values)
       field.Secret?.Dispose();
+    foreach (var entry in PasswordHistory ?? [])
+      entry.Password.Dispose();
   }
 
   public string Subtitle => Type switch

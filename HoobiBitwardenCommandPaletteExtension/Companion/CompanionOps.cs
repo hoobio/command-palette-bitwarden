@@ -208,7 +208,8 @@ internal sealed partial class CompanionOps : IDisposable
       _service.ShowWebsiteIcons ? CachedIconPath(item) : null,
       item.Reprompt == 1 && !locked ? RepromptPage.GetGrace(item.Id) : null,
       item.Password is not null,
-      item.Reprompt == 1 && _biometricEnabled());
+      item.Reprompt == 1 && _biometricEnabled(),
+      locked ? null : item.PasswordHistory?.Count);
   }
 
   internal async Task<FiltersResponse> ListFiltersAsync()

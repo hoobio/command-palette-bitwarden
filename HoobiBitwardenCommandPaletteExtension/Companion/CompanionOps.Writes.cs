@@ -66,16 +66,19 @@ internal sealed partial class CompanionOps
   internal async Task<PasswordHistoryResponse> GetPasswordHistoryAsync(string? id, bool verified = false)
   {
     var item = FindGranted(id, null, verified);
-    return new(HistoryOf(await _service.GetItemJsonAsync(item.Id)).Select(h => h.LastUsed).ToList());
+    return new(item.PasswordHistory?.Select(h => h.LastUsed).ToList()
+      ?? HistoryOf(await _service.GetItemJsonAsync(item.Id)).Select(h => h.LastUsed).ToList());
   }
 
   internal async Task CopyPasswordHistoryAsync(string? id, string field, DateTime revisionDate, bool verified = false)
   {
     var item = FindGranted(id, revisionDate, verified);
-    var history = HistoryOf(await _service.GetItemJsonAsync(item.Id));
-    if (!int.TryParse(field.AsSpan(ItemFields.HistoryPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var index) || index >= history.Count)
+    if (!int.TryParse(field.AsSpan(ItemFields.HistoryPrefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var index))
       throw new IpcException(IpcErrors.Invalid);
-    _copyText(history[index].Password, true);
+    var password = item.PasswordHistory is { } cached
+      ? index < cached.Count ? cached[index].Password.Reveal() : null
+      : HistoryOf(await _service.GetItemJsonAsync(item.Id)).ElementAtOrDefault(index).Password;
+    _copyText(password ?? throw new IpcException(IpcErrors.Invalid), true);
   }
 
   internal async Task<SavedResponse> CreateItemAsync(EditableItem item)

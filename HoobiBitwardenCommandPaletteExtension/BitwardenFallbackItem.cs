@@ -17,6 +17,9 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
   private readonly Lock _lock = new();
   private CancellationTokenSource? _cts;
   private HoobiBitwardenCommandPaletteExtensionPage? _currentPage;
+  private DateTime _lastStatusRetry = DateTime.MinValue;
+
+  internal TimeSpan StatusRetryInterval { get; init; } = TimeSpan.FromSeconds(30);
 
   public BitwardenFallbackItem(BitwardenCliService service, BitwardenSettingsManager? settings = null)
       : base(new NoOpCommand(), "Search Bitwarden", "hoobi.bitwarden.fallback")
@@ -52,18 +55,22 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
       return;
     }
 
+    if (_service.IsUnlocked)
+      _lastStatusRetry = DateTime.MinValue;
+    else if (!ShouldRetryStatus())
+    {
+      ClearResult(ct);
+      return;
+    }
+
     _ = Task.Run(async () =>
     {
       try
       {
-        if (!_service.IsUnlocked)
+        if (!_service.IsUnlocked && await _service.GetVaultStatusAsync() != VaultStatus.Unlocked)
         {
-          var status = await _service.GetVaultStatusAsync();
-          if (status != VaultStatus.Unlocked)
-          {
-            ClearResult(ct);
-            return;
-          }
+          ClearResult(ct);
+          return;
         }
 
         await _service.RefreshCacheAsync();
@@ -86,6 +93,18 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
           ClearResult(ct);
       }
     }, ct);
+  }
+
+  private bool ShouldRetryStatus()
+  {
+    lock (_lock)
+    {
+      var now = DateTime.UtcNow;
+      if (now - _lastStatusRetry < StatusRetryInterval)
+        return false;
+      _lastStatusRetry = now;
+    }
+    return _service.HasRestorableSession;
   }
 
   private void HandleResults(List<BitwardenItem> items, string query, CancellationToken ct)

@@ -40,6 +40,8 @@ internal sealed partial class BitwardenCliService
   private bool _cacheLoaded;
   private int _sessionGeneration;
   private DateTime _lastRefresh;
+  private DataFileStamp? _refreshedDataStamp;
+  private DateTime _refreshedDataAt;
   private int _refreshing;
   private int _refreshPending;
   private readonly Lock _statusLock = new();
@@ -53,7 +55,7 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  public DateTime LastRefresh => _lastRefresh;
+  public DateTime LastRefresh { get => _lastRefresh; internal set => _lastRefresh = value; }
 
   private VaultStatus? _lastStatus;
   private Dictionary<string, string> _folders = [];
@@ -63,6 +65,10 @@ internal sealed partial class BitwardenCliService
   private TimeSpan _autoLockTimeout;
 
   public bool IsUnlocked => _sessionKey != null;
+
+  internal bool HasRestorableSession =>
+    !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BW_SESSION"))
+    || (_settings?.RememberSession.Value == true && !string.IsNullOrEmpty(SessionStore.Load()));
 
   public bool IsCacheLoaded => _cacheLoaded;
 
@@ -140,6 +146,28 @@ internal sealed partial class BitwardenCliService
     _settings?.UsePortableDataDirectory.Value ?? false,
     _settings?.CliDataDirectoryOverride.Value);
 
+  internal string? DataFileOverride { get; set; }
+
+  private string DataFile => DataFileOverride ?? HubProtocol.CliDataFile(DataDirectory);
+
+  private sealed record DataFileStamp(DateTime WriteTimeUtc, long Length);
+
+  // FAT32 keeps write times to 2 seconds, so an unchanged stamp is trusted only for a bounded time.
+  internal TimeSpan UnchangedDataMaxAge { get; set; } = TimeSpan.FromMinutes(30);
+
+  private DataFileStamp? ReadDataFileStamp()
+  {
+    try
+    {
+      var info = new FileInfo(DataFile);
+      return info.Exists ? new DataFileStamp(info.LastWriteTimeUtc, info.Length) : null;
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+    {
+      return null;
+    }
+  }
+
   private void ReplaceSessionKey(string? sessionKey)
   {
     Interlocked.Exchange(ref _sessionKey, ProtectedSecret.From(sessionKey))?.Dispose();
@@ -179,6 +207,32 @@ internal sealed partial class BitwardenCliService
   private string? _lastDataDirectory;
   private bool _lastRememberSession;
   private string? _cliVersion;
+  private volatile CliProbeKey? _cliProbe;
+
+  internal sealed record CliProbeKey(string Path, DateTime WriteTimeUtc)
+  {
+    public static CliProbeKey? For(string executable)
+    {
+      try
+      {
+        var withExe = System.IO.Path.HasExtension(executable) ? executable : executable + ".exe";
+        var dirs = System.IO.Path.IsPathRooted(executable)
+          ? [""]
+          : (Environment.GetEnvironmentVariable("PATH") ?? "").Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var dir in dirs)
+        {
+          foreach (var name in new[] { executable, withExe })
+          {
+            var candidate = System.IO.Path.Combine(dir, name);
+            if (File.Exists(candidate))
+              return new CliProbeKey(candidate, File.GetLastWriteTimeUtc(candidate));
+          }
+        }
+      }
+      catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
+      return null;
+    }
+  }
 
   public BitwardenCliService(BitwardenSettingsManager? settings = null, CliProcessFactory? processFactory = null)
   {
@@ -261,6 +315,7 @@ internal sealed partial class BitwardenCliService
     KillAllRunning();
     ReplaceSessionKey(null);
     _lastStatus = null;
+    _cliProbe = null;
     // Drop the in-flight check so the next status call does not coalesce onto one run against the old CLI path.
     lock (_statusLock) { _statusCheckInFlight = null; }
     ResetStaticState();
@@ -323,6 +378,7 @@ internal sealed partial class BitwardenCliService
         item.DisposeSecrets();
       _cache = [];
       _cacheLoaded = false;
+      _refreshedDataStamp = null;
       _sessionGeneration++;
     }
   }
@@ -425,6 +481,10 @@ internal sealed partial class BitwardenCliService
 
   private async Task<bool> IsCliAvailableAsync()
   {
+    var key = CliProbeKey.For(CliExecutable);
+    if (key != null && key == _cliProbe)
+      return true;
+    _cliProbe = null;
     try
     {
       var psi = CliStartInfo("--version", redirectInput: false);
@@ -446,6 +506,8 @@ internal sealed partial class BitwardenCliService
       _cliVersion = line;
       try { process.Kill(true); } catch { }
       var available = !string.IsNullOrEmpty(line);
+      if (available)
+        _cliProbe = key;
       DebugLogService.Log("Status", $"bw --version => '{line ?? "(none)"}', available={available} (exe: {CliExecutable})");
       return available;
     }
@@ -487,8 +549,33 @@ internal sealed partial class BitwardenCliService
     return false;
   }
 
+  private (bool LoggedIn, string? ServerUrl)? ReadDataFileLoginState()
+  {
+    try
+    {
+      if (HubProtocol.ReadLoginState(DataFile) is { } state)
+        return state;
+      DebugLogService.Log("Status", $"CLI data file state version is missing or below {HubProtocol.MinLoginStateVersion}");
+      return null;
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Text.Json.JsonException)
+    {
+      DebugLogService.Log("Status", $"CLI data file unreadable: {ex.GetType().Name}");
+      return null;
+    }
+  }
+
   private async Task<VaultStatus> FetchStatusAsync()
   {
+    if (ReadDataFileLoginState() is { } state)
+    {
+      ServerUrl ??= state.ServerUrl;
+      ServerUrlResolved = true;
+      var fromFile = state.LoggedIn ? VaultStatus.Locked : VaultStatus.Unauthenticated;
+      DebugLogService.Log("Status", $"CLI data file: loggedIn={state.LoggedIn}, server={SanitizeServerUrl(state.ServerUrl)} -> {fromFile}");
+      return fromFile;
+    }
+
     try
     {
       DebugLogService.Log("Status", "Running bw status");
@@ -689,8 +776,9 @@ internal sealed partial class BitwardenCliService
 
     try
     {
-      var output = await RunCliAsync("status");
-      var url = JsonNode.Parse(output)?["serverUrl"]?.GetValue<string>()?.TrimEnd('/');
+      var url = ReadDataFileLoginState() is { } state
+        ? state.ServerUrl
+        : JsonNode.Parse(await RunCliAsync("status"))?["serverUrl"]?.GetValue<string>()?.TrimEnd('/');
       if (!string.IsNullOrWhiteSpace(url))
         ServerUrl = url;
       ServerUrlResolved = true;
@@ -1229,6 +1317,7 @@ internal sealed partial class BitwardenCliService
     DebugLogService.Log("Cache", "RefreshCacheAsync started");
     var failed = false;
     var writeVersion = WriteVersion;
+    var dataStamp = ReadDataFileStamp();
     try
     {
       var foldersTask = RunCliAsync("list folders");
@@ -1262,6 +1351,8 @@ internal sealed partial class BitwardenCliService
         _cache = items;
         _cacheLoaded = true;
         _lastRefresh = DateTime.UtcNow;
+        _refreshedDataStamp = dataStamp;
+        _refreshedDataAt = _lastRefresh;
       }
 
       CacheUpdated?.Invoke();
@@ -1308,6 +1399,13 @@ internal sealed partial class BitwardenCliService
     if (interval == Timeout.InfiniteTimeSpan) return;
     if (_refreshing == 0 && DateTime.UtcNow - _lastRefresh > interval)
     {
+      // `bw list` only reads data.json, so an unchanged file returns the cached data again.
+      if (_refreshedDataStamp is { } recorded && DateTime.UtcNow - _refreshedDataAt < UnchangedDataMaxAge && ReadDataFileStamp() == recorded)
+      {
+        _lastRefresh = DateTime.UtcNow;
+        DebugLogService.Log("Cache", "Background refresh skipped: CLI data file unchanged");
+        return;
+      }
       DebugLogService.Log("Cache", $"Background refresh triggered (stale for {(DateTime.UtcNow - _lastRefresh).TotalSeconds:F0}s)");
       _ = Task.Run(async () =>
       {
@@ -1780,6 +1878,7 @@ internal sealed partial class BitwardenCliService
       HasPasskey = login?["fido2Credentials"] is JsonArray fido && fido.Count > 0,
       Uris = ParseUris(login),
       PasswordRevisionDate = DateTime.TryParse(Text(login, "passwordRevisionDate"), out var prd) ? prd.ToUniversalTime() : null,
+      PasswordHistory = node is JsonObject obj && obj.ContainsKey("passwordHistory") ? ParsePasswordHistory(obj["passwordHistory"]) : null,
       CardholderName = Text(card, "cardholderName"),
       CardBrand = Text(card, "brand"),
       CardNumber = ProtectedSecret.From(Text(card, "number")),
@@ -1799,6 +1898,12 @@ internal sealed partial class BitwardenCliService
   }
 
   private static string? Text(JsonNode? node, string key) => node?[key]?.GetValue<string>();
+
+  internal static List<PasswordHistoryEntry> ParsePasswordHistory(JsonNode? history) =>
+    [.. (history as JsonArray ?? [])
+      .Select(h => (Password: ProtectedSecret.From(Text(h, "password")), Used: Text(h, "lastUsedDate")))
+      .Where(h => h.Password != null)
+      .Select(h => new PasswordHistoryEntry(h.Password!, DateTime.TryParse(h.Used, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var used) ? used : default))];
 
   private static string? JoinNonEmpty(string separator, params string?[] parts)
   {
