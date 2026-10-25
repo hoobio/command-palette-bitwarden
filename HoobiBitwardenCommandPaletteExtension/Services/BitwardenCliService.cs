@@ -40,6 +40,7 @@ internal sealed partial class BitwardenCliService
   private bool _cacheLoaded;
   private int _sessionGeneration;
   private DateTime _lastRefresh;
+  private DateTime? _refreshedDataWriteTime;
   private int _refreshing;
   private int _refreshPending;
   private readonly Lock _statusLock = new();
@@ -53,7 +54,7 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  public DateTime LastRefresh => _lastRefresh;
+  public DateTime LastRefresh { get => _lastRefresh; internal set => _lastRefresh = value; }
 
   private VaultStatus? _lastStatus;
   private Dictionary<string, string> _folders = [];
@@ -139,6 +140,23 @@ internal sealed partial class BitwardenCliService
     _settings?.CliDirectoryOverride.Value,
     _settings?.UsePortableDataDirectory.Value ?? false,
     _settings?.CliDataDirectoryOverride.Value);
+
+  internal string? DataFileOverride { get; set; }
+
+  private string DataFile => DataFileOverride ?? HubProtocol.CliDataFile(DataDirectory);
+
+  private DateTime? DataFileWriteTime()
+  {
+    try
+    {
+      var info = new FileInfo(DataFile);
+      return info.Exists ? info.LastWriteTimeUtc : null;
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+    {
+      return null;
+    }
+  }
 
   private void ReplaceSessionKey(string? sessionKey)
   {
@@ -323,6 +341,7 @@ internal sealed partial class BitwardenCliService
         item.DisposeSecrets();
       _cache = [];
       _cacheLoaded = false;
+      _refreshedDataWriteTime = null;
       _sessionGeneration++;
     }
   }
@@ -1229,6 +1248,7 @@ internal sealed partial class BitwardenCliService
     DebugLogService.Log("Cache", "RefreshCacheAsync started");
     var failed = false;
     var writeVersion = WriteVersion;
+    var dataWriteTime = DataFileWriteTime();
     try
     {
       var foldersTask = RunCliAsync("list folders");
@@ -1262,6 +1282,7 @@ internal sealed partial class BitwardenCliService
         _cache = items;
         _cacheLoaded = true;
         _lastRefresh = DateTime.UtcNow;
+        _refreshedDataWriteTime = dataWriteTime;
       }
 
       CacheUpdated?.Invoke();
@@ -1308,6 +1329,13 @@ internal sealed partial class BitwardenCliService
     if (interval == Timeout.InfiniteTimeSpan) return;
     if (_refreshing == 0 && DateTime.UtcNow - _lastRefresh > interval)
     {
+      // `bw list` only reads data.json, so an unchanged file returns the cached data again.
+      if (_refreshedDataWriteTime is { } recorded && DataFileWriteTime() == recorded)
+      {
+        _lastRefresh = DateTime.UtcNow;
+        DebugLogService.Log("Cache", "Background refresh skipped: CLI data file unchanged");
+        return;
+      }
       DebugLogService.Log("Cache", $"Background refresh triggered (stale for {(DateTime.UtcNow - _lastRefresh).TotalSeconds:F0}s)");
       _ = Task.Run(async () =>
       {
