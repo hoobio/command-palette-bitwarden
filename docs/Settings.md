@@ -12,6 +12,14 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | Off |
 | **Description** | Persist the Bitwarden session key in Windows Credential Manager so the vault stays unlocked across restarts. When disabled, the session key is stored only in memory and lost when the extension process exits. |
 
+### Use API Key Authentication
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | Off |
+| **Description** | Log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) (`bw login --apikey`) instead of your email and master password. Use this when your account uses FIDO2 or Duo two-step login. The login form asks for the Client ID and Client Secret, and the extension stores them in Windows Credential Manager. When you are logged out, the extension logs in again with the stored key, so you only unlock with your master password. Changing this setting logs you out and deletes the stored API key and session key. Logging out also deletes the stored API key. See [API key login](Getting-Started#api-key-login). |
+
 ### Integrate with Bitwarden Desktop App
 
 | | |

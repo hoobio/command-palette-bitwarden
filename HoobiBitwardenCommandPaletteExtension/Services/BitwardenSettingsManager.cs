@@ -31,6 +31,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Securely store your session key using Windows Credential Manager so you don't need to unlock each launch",
         false);
 
+    public ToggleSetting UseApiKeyAuthentication { get; } = new(
+        "useApiKeyAuthentication",
+        "Use API Key Authentication",
+        "Log in with your personal API key instead of your email and master password. Use this for FIDO2 or Duo two-step login. The key is stored in Windows Credential Manager, and you still unlock with your master password. Changing this setting logs you out",
+        false);
+
     public ToggleSetting UseDesktopIntegration { get; } = new(
         "useDesktopIntegration",
         "Integrate with Bitwarden Desktop App",
@@ -206,6 +212,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         RepromptGracePeriod.Value = "60";
         Settings.Add(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
         Settings.Add(RememberSession);
+        Settings.Add(UseApiKeyAuthentication);
         Settings.Add(UseDesktopIntegration);
         Settings.Add(AutoBiometricUnlock);
         Settings.Add(AutoLockTimeout);
@@ -336,6 +343,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     private IEnumerable<(string Key, object? Value)> AllSettings()
     {
         yield return (RememberSession.Key, (object?)RememberSession.Value);
+        yield return (UseApiKeyAuthentication.Key, (object?)UseApiKeyAuthentication.Value);
         yield return (UseDesktopIntegration.Key, (object?)UseDesktopIntegration.Value);
         yield return (AutoBiometricUnlock.Key, (object?)AutoBiometricUnlock.Value);
         yield return (AutoLockTimeout.Key, AutoLockTimeout.Value);

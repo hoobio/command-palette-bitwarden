@@ -591,10 +591,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         PlaceholderText = "Search your vault... (try url:github)";
 
-        var item = new ListItem(new Pages.LoginPage(_settings, OnLoginSubmitted))
+        var item = new ListItem(new Pages.LoginPage(_settings, OnLoginSubmitted, OnApiKeyLoginSubmitted))
         {
             Title = "Login to Bitwarden",
-            Subtitle = _errorMessage ?? "Sign in with your email and master password",
+            Subtitle = _errorMessage ?? (_settings?.UseApiKeyAuthentication.Value == true
+                ? "Sign in with your personal API key"
+                : "Sign in with your email and master password"),
             Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
         };
 
@@ -1353,6 +1355,28 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             {
                 RecoverFromFailedRefresh(ex);
             }
+        });
+    }
+
+    private void OnApiKeyLoginSubmitted(string clientId, string clientSecret)
+    {
+        DebugLogService.Log("Action", "API key login submitted by user");
+        _handlingAction = true;
+        ClearSearchText();
+        _errorMessage = null;
+        ResetPendingLogin();
+        _currentItems = [];
+        IsLoading = true;
+        RaiseItemsChanged();
+
+        RunAction(async () =>
+        {
+            ShowLoadingStatus("Logging in...", "bw login --apikey");
+            var (success, error) = await _service.LoginWithApiKeyAsync(clientId, clientSecret);
+            if (!success)
+                _errorMessage = error ?? "Login failed";
+            _currentItems = success ? BuildLockedItems() : BuildUnauthenticatedItems();
+            RaiseItemsChanged();
         });
     }
 

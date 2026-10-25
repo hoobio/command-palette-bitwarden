@@ -38,6 +38,16 @@ dotnet build -c Debug -p:Platform=x64
 3. If your vault is locked, you'll be prompted for your master password
 4. Once unlocked, vault items are cached locally and refreshed every 5 minutes
 
+### API key login
+
+If your account uses FIDO2 (WebAuthn) or Duo two-step login, the CLI cannot complete a password login. Turn on **Use API Key Authentication** in [Settings](Settings) and log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) instead:
+
+1. In the Bitwarden web vault, go to **Settings > Security > Keys** and select **View API key**.
+2. Open the **Login to Bitwarden** item and enter the **Client ID** and **Client Secret**.
+3. Unlock the vault with your master password.
+
+The extension stores the API key in Windows Credential Manager. When the CLI session ends, the extension logs in again with the stored key, so you only enter your master password. API key login skips two-step login. The API key cannot decrypt the vault without the master password.
+
 ## Setting Your Server
 
 Select **Set Bitwarden Server** from the vault browser to pick a preset (**Bitwarden Cloud** for `bitwarden.com`, **Bitwarden EU** for `https://vault.bitwarden.eu`) or type a self-hosted server URL. The default is `https://vault.bitwarden.com`. Only the exact hosts `bitwarden.com` and its subdomains are treated as cloud. A self-hosted server on a host that only contains "bitwarden.com" in its name is treated as self-hosted.

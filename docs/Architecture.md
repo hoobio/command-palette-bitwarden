@@ -55,7 +55,8 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── PasswordGenerator.cs           # Password and passphrase generation (RandomNumberGenerator, EFF word list)
 │   ├── ProtectedSecret.cs             # In-memory encryption for secrets (CryptProtectMemory)
 │   ├── SecureClipboardService.cs      # Clipboard security + auto-clear
-│   ├── SessionStore.cs               # Windows Credential Manager wrapper
+│   ├── CredentialStore.cs             # Windows Credential Manager wrapper
+│   ├── SessionStore.cs               # Session key and API key credentials
 │   └── SvgRasterizer.cs              # SVG to PNG conversion via SkiaSharp
 └── Assets/                            # Icons and images
 HoobiBitwardenCompanion/               # Avalonia companion window app
@@ -94,6 +95,7 @@ User selects an action
 | `ContextAwarenessService` | Static | Captures foreground window context (process names, titles, browser URLs) via Win32 + UI Automation |
 | `SecureClipboardService` | Static | Clipboard operations with history exclusion and configurable auto-clear timer |
 | `SessionStore` | Static | Reads/writes session keys to Windows Credential Manager |
+| `ApiKeyStore` | Static | Reads/writes the personal API key (client ID and secret) to Windows Credential Manager for API key login |
 | `AccessTracker` | Static | Tracks item access times (persisted to JSON) and recent-copy state (5-min in-memory timer) |
 | `BitwardenSettingsManager` | Instance | Manages user-configurable settings via Command Palette settings UI |
 | `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; fires `IconCached` to refresh the list UI |

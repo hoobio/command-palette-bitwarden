@@ -206,6 +206,7 @@ internal sealed partial class BitwardenCliService
   private string _lastCliExecutable;
   private string? _lastDataDirectory;
   private bool _lastRememberSession;
+  private bool _lastUseApiKey;
   private string? _cliVersion;
   private volatile CliProbeKey? _cliProbe;
 
@@ -241,6 +242,7 @@ internal sealed partial class BitwardenCliService
     _lastCliExecutable = CliExecutable;
     _lastDataDirectory = DataDirectory;
     _lastRememberSession = _settings?.RememberSession.Value ?? false;
+    _lastUseApiKey = UseApiKey;
     ApplyAutoLockSetting();
     AccessTracker.ItemAccessed += ResetAutoLockTimer;
     if (_settings != null)
@@ -248,8 +250,20 @@ internal sealed partial class BitwardenCliService
       _settings.Settings.SettingsChanged += (_, _) => ApplyAutoLockSetting();
       _settings.Settings.SettingsChanged += (_, _) => CheckCliConfigChanged();
       _settings.Settings.SettingsChanged += (_, _) => CheckRememberSessionDisabled();
+      _settings.Settings.SettingsChanged += (_, _) => CheckApiKeyModeChanged();
       _settings.Settings.SettingsChanged += (_, _) => UpdateLiveSync();
     }
+  }
+
+  private bool UseApiKey => _settings?.UseApiKeyAuthentication.Value ?? false;
+
+  private void CheckApiKeyModeChanged()
+  {
+    var current = UseApiKey;
+    if (current == _lastUseApiKey) return;
+    _lastUseApiKey = current;
+    DebugLogService.Log("Auth", $"API key authentication {(current ? "enabled" : "disabled")}, logging out to switch method");
+    _ = LogoutAsync();
   }
 
   internal void LoadTestData(List<BitwardenItem> items, Dictionary<string, string> folders, Dictionary<string, string>? organizations = null)
@@ -449,6 +463,12 @@ internal sealed partial class BitwardenCliService
 
     var fallback = await FetchStatusAsync();
     DebugLogService.Log("Status", $"Falling back to bw status: {fallback}");
+    if (fallback == VaultStatus.Unauthenticated && UseApiKey && ApiKeyStore.Load() is { } apiKey)
+    {
+      DebugLogService.Log("Status", "Unauthenticated with a stored API key, logging in silently");
+      if ((await LoginWithApiKeyAsync(apiKey.ClientId, apiKey.ClientSecret)).Success)
+        fallback = VaultStatus.Locked;
+    }
     return SetStatus(fallback);
   }
 
@@ -646,7 +666,9 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  public async Task<(bool Success, string? Error)> UnlockAsync(string masterPassword)
+  public Task<(bool Success, string? Error)> UnlockAsync(string masterPassword) => UnlockAsync(masterPassword, allowApiKeyRelogin: true);
+
+  private async Task<(bool Success, string? Error)> UnlockAsync(string masterPassword, bool allowApiKeyRelogin)
   {
     DebugLogService.Log("Unlock", "UnlockAsync started");
     try
@@ -684,6 +706,13 @@ internal sealed partial class BitwardenCliService
 
       if (error.Contains("not logged in", StringComparison.OrdinalIgnoreCase))
       {
+        if (allowApiKeyRelogin && UseApiKey && ApiKeyStore.Load() is { } apiKey
+            && (await LoginWithApiKeyAsync(apiKey.ClientId, apiKey.ClientSecret)).Success)
+        {
+          DebugLogService.Log("Unlock", "Not logged in, logged in again with stored API key, retrying unlock");
+          return await UnlockAsync(masterPassword, allowApiKeyRelogin: false);
+        }
+
         DebugLogService.Log("Unlock", "Not logged in detected, resetting to logged out");
         ResetToLoggedOut();
       }
@@ -897,6 +926,61 @@ internal sealed partial class BitwardenCliService
     }
   }
 
+  // The API key cannot decrypt the vault, so the login ends Locked and any session key the CLI prints is ignored until `bw unlock`.
+  public async Task<(bool Success, string? Error)> LoginWithApiKeyAsync(string clientId, string clientSecret)
+  {
+    DebugLogService.Log("Auth", "LoginWithApiKeyAsync started");
+    DisposeDeviceVerificationProcess();
+    try
+    {
+      var psi = CliStartInfo("login --apikey");
+      psi.Environment["BW_CLIENTID"] = clientId;
+      psi.Environment["BW_CLIENTSECRET"] = clientSecret;
+      psi.Environment["BW_NOINTERACTION"] = "true";
+
+      using var process = _processFactory(psi);
+      string stderr;
+      int exitCode;
+      try
+      {
+        process.StandardInput.Close();
+        using var cts = new CancellationTokenSource(CliTimeoutMs);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cts.Token);
+        var stderrTask = process.StandardError.ReadToEndAsync(cts.Token);
+        await stdoutTask;
+        stderr = (await stderrTask).Trim();
+        await process.WaitForExitAsync(cts.Token);
+        exitCode = process.ExitCode;
+      }
+      finally
+      {
+        try { process.Kill(true); } catch { }
+      }
+
+      if (exitCode == 0 || stderr.Contains("already logged in", StringComparison.OrdinalIgnoreCase))
+      {
+        ApiKeyStore.Save(clientId, clientSecret);
+        SetStatus(VaultStatus.Locked);
+        DebugLogService.Log("Auth", "API key login successful, vault locked");
+        return (true, null);
+      }
+
+      DebugLogService.Log("Auth", $"API key login failed (exit {exitCode}): {(string.IsNullOrEmpty(stderr) ? "(no stderr)" : stderr)}");
+      if (IsRejectedApiKeyError(stderr))
+        ApiKeyStore.Clear();
+      return (false, string.IsNullOrEmpty(stderr) ? "Login failed" : stderr);
+    }
+    catch (Exception ex)
+    {
+      DebugLogService.Log("Auth", $"LoginWithApiKeyAsync exception: {ex.GetType().Name}: {ex.Message}");
+      return (false, ex.Message);
+    }
+  }
+
+  internal static bool IsRejectedApiKeyError(string error) =>
+    error.Contains("client_secret is incorrect", StringComparison.OrdinalIgnoreCase)
+    || error.Contains("Invalid API Key", StringComparison.OrdinalIgnoreCase);
+
   public async Task<(bool Success, string? Error)> SubmitDeviceVerificationAsync(string otpCode)
   {
     var process = _pendingDeviceVerificationProcess;
@@ -985,6 +1069,7 @@ internal sealed partial class BitwardenCliService
     FaviconService.ClearMemCache();
     FaviconService.ClearDiskCache();
     SessionStore.Clear();
+    ApiKeyStore.Clear();
     StatusChanged?.Invoke();
 
     try { await RunCliAsync("logout", CliLogoutTimeoutMs, "You have logged out."); }
