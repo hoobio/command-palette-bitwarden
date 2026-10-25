@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
@@ -692,6 +693,22 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Icon = new IconInfo("\uE9D9"),
     };
 
+    private static ListItem BuildNewItemItem(CompanionHost companion) => new(new AnonymousCommand(companion.ShowNewItem)
+    { Name = "New item", Result = CommandResult.Dismiss() })
+    {
+        Title = "New Bitwarden item",
+        Subtitle = "Create a new login, new password, note, card, identity or SSH key",
+        Icon = new IconInfo(""),
+    };
+
+    private static ListItem BuildGenerateItem(CompanionHost companion) => new(new AnonymousCommand(companion.ShowGenerator)
+    { Name = "Generate password", Result = CommandResult.Dismiss() })
+    {
+        Title = "Generate password",
+        Subtitle = "Open the generator for a new password or passphrase",
+        Icon = new IconInfo(""),
+    };
+
     private ListItem BuildLockItem() => new(new AnonymousCommand(OnLockRequested)
     { Name = "Lock", Result = CommandResult.KeepOpen() })
     {
@@ -776,13 +793,18 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var boostLock = MatchesCommand(search, "lock");
         var boostLogout = MatchesCommand(search, "logout");
         var boostDebug = DebugLogService.Enabled && MatchesCommand(search, "debug");
+        var companion = CompanionHost.Current;
+        var boostNew = companion != null && (MatchesCommand(search, "new item") || MatchesCommand(search, "new login") || MatchesCommand(search, "new password"));
+        var boostGenerate = companion != null && MatchesCommand(search, "generate password");
 
+        if (boostNew) list.Add(BuildNewItemItem(companion!));
+        if (boostGenerate) list.Add(BuildGenerateItem(companion!));
         if (boostSync) list.Add(BuildSyncItem());
         if (boostLock) list.Add(BuildLockItem());
         if (boostLogout) list.Add(BuildLogoutItem());
         if (boostDebug) list.Add(BuildCopyDebugLogItem());
 
-        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug)
+        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug && !boostNew && !boostGenerate)
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
         else
         {
@@ -808,6 +830,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             }
         }
 
+        if (companion != null && !boostNew) list.Add(BuildNewItemItem(companion));
+        if (companion != null && !boostGenerate) list.Add(BuildGenerateItem(companion));
         if (!boostSync) list.Add(BuildSyncItem());
         list.Add(BuildSetServerItem());
         if (!boostLock) list.Add(BuildLockItem());

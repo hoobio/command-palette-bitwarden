@@ -90,7 +90,7 @@ The trash-can button opens a dialog that names the item. It offers **Archive**, 
 
 ## New item
 
-**New Bitwarden item** in Command Palette opens an item window in create mode. The header shows the type icon and a **New item** badge. The form starts as a login. The **Type** box at the top of the form changes it to a secure note, card, identity or SSH key. A type change keeps the name, folder, notes and favourite, and clears the fields of the old type. A new item can go into an organisation: select an **Owner** and at least one collection.
+**New Bitwarden item** in Command Palette opens an item window in create mode. It is a top-level command and is also in the Bitwarden page list, after the vault items; type "new" to move it to the top. The header shows the type icon and a **New item** badge. The form starts as a login. The **Type** box at the top of the form changes it to a secure note, card, identity or SSH key. A type change keeps the name, folder, notes and favourite, and clears the fields of the old type. A new item can go into an organisation: select an **Owner** and at least one collection.
 
 **Save** has the same checks as an edit, and the extension creates the item with `bw create item`, reads it back to confirm it and adds it to the vault cache, so it shows in Command Palette. The window then shows the saved item read-only. A later **Open in window** for the item brings this window to the front.
 
@@ -98,7 +98,7 @@ The trash-can button opens a dialog that names the item. It offers **Archive**, 
 
 ## Password generator
 
-The generate button in the edit form opens the generator in a dialog. **Generate password** in Command Palette opens it in its own window. Only one generator window is open at a time: the command brings the open window to the front. The generator has two tabs:
+The generate button in the edit form opens the generator in a dialog. **Generate password** in Command Palette (a top-level command, also in the Bitwarden page list) opens it in its own window. Only one generator window is open at a time: the command brings the open window to the front. The generator has two tabs:
 
 | Tab | Options | Default |
 |-----|---------|---------|
