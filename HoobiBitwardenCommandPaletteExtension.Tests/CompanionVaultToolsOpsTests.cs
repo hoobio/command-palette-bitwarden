@@ -311,7 +311,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     "--passphrase", "--words", "--separator", "--capitalize", "--includeNumber"];
 
   [Theory]
-  [InlineData("generate -uln --length 20 --minNumber 1")]
+  [InlineData("generate -ulns --length 20 --minNumber 1 --minSpecial 1 --ambiguous")]
   public void BuildGenerateArgs_DefaultsToBitwardensPassword(string expected) =>
     Assert.Equal(expected, CompanionOps.BuildGenerateArgs(new GeneratorOptions()));
 
@@ -358,7 +358,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     var generated = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse);
 
     Assert.Equal("Abcdefghij0123456789", generated.Value);
-    Assert.Equal("generate -uln --length 20 --minNumber 1", Assert.Single(h.Bw.Args));
+    Assert.Equal("generate -ulns --length 20 --minNumber 1 --minSpecial 1 --ambiguous", Assert.Single(h.Bw.Args));
     var history = IpcJson.Read(await h.Ops.HandleAsync(Ops.ListGeneratorHistory, null, TestContext.Current.CancellationToken), IpcJson.Default.GeneratorHistoryResponse);
     var entry = Assert.Single(history.Entries);
     Assert.Equal((generated.EntryId, GeneratorKinds.Password), (entry.Id, entry.Kind));
@@ -406,7 +406,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     var saved = IpcJson.Read(await h.Handle(Ops.RotatePassword, Rotate(id), IpcJson.Default.RotateRequest), IpcJson.Default.SavedResponse);
 
     Assert.Equal(id, saved.Id);
-    Assert.Equal(["generate -uln --length 20 --minNumber 1", $"get item {id}", $"edit item {id}", $"get item {id}"], h.Bw.Args);
+    Assert.Equal(["generate -ulns --length 20 --minNumber 1 --minSpecial 1 --ambiguous", $"get item {id}", $"edit item {id}", $"get item {id}"], h.Bw.Args);
     var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Bw.Stdin))))!;
     Assert.Equal("Abcdefghij0123456789", sent["login"]!["password"]!.GetValue<string>());
     Assert.Equal(("Abcdefghij0123456789", true), Assert.Single(h.TextCopies));
