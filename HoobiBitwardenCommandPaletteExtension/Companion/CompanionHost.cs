@@ -32,15 +32,14 @@ internal sealed partial class CompanionHost : IDisposable
     _ops.Locked += NotifyLocked;
     _ops.VaultChanged += NotifyVaultChanged;
     _ops.VaultChanged += Prewarm;
+    _ops.PrewarmNeeded += Prewarm;
   }
 
   internal Process? Process => _process;
 
-  // The vault cache loads after warmup and after an unlock, so the companion cold start is paid before the first window is asked for.
+  // The cold start is paid before the first window is asked for, in every state: the login, unlock and server dialogs need the companion while the vault is locked or logged out.
   internal void Prewarm()
   {
-    if (!_ops.IsUnlocked)
-      return;
     try
     {
       EnsureStarted();
@@ -63,6 +62,20 @@ internal sealed partial class CompanionHost : IDisposable
     var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
     _ = CommandPaletteModalScope.Enter();
     _ = SendAsync(Ops.ShowApiKeyLogin, IpcJson.ToElement(new DialogRequest(returnWindow), IpcJson.Default.DialogRequest));
+  }
+
+  public void ShowLogin()
+  {
+    var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
+    _ = CommandPaletteModalScope.Enter();
+    _ = SendAsync(Ops.ShowLogin, IpcJson.ToElement(_ops.BuildLoginDialog(returnWindow), IpcJson.Default.LoginDialogRequest));
+  }
+
+  public void ShowReprompt(string itemId, Action action)
+  {
+    var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
+    _ = CommandPaletteModalScope.Enter();
+    _ = SendAsync(Ops.ShowReprompt, IpcJson.ToElement(_ops.RegisterReprompt(itemId, action, returnWindow), IpcJson.Default.RepromptDialogRequest));
   }
 
   public void ShowUnlock(bool rememberSession, bool windowsHello)
@@ -181,14 +194,23 @@ internal sealed partial class CompanionHost : IDisposable
 
   private async Task SendAsync(string op, JsonElement? payload)
   {
+    var cold = !IsRunning();
+    var started = Stopwatch.GetTimestamp();
     try
     {
       await RequestAsync(op, payload);
+      DebugLogService.Log("Companion", $"{op} shown in {(int)Stopwatch.GetElapsedTime(started).TotalMilliseconds}ms (cold start: {(cold ? "yes" : "no")})");
     }
     catch (Exception ex)
     {
       DebugLogService.Log("Companion", $"{op} failed: {ex.GetType().Name}: {ex.Message}");
     }
+  }
+
+  private bool IsRunning()
+  {
+    lock (_lock)
+      return _channel is { IsClosed: false } && _process is { HasExited: false };
   }
 
   internal PipeChannel EnsureStarted()
@@ -244,6 +266,7 @@ internal sealed partial class CompanionHost : IDisposable
     _ops.Locked -= NotifyLocked;
     _ops.VaultChanged -= NotifyVaultChanged;
     _ops.VaultChanged -= Prewarm;
+    _ops.PrewarmNeeded -= Prewarm;
     lock (_lock)
       Stop();
     _ops.Dispose();

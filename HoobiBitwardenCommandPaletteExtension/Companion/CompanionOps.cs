@@ -60,7 +60,13 @@ internal sealed partial class CompanionOps : IDisposable
     _service.StatusChanged += RaiseIfLocked;
     _service.AutoLocked += RaiseIfLocked;
     _service.CacheUpdated += RaiseVaultChanged;
+    _service.WarmupCompleted += RaisePrewarmNeeded;
+    _service.StatusChanged += RaisePrewarmNeeded;
   }
+
+  internal event Action? PrewarmNeeded;
+
+  private void RaisePrewarmNeeded() => PrewarmNeeded?.Invoke();
 
   internal bool IsUnlocked => _service.IsUnlocked;
 
@@ -73,6 +79,7 @@ internal sealed partial class CompanionOps : IDisposable
     if (_service.IsUnlocked)
       return;
     _collections = null;
+    _pendingReprompts.Clear();
     ClearGeneratorHistory();
     Locked?.Invoke();
   }
@@ -96,6 +103,19 @@ internal sealed partial class CompanionOps : IDisposable
           return IpcJson.ToElement(await UnlockAsync(unlock.Password, unlock.RememberSession, unlock.Biometric), IpcJson.Default.UnlockResponse);
         case Ops.SetServer:
           return IpcJson.ToElement(await SetServerAsync(IpcJson.Read(payload, IpcJson.Default.SetServerRequest)), IpcJson.Default.SetServerResponse);
+        case Ops.Login:
+          return IpcJson.ToElement(await LoginAsync(IpcJson.Read(payload, IpcJson.Default.LoginRequest)), IpcJson.Default.LoginResponse);
+        case Ops.SubmitDeviceVerification:
+          return IpcJson.ToElement(await SubmitDeviceVerificationAsync(IpcJson.Read(payload, IpcJson.Default.DeviceVerificationRequest).Code), IpcJson.Default.LoginResponse);
+        case Ops.CancelLogin:
+          CancelLogin();
+          return null;
+        case Ops.ConfirmReprompt:
+          var confirm = IpcJson.Read(payload, IpcJson.Default.RepromptConfirmRequest);
+          return IpcJson.ToElement(await ConfirmRepromptAsync(confirm.Token, confirm.Password, confirm.Biometric), IpcJson.Default.RepromptConfirmResponse);
+        case Ops.CancelReprompt:
+          CancelReprompt(IpcJson.Read(payload, IpcJson.Default.RepromptCancelRequest).Token);
+          return null;
         case Ops.ListFilters:
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
         case Ops.CreateItem:
@@ -494,6 +514,8 @@ internal sealed partial class CompanionOps : IDisposable
     _service.StatusChanged -= RaiseIfLocked;
     _service.AutoLocked -= RaiseIfLocked;
     _service.CacheUpdated -= RaiseVaultChanged;
+    _service.WarmupCompleted -= RaisePrewarmNeeded;
+    _service.StatusChanged -= RaisePrewarmNeeded;
     ClearGeneratorHistory();
     _collectionsGate.Dispose();
   }

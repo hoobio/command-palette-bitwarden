@@ -1,6 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -14,12 +16,15 @@ internal abstract class DialogWindow : Window
   protected void InitializeDialog(DialogViewModel? viewModel)
   {
     DataContext = viewModel;
-    Topmost = ItemWindow.AlwaysOnTop;
+    Topmost = true;
     this.FindControl<Control>("AppTitleBar")!.PointerPressed += OnTitleBarPointerPressed;
     KeyDown += OnWindowKeyDown;
     if (viewModel is not null)
       viewModel.Completed += Close;
   }
+
+  internal void FocusFirstInput() =>
+    Dispatcher.UIThread.Post(() => this.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.IsEffectivelyVisible && t.IsEnabled)?.Focus(), DispatcherPriority.Loaded);
 
   protected override void OnClosed(EventArgs e)
   {
@@ -27,6 +32,7 @@ internal abstract class DialogWindow : Window
     {
       viewModel.Completed -= Close;
       viewModel.ClearSecrets();
+      viewModel.OnWindowClosed();
     }
 
     base.OnClosed(e);

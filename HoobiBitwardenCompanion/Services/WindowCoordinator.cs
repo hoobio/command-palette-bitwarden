@@ -22,6 +22,8 @@ internal sealed class WindowCoordinator : IDisposable
 
   internal Action<nint> ReturnForeground { get; set; } = WindowAlertInterop.ReturnForeground;
 
+  internal Action<Window> TakeForeground { get; set; } = WindowAlertInterop.TakeForeground;
+
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
 
   public IReadOnlyCollection<ItemWindow> NewItemWindows => _newItemWindows;
@@ -97,6 +99,14 @@ internal sealed class WindowCoordinator : IDisposable
         var server = IpcJson.Read(payload, IpcJson.Default.SetServerDialogRequest);
         await Dispatcher.UIThread.InvokeAsync(() => ShowSetServer((nint)server.ReturnWindow, server.Region, server.Url));
         return null;
+      case Ops.ShowLogin:
+        var login = IpcJson.Read(payload, IpcJson.Default.LoginDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowLogin((nint)login.ReturnWindow, login.RememberSession, login.CustomDataDir));
+        return null;
+      case Ops.ShowReprompt:
+        var reprompt = IpcJson.Read(payload, IpcJson.Default.RepromptDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowReprompt((nint)reprompt.ReturnWindow, reprompt.Token, reprompt.ItemName, reprompt.WindowsHello));
+        return null;
       case Ops.NewItem:
         Dispatcher.UIThread.Post(() => _ = ShowNewItemAsync());
         return null;
@@ -165,6 +175,16 @@ internal sealed class WindowCoordinator : IDisposable
   public SetServerWindow ShowSetServer(nint returnWindow = 0, string region = ServerRegions.Cloud, string? url = null) =>
     ShowDialog(() => new SetServerWindow(new SetServerViewModel(Channel, region, url)), returnWindow);
 
+  public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null) =>
+    ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir)), returnWindow);
+
+  public RepromptWindow ShowReprompt(nint returnWindow, string token, string itemName, bool windowsHello)
+  {
+    if (_dialogs.TryGetValue(typeof(RepromptWindow), out var existing) && ((RepromptWindow)existing).ViewModel?.Token != token)
+      existing.Close();
+    return ShowDialog(() => new RepromptWindow(new RepromptViewModel(Channel, token, itemName, windowsHello)), returnWindow);
+  }
+
   private T ShowDialog<T>(Func<T> create, nint returnWindow) where T : DialogWindow
   {
     if (!_dialogs.TryGetValue(typeof(T), out var existing))
@@ -180,7 +200,12 @@ internal sealed class WindowCoordinator : IDisposable
 
     if (returnWindow != 0)
       existing.ReturnWindow = returnWindow;
-    BringToFront(existing);
+    existing.Show();
+    if (existing.WindowState == WindowState.Minimized)
+      existing.WindowState = WindowState.Normal;
+    existing.Activate();
+    TakeForeground(existing);
+    existing.FocusFirstInput();
     return (T)existing;
   }
 

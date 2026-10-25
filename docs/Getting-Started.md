@@ -35,8 +35,9 @@ dotnet build -c Debug -p:Platform=x64
 
 1. Open the Command Palette (default: `Win + Ctrl + Space`)
 2. Type **"Bitwarden"** to open the vault browser
-3. If your vault is locked, select **Unlock Vault**. The companion window opens and asks for your master password. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead. See [Unlock](Companion-Window#unlock).
-4. Once unlocked, vault items are cached locally and refreshed every 5 minutes
+3. If you are not logged in, select **Login to Bitwarden**. The companion window opens and asks for your email and master password, and for the two-factor or device verification code when Bitwarden asks for one. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead. See [Login](Companion-Window#login).
+4. If your vault is locked, select **Unlock Vault**. The companion window opens and asks for your master password. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead. See [Unlock](Companion-Window#unlock).
+5. Once unlocked, vault items are cached locally and refreshed every 5 minutes
 
 ### API key login
 

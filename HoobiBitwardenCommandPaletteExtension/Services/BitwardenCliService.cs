@@ -141,7 +141,7 @@ internal sealed partial class BitwardenCliService
     _settings?.CliDirectoryOverride.Value,
     _settings?.AutoInstalledCliPath);
 
-  private string? DataDirectory => ResolveDataDirectory(
+  internal string? DataDirectory => ResolveDataDirectory(
     _settings?.CliDirectoryOverride.Value,
     _settings?.UsePortableDataDirectory.Value ?? false,
     _settings?.CliDataDirectoryOverride.Value);
@@ -1045,7 +1045,7 @@ internal sealed partial class BitwardenCliService
       token, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default).Unwrap();
   }
 
-  private void DisposeDeviceVerificationProcess()
+  internal void DisposeDeviceVerificationProcess()
   {
     var process = _pendingDeviceVerificationProcess;
     var cts = _pendingDeviceVerificationCts;

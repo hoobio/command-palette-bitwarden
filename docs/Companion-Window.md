@@ -129,6 +129,37 @@ For an item with master password re-prompt, the window shows the item header and
 
 If the item changes in the vault while the window is open, the window loads the new version and does not show or copy the old value.
 
+### Re-prompt from Command Palette
+
+A copy or open command in Command Palette for an item with master password re-prompt opens the **Master password required** window. Command Palette stays open behind it. The window shows the item name, a masked **Master password** box and **Verify**. **Use Windows Hello** shows when **Integrate with Bitwarden Desktop App** is on in [Settings](Settings#integrate-with-bitwarden-desktop-app).
+
+- The extension keeps the command in memory under a single-use token. The window sends the token with the password or the Windows Hello request. The extension checks it with the same code and the same cooldown as the item window, starts the grace period and then runs the command, for example the copy.
+- A wrong password shows the error and keeps the window open and the password in the box. Five failed attempts start the 30-second cooldown.
+- A successful check closes the window and returns focus to Command Palette. Command Palette stays open, also for a copy command that closes it without the re-prompt. The window shows no toast.
+- **Cancel**, `Esc` or closing the window drops the token. A token also ends after 5 minutes and when the vault locks.
+- Inside the grace period no window shows and the command runs at once.
+- If the companion is not available, the command opens the re-prompt form in Command Palette.
+
+## Login
+
+When **Use API Key Authentication** is off, **Login to Bitwarden** opens the **Log in to Bitwarden** window. Command Palette stays open behind it. The window has these parts:
+
+- **Email** and a masked **Master password** box with an eye button.
+- **Two-factor method (if prompted)**: **Authenticator app** (the default), **Email**, **YubiKey OTP** or **Auto-detect**. **Email** makes Bitwarden send the code at the first attempt.
+- **Remember session** starts with the value of the setting. **Log in** saves the box value to the setting.
+- A note for Duo Push and WebAuthn, which the CLI cannot complete. Use an API key for these accounts.
+- A warning when a custom CLI data directory is set. A `bw login` that you run in a terminal must use the same `BITWARDENCLI_APPDATA_DIR`.
+
+**Log in** sends the email and password to the extension. The window then changes in place:
+
+- When Bitwarden asks for a two-factor code, the window shows a **Verification code** box. The hint and the check for the code depend on the method, as in the Command Palette list. **Verify** sends the code with the email and password.
+- When Bitwarden asks to verify a new device, the window shows a box for the 6 to 8 digit code that Bitwarden sent to your login email. **Verify device** sends the code.
+- **Back** returns to the email and password and keeps both values. A wrong code shows the error and keeps the code.
+
+A successful login closes the window and returns focus to Command Palette. The extension syncs the vault, and Command Palette then shows the vault. The email and password stay in the companion only until the window completes or closes. The companion then clears them. Closing the window, or **Back**, during a device verification stops the pending Bitwarden CLI process. `Enter` in a box submits. `Esc` and **Cancel** close the window.
+
+If the companion is not available, **Login to Bitwarden** opens the form in Command Palette.
+
 ## API key login
 
 When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bitwarden** opens the **Log in with your API key** window. Command Palette stays open behind it. The window has a **Client ID** box and a masked **Client secret** box, with an eye button to show the secret. `Enter` in either box logs in. `Esc` and **Cancel** close the window.

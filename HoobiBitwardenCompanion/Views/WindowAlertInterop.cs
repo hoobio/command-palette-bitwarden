@@ -29,6 +29,12 @@ internal static partial class WindowAlertInterop
       SetForegroundWindow(hwnd);
   }
 
+  internal static void TakeForeground(TopLevel window)
+  {
+    if (window.TryGetPlatformHandle() is { HandleDescriptor: "HWND", Handle: var hwnd })
+      ReturnForeground(hwnd);
+  }
+
   [StructLayout(LayoutKind.Sequential)]
   private struct FlashWindowInfo
   {

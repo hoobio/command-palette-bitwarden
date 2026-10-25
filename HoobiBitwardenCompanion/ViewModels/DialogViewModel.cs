@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HoobiBitwarden.Ipc;
@@ -46,6 +47,22 @@ internal abstract partial class DialogViewModel(PipeChannel channel) : Observabl
 
   internal virtual void ClearSecrets()
   {
+  }
+
+  internal virtual void OnWindowClosed()
+  {
+  }
+
+  protected async Task SendQuietlyAsync(string op, JsonElement? payload)
+  {
+    try
+    {
+      await Channel.RequestAsync(op, payload);
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException or ObjectDisposedException)
+    {
+      // The extension drops its pending state by itself when this cancel does not arrive.
+    }
   }
 
   protected abstract Task<bool> RunStepAsync();

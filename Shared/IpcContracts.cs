@@ -43,6 +43,13 @@ internal static class Ops
   public const string Unlock = "unlock";
   public const string ShowSetServer = "showSetServer";
   public const string SetServer = "setServer";
+  public const string ShowLogin = "showLogin";
+  public const string Login = "login";
+  public const string SubmitDeviceVerification = "submitDeviceVerification";
+  public const string CancelLogin = "cancelLogin";
+  public const string ShowReprompt = "showReprompt";
+  public const string ConfirmReprompt = "confirmReprompt";
+  public const string CancelReprompt = "cancelReprompt";
 }
 
 internal static class ServerRegions
@@ -174,6 +181,22 @@ internal sealed record SetServerRequest(
 
 internal sealed record SetServerResponse(bool Success, string? Error);
 
+internal sealed record LoginDialogRequest(long ReturnWindow, bool RememberSession, string? CustomDataDir);
+
+internal sealed record LoginRequest(string Email, string Password, int? Method, string? Code, bool RememberSession);
+
+internal sealed record LoginResponse(bool Success, string? Error, bool TwoFactorRequired = false, bool DeviceVerificationRequired = false);
+
+internal sealed record DeviceVerificationRequest(string Code);
+
+internal sealed record RepromptDialogRequest(long ReturnWindow, string Token, string ItemName, bool WindowsHello);
+
+internal sealed record RepromptConfirmRequest(string Token, string? Password, bool Biometric = false);
+
+internal sealed record RepromptConfirmResponse(bool Success, string? Error);
+
+internal sealed record RepromptCancelRequest(string Token);
+
 internal sealed record SecretResponse(string Value);
 
 internal sealed record TotpResponse(string Code, int Remaining, int Period);
@@ -304,6 +327,14 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 [JsonSerializable(typeof(SetServerDialogRequest))]
 [JsonSerializable(typeof(SetServerRequest))]
 [JsonSerializable(typeof(SetServerResponse))]
+[JsonSerializable(typeof(LoginDialogRequest))]
+[JsonSerializable(typeof(LoginRequest))]
+[JsonSerializable(typeof(LoginResponse))]
+[JsonSerializable(typeof(DeviceVerificationRequest))]
+[JsonSerializable(typeof(RepromptDialogRequest))]
+[JsonSerializable(typeof(RepromptConfirmRequest))]
+[JsonSerializable(typeof(RepromptConfirmResponse))]
+[JsonSerializable(typeof(RepromptCancelRequest))]
 [JsonSerializable(typeof(RepromptRequest))]
 [JsonSerializable(typeof(SecretResponse))]
 [JsonSerializable(typeof(TotpResponse))]

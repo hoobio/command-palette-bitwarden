@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
@@ -572,7 +573,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         {
             PlaceholderText = "Enter device verification code...";
             var code = _currentSearchText.Trim();
-            var canSubmit = code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _);
+            var canSubmit = TwoFactorRules.IsNumericCode(code);
             ICommand command = canSubmit
                 ? new AnonymousCommand(() => OnDeviceVerificationSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
                 : new NoOpCommand();
@@ -591,8 +592,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         PlaceholderText = "Search your vault... (try url:github)";
 
-        ICommand loginCommand = _settings?.UseApiKeyAuthentication.Value == true && CompanionHost.Current is { } companion
-            ? new AnonymousCommand(companion.ShowApiKeyLogin) { Name = "Log in", Result = CommandResult.KeepOpen() }
+        ICommand loginCommand = CompanionHost.Current is { } companion
+            ? new AnonymousCommand(_settings?.UseApiKeyAuthentication.Value == true ? (Action)companion.ShowApiKeyLogin : companion.ShowLogin) { Name = "Log in", Result = CommandResult.KeepOpen() }
             : new Pages.LoginPage(_settings, OnLoginSubmitted, OnApiKeyLoginSubmitted);
         var item = new ListItem(loginCommand)
         {
@@ -616,19 +617,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         BuildLogoutItem(),
     ]);
 
-    internal static (string Placeholder, string TypedNoun, string EmptyHint, Func<string, bool> Validator) DescribeTwoFactorMethod(int? method) => method switch
-    {
-        0 => ("Enter your authenticator code...", "authenticator code", "Type the 6-digit code from your authenticator app", IsNumericCode),
-        1 => ("Enter the code sent to your email...", "email code", "Check your inbox for the code Bitwarden just sent", IsNumericCode),
-        3 => ("Touch your YubiKey...", "YubiKey OTP", "Touch your YubiKey to insert its one-time code", IsYubiKeyOtp),
-        _ => ("Enter your 2FA code...", "2FA code", "Type your 6-8 digit code above and press Enter", IsNumericCode),
-    };
-
-    private static bool IsNumericCode(string code) =>
-        code.Length >= 6 && code.Length <= 8 && long.TryParse(code, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _);
-
-    private static bool IsYubiKeyOtp(string code) =>
-        code.Length >= 32 && code.Length <= 64 && code.All(c => char.IsLetterOrDigit(c));
+    internal static (string Placeholder, string TypedNoun, string EmptyHint, Func<string, bool> Validator) DescribeTwoFactorMethod(int? method) =>
+        TwoFactorRules.Describe(method);
 
     private ListItem BuildBackToLoginItem() => new(new AnonymousCommand(OnBackToLoginRequested)
     {
@@ -1128,6 +1118,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         });
     }
 
+    internal static Func<nint> PaletteWindow { get; set; } = CommandPaletteModalScope.ForegroundCommandPalette;
+
+    internal static bool IsPaletteOpen(Func<nint> foregroundPalette) => foregroundPalette() != 0;
+
     private void TryAutoTriggerBiometric()
     {
         if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
@@ -1136,6 +1130,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         // Startup warmup fires WarmupCompleted before the palette is opened; prompting Windows Hello then shows a dialog with no context
         if (!_initialLoadStarted)
             return;
+
+        if (!IsPaletteOpen(PaletteWindow))
+        {
+            DebugLogService.Log("Page", "Auto biometric skipped: Command Palette not open");
+            return;
+        }
 
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true
                             && _settings?.AutoBiometricUnlock.Value == true;
