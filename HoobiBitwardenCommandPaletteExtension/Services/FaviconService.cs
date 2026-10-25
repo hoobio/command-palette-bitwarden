@@ -4,20 +4,18 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions.Toolkit;
-using Windows.Storage.Streams;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal static partial class FaviconService
 {
-    internal static string CacheDir { get; set; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "HoobiBitwardenCommandPalette", "Icons");
+    internal static string CacheDir { get; set; } = ResolveCacheDir();
 
     private static readonly TimeSpan PositiveTtl = TimeSpan.FromDays(7);
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromMinutes(5);
@@ -27,8 +25,7 @@ internal static partial class FaviconService
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
     // null value = negative cache (host has no icon); missing key = not yet tried
-    private static readonly ConcurrentDictionary<string, byte[]?> _memCache = new();
-    private static readonly ConcurrentDictionary<string, IconInfo> _iconInfoCache = new();
+    private static readonly ConcurrentDictionary<string, IconInfo?> _memCache = new();
 
     // A re-enqueued host leaves its old heap entry as a tombstone, dropped at dequeue when its priority no longer matches _queuedHosts.
     private static readonly Lock _queueLock = new();
@@ -47,30 +44,23 @@ internal static partial class FaviconService
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"HoobiBitwarden/{version}");
     }
 
-    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null, int priority = int.MaxValue, string? itemId = null)
+    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null, int priority = int.MaxValue)
     {
         fallback ??= new IconInfo("");
-        var iconKey = itemId is null ? host : $"{host}|{itemId}";
-        if (_iconInfoCache.TryGetValue(iconKey, out var cachedIcon))
-            return cachedIcon;
         var posPath = GetPositivePath(host);
         var negPath = GetNegativePath(host);
 
-        if (_memCache.TryGetValue(host, out var cachedBytes))
+        if (_memCache.TryGetValue(host, out var cachedIcon))
         {
-            if (cachedBytes is not null)
-                return CacheAndReturnIcon(iconKey, cachedBytes);
+            if (cachedIcon is not null)
+                return cachedIcon;
             if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
                 return fallback;
             _memCache.TryRemove(host, out _);
         }
 
         if (File.Exists(posPath) && !IsExpired(posPath, PositiveTtl))
-        {
-            var bytes = File.ReadAllBytes(posPath);
-            _memCache[host] = bytes;
-            return CacheAndReturnIcon(iconKey, bytes);
-        }
+            return _memCache.GetOrAdd(host, _ => new IconInfo(posPath)) ?? fallback;
 
         if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
         {
@@ -183,8 +173,9 @@ internal static partial class FaviconService
                 pngBytes = bytes;
             }
 
-            await File.WriteAllBytesAsync(GetPositivePath(host), pngBytes);
-            _memCache[host] = pngBytes;
+            var posPath = GetPositivePath(host);
+            await File.WriteAllBytesAsync(posPath, pngBytes);
+            _memCache[host] = new IconInfo(posPath);
 
             try { File.Delete(negPath); } catch { }
             IconCached?.Invoke();
@@ -217,11 +208,7 @@ internal static partial class FaviconService
     private static string Sanitize(string host) =>
         InvalidFilenameChars().Replace(host, "_");
 
-    public static void ClearMemCache()
-    {
-        _iconInfoCache.Clear();
-        _memCache.Clear();
-    }
+    public static void ClearMemCache() => _memCache.Clear();
 
     public static void ClearDiskCache()
     {
@@ -237,23 +224,19 @@ internal static partial class FaviconService
         }
     }
 
-    private static IconInfo CacheAndReturnIcon(string iconKey, byte[] bytes)
+    // MSIX redirects new AppData writes to a per-package location that the Command Palette process cannot see, so a path icon must name the real package folder.
+    private static string ResolveCacheDir()
     {
-        return _iconInfoCache.GetOrAdd(iconKey, _ => MakeIconInfo(bytes));
-    }
-
-    // Icon bytes are served as a stream so they cross the COM process boundary correctly.
-    // One stream per item: Command Palette reads the stream from its current position, so a second item sharing it got an empty icon.
-    private static IconInfo MakeIconInfo(byte[] bytes)
-    {
-        var ras = new InMemoryRandomAccessStream();
-        using var writer = new DataWriter(ras.GetOutputStreamAt(0));
-        writer.WriteBytes(bytes);
-#pragma warning disable VSTHRD002 // In-memory stream write completes synchronously
-        writer.StoreAsync().AsTask().GetAwaiter().GetResult();
-#pragma warning restore VSTHRD002
-        writer.DetachStream();
-        return IconInfo.FromStream(ras);
+        try
+        {
+            return Path.Combine(Windows.Storage.ApplicationData.Current.LocalCacheFolder.Path, "Icons");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or COMException)
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "HoobiBitwardenCommandPalette", "Icons");
+        }
     }
 
     internal static bool IsSvg(string contentType, byte[] bytes)

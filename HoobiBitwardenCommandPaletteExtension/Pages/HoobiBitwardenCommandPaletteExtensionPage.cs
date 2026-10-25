@@ -21,6 +21,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private readonly BitwardenSettingsManager? _settings;
     private readonly Lock _itemsLock = new();
     private IListItem[] _currentItems = [];
+    private const int PageSize = 40;
+    private VaultList? _vaultList;
+    private volatile bool _loadMoreRefetch;
     private long _buildGeneration;
     private long _publishedGeneration;
     private bool _initialLoadStarted;
@@ -41,7 +44,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private ListItem? _syncItem;
     private readonly Timer _iconRefreshTimer;
     private readonly Timer _searchDebounceTimer;
-    // BuildListItems allocates 5-15 commands per result, so a per-keystroke rebuild lags on large vaults
+    // BuildVaultItems allocates 5-15 commands per result, so a per-keystroke rebuild lags on large vaults
     private const int SearchDebounceMs = 100;
     // A pure trailing-edge debounce would hide icon progress for 10-30s on a cold load, so a rebuild is forced every IconRefreshMaxWaitMs
     private const int IconRefreshDebounceMs = 500;
@@ -119,12 +122,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     switch (_service.LastStatus)
                     {
                         case VaultStatus.Unlocked when _service.IsCacheLoaded:
-                            var text = _currentSearchText;
-                            SyncFilters();
-                            var loadedResults = Search(text);
-                            DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedResults.Count} items");
-                            _currentItems = BuildListItems(loadedResults, text);
-                            Filters = _filters;
+                            TryPublishVaultList(out var loadedCount);
+                            DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedCount} items");
                             IsLoading = false;
                             ReverifyIfSuspiciouslyEmpty();
                             break;
@@ -161,15 +160,22 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             }
 
             var timer = System.Diagnostics.Stopwatch.StartNew();
-            var captured = CaptureContext();
+            var refetchAfterLoadMore = _loadMoreRefetch;
+            _loadMoreRefetch = false;
+            var captured = (openedByUser || !refetchAfterLoadMore) && CaptureContext();
             var contextMs = timer.ElapsedMilliseconds;
             var published = -1;
-            if (captured && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            if (!_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
-                TryPublishVaultList(out published);
+                if (captured)
+                    TryPublishVaultList(out published, keepPage: !openedByUser);
+                else if (openedByUser)
+                    ShowFirstPage();
             }
+            SyncHasMoreItems();
 
-            DebugLogService.Log("Page", $"GetItems later: context {(captured ? $"{contextMs}ms" : "skipped")}, rebuild {(published >= 0 ? $"{timer.ElapsedMilliseconds - contextMs}ms for {published} items" : "skipped")}, returned {_currentItems.Length} items in {timer.ElapsedMilliseconds}ms");
+            var pager = _vaultList?.Pager;
+            DebugLogService.Log("Page", $"GetItems later: context {(captured ? $"{contextMs}ms" : "skipped")}, rebuild {(published >= 0 ? $"{timer.ElapsedMilliseconds - contextMs}ms for {published} items" : "skipped")}, returned {_currentItems.Length} items (page {pager?.Page ?? 0} of {pager?.PageCount ?? 0}) in {timer.ElapsedMilliseconds}ms");
 
             if (_initComplete && !_handlingAction)
                 IsLoading = false;
@@ -226,11 +232,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (!_service.IsCacheLoaded)
             await _service.RefreshCacheAsync().ConfigureAwait(false);
 
-        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
-            return;
-
-        var published = TryPublishVaultList(out _);
-        IsLoading = false;
+        var published = !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded && TryPublishVaultList(out _);
+        if (!_handlingAction)
+            IsLoading = false;
         if (published) RaiseItemsChanged();
     }
 
@@ -241,9 +245,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RebuildVaultListSafely();
     }
 
-    private void RebuildVaultListSafely()
+    private void RebuildVaultListSafely(bool keepPage = false)
     {
-        try { RebuildVaultList(); }
+        try { RebuildVaultList(keepPage); }
         catch (Exception ex)
         {
             DebugLogService.Log("Page", $"RebuildVaultList failed: {ex.GetType().Name}: {ex.Message}");
@@ -780,28 +784,16 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void OnFilterSelected()
     {
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded) return;
-        _ = Task.Run(RebuildVaultListSafely);
+        _ = Task.Run(() => RebuildVaultListSafely());
     }
 
     internal static bool MatchesCommand(string search, string command)
         => search.Length >= 2 && command.StartsWith(search, StringComparison.OrdinalIgnoreCase);
 
-    private IListItem[] BuildListItems(List<BitwardenItem> items, string searchText)
+    private VaultList BuildVaultList(List<BitwardenItem> items, string searchText, long generation, int keepShown)
     {
         var list = new List<IListItem>();
-        var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
-        var showContextTag = _settings?.ShowContextTag.Value != false;
-        var totpTagStyle = _settings?.TotpTagStyle.Value ?? "off";
-        var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
-        var showProtectedTag = _settings?.ShowProtectedTag.Value != false;
-        var showWebsiteIcons = _settings?.ShowWebsiteIcons.Value != false;
-        var organizationTagStyle = _settings?.OrganizationTagStyle.Value ?? "name";
-        var totpTracked = new List<(ListItem, BitwardenItem, Tag[])>();
-
-        var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
-        var contextTagsUsed = 0;
-        var capContextTags = showContextTag && string.IsNullOrWhiteSpace(searchText) && contextLimit > 0;
-
+        var tail = new List<IListItem>();
         var search = (searchText ?? "").Trim();
         var boostSync = MatchesCommand(search, "sync");
         var boostLock = MatchesCommand(search, "lock");
@@ -822,41 +814,65 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug && !boostNew && !boostGenerate && !boostSettings)
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
-        else
+
+        if (companion != null && !boostNew) tail.Add(BuildNewItemItem(companion));
+        if (companion != null && !boostGenerate) tail.Add(BuildGenerateItem(companion));
+        if (companion != null && !boostSettings) tail.Add(BuildSettingsItem(companion));
+        if (!boostSync) tail.Add(BuildSyncItem());
+        tail.Add(BuildSetServerItem());
+        if (!boostLock) tail.Add(BuildLockItem());
+        if (!boostLogout) tail.Add(BuildLogoutItem());
+        if (DebugLogService.Enabled && !boostDebug)
+            tail.Add(BuildCopyDebugLogItem());
+
+        var vaultList = new VaultList(items, searchText, generation, list.ToArray(), tail.ToArray())
         {
-            var iconPriority = 0;
-            foreach (var item in items)
+            Pager = ListPager.First(items.Count, PageSize, keepShown),
+        };
+        BuildVaultItems(vaultList);
+
+        _syncTimer ??= new Timer(OnSyncTimerTick, null, 10000, 10000);
+
+        return vaultList;
+    }
+
+    private void BuildVaultItems(VaultList list)
+    {
+        var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
+        var showContextTag = _settings?.ShowContextTag.Value != false;
+        var totpTagStyle = _settings?.TotpTagStyle.Value ?? "off";
+        var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
+        var showProtectedTag = _settings?.ShowProtectedTag.Value != false;
+        var showWebsiteIcons = _settings?.ShowWebsiteIcons.Value != false;
+        var organizationTagStyle = _settings?.OrganizationTagStyle.Value ?? "name";
+
+        var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
+        var capContextTags = showContextTag && string.IsNullOrWhiteSpace(list.SearchText) && contextLimit > 0;
+
+        for (var i = list.Built.Count; i < list.Pager.Shown; i++)
+        {
+            var item = list.Results[i];
+            var allowContextTag = showContextTag;
+            if (capContextTags)
             {
-                var allowContextTag = showContextTag;
-                if (capContextTags)
-                {
-                    var isContextMatch = _context != null && ContextAwarenessService.ContextScore(_context, item) > 0;
-                    allowContextTag = isContextMatch && contextTagsUsed < contextLimit;
-                    if (allowContextTag) contextTagsUsed++;
-                }
-                var contextForTags = capContextTags ? null : _context;
-                var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
-                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, iconPriority++, organizationName, organizationTagStyle);
-                list.Add(listItem);
-                if (totpTagStyle == "live" && item.HasTotp)
-                {
-                    var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
-                    totpTracked.Add((listItem, item, baseTags));
-                }
+                var isContextMatch = _context != null && ContextAwarenessService.ContextScore(_context, item) > 0;
+                allowContextTag = isContextMatch && list.ContextTagsUsed < contextLimit;
+                if (allowContextTag) list.ContextTagsUsed++;
+            }
+            var contextForTags = capContextTags ? null : _context;
+            var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
+            var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, i, organizationName, organizationTagStyle);
+            list.Built.Add(listItem);
+            if (totpTagStyle == "live" && item.HasTotp)
+            {
+                var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
+                list.Totp.Add((listItem, item, baseTags));
             }
         }
 
-        if (companion != null && !boostNew) list.Add(BuildNewItemItem(companion));
-        if (companion != null && !boostGenerate) list.Add(BuildGenerateItem(companion));
-        if (companion != null && !boostSettings) list.Add(BuildSettingsItem(companion));
-        if (!boostSync) list.Add(BuildSyncItem());
-        list.Add(BuildSetServerItem());
-        if (!boostLock) list.Add(BuildLockItem());
-        if (!boostLogout) list.Add(BuildLogoutItem());
-        if (DebugLogService.Enabled && !boostDebug)
-            list.Add(BuildCopyDebugLogItem());
+        list.Refresh();
 
-        _totpItems = totpTracked.Count > 0 ? totpTracked : null;
+        _totpItems = list.Totp.Count > 0 ? list.Totp.ToList() : null;
         if (_totpItems != null)
             _totpTimer ??= new Timer(OnTotpTimerTick, null, 1000, 1000);
         else
@@ -864,10 +880,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             _totpTimer?.Dispose();
             _totpTimer = null;
         }
-
-        _syncTimer ??= new Timer(OnSyncTimerTick, null, 10000, 10000);
-
-        return list.ToArray();
     }
 
     private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null, int iconPriority = int.MaxValue, string? organizationName = null, string organizationTagStyle = "off")
@@ -924,7 +936,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
-        RebuildVaultListSafely();
+        RebuildVaultListSafely(keepPage: true);
     }
 
     private void OnSyncTimerTick(object? state)
@@ -1305,27 +1317,87 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _pendingTwoFactorMethod = null;
     }
 
-    private void RebuildVaultList()
+    private void RebuildVaultList(bool keepPage = false)
     {
-        if (TryPublishVaultList(out _))
+        if (TryPublishVaultList(out _, keepPage))
             RaiseItemsChanged();
     }
 
-    private bool TryPublishVaultList(out int resultCount)
+    private bool TryPublishVaultList(out int resultCount, bool keepPage = false)
     {
         var generation = Interlocked.Increment(ref _buildGeneration);
         var text = _currentSearchText;
+        int keepShown;
+        lock (_itemsLock)
+            keepShown = keepPage && _vaultList is { } previous && previous.SearchText == text ? previous.Pager.Shown : 0;
         SyncFilters();
         var results = Search(text);
         resultCount = results.Count;
-        var built = BuildListItems(results, text);
+        var built = BuildVaultList(results, text, generation, keepShown);
         lock (_itemsLock)
         {
             if (text != _currentSearchText || generation <= _publishedGeneration || _service.LastStatus != VaultStatus.Unlocked) return false;
             _publishedGeneration = generation;
-            _currentItems = built;
+            _vaultList = built;
+            _currentItems = built.Shown;
             Filters = _filters;
+            SyncHasMoreItems();
             return true;
+        }
+    }
+
+    // Command Palette reuses a ListItemViewModel only for the same IListItem reference (ListViewModel._vmCache), so a batch keeps the shown instances and adds new ones after them.
+    public override void LoadMore()
+    {
+        lock (_itemsLock)
+        {
+            if (_vaultList is { } list && list.Generation == _publishedGeneration && ReferenceEquals(_currentItems, list.Shown) && list.Pager.HasMore)
+            {
+                list.Pager = list.Pager.Next();
+                BuildVaultItems(list);
+                _currentItems = list.Shown;
+                _loadMoreRefetch = true;
+                DebugLogService.Log("Page", $"LoadMore: page {list.Pager.Page} of {list.Pager.PageCount}, {_currentItems.Length} items");
+            }
+            SyncHasMoreItems();
+        }
+
+        // The host keeps its pending-batch guard until ItemsChanged, so this raises even when no batch was added.
+        RaiseItemsChanged();
+    }
+
+    private void ShowFirstPage()
+    {
+        if (_vaultList is not { } list || !ReferenceEquals(_currentItems, list.Shown)) return;
+        var first = ListPager.First(list.Results.Count, PageSize);
+        if (first == list.Pager) return;
+        list.Pager = first;
+        list.Refresh();
+        _currentItems = list.Shown;
+    }
+
+    private void SyncHasMoreItems() =>
+        HasMoreItems = _vaultList is { } list && ReferenceEquals(_currentItems, list.Shown) && list.Pager.HasMore;
+
+    private sealed class VaultList(List<BitwardenItem> results, string searchText, long generation, IListItem[] head, IListItem[] tail)
+    {
+        internal List<BitwardenItem> Results { get; } = results;
+        internal string SearchText { get; } = searchText;
+        internal long Generation { get; } = generation;
+        internal List<ListItem> Built { get; } = [];
+        internal List<(ListItem, BitwardenItem, Tag[])> Totp { get; } = [];
+        internal ListPager Pager { get; set; }
+        internal int ContextTagsUsed { get; set; }
+        internal IListItem[] Shown { get; private set; } = [];
+
+        internal void Refresh()
+        {
+            var items = new List<IListItem>(head.Length + Pager.Shown + tail.Length);
+            items.AddRange(head);
+            items.AddRange(Built.Take(Pager.Shown));
+            if (!Pager.HasMore)
+                items.AddRange(tail);
+            Shown = items.ToArray();
         }
     }
 

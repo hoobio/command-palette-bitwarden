@@ -82,3 +82,5 @@ Items are sorted in this priority order:
 6. **Alphabetical** - by item name
 
 When a text search is active, relevance score takes priority, with the above tiers as tiebreakers.
+
+The list shows the first 40 results. More results load in batches of 40 as you scroll down. The command items (Sync Vault, Lock, Logout and the others) show after the last result, or at the top when your search text matches their name.
