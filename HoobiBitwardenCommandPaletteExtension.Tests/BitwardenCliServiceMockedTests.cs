@@ -12,7 +12,7 @@ public class BitwardenCliServiceMockedTests
   private static (BitwardenCliService Service, FakeProcessFactory Factory) CreateService()
   {
     var factory = new FakeProcessFactory();
-    var svc = new BitwardenCliService(processFactory: factory.Create);
+    var svc = new BitwardenCliService(processFactory: factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
     return (svc, factory);
   }
 
