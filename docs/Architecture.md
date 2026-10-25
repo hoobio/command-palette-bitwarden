@@ -6,7 +6,7 @@
 - **Microsoft.CommandPalette.Extensions SDK** - WinRT-based extension API for PowerToys Command Palette
 - **Win32 P/Invoke** via `LibraryImport` - clipboard APIs, window management
 - **UI Automation COM Interop** - browser address bar URL extraction
-- **System.Security.Cryptography** - TOTP code generation (RFC 6238 HMAC)
+- **System.Security.Cryptography** - TOTP code generation (RFC 6238 HMAC), password and passphrase generation (`RandomNumberGenerator`)
 - **Svg.Skia / SkiaSharp** - SVG rasterization (converts SVG favicons to PNG for display)
 - **Bitwarden CLI** (`bw`) - vault operations (login, unlock, list, sync)
 - **Windows Credential Manager** - session key persistence
@@ -26,12 +26,14 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── CompanionHost.cs               # Starts and reuses the companion process, owns the pipes
 │   ├── CompanionOps.cs                # Companion request handlers (validation, re-prompt, secrets)
 │   ├── CompanionOps.Attachments.cs    # Attachment download, upload and delete, local path validation
-│   ├── CompanionOps.Generator.cs      # bw generate arguments, generator history, Quick Rotate
+│   ├── CompanionOps.Generator.cs      # Generated values, generator history, Quick Rotate
 │   └── CompanionOps.Writes.cs         # Typed edit DTOs to and from bw item JSON, write requests
 ├── Helpers/
 │   └── VaultItemHelper.cs             # Icons, tags, default commands, context menus
 ├── Models/
 │   └── BitwardenItem.cs               # Vault item data model (JSON deserialization)
+├── Resources/
+│   └── eff_large_wordlist.txt         # EFF large word list for passphrases (embedded resource, CC BY 3.0 US)
 ├── Pages/
 │   ├── HoobiBitwardenCommandPaletteExtensionPage.cs  # Main vault list (DynamicListPage)
 │   ├── LoginPage.cs                    # Email/password login form
@@ -43,7 +45,6 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── BitwardenCliService.LiveSync.cs  # Starts/stops the notifications listener, debounced sync
 │   ├── BitwardenCliService.VaultAttachments.cs  # bw attachment commands, attachment parsing, error mapping
 │   ├── BitwardenCliService.VaultExtras.cs  # Folders, organisations and collections for the companion edit form
-│   ├── BitwardenCliService.VaultGenerator.cs  # Runs bw generate
 │   ├── BitwardenCliService.Writes.cs  # Verified vault writes (edit, delete, archive, move, collections)
 │   ├── BitwardenSettingsManager.cs    # Extension settings (toggles + choices)
 │   ├── ContextAwarenessService.cs     # Window detection, URL extraction, context scoring
@@ -51,6 +52,7 @@ HoobiBitwardenCommandPaletteExtension/
 │   ├── HubProtocol.cs                 # SignalR MessagePack framing, CLI state and hub URL parsing
 │   ├── ICliProcess.cs                 # Process abstraction for unit testing
 │   ├── NotificationsService.cs        # WebSocket connection to the notifications hub
+│   ├── PasswordGenerator.cs           # Password and passphrase generation (RandomNumberGenerator, EFF word list)
 │   ├── ProtectedSecret.cs             # In-memory encryption for secrets (CryptProtectMemory)
 │   ├── SecureClipboardService.cs      # Clipboard security + auto-clear
 │   ├── SessionStore.cs               # Windows Credential Manager wrapper
@@ -147,7 +149,7 @@ The companion edits items through typed operations. The companion never sends `b
 ### Attachments, generator and Quick Rotate
 
 - **Attachments.** `getItem` lists each attachment as id, file name and size text. The download URL that `bw` returns is never parsed or sent. The attachment bytes never cross the pipe: the companion shows a file picker and sends only the path that the user picked, and `bw` reads or writes that file. The extension rejects a path that is not a fully qualified drive path (`C:\...`), a UNC or device path (`\\server`, `\\?\`, `\\.\`), a relative path, a path with `..`, `"`, wildcard or stream characters, a trailing separator, a leading `-`, or a reserved device name (`NUL`, `CON`, `COM1`). The path goes into the arguments in quotes; an attachment id must be letters and digits and must be on the cached item, because `bw` falls back to a file name search. Download runs `bw get attachment <id> --itemid <guid> --output "<path>"` with the 5-minute timeout and no stop on timeout, and passes when the file is new and not larger than the encrypted size that `bw` reports. Upload (`bw create attachment --file "<path>" --itemid <guid>`) checks a 500 MB limit first; upload and delete (`bw delete attachment <id> --itemid <guid>`) run through the shared write path with the revision check and verify the attachment list. "Premium" in the `bw` output returns `premium`, "Max file size" returns `tooLarge` and "Not enough storage" returns `noStorage`. All three operations have the re-prompt gate.
-- **Generator.** `generate` builds the `bw generate` arguments from the typed `GeneratorOptions` only: `-u -l -n -s`, `--length` (5 to 128), `--minNumber` and `--minSpecial` (0 to 9), `--ambiguous` (avoid ambiguous characters), or `--passphrase --words` (3 to 20), `--separator` (one character from an allowlist, `space` or `empty`), `--capitalize` and `--includeNumber`. Any other value returns `invalid` before a process starts. The output must have the requested length (password) or no space (passphrase).
-- **Generator history.** The extension keeps the last 50 generated values as `ProtectedSecret` in memory only. They are never written to disk and are erased when the vault locks or the extension stops. `listGeneratorHistory` returns only entry ids, kinds and dates; `copyGenerated` copies one entry through `SecureClipboardService`. The companion saves the generator options (not values) in `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\companion-generator.json`, which the package virtualises.
+- **Generator.** `generate` makes the value in the extension process with `Services/PasswordGenerator.cs`. The `bw` CLI is not used. Every random choice uses `RandomNumberGenerator` (`GetInt32` and `Shuffle`). The typed `GeneratorOptions` are validated first: length 5 to 128, minimum numbers and minimum special characters 0 to 9, at least one character type, or 3 to 20 words and a separator that is one character from an allowlist, a space or empty. Any other value returns `invalid`. A password uses Bitwarden's character sets (`avoid ambiguous` removes `l`, `I`, `O`, `0` and `1`): it has the minimum numbers and special characters, one uppercase and one lowercase character when those types are on, and random characters from all the enabled types for the remaining length, in a shuffled order. A passphrase picks words from the EFF large word list (`Resources/eff_large_wordlist.txt`, an embedded resource), without the 4 words that contain a hyphen, as in Bitwarden. `capitalize` makes the first letter of each word uppercase and `includeNumber` adds one digit to the end of one word. The output must have the requested length (password) or no space (passphrase), else `generate` returns `failed`.
+- **Generator history.** The extension keeps the last 20 generated values as `ProtectedSecret` in memory, so that `copyGenerated` and `rotatePassword` can find them by entry id. These values are not listed. A value goes into the listed history (the last 50) only when it is copied with `copyGenerated` or saved by `rotatePassword`. **Use password** in the edit form does not add a value. No value is written to disk. All values are erased when the vault locks or the extension stops. A value that leaves either list is disposed. `listGeneratorHistory` returns only entry ids, kinds and dates; `copyGenerated` copies one entry through `SecureClipboardService`. The companion saves the generator options (not values) in `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\companion-generator.json`, which the package virtualises.
 - **Create.** `createItem` takes the same typed item as `updateItem` with no id. `CompanionOps.CreateItemAsync` validates it, builds the `bw` item JSON (with the owner and at least one collection for an organisation item) and runs `bw create item` with the JSON on standard input, through the shared write path without a revision check. The extension reads the new item back by the id that `bw` prints, compares it and adds it to the cache, so it shows in Command Palette. When `bw` does not answer in time or the read-back fails, the extension refreshes the cache and returns `unknown`, never `failed`, because the item can exist. The companion then asks before it sends the item again.
-- **Quick Rotate.** `rotatePassword` takes the item id, its revision date and either a generator entry id or the generator options (password or passphrase). The companion sends the entry id of the value that the Rotate password dialog shows, so the extension saves its own remembered copy of that value and adds no second history entry. With options, the extension generates the password with `bw generate`. It has the re-prompt gate and saves it with `EditItemAsync`, the same revision check and parsed field compare as `updateItem` (`bw` adds the old password to the password history). Only a verified save copies the new password with `SecureClipboardService`; a conflict, a failed save or an unconfirmed save copies nothing. The new password does not cross the pipe.
+- **Quick Rotate.** `rotatePassword` takes the item id, its revision date and either a generator entry id or the generator options (password or passphrase). The companion sends the entry id of the value that the Rotate password dialog shows, so the extension saves its own remembered copy of that value and adds that entry to the history once. With options, the extension generates the password with `PasswordGenerator`. It has the re-prompt gate and saves it with `EditItemAsync`, the same revision check and parsed field compare as `updateItem` (`bw` adds the old password to the password history). Only a verified save copies the new password with `SecureClipboardService`; a conflict, a failed save or an unconfirmed save copies nothing. The new password does not cross the pipe.

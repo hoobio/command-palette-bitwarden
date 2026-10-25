@@ -106,11 +106,11 @@ The generate button in the edit form opens the generator in a dialog. **Generate
 | Password | Length (5 to 128), uppercase, lowercase, numbers, special characters (`!@#$%^&*`), minimum numbers and minimum special characters (0 to 9), avoid ambiguous characters | 20 characters, uppercase, lowercase, numbers and special characters, at least 1 number and 1 special character, ambiguous characters avoided |
 | Passphrase | Number of words (3 to 20), word separator (one character), capitalise, include number | 4 words, separated by `-` |
 
-The Bitwarden CLI makes the values. **Regenerate** makes a new value, the copy button copies it through the extension with the clipboard clear timer and shows **Copied** in the toast, and **Use password** puts it in the password field.
+The extension makes the values in its own process with the Windows cryptographic random number generator, with the same rules as Bitwarden. A passphrase uses words from the [EFF large word list](https://www.eff.org/dice). **Regenerate** makes a new value, the copy button copies it through the extension with the clipboard clear timer and shows **Copied** in the toast, and **Use password** puts it in the password field.
 
 The generator window has **Save as new item** at the bottom. It opens a [new item](#new-item) window as a login, with the generated value in the password field. The edit form and the **Rotate password** dialog do not show this button.
 
-**Generator history** lists the last 50 values with their type and time. The values are masked; the copy button copies through the extension. The history is kept in the extension memory only, is never written to disk, and is erased when the vault locks. The companion saves the generator options, but not the values, in `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\companion-generator.json`.
+**Generator history** lists the last 50 values that you copied, or that **Rotate password** saved, with their type and time. A value that you only generate, or put in the password field with **Use password**, is not in the history. The values are masked; the copy button copies through the extension. The history is kept in the extension memory only, is never written to disk, and is erased when the vault locks. The companion saves the generator options, but not the values, in `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\companion-generator.json`.
 
 ## Quick Rotate
 
