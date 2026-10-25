@@ -198,7 +198,8 @@ internal sealed partial class CompanionOps : IDisposable
       locked ? [] : MapFields(item),
       locked ? null : item.Attachments.Select(a => new AttachmentDto(a.Id, a.FileName, a.SizeName)).ToList(),
       _service.ShowWebsiteIcons ? CachedIconPath(item) : null,
-      item.Reprompt == 1 && !locked ? RepromptPage.GetGrace(item.Id) : null);
+      item.Reprompt == 1 && !locked ? RepromptPage.GetGrace(item.Id) : null,
+      item.Password is not null);
   }
 
   internal async Task<FiltersResponse> ListFiltersAsync()

@@ -28,6 +28,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private FiltersResponse? _filters;
   private readonly DispatcherTimer _graceTimer;
   private GraceDto? _grace;
+  private bool _keepOpen;
   private (string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done)? _pendingWrite;
 
   public ItemViewModel(string id, PipeChannel channel)
@@ -38,6 +39,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _graceTimer.Tick += (_, _) => TickGrace();
     _totpTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
     _totpTimer.Tick += (_, _) => _ = TickAsync();
+    Groups.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanShowHistory));
   }
 
   public string Id { get; }
@@ -64,7 +66,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public bool CanAttach => IsReadOnly && !IsPrompting && ItemType is >= 1 and <= 5;
 
-  public bool CanRotate => IsReadOnly && ItemType == 1;
+  public bool CanRotate => IsReadOnly && ItemType == 1 && HasPassword;
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(CanRotate))]
+  public partial bool HasPassword { get; private set; }
 
   internal event Action? Removed;
 
@@ -84,7 +90,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public bool CanEdit => IsReadOnly && ItemType is >= 1 and <= 5;
 
-  public bool CanShowHistory => IsReadOnly && ItemType == 1;
+  public bool CanShowHistory => IsReadOnly && ItemType == 1 && !IsPrompting && Groups.All(g => g.Name != HistoryGroup);
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(CanShowHistory), nameof(CanEdit), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
@@ -142,7 +148,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public partial bool IsLoading { get; set; } = true;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsPrompting), nameof(CanAttach), nameof(ShowAttachments))]
+  [NotifyPropertyChangedFor(nameof(IsPrompting), nameof(CanAttach), nameof(ShowAttachments), nameof(CanShowHistory))]
   public partial bool RepromptRequired { get; set; }
 
   public bool IsPrompting => RepromptRequired || _pendingWrite is not null;
@@ -169,17 +175,25 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private void SetGrace(GraceDto? grace)
   {
-    _grace = grace;
+    _grace = _keepOpen ? null : grace;
     OnPropertyChanged(nameof(GraceVisible));
-    if (grace is null)
+    if (_grace is not { } kept)
     {
       _graceTimer.Stop();
       GraceRemaining = TimeSpan.Zero;
       return;
     }
 
-    GraceRemaining = grace.ExpiresUtc - UtcNow();
+    GraceRemaining = kept.ExpiresUtc - UtcNow();
     _graceTimer.Start();
+  }
+
+  // ponytail: keeps only this window's view open; the extension grace still expires, so a later reveal or copy asks again.
+  [RelayCommand]
+  private void KeepOpen()
+  {
+    _keepOpen = true;
+    SetGrace(null);
   }
 
   internal void TickGrace()
@@ -214,6 +228,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     OnPropertyChanged(nameof(IsPrompting));
     OnPropertyChanged(nameof(CanAttach));
     OnPropertyChanged(nameof(ShowAttachments));
+    OnPropertyChanged(nameof(CanShowHistory));
     OnPropertyChanged(nameof(GraceVisible));
   }
 
@@ -318,6 +333,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _filters = null;
     Editor = null;
     RepromptRequired = false;
+    _keepOpen = false;
     SetGrace(null);
     _pendingWrite?.Done.TrySetResult((false, null, IpcErrors.Locked));
     StatusMessage = null;
@@ -335,6 +351,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IsProtected = item.Reprompt;
     TypeGlyph = GlyphFor(item.Type);
     IconPath = item.IconPath;
+    HasPassword = item.HasPassword;
     ItemType = item.Type;
     _inOrganization = item.OrganizationName is not null;
     RepromptRequired = item.RepromptRequired;
@@ -674,15 +691,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     var existing = Groups.FirstOrDefault(g => g.Name == HistoryGroup);
     if (existing is not null)
       Groups.Remove(existing);
-    if (history.LastUsed.Count == 0)
-    {
-      Notify("This item has no password history.", success: false);
-      return;
-    }
-
-    Groups.Add(new FieldGroupViewModel(HistoryGroup, [.. history.LastUsed.Select((used, i) => new FieldViewModel(this, new FieldDto(
-      ItemFields.HistoryPrefix + i.ToString(CultureInfo.InvariantCulture), used.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), HistoryGroup, FieldViewModel.Mask, false)))]));
-  });
+    Groups.Add(new FieldGroupViewModel(HistoryGroup, history.LastUsed.Count == 0
+      ? [new FieldViewModel(null, new FieldDto(HistoryGroup, "No previous passwords", HistoryGroup, null, false), canCopy: false)]
+      : [.. history.LastUsed.Select((used, i) => new FieldViewModel(this, new FieldDto(
+        ItemFields.HistoryPrefix + i.ToString(CultureInfo.InvariantCulture), used.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), HistoryGroup, FieldViewModel.Mask, false)))]));
+  }, Timeout.InfiniteTimeSpan);
 
   private async Task<FiltersResponse?> LoadFiltersAsync()
   {
@@ -710,9 +723,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private Task<bool> AskAsync(string title, string message, string primary, string close) =>
     Confirm?.Invoke(title, message, primary, close) ?? Task.FromResult(false);
 
-  private async Task RunAsync(string op, JsonElement payload, Action<JsonElement?> onSuccess)
+  private async Task RunAsync(string op, JsonElement payload, Action<JsonElement?> onSuccess, TimeSpan? timeout = null)
   {
-    var (ok, reply, error) = await SendAsync(op, payload);
+    var (ok, reply, error) = await SendAsync(op, payload, timeout);
     if (ok)
     {
       onSuccess(reply);

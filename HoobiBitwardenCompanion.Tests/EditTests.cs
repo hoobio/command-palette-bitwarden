@@ -429,7 +429,9 @@ public class EditTests(AvaloniaSession session)
     Assert.False(IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.DeleteItem)), IpcJson.Default.WriteRequest).Permanent);
     Assert.Equal(2, removed);
 
+    Assert.True(vm.CanShowHistory);
     await vm.ShowPasswordHistoryCommand.ExecuteAsync(null);
+    Assert.False(vm.CanShowHistory);
     var history = vm.Groups.Single(g => g.Name == "Password history");
     Assert.Equal(2, history.Fields.Count);
     Assert.All(history.Fields, f => Assert.Equal(FieldViewModel.Mask, f.DisplayValue));

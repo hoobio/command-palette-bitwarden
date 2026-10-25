@@ -91,7 +91,8 @@ public class ItemWindowTests(AvaloniaSession session)
         new FieldDto(ItemFields.Totp, "Verification code (TOTP)", "Login credentials", null, true),
         new FieldDto(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://github.com", false, CanOpen: true),
       ],
-      Grace: RepromptRequired ? null : _grace);
+      Grace: RepromptRequired ? null : _grace,
+      HasPassword: true);
   }
 
   private static FieldViewModel Field(ItemViewModel vm, string key) => vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == key);
@@ -317,6 +318,17 @@ public class ItemWindowTests(AvaloniaSession session)
 
     Assert.True(vm.GraceVisible);
     Assert.InRange(vm.GraceRemaining.TotalSeconds, 50, 60);
+
+    vm.KeepOpenCommand.Execute(null);
+    Assert.False(vm.GraceVisible);
+    await vm.LoadAsync();
+    Assert.False(vm.GraceVisible);
+    Assert.False(vm.RepromptRequired);
+
+    vm.OnLocked();
+    await vm.LoadAsync();
+    await vm.VerifyRepromptAsync("correct");
+    Assert.True(vm.GraceVisible);
   });
 
   [Fact]

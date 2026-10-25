@@ -156,7 +156,8 @@ internal sealed record ItemDto(
   IReadOnlyList<FieldDto> Fields,
   IReadOnlyList<AttachmentDto>? Attachments = null,
   string? IconPath = null,
-  GraceDto? Grace = null);
+  GraceDto? Grace = null,
+  bool HasPassword = false);
 
 internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
 

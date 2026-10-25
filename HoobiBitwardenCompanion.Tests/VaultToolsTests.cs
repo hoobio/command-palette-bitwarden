@@ -29,6 +29,8 @@ public class VaultToolsTests(AvaloniaSession session)
     public bool Reprompt { get; set; }
     public int Type { get; set; } = 1;
 
+    public bool HasPassword { get; set; } = true;
+
     public List<JsonElement?> Payloads(string op)
     {
       lock (Requests)
@@ -58,7 +60,7 @@ public class VaultToolsTests(AvaloniaSession session)
         case Ops.GetItem:
           return IpcJson.ToElement(new ItemDto(ItemId, "GitHub", Type, "Work", null, false, false, false, Revision, Revision, null,
             [new FieldDto(ItemFields.Username, "Username", "Login credentials", "octocat", false), new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true)],
-            Attachments: [.. Attachments]), IpcJson.Default.ItemDto);
+            Attachments: [.. Attachments], HasPassword: HasPassword), IpcJson.Default.ItemDto);
         case Ops.ListFilters:
           return IpcJson.ToElement(new FiltersResponse([new FilterRef(FolderId, "Work"), new FilterRef(Guid.NewGuid().ToString(), "Personal")], [], []), IpcJson.Default.FiltersResponse);
         case Ops.GetEditableItem:
@@ -353,6 +355,11 @@ public class VaultToolsTests(AvaloniaSession session)
     await vm.RotateCommand.ExecuteAsync(null);
     Assert.Equal(Ops.RotatePassword, IpcJson.Read(h.Extension.Payloads(Ops.VerifyReprompt)[^1], IpcJson.Default.RepromptRequest).Op);
 
+    h.Extension.HasPassword = false;
+    await vm.LoadAsync();
+    Assert.False(vm.CanRotate);
+
+    h.Extension.HasPassword = true;
     h.Extension.Type = 3;
     await vm.LoadAsync();
     Assert.False(vm.CanRotate);

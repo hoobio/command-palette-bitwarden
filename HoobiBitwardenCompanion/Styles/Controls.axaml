@@ -134,6 +134,23 @@
             </Style>
         </ControlTheme>
 
+        <ControlTheme x:Key="CaptionLinkButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Background" Value="#00242936" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#00242936" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#00242936" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorTertiaryBrush}" />
+            </Style>
+        </ControlTheme>
+
         <ControlTheme x:Key="CaptionButtonTheme" TargetType="Button" BasedOn="{StaticResource FluentDrawnCaptionButton}">
             <Setter Property="Width" Value="{StaticResource CaptionButtonWidth}" />
             <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
@@ -354,6 +371,18 @@
 
     <Style Selector="Button.CaptionButton">
         <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.revealPasswordButton">
+        <Setter Property="styles:HoldToReveal.IsEnabled" Value="True" />
+    </Style>
+
+    <Style Selector="TextBox.revealPasswordButton /template/ ToggleButton">
+        <Setter Property="Width" Value="36" />
+    </Style>
+
+    <Style Selector="TextBox.revealPasswordButton /template/ ToggleButton /template/ ui|FAFontIcon#Glyph">
+        <Setter Property="FontSize" Value="16" />
     </Style>
 
     <Style Selector="Border.Row.Switch ToggleSwitch">

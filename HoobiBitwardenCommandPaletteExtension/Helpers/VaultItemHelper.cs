@@ -107,7 +107,7 @@ internal static partial class VaultItemHelper
 
     AddCustomFieldContextItems(items, item, id, reprompt);
 
-    if (companion is not null && item.Type == BitwardenItemType.Login)
+    if (companion is not null && item.Type == BitwardenItemType.Login && item.Password is not null)
     {
       items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.RotateItem(id)) { Name = "Rotate password", Result = CommandResult.Dismiss() }))
       {

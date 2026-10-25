@@ -81,13 +81,14 @@
     <Grid RowDefinitions="Auto,Auto,*">
         <Grid x:Name="Toolbar" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,24,4">
             <WrapPanel ItemSpacing="8" LineSpacing="8">
-                <Button x:Name="EditButton" Content="Edit" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" />
-                <Button x:Name="HistoryButton" Content="Password history" Command="{Binding ShowPasswordHistoryCommand}" IsVisible="{Binding CanShowHistory}" />
-                <Button x:Name="RotateButton" Content="Rotate password" Command="{Binding RotateCommand}" IsVisible="{Binding CanRotate}" />
+                <Button x:Name="RotateButton" Content="Rotate password" Command="{Binding RotateCommand}" IsVisible="{Binding CanRotate}" IsEnabled="{Binding !IsPrompting}" />
                 <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditing}" />
                 <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelEditCommand}" IsVisible="{Binding IsEditing}" />
             </WrapPanel>
-            <Button x:Name="DeleteButton" Grid.Column="1" VerticalAlignment="Top" Theme="{StaticResource DangerIconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button x:Name="EditButton" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Edit}" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Edit" AutomationProperties.Name="Edit" />
+                <Button x:Name="DeleteButton" Theme="{StaticResource DangerIconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
+            </StackPanel>
         </Grid>
 
         <StackPanel Grid.Row="1" Margin="0,0,24,0">
@@ -127,7 +128,10 @@
 
                 <StackPanel x:Name="GracePanel" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding GraceVisible}">
                     <ProgressBar x:Name="GraceBar" Height="3" Minimum="0" Maximum="1" Value="{Binding GraceFraction}" />
-                    <TextBlock x:Name="GraceText" Classes="Caption" Text="{Binding GraceCaption}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock x:Name="GraceText" Classes="Caption" Text="{Binding GraceCaption}" VerticalAlignment="Center" />
+                        <Button x:Name="KeepOpenButton" Grid.Column="1" Theme="{StaticResource CaptionLinkButtonStyle}" Content="Keep open" Command="{Binding KeepOpenCommand}" />
+                    </Grid>
                 </StackPanel>
 
                 <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}" IsVisible="{Binding !IsPrompting}">
@@ -200,6 +204,21 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <StackPanel x:Name="PasswordHistoryGroup" IsVisible="{Binding CanShowHistory}">
+                    <TextBlock Classes="GroupHeader" Text="Password history" />
+                    <Border Classes="Group">
+                        <Button x:Name="HistoryButton" Theme="{StaticResource AddRowButtonStyle}" Command="{Binding ShowPasswordHistoryCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Panel Width="16">
+                                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Password}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" IsVisible="{Binding !ShowPasswordHistoryCommand.IsRunning}" />
+                                    <ui:FAProgressRing x:Name="HistoryRing" Width="14" Height="14" IsIndeterminate="True" IsVisible="{Binding ShowPasswordHistoryCommand.IsRunning}" />
+                                </Panel>
+                                <TextBlock Text="Show password history" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </Border>
+                </StackPanel>
 
                 <StackPanel x:Name="AttachmentsGroup" IsVisible="{Binding ShowAttachments}">
                     <TextBlock Classes="GroupHeader" Text="Attachments" />
