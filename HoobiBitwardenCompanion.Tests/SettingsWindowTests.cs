@@ -91,7 +91,7 @@ public class SettingsWindowTests(AvaloniaSession session)
   private static TextBox SearchBox(SettingsWindow window) =>
     window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
 
-  private static IEnumerable<string> ShownKeys(SettingsViewModel vm) =>
+  private static List<string> ShownKeys(SettingsViewModel vm) =>
     vm.Sections.SelectMany(s => s.Rows).Where(r => r.IsShown).Select(r => r.Key).ToList();
 
   [Fact]
