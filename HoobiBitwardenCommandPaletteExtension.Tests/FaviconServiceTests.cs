@@ -44,4 +44,30 @@ public class FaviconServiceTests
   {
     FaviconService.ClearMemCache();
   }
+
+  [Fact]
+  public void GetOrQueue_GivesEachItemItsOwnIcon_ForTheSameHost()
+  {
+    var host = $"shared-{Guid.NewGuid():N}.example";
+    Directory.CreateDirectory(FaviconService.CacheDir);
+    File.WriteAllBytes(Path.Combine(FaviconService.CacheDir, host + ".png"), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+    var first = FaviconService.GetOrQueue(host, "https://icons.invalid/icon.png", itemId: "item-1");
+    var second = FaviconService.GetOrQueue(host, "https://icons.invalid/icon.png", itemId: "item-2");
+
+    Assert.NotSame(first, second);
+    Assert.Same(first, FaviconService.GetOrQueue(host, "https://icons.invalid/icon.png", itemId: "item-1"));
+  }
+
+  [Fact]
+  public void GetOrQueue_ReturnsTheFallback_WhileTheHostIsNegativelyCached()
+  {
+    var host = $"missing-{Guid.NewGuid():N}.example";
+    Directory.CreateDirectory(FaviconService.CacheDir);
+    File.WriteAllText(Path.Combine(FaviconService.CacheDir, host + ".miss"), "404");
+    var fallback = new Microsoft.CommandPalette.Extensions.Toolkit.IconInfo("");
+
+    Assert.Same(fallback, FaviconService.GetOrQueue(host, "https://icons.invalid/icon.png", fallback, itemId: "item-1"));
+    Assert.Same(fallback, FaviconService.GetOrQueue(host, "https://icons.invalid/icon.png", fallback, itemId: "item-1"));
+  }
 }

@@ -47,10 +47,11 @@ internal static partial class FaviconService
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"HoobiBitwarden/{version}");
     }
 
-    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null, int priority = int.MaxValue)
+    public static IconInfo GetOrQueue(string host, string iconUrl, IconInfo? fallback = null, int priority = int.MaxValue, string? itemId = null)
     {
         fallback ??= new IconInfo("");
-        if (_iconInfoCache.TryGetValue(host, out var cachedIcon))
+        var iconKey = itemId is null ? host : $"{host}|{itemId}";
+        if (_iconInfoCache.TryGetValue(iconKey, out var cachedIcon))
             return cachedIcon;
         var posPath = GetPositivePath(host);
         var negPath = GetNegativePath(host);
@@ -58,7 +59,7 @@ internal static partial class FaviconService
         if (_memCache.TryGetValue(host, out var cachedBytes))
         {
             if (cachedBytes is not null)
-                return CacheAndReturnIcon(host, cachedBytes);
+                return CacheAndReturnIcon(iconKey, cachedBytes);
             if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
                 return fallback;
             _memCache.TryRemove(host, out _);
@@ -68,7 +69,7 @@ internal static partial class FaviconService
         {
             var bytes = File.ReadAllBytes(posPath);
             _memCache[host] = bytes;
-            return CacheAndReturnIcon(host, bytes);
+            return CacheAndReturnIcon(iconKey, bytes);
         }
 
         if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
@@ -184,7 +185,6 @@ internal static partial class FaviconService
 
             await File.WriteAllBytesAsync(GetPositivePath(host), pngBytes);
             _memCache[host] = pngBytes;
-            CacheAndReturnIcon(host, pngBytes);
 
             try { File.Delete(negPath); } catch { }
             IconCached?.Invoke();
@@ -237,12 +237,13 @@ internal static partial class FaviconService
         }
     }
 
-    private static IconInfo CacheAndReturnIcon(string host, byte[] bytes)
+    private static IconInfo CacheAndReturnIcon(string iconKey, byte[] bytes)
     {
-        return _iconInfoCache.GetOrAdd(host, _ => MakeIconInfo(bytes));
+        return _iconInfoCache.GetOrAdd(iconKey, _ => MakeIconInfo(bytes));
     }
 
     // Icon bytes are served as a stream so they cross the COM process boundary correctly.
+    // One stream per item: Command Palette reads the stream from its current position, so a second item sharing it got an empty icon.
     private static IconInfo MakeIconInfo(byte[] bytes)
     {
         var ras = new InMemoryRandomAccessStream();
