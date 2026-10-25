@@ -56,6 +56,8 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void ShowNewItem() => _ = SendAsync(Ops.NewItem, null);
 
+  public void ShowGenerator() => _ = SendAsync(Ops.ShowGenerator, null);
+
   public void RotateItem(string id) =>
     _ = SendAsync(Ops.RotateItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
 

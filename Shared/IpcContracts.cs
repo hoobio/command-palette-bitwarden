@@ -17,6 +17,7 @@ internal static class Ops
   public const string VerifyReprompt = "verifyReprompt";
   public const string ShowItem = "showItem";
   public const string NewItem = "newItem";
+  public const string ShowGenerator = "showGenerator";
   public const string Locked = "locked";
   public const string ListFilters = "listFilters";
   public const string VaultChanged = "vaultChanged";

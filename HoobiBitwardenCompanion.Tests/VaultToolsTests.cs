@@ -460,6 +460,43 @@ public class VaultToolsTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task Coordinator_ShowGenerator_IsOneWindow_AndSavesTheValueAsANewLogin() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+
+    var reply = pair.Extension.RequestAsync(Ops.ShowGenerator, null);
+    AvaloniaSession.WaitFor(() => reply.IsCompleted);
+    var window = coordinator.ShowGenerator();
+    Assert.Same(window, coordinator.ShowGenerator());
+    var vm = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.HasValue);
+    Assert.Single(extension.Payloads(Ops.Generate));
+    window.UpdateLayout();
+    Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "CurrentPasswordGroup").IsEffectivelyVisible);
+    var save = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveAsNewItemButton");
+    Assert.True(save.IsEffectivelyEnabled);
+
+    save.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+    AvaloniaSession.WaitFor(() => coordinator.NewItemWindows.Count == 1);
+    var created = coordinator.NewItemWindows.Single().ViewModel!;
+    Assert.True(created.Editor!.IsLogin);
+    Assert.Equal(vm.Value, created.Editor.Password);
+    Assert.False(created.Editor.IsDirty);
+
+    coordinator.OnLocked();
+    Assert.False(vm.HasValue);
+    Assert.Empty(coordinator.NewItemWindows);
+    window.Close();
+    Assert.NotSame(window, coordinator.ShowGenerator());
+    coordinator.ShowGenerator().Close();
+    await Task.CompletedTask;
+    File.Delete(CompanionSettings.FilePath);
+  });
+
+  [Fact]
   public Task EditForm_GenerateButton_FillsThePassword() => session.RunAsync(async () =>
   {
     using var h = new Harness();

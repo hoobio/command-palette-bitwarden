@@ -11,6 +11,7 @@ internal sealed class WindowCoordinator : IDisposable
 {
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
   private readonly List<ItemWindow> _newItemWindows = [];
+  private GeneratorWindow? _generatorWindow;
 
   public WindowCoordinator(Stream input, Stream output) =>
     Channel = new PipeChannel(input, output, HandleRequestAsync, OnEvent);
@@ -51,6 +52,7 @@ internal sealed class WindowCoordinator : IDisposable
       window.Close();
     }
 
+    _generatorWindow?.ViewModel?.OnLocked();
     GeneratorView.OnLocked();
   }
 
@@ -68,6 +70,9 @@ internal sealed class WindowCoordinator : IDisposable
           await Dispatcher.UIThread.InvokeAsync(() => ShowItem(request.Id));
         else
           Dispatcher.UIThread.Post(() => RotateItem(request.Id));
+        return null;
+      case Ops.ShowGenerator:
+        await Dispatcher.UIThread.InvokeAsync(ShowGenerator);
         return null;
       case Ops.NewItem:
         Dispatcher.UIThread.Post(() => _ = ShowNewItemAsync());
@@ -108,6 +113,24 @@ internal sealed class WindowCoordinator : IDisposable
       _ = window.ViewModel?.LoadAsync();
     BringToFront(window);
     return window;
+  }
+
+  public GeneratorWindow ShowGenerator()
+  {
+    if (_generatorWindow is null)
+    {
+      var viewModel = new GeneratorViewModel(Channel) { Toast = message => ToastWindow.Show(_generatorWindow, message) };
+      var window = new GeneratorWindow(viewModel)
+      {
+        SaveAsNewItem = value => ShowNewItemAsync(ItemEditorViewModel.Blank(1) with { Login = new LoginEdit(null, value, null, []) }),
+      };
+      window.Closed += (_, _) => _generatorWindow = null;
+      _generatorWindow = window;
+      _ = viewModel.InitializeAsync();
+    }
+
+    BringToFront(_generatorWindow);
+    return _generatorWindow;
   }
 
   public async Task<ItemWindow?> ShowNewItemAsync(EditableItem? item = null)

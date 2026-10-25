@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -35,11 +36,17 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
                 Title = DisplayName,
                 Subtitle = "Search your vault",
             },
-            new CommandItem(new NewItemCommand(_service, companion))
+            new CommandItem(new CompanionCommand("New item", _service, companion.ShowNewItem))
             {
                 Title = "New Bitwarden item",
                 Subtitle = "Create a new login, new password, note, card, identity or SSH key",
                 Icon = new IconInfo(""),
+            },
+            new CommandItem(new CompanionCommand("Generate password", _service, companion.ShowGenerator))
+            {
+                Title = "Generate password",
+                Subtitle = "Open the generator for a new password or passphrase",
+                Icon = new IconInfo(""),
             },
         ];
 
@@ -51,23 +58,23 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
 
     public override IFallbackCommandItem[] FallbackCommands() => [_fallbackItem];
 
-    private sealed partial class NewItemCommand : InvokableCommand
+    private sealed partial class CompanionCommand : InvokableCommand
     {
         private readonly BitwardenCliService _service;
-        private readonly CompanionHost _companion;
+        private readonly Action _show;
 
-        public NewItemCommand(BitwardenCliService service, CompanionHost companion)
+        public CompanionCommand(string name, BitwardenCliService service, Action show)
         {
             _service = service;
-            _companion = companion;
-            Name = "New item";
+            _show = show;
+            Name = name;
         }
 
         public override ICommandResult Invoke()
         {
             if (!_service.IsUnlocked)
                 return CommandResult.ShowToast("Unlock your vault in Bitwarden first.");
-            _companion.ShowNewItem();
+            _show();
             return CommandResult.Dismiss();
         }
     }

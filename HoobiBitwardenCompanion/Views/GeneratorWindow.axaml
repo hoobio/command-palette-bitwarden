@@ -1,0 +1,43 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.Views.GeneratorWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
+    x:DataType="vm:GeneratorViewModel"
+    Title="Generator"
+    Width="440"
+    Height="680"
+    MinWidth="340"
+    MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid RowDefinitions="48,*,Auto" Background="Transparent">
+        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Password}" FontSize="16" VerticalAlignment="Center" />
+                <TextBlock Text="Generator" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1">
+            <views:GeneratorView Margin="24,0,24,16" />
+        </ScrollViewer>
+
+        <Button
+            x:Name="SaveAsNewItemButton"
+            Grid.Row="2"
+            Margin="24,8,24,24"
+            HorizontalAlignment="Stretch"
+            Theme="{StaticResource AccentButtonStyle}"
+            Content="Save as new item"
+            IsEnabled="{Binding HasValue}"
+            Click="OnSaveAsNewItemClick" />
+    </Grid>
+</Window>
