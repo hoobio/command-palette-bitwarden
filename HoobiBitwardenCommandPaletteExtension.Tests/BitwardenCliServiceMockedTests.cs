@@ -1057,7 +1057,7 @@ public class BitwardenCliServiceMockedTests
       settings.UseApiKeyAuthentication.Value = true;
       ApiKeyStore.Save("user.abc", "s3cret");
       var factory = new FakeProcessFactory();
-      var svc = new BitwardenCliService(settings, factory.Create);
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
       factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
       factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unauthenticated\"}\n", exitCode: 0));
       factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
@@ -1102,7 +1102,7 @@ public class BitwardenCliServiceMockedTests
       settings.UseApiKeyAuthentication.Value = true;
       ApiKeyStore.Save("user.abc", "s3cret");
       var factory = new FakeProcessFactory();
-      var svc = new BitwardenCliService(settings, factory.Create);
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
       factory.Enqueue(new FakeCliProcess(stderr: "You are not logged in.\n", exitCode: 1));
       factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
       factory.Enqueue(new FakeCliProcess(stdout: "session_key_abc\n", exitCode: 0));
@@ -1129,7 +1129,7 @@ public class BitwardenCliServiceMockedTests
       settings.UseApiKeyAuthentication.Value = true;
       ApiKeyStore.Save("user.abc", "s3cret");
       var factory = new FakeProcessFactory();
-      var svc = new BitwardenCliService(settings, factory.Create);
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
       factory.Enqueue(new FakeCliProcess(stderr: "You are not logged in.\n", exitCode: 1));
       factory.Enqueue(new FakeCliProcess(stderr: "client_id or client_secret is incorrect. Try again.\n", exitCode: 1));
 
