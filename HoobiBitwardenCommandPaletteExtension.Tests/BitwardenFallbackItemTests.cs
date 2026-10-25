@@ -75,6 +75,48 @@ public class BitwardenFallbackItemTests
     Assert.Equal(string.Empty, fallback.Title);
   }
 
+  private static async Task<int> VersionProbesAfterTwoLockedQueries(TimeSpan retryInterval)
+  {
+    var settingsPath = Path.Combine(Path.GetTempPath(), $"bw_test_{Guid.NewGuid():N}.json");
+    var settings = new BitwardenSettingsManager(settingsPath);
+    settings.RememberSession.Value = true;
+    SessionStore.Save("stored-session");
+    var probes = 0;
+    try
+    {
+      var svc = new BitwardenCliService(settings, psi =>
+      {
+        if (psi.Arguments == "--version")
+          Interlocked.Increment(ref probes);
+        throw new InvalidOperationException(psi.Arguments);
+      });
+      using var fallback = new BitwardenFallbackItem(svc) { StatusRetryInterval = retryInterval };
+
+      fallback.UpdateQuery("github");
+      for (var i = 0; i < 50 && Volatile.Read(ref probes) == 0; i++)
+        await Task.Delay(20, TestContext.Current.CancellationToken);
+      await Task.Delay(100, TestContext.Current.CancellationToken);
+      fallback.UpdateQuery("githu");
+      await Task.Delay(200, TestContext.Current.CancellationToken);
+
+      Assert.Equal(string.Empty, fallback.Title);
+      return Volatile.Read(ref probes);
+    }
+    finally
+    {
+      SessionStore.Clear();
+      File.Delete(settingsPath);
+    }
+  }
+
+  [Fact]
+  public async Task UpdateQuery_LockedWithStoredCredential_RetriesStatusOncePerInterval() =>
+    Assert.Equal(1, await VersionProbesAfterTwoLockedQueries(TimeSpan.FromSeconds(30)));
+
+  [Fact]
+  public async Task UpdateQuery_LockedWithStoredCredential_RetriesAgainAfterInterval() =>
+    Assert.Equal(2, await VersionProbesAfterTwoLockedQueries(TimeSpan.Zero));
+
   [Fact]
   public async Task UpdateQuery_UnlockedWithoutCache_RefreshesAndShowsMatch()
   {
@@ -84,7 +126,7 @@ public class BitwardenFallbackItemTests
       "list items" => """[{"id":"1","name":"GitHub","type":1,"login":{"username":"octocat"}}]""",
       "list folders" or "list organizations" => "[]",
       _ => "session_key\n",
-    }, id: Interlocked.Increment(ref id)));
+    }, id: Interlocked.Increment(ref id))) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
     await svc.UnlockAsync("pw");
     using var fallback = new BitwardenFallbackItem(svc);
 

@@ -38,11 +38,20 @@ internal static class HubProtocol
         return (ResolveHubUri(ActiveEnvironment(root, userId)), accessToken);
     }
 
-    public static (bool LoggedIn, string? ServerUrl) ReadLoginState(string dataFile)
+    // global_account_activeAccountId first appears in CLI state version 60; older layouts misread as logged out.
+    public const int MinLoginStateVersion = 60;
+
+    public static (bool LoggedIn, string? ServerUrl)? ReadLoginState(string dataFile)
     {
         using var stream = new FileStream(dataFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var document = JsonDocument.Parse(stream);
         var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("stateVersion", out var version)
+            || version.ValueKind != JsonValueKind.Number
+            || !version.TryGetInt32(out var stateVersion)
+            || stateVersion < MinLoginStateVersion)
+            return null;
         var userId = StringProperty(root, "global_account_activeAccountId");
         var loggedIn = userId != null && StringProperty(root, $"user_{userId}_token_accessToken") != null;
         return (loggedIn, ResolveServerUrl(ActiveEnvironment(root, userId)));

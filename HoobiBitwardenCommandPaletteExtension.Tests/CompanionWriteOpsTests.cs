@@ -525,6 +525,7 @@ public class CompanionWriteOpsTests
     var h = new Harness(Login(id, reprompt: 1));
     var payload = IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest);
 
+    Assert.Null(h.Ops.GetItem(id).PasswordHistoryCount);
     Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.GetEditableItem, payload, TestContext.Current.CancellationToken))).Code);
     Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.GetPasswordHistory, payload, TestContext.Current.CancellationToken))).Code);
     Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.CopyPasswordHistoryAsync(id, ItemFields.HistoryPrefix + "0", RevisionDate))).Code);
@@ -535,6 +536,7 @@ public class CompanionWriteOpsTests
     {
       var verified = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.GetEditableItem, payload);
       Assert.Equal("hunter2", IpcJson.Read(verified.Result, IpcJson.Default.EditableItem).Login!.Password);
+      Assert.Equal(2, h.Ops.GetItem(id, verified: true).PasswordHistoryCount);
       var history = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.GetPasswordHistory, payload);
       Assert.Equal([new DateTime(2024, 12, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2024, 11, 1, 0, 0, 0, DateTimeKind.Utc)],
         IpcJson.Read(history.Result, IpcJson.Default.PasswordHistoryResponse).LastUsed);

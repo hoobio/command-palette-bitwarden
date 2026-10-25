@@ -1537,7 +1537,7 @@ public class BitwardenCliServiceTests
   [Fact]
   public void WarmCacheAsync_ReturnsSameTaskAsWarmupTask()
   {
-    var svc = new BitwardenCliService();
+    var svc = new BitwardenCliService(processFactory: psi => throw new InvalidOperationException(psi.Arguments));
     var returned = svc.WarmCacheAsync();
     Assert.Same(returned, svc.WarmupTask);
   }
@@ -1545,7 +1545,7 @@ public class BitwardenCliServiceTests
   [Fact]
   public void WarmCacheAsync_CalledTwice_WarmupTaskReflectsLatestCall()
   {
-    var svc = new BitwardenCliService();
+    var svc = new BitwardenCliService(processFactory: psi => throw new InvalidOperationException(psi.Arguments));
     var first = svc.WarmCacheAsync();
     var second = svc.WarmCacheAsync();
     Assert.Same(second, svc.WarmupTask);

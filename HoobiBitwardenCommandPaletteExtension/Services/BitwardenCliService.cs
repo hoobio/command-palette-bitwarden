@@ -40,7 +40,8 @@ internal sealed partial class BitwardenCliService
   private bool _cacheLoaded;
   private int _sessionGeneration;
   private DateTime _lastRefresh;
-  private DateTime? _refreshedDataWriteTime;
+  private DataFileStamp? _refreshedDataStamp;
+  private DateTime _refreshedDataAt;
   private int _refreshing;
   private int _refreshPending;
   private readonly Lock _statusLock = new();
@@ -64,6 +65,10 @@ internal sealed partial class BitwardenCliService
   private TimeSpan _autoLockTimeout;
 
   public bool IsUnlocked => _sessionKey != null;
+
+  internal bool HasRestorableSession =>
+    !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BW_SESSION"))
+    || (_settings?.RememberSession.Value == true && !string.IsNullOrEmpty(SessionStore.Load()));
 
   public bool IsCacheLoaded => _cacheLoaded;
 
@@ -145,12 +150,17 @@ internal sealed partial class BitwardenCliService
 
   private string DataFile => DataFileOverride ?? HubProtocol.CliDataFile(DataDirectory);
 
-  private DateTime? DataFileWriteTime()
+  private sealed record DataFileStamp(DateTime WriteTimeUtc, long Length);
+
+  // FAT32 keeps write times to 2 seconds, so an unchanged stamp is trusted only for a bounded time.
+  internal TimeSpan UnchangedDataMaxAge { get; set; } = TimeSpan.FromMinutes(30);
+
+  private DataFileStamp? ReadDataFileStamp()
   {
     try
     {
       var info = new FileInfo(DataFile);
-      return info.Exists ? info.LastWriteTimeUtc : null;
+      return info.Exists ? new DataFileStamp(info.LastWriteTimeUtc, info.Length) : null;
     }
     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
     {
@@ -368,7 +378,7 @@ internal sealed partial class BitwardenCliService
         item.DisposeSecrets();
       _cache = [];
       _cacheLoaded = false;
-      _refreshedDataWriteTime = null;
+      _refreshedDataStamp = null;
       _sessionGeneration++;
     }
   }
@@ -543,7 +553,10 @@ internal sealed partial class BitwardenCliService
   {
     try
     {
-      return HubProtocol.ReadLoginState(DataFile);
+      if (HubProtocol.ReadLoginState(DataFile) is { } state)
+        return state;
+      DebugLogService.Log("Status", $"CLI data file state version is missing or below {HubProtocol.MinLoginStateVersion}");
+      return null;
     }
     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Text.Json.JsonException)
     {
@@ -1304,7 +1317,7 @@ internal sealed partial class BitwardenCliService
     DebugLogService.Log("Cache", "RefreshCacheAsync started");
     var failed = false;
     var writeVersion = WriteVersion;
-    var dataWriteTime = DataFileWriteTime();
+    var dataStamp = ReadDataFileStamp();
     try
     {
       var foldersTask = RunCliAsync("list folders");
@@ -1338,7 +1351,8 @@ internal sealed partial class BitwardenCliService
         _cache = items;
         _cacheLoaded = true;
         _lastRefresh = DateTime.UtcNow;
-        _refreshedDataWriteTime = dataWriteTime;
+        _refreshedDataStamp = dataStamp;
+        _refreshedDataAt = _lastRefresh;
       }
 
       CacheUpdated?.Invoke();
@@ -1386,7 +1400,7 @@ internal sealed partial class BitwardenCliService
     if (_refreshing == 0 && DateTime.UtcNow - _lastRefresh > interval)
     {
       // `bw list` only reads data.json, so an unchanged file returns the cached data again.
-      if (_refreshedDataWriteTime is { } recorded && DataFileWriteTime() == recorded)
+      if (_refreshedDataStamp is { } recorded && DateTime.UtcNow - _refreshedDataAt < UnchangedDataMaxAge && ReadDataFileStamp() == recorded)
       {
         _lastRefresh = DateTime.UtcNow;
         DebugLogService.Log("Cache", "Background refresh skipped: CLI data file unchanged");

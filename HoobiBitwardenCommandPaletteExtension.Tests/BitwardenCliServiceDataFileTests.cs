@@ -12,7 +12,7 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
 
   public void Dispose() => Directory.Delete(_dir, true);
 
-  private string WriteDataFile(string json = "{}")
+  private string WriteDataFile(string json = """{"stateVersion":78}""")
   {
     var path = Path.Combine(_dir, "data.json");
     File.WriteAllText(path, json);
@@ -68,12 +68,12 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
   }
 
   [Theory]
-  [InlineData("""{"global_account_activeAccountId":"u1","user_u1_token_accessToken":"t","user_u1_environment_environment":{"region":"EU","urls":{}}}""", "Locked", null)]
+  [InlineData("""{"stateVersion":78,"global_account_activeAccountId":"u1","user_u1_token_accessToken":"t","user_u1_environment_environment":{"region":"EU","urls":{}}}""", "Locked", null)]
   [InlineData("""{"stateVersion":78}""", "Unauthenticated", null)]
-  [InlineData("""{"global_account_activeAccountId":"u1"}""", "Unauthenticated", null)]
-  [InlineData("""{"global_environment_environment":{"region":"Self-hosted","urls":{"base":"https://vault.example.com/"}}}""", "Unauthenticated", "https://vault.example.com")]
-  [InlineData("""{"global_environment_environment":{"region":"Self-hosted","urls":{}}}""", "Unauthenticated", null)]
-  [InlineData("""{"global_account_activeAccountId":"u1","user_u1_token_accessToken":"t","user_u1_environment_environment":{"region":"US","urls":{"base":null}}}""", "Locked", null)]
+  [InlineData("""{"stateVersion":60,"global_account_activeAccountId":"u1"}""", "Unauthenticated", null)]
+  [InlineData("""{"stateVersion":78,"global_environment_environment":{"region":"Self-hosted","urls":{"base":"https://vault.example.com/"}}}""", "Unauthenticated", "https://vault.example.com")]
+  [InlineData("""{"stateVersion":78,"global_environment_environment":{"region":"Self-hosted","urls":{}}}""", "Unauthenticated", null)]
+  [InlineData("""{"stateVersion":78,"global_account_activeAccountId":"u1","user_u1_token_accessToken":"t","user_u1_environment_environment":{"region":"US","urls":{"base":null}}}""", "Locked", null)]
   public async Task GetVaultStatus_NoSession_ReadsDataFileWithoutStatusProcess(string json, string expected, string? serverUrl)
   {
     var recorder = new Recorder();
@@ -88,6 +88,10 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
   [Theory]
   [InlineData(null)]
   [InlineData("not json")]
+  [InlineData("[]")]
+  [InlineData("""{"global_account_activeAccountId":"u1","user_u1_token_accessToken":"t"}""")]
+  [InlineData("""{"stateVersion":"78","global_account_activeAccountId":"u1","user_u1_token_accessToken":"t"}""")]
+  [InlineData("""{"stateVersion":59,"global_account_activeAccountId":"u1","user_u1_token_accessToken":"t"}""")]
   public async Task GetVaultStatus_DataFileUnusable_FallsBackToStatusProcess(string? json)
   {
     var recorder = new Recorder();
@@ -212,6 +216,39 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
     await svc.RefreshCacheAsync();
     svc.LastRefresh = DateTime.UtcNow.AddHours(-1);
     File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(1));
+
+    svc.TriggerBackgroundRefreshIfStale();
+    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 6);
+
+    Assert.Equal(6, Volatile.Read(ref counter.Lists));
+  }
+
+  [Fact]
+  public async Task TriggerBackgroundRefresh_DataFileLengthChangedWithSameWriteTime_Refreshes()
+  {
+    var counter = new Counter();
+    var path = WriteDataFile();
+    var svc = UnlockedService(path, counter);
+    await svc.RefreshCacheAsync();
+    svc.LastRefresh = DateTime.UtcNow.AddHours(-1);
+    var writeTime = File.GetLastWriteTimeUtc(path);
+    await File.WriteAllTextAsync(path, """{"stateVersion":78,"changed":true}""", TestContext.Current.CancellationToken);
+    File.SetLastWriteTimeUtc(path, writeTime);
+
+    svc.TriggerBackgroundRefreshIfStale();
+    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 6);
+
+    Assert.Equal(6, Volatile.Read(ref counter.Lists));
+  }
+
+  [Fact]
+  public async Task TriggerBackgroundRefresh_UnchangedPastMaxAge_Refreshes()
+  {
+    var counter = new Counter();
+    var svc = UnlockedService(WriteDataFile(), counter);
+    svc.UnchangedDataMaxAge = TimeSpan.Zero;
+    await svc.RefreshCacheAsync();
+    svc.LastRefresh = DateTime.UtcNow.AddHours(-1);
 
     svc.TriggerBackgroundRefreshIfStale();
     await WaitFor(() => Volatile.Read(ref counter.Lists) >= 6);
