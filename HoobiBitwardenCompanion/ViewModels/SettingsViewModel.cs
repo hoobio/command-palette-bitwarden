@@ -108,6 +108,8 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   private string _committed = string.Empty;
   private int _pending;
   private bool _applying;
+  private bool _sending;
+  private string? _queued;
   private bool _boolValue;
   private ChoiceDto? _selectedChoice;
   private string _textValue = string.Empty;
@@ -208,7 +210,35 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 
   internal Task CommitTextAsync(string text) => text == _committed ? Task.CompletedTask : SubmitAsync(text);
 
+  // Requests to the extension are handled concurrently, so a quick on-off toggle sent as two requests could be applied in the wrong order.
   internal async Task SubmitAsync(string value)
+  {
+    if (_sending)
+    {
+      _queued = value;
+      return;
+    }
+
+    _sending = true;
+    try
+    {
+      for (var next = value; next is not null; next = TakeQueued())
+        await SendAsync(next);
+    }
+    finally
+    {
+      _sending = false;
+    }
+  }
+
+  private string? TakeQueued()
+  {
+    var queued = _queued;
+    _queued = null;
+    return queued;
+  }
+
+  private async Task SendAsync(string value)
   {
     ErrorMessage = null;
     _pending++;

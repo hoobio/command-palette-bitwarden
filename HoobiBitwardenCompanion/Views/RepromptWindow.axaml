@@ -19,14 +19,11 @@
     Background="{DynamicResource WindowGroundBrush}">
     <Grid RowDefinitions="48,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" VerticalAlignment="Center" />
-            </StackPanel>
+            <TextBlock Text="Master password required" Margin="24,0,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
         </Grid>
 
         <ScrollViewer Grid.Row="1">
-            <StackPanel Margin="24,8,24,16" Spacing="8">
-                <TextBlock Text="Master password required" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <StackPanel Margin="24,0,24,12" Spacing="8">
                 <TextBlock x:Name="ItemNameText" FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding ItemName}" IsVisible="{Binding ItemName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 <TextBlock Classes="Caption" TextWrapping="Wrap" Text="This item requires master password verification before you can access it." />
                 <TextBlock Text="Master password" Margin="0,8,0,0" />

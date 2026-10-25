@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -39,6 +40,15 @@ internal abstract class DialogWindow : Window
   }
 
   protected void OnCancelClick(object? sender, RoutedEventArgs e) => Close();
+
+  internal void CentreOnScreenOf(PixelPoint anchor)
+  {
+    if (Screens.ScreenFromPoint(anchor) is not { } screen)
+      return;
+    var area = screen.WorkingArea;
+    var size = PixelSize.FromSize(ClientSize, screen.Scaling);
+    Position = new PixelPoint(area.X + (area.Width - size.Width) / 2, area.Y + (area.Height - size.Height) / 2);
+  }
 
   private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
   {

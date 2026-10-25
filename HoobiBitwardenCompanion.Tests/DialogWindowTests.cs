@@ -16,6 +16,8 @@ public class DialogWindowTests(AvaloniaSession session)
 
     public async Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
     {
+      if (op == Ops.ListFilters)
+        throw new IpcException(IpcErrors.Invalid);
       lock (Calls)
         Calls.Add((op, payload));
       if (Gate is { } gate)
@@ -28,6 +30,29 @@ public class DialogWindowTests(AvaloniaSession session)
       };
     }
   }
+
+  [Fact]
+  public Task ShowDialog_OpensOnTheCommandPaletteScreen() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    List<nint> anchored = [];
+    coordinator.ReturnForeground = _ => { };
+    coordinator.AnchorOf = hwnd =>
+    {
+      anchored.Add(hwnd);
+      return new Avalonia.PixelPoint(300, 200);
+    };
+    _ = coordinator.RunAsync(() => { });
+
+    var window = coordinator.ShowUnlock(4321, rememberSession: false, windowsHello: false);
+
+    Assert.Equal([(nint)4321], anchored);
+    Assert.Equal(Avalonia.Controls.WindowStartupLocation.Manual, window.WindowStartupLocation);
+    window.Close();
+    await Task.CompletedTask;
+  });
 
   [Fact]
   public Task Unlock_WhileTheRequestRuns_ShowsProgressWithText() => session.RunAsync(async () =>
@@ -175,7 +200,7 @@ public class DialogWindowTests(AvaloniaSession session)
     window.ViewModel!.Password = "ignored";
     await window.ViewModel.SubmitBiometricAsync();
 
-    Assert.Equal(new UnlockRequest(string.Empty, true, true), IpcJson.Read(extension.Calls.Single().Payload, IpcJson.Default.UnlockRequest));
+    Assert.Equal(new UnlockRequest(string.Empty, true, true), IpcJson.Read(Assert.Single(extension.Calls).Payload, IpcJson.Default.UnlockRequest));
     Assert.NotSame(window, coordinator.ShowUnlock());
     coordinator.ShowUnlock().Close();
   });

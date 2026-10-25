@@ -19,14 +19,11 @@
     Background="{DynamicResource WindowGroundBrush}">
     <Grid RowDefinitions="48,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" VerticalAlignment="Center" />
-            </StackPanel>
+            <TextBlock Text="Unlock your vault" Margin="24,0,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
         </Grid>
 
         <ScrollViewer Grid.Row="1">
-            <StackPanel Margin="24,8,24,16" Spacing="8">
-                <TextBlock Text="Unlock your vault" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <StackPanel Margin="24,0,24,12" Spacing="8">
                 <TextBlock Text="Master password" Margin="0,8,0,0" />
                 <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Master password" Text="{Binding Password, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
                 <CheckBox x:Name="RememberBox" Content="Remember session" IsChecked="{Binding RememberSession, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />

@@ -19,15 +19,16 @@
     Background="{DynamicResource WindowGroundBrush}">
     <Grid RowDefinitions="48,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" VerticalAlignment="Center" />
-            </StackPanel>
+            <Panel Margin="24,0,56,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Text="Log in to Bitwarden" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsCredentialsStep}" />
+                <TextBlock Text="Two-step login" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsCodeStep}" />
+                <TextBlock Text="Verify this device" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDeviceStep}" />
+            </Panel>
         </Grid>
 
         <ScrollViewer Grid.Row="1">
-            <StackPanel Margin="24,8,24,16" Spacing="8">
+            <StackPanel Margin="24,0,24,12" Spacing="8">
                 <StackPanel x:Name="CredentialsPanel" Spacing="8" IsVisible="{Binding IsCredentialsStep}">
-                    <TextBlock Text="Log in to Bitwarden" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <Border x:Name="DataDirAlert" Classes="Alert" IsVisible="{Binding CustomDataDirWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <TextBlock x:Name="DataDirText" TextWrapping="Wrap" Text="{Binding CustomDataDirWarning}" />
                     </Border>
@@ -42,14 +43,12 @@
                 </StackPanel>
 
                 <StackPanel x:Name="CodePanel" Spacing="8" IsVisible="{Binding IsCodeStep}">
-                    <TextBlock Text="Two-step login" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock x:Name="CodeHintText" Classes="Caption" TextWrapping="Wrap" Text="{Binding CodeHint}" />
                     <TextBlock Text="Verification code" Margin="0,8,0,0" />
                     <TextBox x:Name="CodeBox" PlaceholderText="{Binding CodePlaceholder}" Text="{Binding Code, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
                 </StackPanel>
 
                 <StackPanel x:Name="DevicePanel" Spacing="8" IsVisible="{Binding IsDeviceStep}">
-                    <TextBlock Text="Verify this device" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Enter the code sent to your login email" />
                     <TextBlock Text="Verification code" Margin="0,8,0,0" />
                     <TextBox x:Name="DeviceCodeBox" PlaceholderText="Enter device verification code..." Text="{Binding Code, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />

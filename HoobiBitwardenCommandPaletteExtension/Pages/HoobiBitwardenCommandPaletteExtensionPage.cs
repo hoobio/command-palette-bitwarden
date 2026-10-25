@@ -1133,6 +1133,23 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     internal static bool IsPaletteOpen(Func<nint> foregroundPalette) => foregroundPalette() != 0;
 
+    internal const long ShownWindowMs = 10_000;
+
+    private long _shownTicks;
+
+    // Command Palette reads PlaceholderText only when the user navigates to the page (ListViewModel.InitializeProperties); a Dock band refresh calls GetItems without it.
+    public override string PlaceholderText
+    {
+        get
+        {
+            Volatile.Write(ref _shownTicks, Environment.TickCount64);
+            return base.PlaceholderText;
+        }
+        set => base.PlaceholderText = value;
+    }
+
+    internal static bool WasShownRecently(long shownTicks, long nowTicks) => shownTicks != 0 && nowTicks - shownTicks <= ShownWindowMs;
+
     private void TryAutoTriggerBiometric()
     {
         if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
@@ -1141,6 +1158,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         // Startup warmup fires WarmupCompleted before the palette is opened; prompting Windows Hello then shows a dialog with no context
         if (!_initialLoadStarted)
             return;
+
+        if (!WasShownRecently(Volatile.Read(ref _shownTicks), Environment.TickCount64))
+        {
+            DebugLogService.Log("Page", "Auto biometric skipped: Bitwarden page not opened by the user");
+            return;
+        }
 
         if (!IsPaletteOpen(PaletteWindow))
         {

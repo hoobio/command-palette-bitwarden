@@ -20,6 +20,8 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
 
     public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
     {
+      if (op == Ops.ListFilters)
+        throw new IpcException(IpcErrors.Invalid);
       lock (Calls)
         Calls.Add((op, payload));
       return Task.FromResult<JsonElement?>(op switch
@@ -463,7 +465,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     window.ViewModel!.Password = "ignored";
     await window.ViewModel.SubmitBiometricAsync();
 
-    Assert.Equal(new RepromptConfirmRequest("tok", null, true), IpcJson.Read(extension.Calls.Single().Payload, IpcJson.Default.RepromptConfirmRequest));
+    Assert.Equal(new RepromptConfirmRequest("tok", null, true), IpcJson.Read(extension.Calls.Single(c => c.Op == Ops.ConfirmReprompt).Payload, IpcJson.Default.RepromptConfirmRequest));
     coordinator.ShowReprompt(0, "tok", "GitHub", true).Close();
   });
 
@@ -481,7 +483,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
 
     Assert.Null(viewModel.Password);
     AvaloniaSession.WaitFor(() => extension.Ops_.Contains(Ops.CancelReprompt));
-    Assert.Equal("tok", IpcJson.Read(extension.Calls.Single().Payload, IpcJson.Default.RepromptCancelRequest).Token);
+    Assert.Equal("tok", IpcJson.Read(extension.Calls.Single(c => c.Op == Ops.CancelReprompt).Payload, IpcJson.Default.RepromptCancelRequest).Token);
     await Task.CompletedTask;
   });
 

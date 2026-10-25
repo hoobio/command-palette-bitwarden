@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using HoobiBitwarden.Ipc;
@@ -24,6 +25,8 @@ internal sealed class WindowCoordinator : IDisposable
   internal Action<nint> ReturnForeground { get; set; } = WindowAlertInterop.ReturnForeground;
 
   internal Action<Window> TakeForeground { get; set; } = WindowAlertInterop.TakeForeground;
+
+  internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlertInterop.WindowCentre;
 
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
 
@@ -210,6 +213,8 @@ internal sealed class WindowCoordinator : IDisposable
 
   private T ShowDialog<T>(Func<T> create, nint returnWindow) where T : DialogWindow
   {
+    var anchor = AnchorOf(returnWindow);
+    var created = false;
     if (!_dialogs.TryGetValue(typeof(T), out var existing))
     {
       var window = create();
@@ -218,12 +223,20 @@ internal sealed class WindowCoordinator : IDisposable
         _dialogs.Remove(typeof(T));
         ReturnForeground(window.ReturnWindow);
       };
+      if (anchor is { } point)
+      {
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Position = point;
+      }
       _dialogs[typeof(T)] = existing = window;
+      created = true;
     }
 
     if (returnWindow != 0)
       existing.ReturnWindow = returnWindow;
     existing.Show();
+    if (created && anchor is { } centre)
+      existing.CentreOnScreenOf(centre);
     if (existing.WindowState == WindowState.Minimized)
       existing.WindowState = WindowState.Normal;
     existing.Activate();

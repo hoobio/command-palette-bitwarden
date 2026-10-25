@@ -19,14 +19,11 @@
     Background="{DynamicResource WindowGroundBrush}">
     <Grid RowDefinitions="48,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" VerticalAlignment="Center" />
-            </StackPanel>
+            <TextBlock Text="Log in with your API key" Margin="24,0,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
         </Grid>
 
         <ScrollViewer Grid.Row="1">
-            <StackPanel Margin="24,8,24,16" Spacing="8">
-                <TextBlock Text="Log in with your API key" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <StackPanel Margin="24,0,24,12" Spacing="8">
                 <TextBlock Classes="Caption" TextWrapping="Wrap" Text="In the Bitwarden web vault, open Settings &gt; Security &gt; Keys and select View API key." />
                 <TextBlock Text="Client ID" Margin="0,8,0,0" />
                 <TextBox x:Name="ClientIdBox" PlaceholderText="user.xxxxxxxx-..." Text="{Binding ClientId, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
