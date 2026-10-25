@@ -32,8 +32,20 @@ internal sealed partial class ItemView : UserControl
         viewModel.PickOpenPath ??= PickOpenPathAsync;
         viewModel.Toast ??= (message, success) => ToastWindow.Show(TopLevel.GetTopLevel(this), message, success);
         viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this), viewModel.Channel);
+        viewModel.OpenRotateGenerator ??= () => GeneratorView.ShowForRotateAsync(TopLevel.GetTopLevel(this), viewModel);
       }
     };
+    AddHandler(SelectableTextBlock.CopyingToClipboardEvent, OnCopyingToClipboard);
+  }
+
+  // The extension copies the selection from its own copy of the secret, so the plaintext never reaches the clipboard from here.
+  private void OnCopyingToClipboard(object? sender, RoutedEventArgs e)
+  {
+    if (e.Source is not SelectableTextBlock { DataContext: FieldViewModel { IsSecret: true } field } block || DataContext is not ItemViewModel viewModel)
+      return;
+    e.Handled = true;
+    var start = Math.Min(block.SelectionStart, block.SelectionEnd);
+    _ = viewModel.CopySelectionAsync(field, start, Math.Abs(block.SelectionEnd - block.SelectionStart));
   }
 
   private async Task<string?> PickSavePathAsync(string suggestedName)

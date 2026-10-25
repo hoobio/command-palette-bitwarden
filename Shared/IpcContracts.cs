@@ -125,7 +125,7 @@ internal sealed record Envelope(long Id, string Type, string? Op = null, JsonEle
 
 internal sealed record ItemRequest(string Id);
 
-internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDate);
+internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDate, int? Start = null, int? Length = null);
 
 internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
@@ -186,7 +186,7 @@ internal sealed record GeneratorHistoryResponse(IReadOnlyList<GeneratedEntry> En
 
 internal sealed record HistoryEntryRequest(long Id);
 
-internal sealed record RotateRequest(string Id, DateTime RevisionDate, GeneratorOptions Options);
+internal sealed record RotateRequest(string Id, DateTime RevisionDate, GeneratorOptions? Options = null, long? EntryId = null);
 
 internal sealed record FilterRef(string Id, string Name, string? OrganizationId = null);
 

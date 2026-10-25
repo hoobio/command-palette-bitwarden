@@ -52,8 +52,12 @@ internal sealed partial class FieldViewModel : ObservableObject
   public partial string? RevealedValue { get; set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(DisplayValue))]
+  [NotifyPropertyChangedFor(nameof(DisplayValue), nameof(IsSelectableSecret), nameof(IsFixedSecret))]
   public partial bool IsRevealed { get; set; }
+
+  public bool IsSelectableSecret => IsSecret && IsMultiline && IsRevealed;
+
+  public bool IsFixedSecret => IsSecret && !IsSelectableSecret;
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(DisplayValue))]
@@ -74,6 +78,20 @@ internal sealed partial class FieldViewModel : ObservableObject
   public string DisplayValue => IsTotp
     ? TotpCode ?? Mask
     : IsSecret ? (IsRevealed ? RevealedValue ?? string.Empty : Mask) : _value ?? string.Empty;
+
+  internal bool IsHeld { get; private set; }
+
+  internal Task PeekAsync()
+  {
+    IsHeld = true;
+    return _owner?.PeekAsync(this) ?? Task.CompletedTask;
+  }
+
+  internal void Unpeek()
+  {
+    IsHeld = false;
+    Wipe();
+  }
 
   internal void Wipe()
   {

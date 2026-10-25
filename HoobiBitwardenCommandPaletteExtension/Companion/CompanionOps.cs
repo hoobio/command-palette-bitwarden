@@ -136,9 +136,9 @@ internal sealed partial class CompanionOps : IDisposable
       case Ops.Copy:
         var copy = IpcJson.Read(payload, IpcJson.Default.FieldRequest);
         if (copy.Field?.StartsWith(ItemFields.HistoryPrefix, StringComparison.Ordinal) == true)
-          await CopyPasswordHistoryAsync(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
+          await CopyPasswordHistoryAsync(copy.Id, copy.Start is null && copy.Length is null ? copy.Field : throw new IpcException(IpcErrors.Invalid), copy.RevisionDate, IsVerified(copy.Id, verifiedId));
         else
-          Copy(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
+          Copy(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId), copy.Start, copy.Length);
         return null;
       case Ops.GetEditableItem:
         var editable = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
@@ -311,17 +311,24 @@ internal sealed partial class CompanionOps : IDisposable
     return (secret ?? throw new IpcException(IpcErrors.Invalid)).Reveal();
   }
 
-  internal void Copy(string? id, string? field, DateTime? revisionDate = null, bool verified = false)
+  internal void Copy(string? id, string? field, DateTime? revisionDate = null, bool verified = false, int? start = null, int? length = null)
   {
     var item = FindGranted(id, revisionDate, verified);
-    if (field == ItemFields.Totp)
+    var ranged = start is not null || length is not null;
+    if (field == ItemFields.Totp && !ranged)
     {
       _copyText(ComputeTotp(item).Code, true);
       return;
     }
 
-    var (secret, text) = Resolve(item, field);
-    if (secret != null)
+    var (secret, text) = field == ItemFields.Totp ? (null, null) : Resolve(item, field);
+    if (ranged)
+    {
+      if (secret is null || start is not { } from || length is not { } count || from < 0 || count <= 0 || from > secret.Length - count)
+        throw new IpcException(IpcErrors.Invalid);
+      _copyText(secret.Use(value => new string(value.Slice(from, count))), true);
+    }
+    else if (secret != null)
       _copySecret(secret);
     else
       _copyText(text!, item.Reprompt == 1);

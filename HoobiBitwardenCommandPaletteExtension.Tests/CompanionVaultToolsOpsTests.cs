@@ -415,6 +415,27 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
   }
 
   [Fact]
+  public async Task Rotate_WithAGeneratedEntry_SavesThatExactValue_AndKeepsOneHistoryRow()
+  {
+    var id = NewId();
+    var h = new Harness(Login(id));
+    var generated = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse);
+    h.Bw.Generated = "Zyxwvutsrqp987654321";
+
+    await h.Handle(Ops.RotatePassword, new RotateRequest(id, RevisionDate, EntryId: generated.EntryId), IpcJson.Default.RotateRequest);
+
+    Assert.Single(h.Bw.Args, a => a.StartsWith("generate", StringComparison.Ordinal));
+    var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Bw.Stdin))))!;
+    Assert.Equal(generated.Value, sent["login"]!["password"]!.GetValue<string>());
+    Assert.Equal((generated.Value, true), Assert.Single(h.TextCopies));
+    Assert.Single(h.Ops.ListGeneratorHistory().Entries);
+
+    Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.RotatePassword, new RotateRequest(id, h.Ops.GetItem(id).RevisionDate, EntryId: generated.EntryId + 1), IpcJson.Default.RotateRequest));
+    Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.RotatePassword, new RotateRequest(id, RevisionDate), IpcJson.Default.RotateRequest));
+    Assert.Single(h.Bw.Stdin);
+  }
+
+  [Fact]
   public async Task Rotate_ThatBwDoesNotConfirm_CopiesNothing()
   {
     var id = NewId();

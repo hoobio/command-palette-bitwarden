@@ -192,6 +192,29 @@ public class CompanionOpsTests
   }
 
   [Fact]
+  public async Task Copy_WithARange_CopiesThatSliceOfTheSecret_AsSensitive()
+  {
+    var id = NewId();
+    var item = Login(id);
+    var h = new Harness(item);
+
+    await h.Ops.HandleAsync(Ops.Copy, IpcJson.ToElement(new FieldRequest(id, ItemFields.Notes, item.RevisionDate, 7, 4), IpcJson.Default.FieldRequest), TestContext.Current.CancellationToken);
+
+    Assert.Equal(("note", true), Assert.Single(h.TextCopies));
+    Assert.Empty(h.SecretCopies);
+    foreach (var (field, start, length) in new (string, int?, int?)[]
+    {
+      (ItemFields.Notes, 8, 4), (ItemFields.Notes, -1, 2), (ItemFields.Notes, 0, 0), (ItemFields.Notes, 0, null), (ItemFields.Notes, int.MaxValue, 2),
+      (ItemFields.Username, 0, 2), (ItemFields.Totp, 0, 2),
+    })
+      Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.Copy(id, field, start: start, length: length))));
+    var history = await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.Copy,
+      IpcJson.ToElement(new FieldRequest(id, ItemFields.HistoryPrefix + "0", item.RevisionDate, 0, 1), IpcJson.Default.FieldRequest), TestContext.Current.CancellationToken));
+    Assert.Equal(IpcErrors.Invalid, history.Code);
+    Assert.Single(h.TextCopies);
+  }
+
+  [Fact]
   public void Copy_MissingValue_IsNotFound()
   {
     var id = NewId();

@@ -5,6 +5,24 @@
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:GeneratorViewModel">
     <StackPanel>
+        <Border x:Name="CurrentPasswordGroup" Classes="Group" Margin="0,0,0,12" IsVisible="{Binding HasCurrentPassword}">
+            <Border Classes="Row Field" DataContext="{Binding CurrentPassword}" x:DataType="vm:FieldViewModel">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                        <TextBlock Classes="FieldLabel" Text="Current password" />
+                        <TextBlock x:Name="CurrentPasswordText" Text="{Binding DisplayValue}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" FontSize="13" LetterSpacing="1" />
+                    </StackPanel>
+                    <Button x:Name="PeekButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" ToolTip.Tip="Hold to show" AutomationProperties.Name="Hold to show">
+                        <Panel>
+                            <TextBlock Text="{StaticResource Glyph.Eye}" IsVisible="{Binding !IsRevealed}" />
+                            <TextBlock Classes="Icon Accent" Text="{StaticResource Glyph.EyeOff}" IsVisible="{Binding IsRevealed}" />
+                        </Panel>
+                    </Button>
+                    <Button x:Name="CopyCurrentButton" Grid.Column="2" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy" AutomationProperties.Name="Copy current password" />
+                </Grid>
+            </Border>
+        </Border>
+
         <TabStrip x:Name="KindTabs" SelectedIndex="{Binding SelectedTab}">
             <TabStripItem Content="Password" />
             <TabStripItem Content="Passphrase" />

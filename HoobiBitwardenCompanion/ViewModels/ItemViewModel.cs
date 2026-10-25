@@ -13,6 +13,7 @@ namespace HoobiBitwardenCompanion.ViewModels;
 internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 {
   private const string HistoryGroup = "Password history";
+  private const string SavingChanges = "Saving changes…";
 
   private static readonly Dictionary<string, Bitmap?> Icons = new(StringComparer.OrdinalIgnoreCase);
 
@@ -55,6 +56,14 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   internal Func<Task<string?>>? PickOpenPath { get; set; }
 
   internal Func<Task<string?>>? OpenGenerator { get; set; }
+
+  internal Func<Task<long?>>? OpenRotateGenerator { get; set; }
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsBusy))]
+  public partial string? BusyMessage { get; private set; }
+
+  public bool IsBusy => BusyMessage is not null && !IsPrompting;
 
   internal Action<string, bool>? Toast { get; set; }
 
@@ -226,6 +235,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _pendingWrite = pending;
     PasswordError = null;
     OnPropertyChanged(nameof(IsPrompting));
+    OnPropertyChanged(nameof(IsBusy));
     OnPropertyChanged(nameof(CanAttach));
     OnPropertyChanged(nameof(ShowAttachments));
     OnPropertyChanged(nameof(CanShowHistory));
@@ -396,8 +406,19 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     });
   }
 
+  internal Task PeekAsync(FieldViewModel field) => RunAsync(Ops.Reveal, FieldPayload(field.Key), reply =>
+  {
+    if (!field.IsHeld)
+      return;
+    field.RevealedValue = IpcJson.Read(reply, IpcJson.Default.SecretResponse).Value;
+    field.IsRevealed = true;
+  });
+
   public Task CopyAsync(FieldViewModel field) =>
     RunAsync(Ops.Copy, FieldPayload(field.Key), _ => Notify($"Copied {field.Label}"));
+
+  public Task CopySelectionAsync(FieldViewModel field, int start, int length) =>
+    RunAsync(Ops.Copy, FieldPayload(field.Key, start, length), _ => Notify("Copied selected text"));
 
   public async Task OpenUriAsync(FieldViewModel field)
   {
@@ -448,7 +469,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     if (Editor is not { } editor || editor.Validate() is not null)
       return;
     var item = editor.ToDto();
-    var (ok, reply, error) = await WriteAsync(Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem));
+    var (ok, reply, error) = await WriteAsync(Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem), SavingChanges);
     if (!ok)
     {
       await OnEditFailedAsync(error);
@@ -461,7 +482,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       && (organization != editor.OriginalOrganizationId || !item.CollectionIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(editor.OriginalCollectionIds)))
     {
       var request = new WriteRequest(saved.Id, saved.RevisionDate, OrganizationId: organization, CollectionIds: item.CollectionIds);
-      (ok, reply, error) = await WriteAsync(editor.OriginalOrganizationId is null ? Ops.MoveItem : Ops.SetCollections, IpcJson.ToElement(request, IpcJson.Default.WriteRequest));
+      (ok, reply, error) = await WriteAsync(editor.OriginalOrganizationId is null ? Ops.MoveItem : Ops.SetCollections, IpcJson.ToElement(request, IpcJson.Default.WriteRequest), SavingChanges);
       if (!ok)
       {
         await OnEditFailedAsync(error);
@@ -543,7 +564,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     async Task<string?> AttemptAsync(string op, bool permanent)
     {
       var payload = IpcJson.ToElement(new WriteRequest(Id, _revisionDate, permanent), IpcJson.Default.WriteRequest);
-      var (ok, _, error) = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
+      var busy = permanent ? "Deleting the item…" : op == Ops.ArchiveItem ? "Archiving the item…" : "Moving the item to the trash…";
+      var (ok, _, error) = await BusyAsync(busy, () => SendAsync(op, payload, Timeout.InfiniteTimeSpan));
       var message = ErrorMessage;
       ErrorMessage = null;
       if (ok || error == IpcErrors.Reprompt)
@@ -567,10 +589,23 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private string ArchiveLabel => _archiveUnavailable || _inOrganization ? "Move to Trash" : "Archive";
 
-  private async Task<(bool Ok, JsonElement? Reply, string? Error)> WriteAsync(string op, JsonElement payload)
+  private Task<(bool Ok, JsonElement? Reply, string? Error)> WriteAsync(string op, JsonElement payload, string busyMessage) => BusyAsync(busyMessage, async () =>
   {
     var sent = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
     return sent.Error == IpcErrors.Reprompt ? await RetryWithPasswordAsync(op, payload) : sent;
+  });
+
+  private async Task<T> BusyAsync<T>(string message, Func<Task<T>> run)
+  {
+    BusyMessage = message;
+    try
+    {
+      return await run();
+    }
+    finally
+    {
+      BusyMessage = null;
+    }
   }
 
   private async Task<(bool Ok, JsonElement? Reply, string? Error)> RetryWithPasswordAsync(string op, JsonElement payload)
@@ -591,12 +626,10 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   [RelayCommand]
   private async Task RotateAsync()
   {
-    if (!await AskAsync("Rotate password", $"Replace the password for {Title}? The old password is kept in password history.", "Rotate", "Cancel"))
+    if (OpenRotateGenerator is null || await OpenRotateGenerator() is not { } entryId)
       return;
-    var options = CompanionSettings.LoadGenerator();
-    if (options.Kind is not (GeneratorKinds.Password or GeneratorKinds.Passphrase))
-      options = options with { Kind = GeneratorKinds.Password };
-    var (ok, _, error) = await WriteAsync(Ops.RotatePassword, IpcJson.ToElement(new RotateRequest(Id, _revisionDate, options), IpcJson.Default.RotateRequest));
+    var (ok, _, error) = await WriteAsync(Ops.RotatePassword, IpcJson.ToElement(new RotateRequest(Id, _revisionDate, EntryId: entryId), IpcJson.Default.RotateRequest),
+      "Saving the new password to Bitwarden…");
     if (ok)
     {
       await LoadAsync();
@@ -629,7 +662,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (PickOpenPath is null || await PickOpenPath() is not { Length: > 0 } path)
       return;
-    var (ok, _, error) = await WriteAsync(Ops.UploadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, Path: path), IpcJson.Default.AttachmentRequest));
+    var (ok, _, error) = await WriteAsync(Ops.UploadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, Path: path), IpcJson.Default.AttachmentRequest), "Uploading attachment…");
     if (ok)
     {
       await LoadAsync();
@@ -645,7 +678,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (PickSavePath is null || await PickSavePath(attachment.FileName) is not { Length: > 0 } path)
       return;
-    var (ok, _, error) = await WriteAsync(Ops.DownloadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id, path), IpcJson.Default.AttachmentRequest));
+    var (ok, _, error) = await WriteAsync(Ops.DownloadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id, path), IpcJson.Default.AttachmentRequest), "Downloading attachment…");
     if (ok)
       Notify($"Saved {attachment.FileName}");
     else if (error == IpcErrors.Stale)
@@ -663,7 +696,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     request.Danger = async () =>
     {
       var payload = IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id), IpcJson.Default.AttachmentRequest);
-      var (ok, _, error) = await SendAsync(Ops.DeleteAttachment, payload, Timeout.InfiniteTimeSpan);
+      var (ok, _, error) = await BusyAsync("Deleting attachment…", () => SendAsync(Ops.DeleteAttachment, payload, Timeout.InfiniteTimeSpan));
       var message = ErrorMessage;
       ErrorMessage = null;
       if (ok || error == IpcErrors.Reprompt)
@@ -807,7 +840,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private JsonElement ItemPayload => IpcJson.ToElement(new ItemRequest(Id), IpcJson.Default.ItemRequest);
 
-  private JsonElement FieldPayload(string field) => IpcJson.ToElement(new FieldRequest(Id, field, _revisionDate), IpcJson.Default.FieldRequest);
+  private JsonElement FieldPayload(string field, int? start = null, int? length = null) =>
+    IpcJson.ToElement(new FieldRequest(Id, field, _revisionDate, start, length), IpcJson.Default.FieldRequest);
 
   private static FieldViewModel HistoryField(string label, DateTime value) =>
     new(null, new FieldDto(label, label, "Item history", value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), false), canCopy: false);

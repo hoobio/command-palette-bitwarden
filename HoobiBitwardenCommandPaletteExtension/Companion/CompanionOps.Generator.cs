@@ -37,22 +37,20 @@ internal sealed partial class CompanionOps
   internal void CopyGenerated(long id)
   {
     RequireUnlocked();
-    ProtectedSecret? value;
-    lock (_historyLock)
-      value = _history.Find(h => h.Entry.Id == id).Value;
-    _copySecret(value ?? throw new IpcException(IpcErrors.NotFound));
+    _copySecret(FindGenerated(id));
   }
 
   internal async Task<SavedResponse> RotatePasswordAsync(RotateRequest request, bool verified = false)
   {
-    if (request.Options?.Kind is not (GeneratorKinds.Password or GeneratorKinds.Passphrase))
+    var options = request.Options;
+    if (request.EntryId is null && options?.Kind is not (GeneratorKinds.Password or GeneratorKinds.Passphrase))
       throw new IpcException(IpcErrors.Invalid);
-    var args = BuildGenerateArgs(request.Options);
+    var args = request.EntryId is null ? BuildGenerateArgs(options!) : null;
     var item = Find(request.Id);
     if (item.Type != BitwardenItemType.Login || item.DeletedDate is not null || item.ArchivedDate is not null)
       throw new IpcException(IpcErrors.Invalid);
     await RequireWriteGrantAsync(item.Id, verified);
-    var password = RequireGenerated(request.Options, await _service.GenerateAsync(args));
+    var password = args is null ? FindGenerated(request.EntryId!.Value).Reveal() : RequireGenerated(options!, await _service.GenerateAsync(args));
     var saved = await _service.EditItemAsync(item.Id, request.RevisionDate, current =>
     {
       if (Int(current, "type") != 1)
@@ -62,8 +60,17 @@ internal sealed partial class CompanionOps
     });
     var response = Saved(saved) ?? throw new IpcException(IpcErrors.Failed);
     _copyText(password, true);
-    Remember(password, request.Options.Kind);
+    if (args is not null)
+      Remember(password, options!.Kind);
     return response;
+  }
+
+  private ProtectedSecret FindGenerated(long id)
+  {
+    ProtectedSecret? value;
+    lock (_historyLock)
+      value = _history.Find(h => h.Entry.Id == id).Value;
+    return value ?? throw new IpcException(IpcErrors.NotFound);
   }
 
   internal static string BuildGenerateArgs(GeneratorOptions options)
