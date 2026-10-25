@@ -199,7 +199,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting DebugLogging { get; } = new(
         "debugLogging",
         "Debug Logging",
-        "Show a 'Copy Debug Log' item in the vault browser to help diagnose problems. Logs are collected in memory whether or not this is on, and cleared when the extension restarts",
+        "Show a 'Copy Debug Log' item in the vault browser and write the log to %LOCALAPPDATA%\\HoobiBitwardenCommandPalette\\logs to help diagnose problems. Log files are deleted after 7 days. Logs are collected in memory whether or not this is on",
         false);
 
     // Settings.RaiseSettingsChanged is internal to the SDK, and the public Settings.Update(json) sets values without raising it.
@@ -272,6 +272,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         LoadSettings();
         SyncClipboardSettings();
         SyncRepromptSettings();
+        DebugLogService.LogDirectory = Path.Combine(Path.GetDirectoryName(FilePath) is { Length: > 0 } dir ? dir : SettingsDir, "logs");
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("startup");
     }

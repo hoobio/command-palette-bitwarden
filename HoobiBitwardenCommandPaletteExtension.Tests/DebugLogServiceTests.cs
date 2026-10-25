@@ -11,6 +11,7 @@ public class DebugLogServiceTests : IDisposable
   public DebugLogServiceTests()
   {
     DebugLogService.Clear();
+    DebugLogService.LogDirectory = null;
     DebugLogService.Enabled = true;
   }
 
@@ -18,7 +19,69 @@ public class DebugLogServiceTests : IDisposable
   {
     DebugLogService.Clear();
     DebugLogService.Enabled = false;
+    DebugLogService.LogDirectory = null;
     GC.SuppressFinalize(this);
+  }
+
+  private static string NewLogDirectory() => Path.Combine(Path.GetTempPath(), $"bw_logs_{Guid.NewGuid():N}");
+
+  [Fact]
+  public void Log_WhenEnabledWithADirectory_AppendsToTheDailyFile()
+  {
+    var directory = NewLogDirectory();
+    try
+    {
+      DebugLogService.LogDirectory = directory;
+      DebugLogService.Log("Disk", "first");
+      DebugLogService.Log("Disk", "second");
+
+      var file = Assert.Single(Directory.GetFiles(directory, DebugLogService.FilePrefix + "*.log"));
+      var text = File.ReadAllText(file);
+      Assert.Contains("[Disk] first", text, StringComparison.Ordinal);
+      Assert.Contains("[Disk] second", text, StringComparison.Ordinal);
+    }
+    finally
+    {
+      Directory.Delete(directory, recursive: true);
+    }
+  }
+
+  [Fact]
+  public void Log_WhenDisabled_DoesNotWriteToDisk()
+  {
+    var directory = NewLogDirectory();
+    DebugLogService.Enabled = false;
+    DebugLogService.LogDirectory = directory;
+    DebugLogService.Log("Disk", "not written");
+    Assert.False(Directory.Exists(directory));
+  }
+
+  [Fact]
+  public void Purge_DeletesFilesOlderThanTheRetention_AndKeepsNewerOnes()
+  {
+    var directory = NewLogDirectory();
+    Directory.CreateDirectory(directory);
+    try
+    {
+      var now = DateTime.UtcNow;
+      var old = Path.Combine(directory, DebugLogService.FilePrefix + "old.log");
+      var recent = Path.Combine(directory, DebugLogService.FilePrefix + "recent.log");
+      var other = Path.Combine(directory, "other.log");
+      foreach (var path in new[] { old, recent, other })
+        File.WriteAllText(path, "x");
+      File.SetLastWriteTimeUtc(old, now.AddDays(-(DebugLogService.RetentionDays + 1)));
+      File.SetLastWriteTimeUtc(other, now.AddDays(-30));
+
+      DebugLogService.Purge(directory, now);
+
+      Assert.False(File.Exists(old));
+      Assert.True(File.Exists(recent));
+      Assert.True(File.Exists(other));
+    }
+    finally
+    {
+      Directory.Delete(directory, recursive: true);
+    }
   }
 
   [Fact]

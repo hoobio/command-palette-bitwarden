@@ -35,9 +35,18 @@ public class CompanionLoginOpsTests
   {
     var (svc, factory, settingsPath) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "session_key_abc\n", exitCode: 0));
+    for (var i = 0; i < 4; i++)
+      factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.", exitCode: 0));
+    for (var i = 0; i < 4; i++)
+      factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     var statusChanged = 0;
-    svc.StatusChanged += () => statusChanged++;
+    var refreshingWhenNotified = false;
+    svc.StatusChanged += () =>
+    {
+      statusChanged++;
+      refreshingWhenNotified |= svc.IsRefreshing || svc.IsCacheLoaded;
+    };
     using var ops = new CompanionOps(svc);
     try
     {
@@ -47,7 +56,9 @@ public class CompanionLoginOpsTests
       Assert.Equal(new LoginResponse(true, null), reply);
       Assert.True(svc.IsUnlocked);
       Assert.True(statusChanged >= 1);
-      Assert.Contains("sync", factory.LastArgs ?? string.Empty, StringComparison.Ordinal);
+      Assert.True(refreshingWhenNotified);
+      lock (factory.AllArgs)
+        Assert.Contains("sync", factory.AllArgs);
     }
     finally
     {

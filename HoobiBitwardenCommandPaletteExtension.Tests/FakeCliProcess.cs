@@ -126,6 +126,8 @@ internal sealed class FakeProcessFactory
 
   public ICliProcess Create(System.Diagnostics.ProcessStartInfo psi)
   {
+    lock (AllArgs)
+      AllArgs.Add(psi.Arguments);
     if (_queue.Count == 0)
       throw new InvalidOperationException($"No fake process queued for: {psi.Arguments}");
     LastArgs = psi.Arguments;
@@ -134,5 +136,6 @@ internal sealed class FakeProcessFactory
   }
 
   public string? LastArgs { get; private set; }
+  public List<string> AllArgs { get; } = [];
   public System.Diagnostics.ProcessStartInfo? LastPsi { get; private set; }
 }

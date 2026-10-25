@@ -68,9 +68,10 @@ internal sealed partial class CompanionOps
   {
     try
     {
-      var sync = _service.SyncVaultAsync();
+      var refresh = _service.RefreshCacheAsync();
       _service.NotifyStatusChanged();
-      await sync;
+      await refresh;
+      await _service.SyncVaultAsync();
     }
     catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
     {
