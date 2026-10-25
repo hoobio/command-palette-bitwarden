@@ -19,7 +19,7 @@ Every scroll area scrolls smoothly with the mouse wheel. Press the middle mouse 
 
 ## Item window
 
-The item window shows a toolbar at the top. **Rotate password** is a text button on the left, for a login that has a password. The pencil button (**Edit**) and the red trash-can button (**Delete**) are on the right. The toolbar buttons are disabled while the master password panel shows. Below the toolbar are the item name, its website or card brand icon (or its type icon) and badges for the folder, organisation, favourite and master password re-prompt. The title bar shows the same icon and the item name. The icons come from the same cache as Command Palette. The fields are grouped as Bitwarden Desktop groups them. Each group is one block of rows with its name above it:
+The title bar shows the item's icon and name, then the pencil button (**Edit**) and the red trash-can button (**Delete**) to the left of the close button. Edit and Delete have the size and hover style of caption buttons, and are disabled while the master password panel shows. At the top of the window are the item name, its website or card brand icon (or its type icon) and badges for the folder, organisation, favourite and master password re-prompt. The name is shortened when the window is narrow. For a login that has a password, a **Rotate** link is next to the **Password** label. The icons come from the same cache as Command Palette. The fields are grouped as Bitwarden Desktop groups them. Each group is one block of rows with its name above it:
 
 | Item type | Groups |
 |-----------|--------|
@@ -40,7 +40,7 @@ All item types also show Custom fields, Additional options (notes) and Item hist
 - A failed request shows as a yellow message at the top of the item. Red is used only for actions that you cannot undo. When an action fails because the item changed in the vault, the window reloads the item and a yellow message at the top says so.
 - The result of a successful action (copy, save, rotate, attach, download or delete an attachment, copy from the generator) shows in a small toast at the bottom centre of the monitor that holds the window, above the taskbar, as in Command Palette. The toast names the field or file, never its value. It does not take focus, has no taskbar button and goes away after about 2 seconds. A new result replaces the text and starts the 2 seconds again.
 
-- While a change that goes to Bitwarden runs (save, rotate, attachment upload, download or delete, archive or delete), a progress bar and a caption show under the toolbar, for example "Saving the new password to Bitwarden…" or "Uploading attachment…". The caption names the action, not each step, because the extension sends one reply when the action is done.
+- While a change that goes to Bitwarden runs (save, rotate, attachment upload, download or delete, archive or delete), a progress bar and a caption show under the item header, for example "Saving the new password to Bitwarden…" or "Uploading attachment…". The caption names the action, not each step, because the extension sends one reply when the action is done.
 
 When the vault changes, for example after a sync, every item window loads the new data.
 
@@ -76,7 +76,7 @@ All item types also have name, folder, favourite, master password re-prompt, not
 
 Bank account, driver's licence and passport items show read-only, with no **Edit** button.
 
-- **Save** and **Cancel** replace the toolbar while the form is open, and the header shows an **Editing** badge.
+- **Save** and **Cancel** show under the item header while the form is open, and the header shows an **Editing** badge.
 - **Save** checks that the name is set, each new custom field has a name and the expiration month is 1 to 12. A missing name shows a yellow ring and a message below the name; the other checks show a yellow message above the form. A website can be any text, as in Bitwarden. A boolean custom field keeps its stored value until you change the switch. The extension then saves the item and reads it back to confirm the change.
 - **Cancel**, or closing the window, asks before it discards changes that are not saved.
 - If the item changed in the vault after you started to edit it, for example from another device, **Save** asks you to **Reload** the item and discard your changes, or **Keep editing**. The extension syncs the vault first, so **Reload** shows the server version.
@@ -113,7 +113,7 @@ The generator window has **Save as new item** at the bottom. It opens a [new ite
 
 ## Quick Rotate
 
-**Rotate password** (in the item window of a login that has a password, or in the Command Palette more-commands menu) opens the **Rotate password** dialog in the item window:
+**Rotate** (next to the **Password** label in the item window of a login that has a password) or **Rotate password** (in the Command Palette more-commands menu) opens the **Rotate password** dialog in the item window:
 
 1. The **Current password** row is at the top. It is masked. Press and hold the eye button to show it; it is masked and cleared again when you release the button. The copy button copies it through the extension.
 2. The generator is below it, with the saved options. Change the options or select **Regenerate** until you have the password that you want.
