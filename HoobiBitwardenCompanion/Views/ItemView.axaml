@@ -128,13 +128,20 @@
                             </StackPanel>
                             <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Master password" IsEnabled="{Binding !IsVerifying}" KeyDown="OnPasswordKeyDown" />
                             <TextBlock x:Name="PasswordErrorText" Classes="Caption Warn" TextWrapping="Wrap" Text="{Binding PasswordError}" IsVisible="{Binding PasswordError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                            <Button x:Name="VerifyButton" Margin="0,8,0,0" Theme="{StaticResource AccentButtonStyle}" IsEnabled="{Binding !IsVerifying}" Click="OnVerifyClick">
-                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-                                    <ui:FAProgressRing x:Name="VerifyRing" Width="14" Height="14" IsIndeterminate="True" IsVisible="{Binding IsVerifying}" />
-                                    <TextBlock Text="Verify" />
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="BiometricButton" Content="Use Windows Hello" IsVisible="{Binding BiometricAvailable}" IsEnabled="{Binding !IsVerifying}" Click="OnBiometricClick" />
+                            <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,*">
+                                <Button x:Name="VerifyButton" Theme="{StaticResource AccentButtonStyle}" IsEnabled="{Binding !IsVerifying}" Click="OnVerifyClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                        <ui:FAProgressRing x:Name="VerifyRing" Width="14" Height="14" IsIndeterminate="True" IsVisible="{Binding IsVerifying}" />
+                                        <TextBlock Text="Verify" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="BiometricButton" Grid.Column="1" HorizontalAlignment="Right" IsVisible="{Binding BiometricAvailable}" IsEnabled="{Binding !IsVerifying}" Click="OnBiometricClick" ToolTip.Tip="Verify with Windows Hello">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.Fingerprint}" FontSize="16" VerticalAlignment="Center" />
+                                        <TextBlock Text="Use Windows Hello" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
 
                         </StackPanel>
                     </Border>
