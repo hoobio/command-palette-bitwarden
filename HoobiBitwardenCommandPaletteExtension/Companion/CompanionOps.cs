@@ -93,7 +93,7 @@ internal sealed partial class CompanionOps : IDisposable
         case Ops.CreateItem:
           return IpcJson.ToElement(await CreateItemAsync(IpcJson.Read(payload, IpcJson.Default.EditableItem)), IpcJson.Default.SavedResponse);
         case Ops.Generate:
-          return IpcJson.ToElement(await GenerateAsync(IpcJson.Read(payload, IpcJson.Default.GeneratorOptions)), IpcJson.Default.GeneratedResponse);
+          return IpcJson.ToElement(Generate(IpcJson.Read(payload, IpcJson.Default.GeneratorOptions)), IpcJson.Default.GeneratedResponse);
         case Ops.ListGeneratorHistory:
           return IpcJson.ToElement(ListGeneratorHistory(), IpcJson.Default.GeneratorHistoryResponse);
         case Ops.CopyGenerated:

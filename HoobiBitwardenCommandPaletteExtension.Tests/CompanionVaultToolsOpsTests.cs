@@ -31,7 +31,6 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     public List<string> Args { get; } = [];
     public List<string> Stdin { get; } = [];
     public string? AttachmentError { get; set; }
-    public string Generated { get; set; } = "Abcdefghij0123456789";
     public Func<string, FakeCliProcess?>? Override { get; set; }
     public Action<JsonObject>? OnEdit { get; set; }
 
@@ -49,8 +48,6 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
         {
           case "sync":
             return new FakeCliProcess("Syncing complete.\n");
-          case "generate":
-            return new FakeCliProcess(Generated + "\n");
           case "list":
             return new FakeCliProcess((parts[1] switch
             {
@@ -307,47 +304,23 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     Assert.Empty(h.Bw.Args);
   }
 
-  private static readonly HashSet<string> AllowedFlags = ["-u", "-l", "-n", "-s", "-ul", "-uln", "-ulns", "-uls", "-un", "-ns", "--length", "--minNumber", "--minSpecial", "--ambiguous",
-    "--passphrase", "--words", "--separator", "--capitalize", "--includeNumber"];
-
-  [Theory]
-  [InlineData("generate -ulns --length 20 --minNumber 1 --minSpecial 1 --ambiguous")]
-  public void BuildGenerateArgs_DefaultsToBitwardensPassword(string expected) =>
-    Assert.Equal(expected, CompanionOps.BuildGenerateArgs(new GeneratorOptions()));
-
   [Fact]
-  public void BuildGenerateArgs_UsesOnlyAllowlistedFlagsFromTheDto()
+  public void RequireGenerated_RejectsValuesThatDoNotMatchTheOptions()
   {
-    Assert.Equal("generate -ulns --length 32 --minNumber 2 --minSpecial 3 --ambiguous",
-      CompanionOps.BuildGenerateArgs(new GeneratorOptions(Length: 32, Special: true, MinNumber: 2, MinSpecial: 3, AvoidAmbiguous: true)));
-    Assert.Equal("generate -s --length 5", CompanionOps.BuildGenerateArgs(new GeneratorOptions(Length: 5, Uppercase: false, Lowercase: false, Numbers: false, Special: true, MinSpecial: 0, AvoidAmbiguous: false)));
-    Assert.Equal("generate --passphrase --words 4", CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase)));
-    Assert.Equal("generate --passphrase --words 6 --separator _ --capitalize --includeNumber",
-      CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 6, Separator: "_", Capitalize: true, IncludeNumber: true)));
-    Assert.Equal("generate --passphrase --words 3 --separator space", CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 3, Separator: " ")));
-    Assert.Equal("generate --passphrase --words 3 --separator empty", CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 3, Separator: "")));
-
-    var noisy = new GeneratorOptions(GeneratorKinds.Password, Length: 64, Special: true, MinNumber: 9, MinSpecial: 9, AvoidAmbiguous: true);
-    Assert.All(CompanionOps.BuildGenerateArgs(noisy).Split(' ').Skip(1).Where(t => t.StartsWith('-')), t => Assert.Contains(t, AllowedFlags));
+    Assert.Equal("Abcdefghij0123456789", CompanionOps.RequireGenerated(new GeneratorOptions(), "Abcdefghij0123456789"));
+    Assert.Equal(IpcErrors.Failed, Assert.Throws<IpcException>(() => CompanionOps.RequireGenerated(new GeneratorOptions(), "short")).Code);
+    Assert.Equal(IpcErrors.Failed, Assert.Throws<IpcException>(() => CompanionOps.RequireGenerated(new GeneratorOptions(GeneratorKinds.Passphrase), "two words")).Code);
+    Assert.Equal("two words", CompanionOps.RequireGenerated(new GeneratorOptions(GeneratorKinds.Passphrase, Separator: " "), "two words"));
   }
 
-  [Theory]
-  [InlineData(GeneratorKinds.Password, 4, 4, "-", 1, 1, true)]
-  [InlineData(GeneratorKinds.Password, 129, 4, "-", 1, 1, true)]
-  [InlineData(GeneratorKinds.Password, 20, 4, "-", 10, 1, true)]
-  [InlineData(GeneratorKinds.Password, 20, 4, "-", 1, -1, true)]
-  [InlineData(GeneratorKinds.Password, 20, 4, "-", 1, 1, false)]
-  [InlineData(GeneratorKinds.Passphrase, 20, 2, "-", 1, 1, true)]
-  [InlineData(GeneratorKinds.Passphrase, 20, 21, "-", 1, 1, true)]
-  [InlineData(GeneratorKinds.Passphrase, 20, 4, "\" --raw", 1, 1, true)]
-  [InlineData(GeneratorKinds.Passphrase, 20, 4, "{", 1, 1, true)]
-  [InlineData(GeneratorKinds.Passphrase, 20, 4, "&", 1, 1, true)]
-  [InlineData(GeneratorKinds.Passphrase, 20, 4, "ab", 1, 1, true)]
-  [InlineData("username", 20, 4, "-", 1, 1, true)]
-  public void BuildGenerateArgs_RejectsOutOfRangeOptions(string kind, int length, int words, string separator, int minNumber, int minSpecial, bool anyClass)
+  [Fact]
+  public async Task Generate_RejectsOptionsItCannotMeet()
   {
-    var options = new GeneratorOptions(kind, length, anyClass, anyClass, anyClass, false, minNumber, minSpecial, Words: words, Separator: separator);
-    Assert.Equal(IpcErrors.Invalid, Assert.Throws<IpcException>(() => CompanionOps.BuildGenerateArgs(options)).Code);
+    var h = new Harness();
+
+    Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.Generate, new GeneratorOptions(Length: 4), IpcJson.Default.GeneratorOptions));
+    Assert.Equal(IpcErrors.Failed, await h.Fails(Ops.Generate, new GeneratorOptions(Length: 5, Special: true, MinNumber: 9), IpcJson.Default.GeneratorOptions));
+    Assert.Empty(h.Ops.ListGeneratorHistory().Entries);
   }
 
   [Fact]
@@ -357,8 +330,8 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
 
     var generated = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse);
 
-    Assert.Equal("Abcdefghij0123456789", generated.Value);
-    Assert.Equal("generate -ulns --length 20 --minNumber 1 --minSpecial 1 --ambiguous", Assert.Single(h.Bw.Args));
+    Assert.Equal(20, generated.Value.Length);
+    Assert.Empty(h.Bw.Args);
     var history = IpcJson.Read(await h.Ops.HandleAsync(Ops.ListGeneratorHistory, null, TestContext.Current.CancellationToken), IpcJson.Default.GeneratorHistoryResponse);
     var entry = Assert.Single(history.Entries);
     Assert.Equal((generated.EntryId, GeneratorKinds.Password), (entry.Id, entry.Kind));
@@ -366,11 +339,6 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
 
     await h.Handle(Ops.CopyGenerated, new HistoryEntryRequest(entry.Id), IpcJson.Default.HistoryEntryRequest);
     Assert.Equal(generated.Value, Assert.Single(h.SecretCopies));
-
-    h.Bw.Generated = "short";
-    Assert.Equal(IpcErrors.Failed, await h.Fails(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions));
-    h.Bw.Generated = "two words";
-    Assert.Equal(IpcErrors.Failed, await h.Fails(Ops.Generate, new GeneratorOptions(GeneratorKinds.Passphrase), IpcJson.Default.GeneratorOptions));
   }
 
   [Fact]
@@ -406,12 +374,13 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     var saved = IpcJson.Read(await h.Handle(Ops.RotatePassword, Rotate(id), IpcJson.Default.RotateRequest), IpcJson.Default.SavedResponse);
 
     Assert.Equal(id, saved.Id);
-    Assert.Equal(["generate -ulns --length 20 --minNumber 1 --minSpecial 1 --ambiguous", $"get item {id}", $"edit item {id}", $"get item {id}"], h.Bw.Args);
+    Assert.Equal([$"get item {id}", $"edit item {id}", $"get item {id}"], h.Bw.Args);
     var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Bw.Stdin))))!;
-    Assert.Equal("Abcdefghij0123456789", sent["login"]!["password"]!.GetValue<string>());
-    Assert.Equal(("Abcdefghij0123456789", true), Assert.Single(h.TextCopies));
+    var password = sent["login"]!["password"]!.GetValue<string>();
+    Assert.Equal(20, password.Length);
+    Assert.Equal((password, true), Assert.Single(h.TextCopies));
     Assert.Single(h.Ops.ListGeneratorHistory().Entries);
-    Assert.DoesNotContain(h.Bw.Args, a => a.Contains("Abcdefghij", StringComparison.Ordinal));
+    Assert.DoesNotContain(h.Bw.Args, a => a.Contains(password, StringComparison.Ordinal));
   }
 
   [Fact]
@@ -420,11 +389,9 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     var id = NewId();
     var h = new Harness(Login(id));
     var generated = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse);
-    h.Bw.Generated = "Zyxwvutsrqp987654321";
 
     await h.Handle(Ops.RotatePassword, new RotateRequest(id, RevisionDate, EntryId: generated.EntryId), IpcJson.Default.RotateRequest);
 
-    Assert.Single(h.Bw.Args, a => a.StartsWith("generate", StringComparison.Ordinal));
     var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Bw.Stdin))))!;
     Assert.Equal(generated.Value, sent["login"]!["password"]!.GetValue<string>());
     Assert.Equal((generated.Value, true), Assert.Single(h.TextCopies));
