@@ -8,6 +8,15 @@ The Enter key runs the default action. A login with a web URL opens the website.
 
 **Open in window** is the first more-command of every item (`Ctrl+Shift+O`), so `Ctrl+Enter` also opens the companion window.
 
+## Top-level commands
+
+| Command | Description |
+|---------|-------------|
+| New Bitwarden item | Opens the companion window in create mode for a new login, secure note, card, identity or SSH key (see [New item](Companion-Window#new-item)) |
+| Generate password | Opens the password generator in its own companion window. **Save as new item** opens a new login with the generated password (see [Password generator](Companion-Window#password-generator)) |
+
+Both commands show in the Command Palette root. When the vault is locked, they show a message and open no window.
+
 ## Login Items
 
 | Action | Description | Clipboard |
@@ -17,7 +26,7 @@ The Enter key runs the default action. A login with a web URL opens the website.
 | Copy Password | Copies the password | Secure (excluded + auto-clear) |
 | Copy TOTP Code | Copies the current TOTP code (if configured) | Secure |
 | Copy Custom Fields | One action per custom field | Secure for hidden fields, standard for others |
-| Rotate password | Opens the companion window and asks before it replaces the password with a generated one (see [Quick Rotate](Companion-Window#quick-rotate)) | Secure, after a confirmed save |
+| Rotate password | Only for a login that has a password. Opens the companion window and the **Rotate password** dialog, where you generate the new password and select **Save** (see [Quick Rotate](Companion-Window#quick-rotate)) | Secure, after a confirmed save |
 
 ## Card Items
 
