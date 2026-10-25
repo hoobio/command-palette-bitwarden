@@ -12,6 +12,7 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
+  private SettingsWindow? _settingsWindow;
   private readonly Dictionary<Type, DialogWindow> _dialogs = [];
   private FiltersResponse? _filters;
 
@@ -52,6 +53,8 @@ internal sealed class WindowCoordinator : IDisposable
           _ = LoadFiltersAsync();
         _ = OnVaultChangedAsync();
       });
+    else if (op == Ops.SettingsChanged)
+      Dispatcher.UIThread.Post(() => _ = OnSettingsChangedAsync());
   }
 
   internal void OnLocked()
@@ -71,6 +74,8 @@ internal sealed class WindowCoordinator : IDisposable
 
   internal Task OnVaultChangedAsync() => Task.WhenAll(_itemWindows.Values.Select(w => w.ViewModel?.LoadAsync() ?? Task.CompletedTask));
 
+  internal Task OnSettingsChangedAsync() => _settingsWindow?.ViewModel?.LoadAsync() ?? Task.CompletedTask;
+
   private async Task<JsonElement?> HandleRequestAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
   {
     switch (op)
@@ -86,6 +91,9 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowGenerator:
         await Dispatcher.UIThread.InvokeAsync(ShowGenerator);
+        return null;
+      case Ops.ShowSettings:
+        await Dispatcher.UIThread.InvokeAsync(ShowSettings);
         return null;
       case Ops.ShowApiKeyLogin:
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
@@ -164,6 +172,21 @@ internal sealed class WindowCoordinator : IDisposable
 
     BringToFront(_generatorWindow);
     return _generatorWindow;
+  }
+
+  public SettingsWindow ShowSettings()
+  {
+    if (_settingsWindow is null)
+    {
+      var viewModel = new SettingsViewModel(Channel);
+      var window = new SettingsWindow(viewModel);
+      window.Closed += (_, _) => _settingsWindow = null;
+      _settingsWindow = window;
+      _ = viewModel.LoadAsync();
+    }
+
+    BringToFront(_settingsWindow);
+    return _settingsWindow;
   }
 
   public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0) =>

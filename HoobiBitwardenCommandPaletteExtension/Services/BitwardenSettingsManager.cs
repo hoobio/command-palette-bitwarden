@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
@@ -201,6 +202,22 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Show a 'Copy Debug Log' button on the vault browser to help diagnose issues. Logs are always collected in memory and cleared when the extension restarts",
         false);
 
+    // Settings.RaiseSettingsChanged is internal to the SDK, and the public Settings.Update(json) sets values without raising it.
+    private static readonly MethodInfo RaiseSettingsChangedMethod = typeof(Microsoft.CommandPalette.Extensions.Toolkit.Settings)
+        .GetMethod("RaiseSettingsChanged", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+    private readonly List<object> _ordered = [];
+
+    internal IReadOnlyList<object> OrderedSettings => _ordered;
+
+    internal void RaiseChanged() => RaiseSettingsChangedMethod.Invoke(Settings, null);
+
+    private void AddSetting<T>(Setting<T> setting)
+    {
+        Settings.Add(setting);
+        _ordered.Add(setting);
+    }
+
     public BitwardenSettingsManager(string? settingsFilePath = null)
     {
         Directory.CreateDirectory(SettingsDir);
@@ -210,40 +227,40 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         OrganizationTagStyle.Value = "name";
         BackgroundRefresh.Value = "5";
         RepromptGracePeriod.Value = "60";
-        Settings.Add(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
-        Settings.Add(RememberSession);
-        Settings.Add(UseApiKeyAuthentication);
-        Settings.Add(UseDesktopIntegration);
-        Settings.Add(AutoBiometricUnlock);
-        Settings.Add(AutoLockTimeout);
-        Settings.Add(RepromptGracePeriod);
+        AddSetting(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
+        AddSetting(RememberSession);
+        AddSetting(UseApiKeyAuthentication);
+        AddSetting(UseDesktopIntegration);
+        AddSetting(AutoBiometricUnlock);
+        AddSetting(AutoLockTimeout);
+        AddSetting(RepromptGracePeriod);
 
-        Settings.Add(new SectionHeaderSetting("_section_display", "Vault Display"));
-        Settings.Add(ShowWebsiteIcons);
-        Settings.Add(ShowWatchtowerTags);
-        Settings.Add(ShowProtectedTag);
-        Settings.Add(ShowPasskeyTag);
-        Settings.Add(TotpTagStyle);
-        Settings.Add(OrganizationTagStyle);
-        Settings.Add(BackgroundRefresh);
-        Settings.Add(LiveSync);
+        AddSetting(new SectionHeaderSetting("_section_display", "Vault Display"));
+        AddSetting(ShowWebsiteIcons);
+        AddSetting(ShowWatchtowerTags);
+        AddSetting(ShowProtectedTag);
+        AddSetting(ShowPasskeyTag);
+        AddSetting(TotpTagStyle);
+        AddSetting(OrganizationTagStyle);
+        AddSetting(BackgroundRefresh);
+        AddSetting(LiveSync);
 
-        Settings.Add(new SectionHeaderSetting("_section_context", "Context Awareness"));
-        Settings.Add(ContextAwareness);
-        Settings.Add(ShowContextTag);
-        Settings.Add(ContextItemLimit);
+        AddSetting(new SectionHeaderSetting("_section_context", "Context Awareness"));
+        AddSetting(ContextAwareness);
+        AddSetting(ShowContextTag);
+        AddSetting(ContextItemLimit);
 
-        Settings.Add(new SectionHeaderSetting("_section_clipboard", "Clipboard"));
-        Settings.Add(AutoClearClipboard);
-        Settings.Add(ClipboardClearDelay);
+        AddSetting(new SectionHeaderSetting("_section_clipboard", "Clipboard"));
+        AddSetting(AutoClearClipboard);
+        AddSetting(ClipboardClearDelay);
 
-        Settings.Add(new SectionHeaderSetting("_section_cli", "Bitwarden CLI"));
-        Settings.Add(CliDirectoryOverride);
-        Settings.Add(UsePortableDataDirectory);
-        Settings.Add(CliDataDirectoryOverride);
+        AddSetting(new SectionHeaderSetting("_section_cli", "Bitwarden CLI"));
+        AddSetting(CliDirectoryOverride);
+        AddSetting(UsePortableDataDirectory);
+        AddSetting(CliDataDirectoryOverride);
 
-        Settings.Add(new SectionHeaderSetting("_section_advanced", "Advanced"));
-        Settings.Add(DebugLogging);
+        AddSetting(new SectionHeaderSetting("_section_advanced", "Advanced"));
+        AddSetting(DebugLogging);
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();

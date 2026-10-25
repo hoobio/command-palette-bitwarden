@@ -188,6 +188,20 @@ When the vault is locked, **Unlock Vault** opens the **Unlock your vault** windo
 
 **Save** logs out of a locked or unlocked vault first, as the Command Palette list does, and then saves the server. A URL that is not valid, or an error from the CLI, shows in the window and keeps the values. A saved server closes the window and returns focus to Command Palette, which then shows **Login to Bitwarden**. `Esc` and **Cancel** close the window.
 
+## Settings window
+
+**Bitwarden settings** is a top-level command in Command Palette. Typing "settings" in the vault browser also lists it. It opens the **Bitwarden settings** window, and it works when you are logged out, locked or unlocked. Command Palette closes, and the window is a normal window like the item windows.
+
+The window shows every setting of the [Settings](Settings) page, in the same order and in the same sections. A new setting appears in the window without a change to the companion.
+
+- A toggle is a switch. A choice is a drop-down list. A text setting is a box that saves when you press `Enter` or move to another control.
+- Each control shows its name and its description.
+- A change applies at once and has no **Save** button. It runs the same code as a change on the Command Palette settings page.
+- If the extension refuses a value, the control goes back to its old value and the window shows the reason under the control.
+- A change on the Command Palette settings page while the window is open shows in the window. The window keeps the focus, the scroll position and a text box that you are editing.
+- Turning **Use API Key Authentication** on or off logs you out, as on the settings page.
+- The window stays open when the vault is locked.
+
 ## Locked vault
 
 When the vault locks or auto-locks, every item window removes the values it shows, closes an open edit form without saving, stops the verification code and shows that the vault is locked. New item windows close without saving. An open generator, in a dialog or in its own window, removes its value and history. Unlock the vault in Command Palette. The open item windows then load the item again.

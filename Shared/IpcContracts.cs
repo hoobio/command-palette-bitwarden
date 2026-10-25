@@ -50,6 +50,18 @@ internal static class Ops
   public const string ShowReprompt = "showReprompt";
   public const string ConfirmReprompt = "confirmReprompt";
   public const string CancelReprompt = "cancelReprompt";
+  public const string ShowSettings = "showSettings";
+  public const string GetSettings = "getSettings";
+  public const string SetSetting = "setSetting";
+  public const string SettingsChanged = "settingsChanged";
+}
+
+internal static class SettingKinds
+{
+  public const string Section = "section";
+  public const string Toggle = "toggle";
+  public const string Choice = "choice";
+  public const string Text = "text";
 }
 
 internal static class ServerRegions
@@ -313,6 +325,16 @@ internal sealed record SavedResponse(string Id, DateTime RevisionDate);
 
 internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed);
 
+internal sealed record ChoiceDto(string Title, string Value);
+
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices);
+
+internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
+
+internal sealed record SetSettingRequest(string Key, string Value);
+
+internal sealed record SetSettingResponse(bool Success, string? Error);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(Envelope))]
 [JsonSerializable(typeof(ItemRequest))]
@@ -351,6 +373,9 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 [JsonSerializable(typeof(GeneratorHistoryResponse))]
 [JsonSerializable(typeof(HistoryEntryRequest))]
 [JsonSerializable(typeof(RotateRequest))]
+[JsonSerializable(typeof(SettingsResponse))]
+[JsonSerializable(typeof(SetSettingRequest))]
+[JsonSerializable(typeof(SetSettingResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);

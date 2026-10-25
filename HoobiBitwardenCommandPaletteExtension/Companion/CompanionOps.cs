@@ -62,6 +62,8 @@ internal sealed partial class CompanionOps : IDisposable
     _service.CacheUpdated += RaiseVaultChanged;
     _service.WarmupCompleted += RaisePrewarmNeeded;
     _service.StatusChanged += RaisePrewarmNeeded;
+    if (_service.Settings is { } settings)
+      settings.Settings.SettingsChanged += RaiseSettingsChanged;
   }
 
   internal event Action? PrewarmNeeded;
@@ -127,6 +129,10 @@ internal sealed partial class CompanionOps : IDisposable
         case Ops.CopyGenerated:
           CopyGenerated(IpcJson.Read(payload, IpcJson.Default.HistoryEntryRequest).Id);
           return null;
+        case Ops.GetSettings:
+          return IpcJson.ToElement(GetSettings(), IpcJson.Default.SettingsResponse);
+        case Ops.SetSetting:
+          return IpcJson.ToElement(SetSetting(IpcJson.Read(payload, IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
         default:
           return await DispatchAsync(op, payload, null);
       }
@@ -516,6 +522,8 @@ internal sealed partial class CompanionOps : IDisposable
     _service.CacheUpdated -= RaiseVaultChanged;
     _service.WarmupCompleted -= RaisePrewarmNeeded;
     _service.StatusChanged -= RaisePrewarmNeeded;
+    if (_service.Settings is { } settings)
+      settings.Settings.SettingsChanged -= RaiseSettingsChanged;
     ClearGeneratorHistory();
     _collectionsGate.Dispose();
   }

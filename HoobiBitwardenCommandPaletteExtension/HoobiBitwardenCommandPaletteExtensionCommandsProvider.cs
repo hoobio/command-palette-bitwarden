@@ -48,6 +48,12 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
                 Subtitle = "Open the generator for a new password or passphrase",
                 Icon = new IconInfo(""),
             },
+            new CommandItem(new AnonymousCommand(companion.ShowSettings) { Name = "Bitwarden settings", Result = CommandResult.Dismiss() })
+            {
+                Title = "Bitwarden settings",
+                Subtitle = "Open the settings window",
+                Icon = new IconInfo(""),
+            },
         ];
 
         Settings = _settingsManager.Settings;

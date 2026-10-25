@@ -31,6 +31,7 @@ internal sealed partial class CompanionHost : IDisposable
     _allowForeground = allowForeground ?? AllowSetForegroundWindow;
     _ops.Locked += NotifyLocked;
     _ops.VaultChanged += NotifyVaultChanged;
+    _ops.SettingsChanged += NotifySettingsChanged;
     _ops.VaultChanged += Prewarm;
     _ops.PrewarmNeeded += Prewarm;
   }
@@ -56,6 +57,9 @@ internal sealed partial class CompanionHost : IDisposable
   public void ShowNewItem() => _ = SendAsync(Ops.NewItem, null);
 
   public void ShowGenerator() => _ = SendAsync(Ops.ShowGenerator, null);
+
+  public void ShowSettings() =>
+    _ = SendAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(CommandPaletteModalScope.ForegroundCommandPalette()), IpcJson.Default.DialogRequest));
 
   public void ShowApiKeyLogin()
   {
@@ -130,6 +134,8 @@ internal sealed partial class CompanionHost : IDisposable
   internal void NotifyLocked() => Notify(Ops.Locked);
 
   internal void NotifyVaultChanged() => Notify(Ops.VaultChanged);
+
+  internal void NotifySettingsChanged() => Notify(Ops.SettingsChanged);
 
   private void Notify(string op)
   {
@@ -265,6 +271,7 @@ internal sealed partial class CompanionHost : IDisposable
   {
     _ops.Locked -= NotifyLocked;
     _ops.VaultChanged -= NotifyVaultChanged;
+    _ops.SettingsChanged -= NotifySettingsChanged;
     _ops.VaultChanged -= Prewarm;
     _ops.PrewarmNeeded -= Prewarm;
     lock (_lock)

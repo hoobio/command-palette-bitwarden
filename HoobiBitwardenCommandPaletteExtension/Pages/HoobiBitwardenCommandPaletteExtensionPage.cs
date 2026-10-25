@@ -708,6 +708,14 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Icon = new IconInfo(""),
     };
 
+    private static ListItem BuildSettingsItem(CompanionHost companion) => new(new AnonymousCommand(companion.ShowSettings)
+    { Name = "Bitwarden settings", Result = CommandResult.Dismiss() })
+    {
+        Title = "Bitwarden settings",
+        Subtitle = "Open the settings window",
+        Icon = new IconInfo(""),
+    };
+
     private ListItem BuildLockItem() => new(new AnonymousCommand(OnLockRequested)
     { Name = "Lock", Result = CommandResult.KeepOpen() })
     {
@@ -795,15 +803,17 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var companion = CompanionHost.Current;
         var boostNew = companion != null && (MatchesCommand(search, "new item") || MatchesCommand(search, "new login") || MatchesCommand(search, "new password"));
         var boostGenerate = companion != null && MatchesCommand(search, "generate password");
+        var boostSettings = companion != null && MatchesCommand(search, "settings");
 
         if (boostNew) list.Add(BuildNewItemItem(companion!));
         if (boostGenerate) list.Add(BuildGenerateItem(companion!));
+        if (boostSettings) list.Add(BuildSettingsItem(companion!));
         if (boostSync) list.Add(BuildSyncItem());
         if (boostLock) list.Add(BuildLockItem());
         if (boostLogout) list.Add(BuildLogoutItem());
         if (boostDebug) list.Add(BuildCopyDebugLogItem());
 
-        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug && !boostNew && !boostGenerate)
+        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug && !boostNew && !boostGenerate && !boostSettings)
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
         else
         {
@@ -831,6 +841,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (companion != null && !boostNew) list.Add(BuildNewItemItem(companion));
         if (companion != null && !boostGenerate) list.Add(BuildGenerateItem(companion));
+        if (companion != null && !boostSettings) list.Add(BuildSettingsItem(companion));
         if (!boostSync) list.Add(BuildSyncItem());
         list.Add(BuildSetServerItem());
         if (!boostLock) list.Add(BuildLockItem());
