@@ -12,6 +12,7 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
+  private FiltersResponse? _filters;
 
   public WindowCoordinator(Stream input, Stream output) =>
     Channel = new PipeChannel(input, output, HandleRequestAsync, OnEvent);
@@ -24,6 +25,7 @@ internal sealed class WindowCoordinator : IDisposable
 
   public async Task RunAsync(Action onClosed)
   {
+    Dispatcher.UIThread.Post(() => _ = LoadFiltersAsync(), DispatcherPriority.Background);
     try
     {
       await Channel.RunAsync();
@@ -39,11 +41,17 @@ internal sealed class WindowCoordinator : IDisposable
     if (op == Ops.Locked)
       Dispatcher.UIThread.Post(OnLocked);
     else if (op == Ops.VaultChanged)
-      Dispatcher.UIThread.Post(() => _ = OnVaultChangedAsync());
+      Dispatcher.UIThread.Post(() =>
+      {
+        if (_filters is null)
+          _ = LoadFiltersAsync();
+        _ = OnVaultChangedAsync();
+      });
   }
 
   internal void OnLocked()
   {
+    _filters = null;
     foreach (var window in _itemWindows.Values)
       window.ViewModel?.OnLocked();
     foreach (var window in _newItemWindows.ToList())
@@ -133,17 +141,26 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
-  public async Task<ItemWindow?> ShowNewItemAsync(EditableItem? item = null)
+  // The extension lists collections with bw, so a new item window opens from the last list and refreshes it afterwards.
+  private async Task<FiltersResponse?> LoadFiltersAsync()
   {
-    FiltersResponse filters;
     try
     {
-      filters = IpcJson.Read(await Channel.RequestAsync(Ops.ListFilters, null), IpcJson.Default.FiltersResponse);
+      return _filters = IpcJson.Read(await Channel.RequestAsync(Ops.ListFilters, null), IpcJson.Default.FiltersResponse);
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
       return null;
     }
+  }
+
+  public async Task<ItemWindow?> ShowNewItemAsync(EditableItem? item = null)
+  {
+    var cached = _filters;
+    if ((cached ?? await LoadFiltersAsync()) is not { } filters)
+      return null;
+    if (cached is not null)
+      _ = LoadFiltersAsync();
 
     var viewModel = ItemViewModel.ForNew(Channel, item ?? ItemEditorViewModel.Blank(1), filters);
     var window = new ItemWindow(viewModel);

@@ -39,6 +39,14 @@ internal sealed partial class GeneratorViewModel : ObservableObject
 
   public bool HasCurrentPassword => CurrentPassword is not null;
 
+  public FieldViewModel? Website { get; init; }
+
+  public bool HasWebsite => Website is not null;
+
+  public FieldViewModel? Username { get; init; }
+
+  public bool HasUsername => Username is not null;
+
   internal Action<string>? Toast { get; set; }
 
   public ObservableCollection<GeneratedRowViewModel> History { get; } = [];

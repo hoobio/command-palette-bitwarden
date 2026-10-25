@@ -713,7 +713,13 @@ public class EditTests(AvaloniaSession session)
     await third.ViewModel!.CancelEditCommand.ExecuteAsync(null);
     Assert.Empty(coordinator.NewItemWindows);
 
+    var listed = h.Extension.Payloads(Ops.ListFilters).Count;
+    var cached = (await coordinator.ShowNewItemAsync())!;
+    await UntilAsync(() => h.Extension.Payloads(Ops.ListFilters).Count > listed);
+    await cached.ViewModel!.CancelEditCommand.ExecuteAsync(null);
+
     h.Extension.FailWith = IpcErrors.Locked;
+    coordinator.OnLocked();
     Assert.Null(await coordinator.ShowNewItemAsync());
     window.Close();
   });

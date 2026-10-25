@@ -78,7 +78,13 @@ internal sealed partial class GeneratorView : UserControl
   internal static async Task<long?> ShowForRotateAsync(TopLevel? owner, ItemViewModel item)
   {
     var current = item.HasPassword ? new FieldViewModel(item, new FieldDto(ItemFields.Password, "Password", string.Empty, null, true)) : null;
-    var viewModel = new GeneratorViewModel(item.Channel) { Toast = message => ToastWindow.Show(owner, message), CurrentPassword = current };
+    var viewModel = new GeneratorViewModel(item.Channel)
+    {
+      Toast = message => ToastWindow.Show(owner, message),
+      CurrentPassword = current,
+      Website = item.Groups.SelectMany(g => g.Fields).FirstOrDefault(f => f.CanOpen),
+      Username = item.Groups.SelectMany(g => g.Fields).FirstOrDefault(f => f.Key == ItemFields.Username),
+    };
     var dialog = CreateDialog(viewModel, "Rotate password", "Save", "Cancel");
     void HideOnPrompt(object? sender, PropertyChangedEventArgs e)
     {

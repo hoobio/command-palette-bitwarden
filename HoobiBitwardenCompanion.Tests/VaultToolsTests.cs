@@ -298,6 +298,9 @@ public class VaultToolsTests(AvaloniaSession session)
     Assert.Equal("Rotate password", window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Single().Title);
     Assert.Equal("Cancel", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CloseButton").Content);
     Assert.True(view.FindControl<Border>("CurrentPasswordGroup")!.IsEffectivelyVisible);
+    Assert.Equal("octocat", view.FindControl<SelectableTextBlock>("UsernameText")!.Text);
+    Assert.True(vm.HasUsername);
+    Assert.False(vm.HasWebsite);
     var text = view.FindControl<TextBlock>("CurrentPasswordText")!;
     Assert.Equal(FieldViewModel.Mask, text.Text);
 
