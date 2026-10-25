@@ -17,9 +17,9 @@
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
     WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
     Background="{DynamicResource WindowGroundBrush}">
-    <Grid RowDefinitions="48,*,Auto" Background="Transparent">
+    <Grid RowDefinitions="64,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
-            <TextBlock Text="Set Bitwarden server" Margin="24,0,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
+            <TextBlock Text="Set Bitwarden server" Margin="24,16,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
         </Grid>
 
         <ScrollViewer Grid.Row="1">
