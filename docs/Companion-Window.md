@@ -76,7 +76,7 @@ All item types also have name, folder, favourite, master password re-prompt, not
 
 Bank account, driver's licence and passport items show read-only, with no **Edit** button.
 
-- **Save** and **Cancel** show under the item header while the form is open, and the header shows an **Editing** badge.
+- **Save** and **Cancel** are at the bottom right of the window while the form is open, and the header shows an **Editing** badge. The header and the title bar show the name as you type it.
 - **Save** checks that the name is set, each new custom field has a name and the expiration month is 1 to 12. A missing name shows a yellow ring and a message below the name; the other checks show a yellow message above the form. A website can be any text, as in Bitwarden. A boolean custom field keeps its stored value until you change the switch. The extension then saves the item and reads it back to confirm the change.
 - **Cancel**, or closing the window, asks before it discards changes that are not saved.
 - If the item changed in the vault after you started to edit it, for example from another device, **Save** asks you to **Reload** the item and discard your changes, or **Keep editing**. The extension syncs the vault first, so **Reload** shows the server version.

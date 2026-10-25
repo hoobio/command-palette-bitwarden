@@ -185,7 +185,16 @@ public class EditTests(AvaloniaSession session)
     Assert.Single(h.Extension.Payloads(Ops.ListFilters));
     Assert.Single(h.Extension.Payloads(Ops.GetEditableItem));
 
+    var title = vm.Title;
+    vm.Editor!.Name = "Renamed";
+    Assert.Equal("Renamed", vm.HeaderTitle);
+    vm.Editor.Name = "";
+    Assert.Equal(title, vm.HeaderTitle);
+    vm.Editor.Name = "Renamed";
+
+    h.Answer = true;
     await vm.CancelEditCommand.ExecuteAsync(null);
+    Assert.Equal(title, vm.HeaderTitle);
     vm.OnLocked();
     await vm.EditCommand.ExecuteAsync(null);
     Assert.Equal(2, h.Extension.Payloads(Ops.ListFilters).Count);

@@ -126,11 +126,26 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial ItemEditorViewModel? Editor { get; private set; }
 
-  partial void OnEditorChanged(ItemEditorViewModel? value)
+  partial void OnEditorChanged(ItemEditorViewModel? oldValue, ItemEditorViewModel? newValue)
   {
-    if (value is not null)
-      value.Generate = () => OpenGenerator?.Invoke() ?? Task.FromResult<string?>(null);
+    if (oldValue is not null)
+      oldValue.PropertyChanged -= OnEditorPropertyChanged;
+    if (newValue is not null)
+    {
+      newValue.Generate = () => OpenGenerator?.Invoke() ?? Task.FromResult<string?>(null);
+      newValue.PropertyChanged += OnEditorPropertyChanged;
+    }
+
+    OnPropertyChanged(nameof(HeaderTitle));
   }
+
+  private void OnEditorPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+  {
+    if (e.PropertyName == nameof(ItemEditorViewModel.Name))
+      OnPropertyChanged(nameof(HeaderTitle));
+  }
+
+  public string HeaderTitle => Editor is { Name: { Length: > 0 } name } ? name : Title;
 
   public bool IsEditing => Editor is not null;
 
@@ -147,6 +162,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public ObservableCollection<FieldGroupViewModel> Groups { get; } = [];
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(HeaderTitle))]
   public partial string Title { get; set; } = "Loading";
 
   [ObservableProperty]
