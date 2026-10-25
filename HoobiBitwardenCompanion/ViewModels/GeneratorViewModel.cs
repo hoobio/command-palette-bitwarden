@@ -216,7 +216,7 @@ internal sealed partial class GeneratorViewModel : ObservableObject
   private static string Describe(Exception ex) => ex switch
   {
     IpcException { Code: IpcErrors.Invalid } => "Check the generator options. A password needs 5 to 128 characters and at least one character type, a passphrase 3 to 20 words.",
-    IpcException { Code: IpcErrors.Failed } => "Bitwarden did not generate a value.",
+    IpcException { Code: IpcErrors.Failed } => "These options cannot make a value. Lower the minimums or raise the length.",
     _ => ItemViewModel.Describe(ex),
   };
 }

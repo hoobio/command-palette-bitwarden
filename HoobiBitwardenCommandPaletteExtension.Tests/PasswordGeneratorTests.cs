@@ -61,7 +61,7 @@ public class PasswordGeneratorTests
   [Fact]
   public void Password_UsesEveryCharacterOfEachSet()
   {
-    var options = new GeneratorOptions(Length: 128, Special: true);
+    var options = new GeneratorOptions(Length: 128, Special: true, AvoidAmbiguous: false);
     var seen = string.Concat(Enumerable.Range(0, 200).Select(_ => PasswordGenerator.Generate(options))).ToHashSet();
 
     Assert.Equal((PasswordGenerator.Uppercase(false) + PasswordGenerator.Lowercase(false) + PasswordGenerator.Numbers(false) + PasswordGenerator.Special).ToHashSet(), seen);
