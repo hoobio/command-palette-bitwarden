@@ -125,9 +125,87 @@ The generator window has **Save as new item** at the bottom. It opens a [new ite
 
 ## Master password re-prompt
 
-For an item with master password re-prompt, the window shows the item header and one inline panel, and no field values, until you verify your master password. The panel has a password box that has focus when the panel shows, and a **Verify** button. `Enter` also verifies. While the extension checks the password, the box and the button are disabled and the button shows a progress ring. A wrong password shows a message under the box, selects the text and returns focus to the box. When **Integrate with Bitwarden Desktop App** is on in [Settings](Settings#integrate-with-bitwarden-desktop-app), a **Use Windows Hello** button shows under **Verify**. The extension asks Bitwarden Desktop for the Windows Hello check, so the companion cannot report a verification by itself. The progress ring shows until you finish the Windows Hello prompt. A cancelled or failed check shows a message under the box and counts as a failed attempt. Every action that needs the master password (show, copy, **Edit**, **Delete** and the other actions below) shows this same panel in place of the fields. `Esc` cancels the panel when it waits for an action. The window uses the same re-prompt grace period as Command Palette (see [Settings](Settings)). A successful verification starts the grace period, and the extension sends the end time of the grace period with the item. While the grace period runs, the fields show a thin bar and the text **Locks in 0:42** that count down. At zero the window clears the shown values and the verification code, and the panel shows again. **Keep open** next to the countdown stops it for this window, so the fields stay shown. The extension grace period still ends, so a later show or copy asks for your master password again. The countdown also shows after you reload the item. A verification in Command Palette does not start the countdown in a window that is already open until the window reloads the item. During the grace period, you can show, copy and open values without a prompt. When the grace period is 0, the window asks for your master password for each show, copy or open action, and the verification code is masked. **Edit** and **Password history** use the same re-prompt. **Save**, **Archive**, **Move to Trash**, **Permanently delete**, owner or collection changes, attachment download, upload and delete, and **Rotate password** also ask for your master password outside the grace period, as the Bitwarden web vault does. When the grace period is 0, a save that also moves the item into an organisation asks twice. Five failed attempts start the same 30-second cooldown as the Command Palette re-prompt.
+For an item with master password re-prompt, the window shows the item header and one inline panel, and no field values, until you verify your master password. The panel has a password box that has focus when the panel shows, and a **Verify** button. `Enter` also verifies. While the extension checks the password, the box and the button are disabled and the button shows a progress ring. A wrong password shows a message under the box, selects the text and returns focus to the box. When **Integrate with Bitwarden Desktop App** is on in [Settings](Settings#integrate-with-bitwarden-desktop-app), a **Verify with Windows Hello** button shows under **Verify**. The extension asks Bitwarden Desktop for the Windows Hello check, so the companion cannot report a verification by itself. The progress ring shows until you finish the Windows Hello prompt. A cancelled or failed check shows a message under the box and counts as a failed attempt. Every action that needs the master password (show, copy, **Edit**, **Delete** and the other actions below) shows this same panel in place of the fields. `Esc` cancels the panel when it waits for an action. The window uses the same re-prompt grace period as Command Palette (see [Settings](Settings)). A successful verification starts the grace period, and the extension sends the end time of the grace period with the item. While the grace period runs, the fields show a thin bar and the text **Locks in 0:42** that count down. At zero the window clears the shown values and the verification code, and the panel shows again. **Keep open** next to the countdown stops it for this window, so the fields stay shown. The extension grace period still ends, so a later show or copy asks for your master password again. The countdown also shows after you reload the item. A verification in Command Palette does not start the countdown in a window that is already open until the window reloads the item. During the grace period, you can show, copy and open values without a prompt. When the grace period is 0, the window asks for your master password for each show, copy or open action, and the verification code is masked. **Edit** and **Password history** use the same re-prompt. **Save**, **Archive**, **Move to Trash**, **Permanently delete**, owner or collection changes, attachment download, upload and delete, and **Rotate password** also ask for your master password outside the grace period, as the Bitwarden web vault does. When the grace period is 0, a save that also moves the item into an organisation asks twice. Five failed attempts start the same 30-second cooldown as the Command Palette re-prompt.
 
 If the item changes in the vault while the window is open, the window loads the new version and does not show or copy the old value.
+
+### Re-prompt from Command Palette
+
+A copy or open command in Command Palette for an item with master password re-prompt opens the **Master password required** window. Command Palette stays open behind it. The window shows the item name, a masked **Master password** box and **Verify**. **Verify with Windows Hello** shows when **Integrate with Bitwarden Desktop App** is on in [Settings](Settings#integrate-with-bitwarden-desktop-app). A cancelled or failed Windows Hello check shows no error and puts the cursor back in the password box.
+
+- The extension keeps the command in memory under a single-use token. The window sends the token with the password or the Windows Hello request. The extension checks it with the same code and the same cooldown as the item window, starts the grace period and then runs the command, for example the copy.
+- A wrong password shows the error and keeps the window open and the password in the box. Five failed attempts start the 30-second cooldown.
+- A successful check closes the window and returns focus to Command Palette. Command Palette stays open, also for a copy command that closes it without the re-prompt. The window shows no toast.
+- **Cancel**, `Esc` or closing the window drops the token. A token also ends after 5 minutes and when the vault locks.
+- Inside the grace period no window shows and the command runs at once.
+- If the companion is not available, the command opens the re-prompt form in Command Palette.
+
+## Login
+
+When **Use API Key Authentication** is off, **Login to Bitwarden** opens the **Log in to Bitwarden** window. Command Palette stays open behind it. The window has these parts:
+
+- **Email** and a masked **Master password** box with an eye button.
+- **Two-factor method (if prompted)**: **Authenticator app** (the default), **Email**, **YubiKey OTP** or **Auto-detect**. **Email** makes Bitwarden send the code at the first attempt.
+- **Remember session** starts with the value of the setting. **Log in** saves the box value to the setting.
+- A note for Duo Push and WebAuthn, which the CLI cannot complete. Use an API key for these accounts.
+- A warning when a custom CLI data directory is set. A `bw login` that you run in a terminal must use the same `BITWARDENCLI_APPDATA_DIR`.
+
+**Log in** sends the email and password to the extension. The window then changes in place:
+
+- When Bitwarden asks for a two-factor code, the window shows a **Verification code** box. The hint and the check for the code depend on the method, as in the Command Palette list. **Verify** sends the code with the email and password.
+- When Bitwarden asks to verify a new device, the window shows a box for the 6 to 8 digit code that Bitwarden sent to your login email. **Verify device** sends the code.
+- **Back** returns to the email and password and keeps both values. A wrong code shows the error and keeps the code.
+
+A successful login closes the window and returns focus to Command Palette. The extension syncs the vault, and Command Palette then shows the vault. The email and password stay in the companion only until the window completes or closes. The companion then clears them. Closing the window, or **Back**, during a device verification stops the pending Bitwarden CLI process. `Enter` in a box submits. `Esc` and **Cancel** close the window.
+
+If the companion is not available, **Login to Bitwarden** opens the form in Command Palette.
+
+## API key login
+
+When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bitwarden** opens the **Log in with your API key** window. Command Palette stays open behind it. The window has a **Client ID** box and a masked **Client secret** box, with an eye button to show the secret. `Enter` in either box logs in. `Esc` and **Cancel** close the window.
+
+The window stays open when you switch to another app, for example to copy the values from the web vault. While the extension logs in, the boxes and buttons are disabled. A failed login shows the error from the CLI and keeps the values. A successful login clears the values, closes the window and returns focus to Command Palette. Command Palette then shows **Unlock**. The window does not close when the vault is locked, because you are logged out, not locked.
+
+## Unlock
+
+When the vault is locked, **Unlock Vault** opens the **Unlock your vault** window. Command Palette stays open behind it. The window has a masked **Master password** box with an eye button, a **Remember session** box, an **Unlock** button and **Cancel**. **Unlock with Windows Hello** shows when **Integrate with Bitwarden Desktop App** is on in [Settings](Settings#integrate-with-bitwarden-desktop-app). `Enter` in the password box unlocks. `Esc` and **Cancel** close the window.
+
+- **Remember session** starts with the value of the setting. **Unlock** saves the box value to the setting, as the Command Palette form does.
+- **Unlock** and **Unlock with Windows Hello** disable the boxes and buttons while the extension works. Windows Hello waits for the Windows Hello prompt.
+- A cancelled or failed Windows Hello check shows no error and puts the cursor back in the password box.
+- A wrong password shows "Invalid password entered" and keeps the window open and the password in the box. Other CLI errors show as the CLI reports them.
+- A successful unlock clears the password, closes the window and returns focus to Command Palette. Command Palette then loads the vault and shows the item list.
+- If the CLI reports that you are not logged in, the window closes and Command Palette shows **Login to Bitwarden**.
+- The window stays open when the vault is locked, because it is the way to unlock.
+- The item in Command Palette still starts Windows Hello at once when **Automatically Prompt for Biometrics** is on, and it opens the window when Windows Hello fails.
+
+## Server URL
+
+**Set Bitwarden Server** opens the **Set Bitwarden server** window. Command Palette stays open behind it. The window has these parts:
+
+- **Region** is **Bitwarden Cloud (bitwarden.com)**, **Bitwarden EU (vault.bitwarden.eu)** or **Self-hosted**. The box starts with the region of the current server.
+- **Server URL** shows for **Self-hosted**. It must start with `http://` or `https://`.
+- **Advanced URL overrides** shows for **Self-hosted**. It has **Web Vault URL**, **API URL**, **Identity URL**, **Icons URL**, **Notifications URL**, **Events URL** and **Key Connector URL**. A blank box derives the URL from the server URL. A filled box must start with `https://`.
+
+**Save** logs out of a locked or unlocked vault first, as the Command Palette list does, and then saves the server. A URL that is not valid, or an error from the CLI, shows in the window and keeps the values. A saved server closes the window and returns focus to Command Palette, which then shows **Login to Bitwarden**. `Esc` and **Cancel** close the window.
+
+## Settings window
+
+**Bitwarden settings** is a top-level command in Command Palette. Typing "settings" in the vault browser also lists it. It opens the **Bitwarden settings** window, and it works when you are logged out, locked or unlocked. Command Palette closes, and the window is a normal window like the item windows.
+
+The window shows every setting of the [Settings](Settings) page, in the same order and in the same sections. A new setting appears in the window without a change to the companion.
+
+- A toggle is a switch. A choice is a drop-down list. A text setting is a box that saves when you press `Enter` or move to another control.
+- Each control shows its name and its description.
+- A setting that only matters when another setting is on sits under that setting, indented. The window hides it while the parent is off and shows it when you turn the parent on. A hidden setting keeps its value. **Automatically Prompt for Biometrics** sits under **Integrate with Bitwarden Desktop App**, **Show Context Tag** and **Context Items Limit** sit under **Context Awareness**, and **Clipboard Clear Delay** sits under **Auto-Clear Clipboard**.
+- The search box in the title bar filters the settings by name and description, without regard to case. A section header shows only while the section has a matching setting. A match on a hidden setting shows its parent, so you can turn the parent on.
+- `Ctrl+F` moves the focus to the search box. `Esc` clears the search and the full list returns, scrolled to the top.
+- The window opens with the focus in the search box.
+- A change applies at once and has no **Save** button. It runs the same code as a change on the Command Palette settings page.
+- If the extension refuses a value, the control goes back to its old value and the window shows the reason under the control.
+- A change on the Command Palette settings page while the window is open shows in the window. The window keeps the focus, the scroll position and a text box that you are editing.
+- Turning **Use API Key Authentication** on or off logs you out, as on the settings page.
+- The window stays open when the vault is locked.
 
 ## Locked vault
 

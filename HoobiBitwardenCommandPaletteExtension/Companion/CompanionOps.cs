@@ -60,7 +60,15 @@ internal sealed partial class CompanionOps : IDisposable
     _service.StatusChanged += RaiseIfLocked;
     _service.AutoLocked += RaiseIfLocked;
     _service.CacheUpdated += RaiseVaultChanged;
+    _service.WarmupCompleted += RaisePrewarmNeeded;
+    _service.StatusChanged += RaisePrewarmNeeded;
+    if (_service.Settings is { } settings)
+      settings.Settings.SettingsChanged += RaiseSettingsChanged;
   }
+
+  internal event Action? PrewarmNeeded;
+
+  private void RaisePrewarmNeeded() => PrewarmNeeded?.Invoke();
 
   internal bool IsUnlocked => _service.IsUnlocked;
 
@@ -73,6 +81,7 @@ internal sealed partial class CompanionOps : IDisposable
     if (_service.IsUnlocked)
       return;
     _collections = null;
+    _pendingReprompts.Clear();
     ClearGeneratorHistory();
     Locked?.Invoke();
   }
@@ -88,6 +97,27 @@ internal sealed partial class CompanionOps : IDisposable
         case Ops.VerifyReprompt:
           var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
           return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password, verify.Op, verify.Payload, verify.Biometric), IpcJson.Default.RepromptResponse);
+        case Ops.ApiKeyLogin:
+          var login = IpcJson.Read(payload, IpcJson.Default.ApiKeyLoginRequest);
+          return IpcJson.ToElement(await ApiKeyLoginAsync(login.ClientId, login.ClientSecret), IpcJson.Default.ApiKeyLoginResponse);
+        case Ops.Unlock:
+          var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockRequest);
+          return IpcJson.ToElement(await UnlockAsync(unlock.Password, unlock.RememberSession, unlock.Biometric), IpcJson.Default.UnlockResponse);
+        case Ops.SetServer:
+          return IpcJson.ToElement(await SetServerAsync(IpcJson.Read(payload, IpcJson.Default.SetServerRequest)), IpcJson.Default.SetServerResponse);
+        case Ops.Login:
+          return IpcJson.ToElement(await LoginAsync(IpcJson.Read(payload, IpcJson.Default.LoginRequest)), IpcJson.Default.LoginResponse);
+        case Ops.SubmitDeviceVerification:
+          return IpcJson.ToElement(await SubmitDeviceVerificationAsync(IpcJson.Read(payload, IpcJson.Default.DeviceVerificationRequest).Code), IpcJson.Default.LoginResponse);
+        case Ops.CancelLogin:
+          CancelLogin();
+          return null;
+        case Ops.ConfirmReprompt:
+          var confirm = IpcJson.Read(payload, IpcJson.Default.RepromptConfirmRequest);
+          return IpcJson.ToElement(await ConfirmRepromptAsync(confirm.Token, confirm.Password, confirm.Biometric), IpcJson.Default.RepromptConfirmResponse);
+        case Ops.CancelReprompt:
+          CancelReprompt(IpcJson.Read(payload, IpcJson.Default.RepromptCancelRequest).Token);
+          return null;
         case Ops.ListFilters:
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
         case Ops.CreateItem:
@@ -99,6 +129,10 @@ internal sealed partial class CompanionOps : IDisposable
         case Ops.CopyGenerated:
           CopyGenerated(IpcJson.Read(payload, IpcJson.Default.HistoryEntryRequest).Id);
           return null;
+        case Ops.GetSettings:
+          return IpcJson.ToElement(GetSettings(), IpcJson.Default.SettingsResponse);
+        case Ops.SetSetting:
+          return IpcJson.ToElement(SetSetting(IpcJson.Read(payload, IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
         default:
           return await DispatchAsync(op, payload, null);
       }
@@ -181,6 +215,16 @@ internal sealed partial class CompanionOps : IDisposable
       default:
         throw new IpcException(IpcErrors.Invalid);
     }
+  }
+
+  internal async Task<ApiKeyLoginResponse> ApiKeyLoginAsync(string? clientId, string? clientSecret)
+  {
+    var id = clientId?.Trim();
+    var secret = clientSecret?.Trim();
+    if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(secret))
+      return new ApiKeyLoginResponse(false, "Enter both the client ID and the client secret");
+    var (success, error) = await _service.LoginWithApiKeyAsync(id, secret);
+    return new ApiKeyLoginResponse(success, success ? null : error ?? "Login failed");
   }
 
   private static bool IsVerified(string? id, string? verifiedId) =>
@@ -476,6 +520,10 @@ internal sealed partial class CompanionOps : IDisposable
     _service.StatusChanged -= RaiseIfLocked;
     _service.AutoLocked -= RaiseIfLocked;
     _service.CacheUpdated -= RaiseVaultChanged;
+    _service.WarmupCompleted -= RaisePrewarmNeeded;
+    _service.StatusChanged -= RaisePrewarmNeeded;
+    if (_service.Settings is { } settings)
+      settings.Settings.SettingsChanged -= RaiseSettingsChanged;
     ClearGeneratorHistory();
     _collectionsGate.Dispose();
   }

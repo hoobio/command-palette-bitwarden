@@ -138,7 +138,7 @@
                                 <Button x:Name="BiometricButton" Grid.Column="1" HorizontalAlignment="Right" IsVisible="{Binding BiometricAvailable}" IsEnabled="{Binding !IsVerifying}" Click="OnBiometricClick" ToolTip.Tip="Verify with Windows Hello">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Classes="Icon" Text="{StaticResource Glyph.Fingerprint}" FontSize="16" VerticalAlignment="Center" />
-                                        <TextBlock Text="Use Windows Hello" VerticalAlignment="Center" />
+                                        <TextBlock Text="Verify with Windows Hello" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
                             </Grid>

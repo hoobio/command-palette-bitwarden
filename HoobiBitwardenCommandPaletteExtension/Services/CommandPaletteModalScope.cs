@@ -93,12 +93,29 @@ internal static partial class CommandPaletteModalScope
     }
   }
 
+  internal static nint ForegroundCommandPalette() => GetForegroundMainWindow();
+
+  internal static string DescribeForeground()
+  {
+    var hwnd = GetForegroundWindow();
+    if (hwnd == 0)
+      return "none";
+    try
+    {
+      return $"{ClassName(hwnd)}/{ProcessName(hwnd)} visible={IsWindowVisible(hwnd)} cloaked={IsCloaked(hwnd)}";
+    }
+    catch (Exception ex)
+    {
+      return $"unknown ({ex.GetType().Name})";
+    }
+  }
+
   private static nint GetForegroundMainWindow()
   {
     var hwnd = GetForegroundWindow();
     try
     {
-      return hwnd != 0 && IsWindowVisible(hwnd) && !IsCloaked(hwnd) && HasClass(hwnd, MainWindowClass) && IsHostProcess(hwnd) ? hwnd : 0;
+      return hwnd != 0 && IsWindowVisible(hwnd) && !IsCloaked(hwnd) && ClassName(hwnd) == MainWindowClass && IsHostProcess(hwnd) ? hwnd : 0;
     }
     catch
     {
@@ -106,19 +123,21 @@ internal static partial class CommandPaletteModalScope
     }
   }
 
-  private static unsafe bool HasClass(nint hwnd, string className)
+  private static unsafe string ClassName(nint hwnd)
   {
     var buffer = stackalloc char[64];
     var length = GetClassNameW(hwnd, buffer, 64);
-    return new ReadOnlySpan<char>(buffer, length).SequenceEqual(className);
+    return new string(buffer, 0, length);
   }
 
-  private static bool IsHostProcess(nint hwnd)
+  private static string ProcessName(nint hwnd)
   {
     GetWindowThreadProcessId(hwnd, out var pid);
     using var process = Process.GetProcessById((int)pid);
-    return process.ProcessName.Equals(HostProcessName, StringComparison.OrdinalIgnoreCase);
+    return process.ProcessName;
   }
+
+  private static bool IsHostProcess(nint hwnd) => ProcessName(hwnd).Equals(HostProcessName, StringComparison.OrdinalIgnoreCase);
 
   private static bool IsCloaked(nint hwnd) =>
     DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out var cloaked, sizeof(int)) == 0 && cloaked != 0;

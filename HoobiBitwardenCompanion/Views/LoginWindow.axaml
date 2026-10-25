@@ -1,0 +1,73 @@
+<views:DialogWindow
+    x:Class="HoobiBitwardenCompanion.Views.LoginWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:LoginViewModel"
+    Title="Log in to Bitwarden"
+    Width="460"
+    SizeToContent="Height"
+    MinWidth="360"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid RowDefinitions="64,*,Auto" Background="Transparent">
+        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+            <Panel Margin="24,16,56,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Text="Log in to Bitwarden" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsCredentialsStep}" />
+                <TextBlock Text="Two-step login" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsCodeStep}" />
+                <TextBlock Text="Verify this device" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDeviceStep}" />
+            </Panel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Margin="24,0,24,12" Spacing="8">
+                <StackPanel x:Name="CredentialsPanel" Spacing="8" IsVisible="{Binding IsCredentialsStep}">
+                    <Border x:Name="DataDirAlert" Classes="Alert" IsVisible="{Binding CustomDataDirWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock x:Name="DataDirText" TextWrapping="Wrap" Text="{Binding CustomDataDirWarning}" />
+                    </Border>
+                    <TextBlock Text="Email" Margin="0,8,0,0" />
+                    <TextBox x:Name="EmailBox" PlaceholderText="your@email.com" Text="{Binding Email, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <TextBlock Text="Master password" />
+                    <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Enter your master password" Text="{Binding MasterPassword, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <TextBlock Text="Two-factor method (if prompted)" />
+                    <ComboBox x:Name="MethodBox" HorizontalAlignment="Stretch" ItemsSource="{x:Static vm:LoginViewModel.MethodChoices}" SelectedIndex="{Binding MethodIndex, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <TextBlock Classes="Caption" TextWrapping="Wrap" Text="For Duo Push or WebAuthn, turn on 'Use API Key Authentication' in settings, or run `bw login` in a terminal first, then unlock here with your master password." />
+                    <CheckBox x:Name="RememberBox" Content="Remember session (stay unlocked between launches)" IsChecked="{Binding RememberSession, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                </StackPanel>
+
+                <StackPanel x:Name="CodePanel" Spacing="8" IsVisible="{Binding IsCodeStep}">
+                    <TextBlock x:Name="CodeHintText" Classes="Caption" TextWrapping="Wrap" Text="{Binding CodeHint}" />
+                    <TextBlock Text="Verification code" Margin="0,8,0,0" />
+                    <TextBox x:Name="CodeBox" PlaceholderText="{Binding CodePlaceholder}" Text="{Binding Code, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                </StackPanel>
+
+                <StackPanel x:Name="DevicePanel" Spacing="8" IsVisible="{Binding IsDeviceStep}">
+                    <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Enter the code sent to your login email" />
+                    <TextBlock Text="Verification code" Margin="0,8,0,0" />
+                    <TextBox x:Name="DeviceCodeBox" PlaceholderText="Enter device verification code..." Text="{Binding Code, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                </StackPanel>
+
+                <Border x:Name="ErrorAlert" Classes="Alert" Classes.Danger="True" Margin="0,4,0,0" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+                </Border>
+                <StackPanel x:Name="BusyPanel" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsBusy}">
+                    <ProgressBar IsIndeterminate="True" />
+                    <TextBlock x:Name="BusyText" Classes="Caption" TextWrapping="Wrap" Text="{Binding BusyText}" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,8,24,24">
+            <Button x:Name="SubmitButton" Theme="{StaticResource AccentButtonStyle}" Content="{Binding SubmitLabel}" Command="{Binding SubmitCommand}" IsEnabled="{Binding !IsBusy}" />
+            <Button x:Name="BackButton" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding !IsCredentialsStep}" IsEnabled="{Binding !IsBusy}" />
+            <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
+        </StackPanel>
+    </Grid>
+</views:DialogWindow>

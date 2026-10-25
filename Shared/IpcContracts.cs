@@ -37,6 +37,38 @@ internal static class Ops
   public const string CopyGenerated = "copyGenerated";
   public const string RotatePassword = "rotatePassword";
   public const string RotateItem = "rotateItem";
+  public const string ShowApiKeyLogin = "showApiKeyLogin";
+  public const string ApiKeyLogin = "apiKeyLogin";
+  public const string ShowUnlock = "showUnlock";
+  public const string Unlock = "unlock";
+  public const string ShowSetServer = "showSetServer";
+  public const string SetServer = "setServer";
+  public const string ShowLogin = "showLogin";
+  public const string Login = "login";
+  public const string SubmitDeviceVerification = "submitDeviceVerification";
+  public const string CancelLogin = "cancelLogin";
+  public const string ShowReprompt = "showReprompt";
+  public const string ConfirmReprompt = "confirmReprompt";
+  public const string CancelReprompt = "cancelReprompt";
+  public const string ShowSettings = "showSettings";
+  public const string GetSettings = "getSettings";
+  public const string SetSetting = "setSetting";
+  public const string SettingsChanged = "settingsChanged";
+}
+
+internal static class SettingKinds
+{
+  public const string Section = "section";
+  public const string Toggle = "toggle";
+  public const string Choice = "choice";
+  public const string Text = "text";
+}
+
+internal static class ServerRegions
+{
+  public const string Cloud = "cloud";
+  public const string Eu = "eu";
+  public const string SelfHosted = "selfHosted";
 }
 
 internal static class GeneratorKinds
@@ -133,6 +165,49 @@ internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDa
 internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
+
+internal sealed record DialogRequest(long ReturnWindow);
+
+internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
+
+internal sealed record ApiKeyLoginResponse(bool Success, string? Error);
+
+internal sealed record UnlockDialogRequest(long ReturnWindow, bool RememberSession, bool WindowsHello);
+
+internal sealed record UnlockRequest(string Password, bool RememberSession, bool Biometric = false);
+
+internal sealed record UnlockResponse(bool Success, string? Error, bool LoggedOut = false);
+
+internal sealed record SetServerDialogRequest(long ReturnWindow, string Region, string? Url);
+
+internal sealed record SetServerRequest(
+  string Region,
+  string? BaseUrl,
+  string? WebVaultUrl = null,
+  string? ApiUrl = null,
+  string? IdentityUrl = null,
+  string? IconsUrl = null,
+  string? NotificationsUrl = null,
+  string? EventsUrl = null,
+  string? KeyConnectorUrl = null);
+
+internal sealed record SetServerResponse(bool Success, string? Error);
+
+internal sealed record LoginDialogRequest(long ReturnWindow, bool RememberSession, string? CustomDataDir);
+
+internal sealed record LoginRequest(string Email, string Password, int? Method, string? Code, bool RememberSession);
+
+internal sealed record LoginResponse(bool Success, string? Error, bool TwoFactorRequired = false, bool DeviceVerificationRequired = false);
+
+internal sealed record DeviceVerificationRequest(string Code);
+
+internal sealed record RepromptDialogRequest(long ReturnWindow, string Token, string ItemName, bool WindowsHello);
+
+internal sealed record RepromptConfirmRequest(string Token, string? Password, bool Biometric = false);
+
+internal sealed record RepromptConfirmResponse(bool Success, string? Error);
+
+internal sealed record RepromptCancelRequest(string Token);
 
 internal sealed record SecretResponse(string Value);
 
@@ -250,11 +325,38 @@ internal sealed record SavedResponse(string Id, DateTime RevisionDate);
 
 internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed);
 
+internal sealed record ChoiceDto(string Title, string Value);
+
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null);
+
+internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
+
+internal sealed record SetSettingRequest(string Key, string Value);
+
+internal sealed record SetSettingResponse(bool Success, string? Error);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(Envelope))]
 [JsonSerializable(typeof(ItemRequest))]
 [JsonSerializable(typeof(FieldRequest))]
 [JsonSerializable(typeof(UriRequest))]
+[JsonSerializable(typeof(DialogRequest))]
+[JsonSerializable(typeof(ApiKeyLoginRequest))]
+[JsonSerializable(typeof(ApiKeyLoginResponse))]
+[JsonSerializable(typeof(UnlockDialogRequest))]
+[JsonSerializable(typeof(UnlockRequest))]
+[JsonSerializable(typeof(UnlockResponse))]
+[JsonSerializable(typeof(SetServerDialogRequest))]
+[JsonSerializable(typeof(SetServerRequest))]
+[JsonSerializable(typeof(SetServerResponse))]
+[JsonSerializable(typeof(LoginDialogRequest))]
+[JsonSerializable(typeof(LoginRequest))]
+[JsonSerializable(typeof(LoginResponse))]
+[JsonSerializable(typeof(DeviceVerificationRequest))]
+[JsonSerializable(typeof(RepromptDialogRequest))]
+[JsonSerializable(typeof(RepromptConfirmRequest))]
+[JsonSerializable(typeof(RepromptConfirmResponse))]
+[JsonSerializable(typeof(RepromptCancelRequest))]
 [JsonSerializable(typeof(RepromptRequest))]
 [JsonSerializable(typeof(SecretResponse))]
 [JsonSerializable(typeof(TotpResponse))]
@@ -271,6 +373,9 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 [JsonSerializable(typeof(GeneratorHistoryResponse))]
 [JsonSerializable(typeof(HistoryEntryRequest))]
 [JsonSerializable(typeof(RotateRequest))]
+[JsonSerializable(typeof(SettingsResponse))]
+[JsonSerializable(typeof(SetSettingRequest))]
+[JsonSerializable(typeof(SetSettingResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);

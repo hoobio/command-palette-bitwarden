@@ -1,0 +1,68 @@
+<views:DialogWindow
+    x:Class="HoobiBitwardenCompanion.Views.SetServerWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:SetServerViewModel"
+    Title="Set Bitwarden server"
+    Width="480"
+    SizeToContent="Height"
+    MinWidth="360"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid RowDefinitions="64,*,Auto" Background="Transparent">
+        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+            <TextBlock Text="Set Bitwarden server" Margin="24,16,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Margin="24,0,24,12" Spacing="8">
+                <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Changing the server logs you out." />
+                <TextBlock Text="Region" Margin="0,8,0,0" />
+                <ComboBox x:Name="RegionBox" HorizontalAlignment="Stretch" ItemsSource="{x:Static vm:SetServerViewModel.RegionChoices}" SelectedIndex="{Binding RegionIndex, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                <StackPanel x:Name="SelfHostedPanel" Spacing="8" IsVisible="{Binding IsSelfHosted}">
+                    <TextBlock Text="Server URL" />
+                    <TextBox x:Name="BaseUrlBox" PlaceholderText="https://vault.example.com" Text="{Binding BaseUrl, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <Expander x:Name="AdvancedExpander" Header="Advanced URL overrides" IsEnabled="{Binding !IsBusy}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Leave blank to derive from the server URL." />
+                            <TextBlock Text="Web Vault URL" />
+                            <TextBox PlaceholderText="{}{base URL}/" Text="{Binding WebVaultUrl, Mode=TwoWay}" />
+                            <TextBlock Text="API URL" />
+                            <TextBox PlaceholderText="{}{base URL}/api" Text="{Binding ApiUrl, Mode=TwoWay}" />
+                            <TextBlock Text="Identity URL" />
+                            <TextBox PlaceholderText="{}{base URL}/identity" Text="{Binding IdentityUrl, Mode=TwoWay}" />
+                            <TextBlock Text="Icons URL" />
+                            <TextBox PlaceholderText="{}{base URL}/icons" Text="{Binding IconsUrl, Mode=TwoWay}" />
+                            <TextBlock Text="Notifications URL" />
+                            <TextBox PlaceholderText="{}{base URL}/notifications" Text="{Binding NotificationsUrl, Mode=TwoWay}" />
+                            <TextBlock Text="Events URL" />
+                            <TextBox PlaceholderText="{}{base URL}/events" Text="{Binding EventsUrl, Mode=TwoWay}" />
+                            <TextBlock Text="Key Connector URL" />
+                            <TextBox PlaceholderText="{}{base URL}/key-connector" Text="{Binding KeyConnectorUrl, Mode=TwoWay}" />
+                        </StackPanel>
+                    </Expander>
+                </StackPanel>
+                <Border x:Name="ErrorAlert" Classes="Alert" Classes.Danger="True" Margin="0,4,0,0" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+                </Border>
+                <StackPanel x:Name="BusyPanel" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsBusy}">
+                    <ProgressBar IsIndeterminate="True" />
+                    <TextBlock x:Name="BusyText" Classes="Caption" TextWrapping="Wrap" Text="{Binding BusyText}" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,8,24,24">
+            <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SubmitCommand}" IsEnabled="{Binding !IsBusy}" />
+            <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
+        </StackPanel>
+    </Grid>
+</views:DialogWindow>

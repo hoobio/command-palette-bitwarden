@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json.Nodes;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -968,5 +969,281 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "not a valid key\n", stderr: "", exitCode: 0));
     var result = await svc.VerifyMasterPasswordAsync("pass");
     Assert.False(result);
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_Success_PassesKeyViaEnvStoresItAndEndsLocked()
+  {
+    ApiKeyStore.Clear();
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
+    var statusChanged = 0;
+    svc.StatusChanged += () => statusChanged++;
+    try
+    {
+      var (success, error) = await svc.LoginWithApiKeyAsync("user.abc", "s3cret");
+
+      Assert.True(success);
+      Assert.Equal(1, statusChanged);
+      Assert.Null(error);
+      Assert.Equal("login --apikey", factory.LastArgs);
+      Assert.Equal("user.abc", factory.LastPsi!.Environment["BW_CLIENTID"]);
+      Assert.Equal("s3cret", factory.LastPsi.Environment["BW_CLIENTSECRET"]);
+      Assert.Equal("true", factory.LastPsi.Environment["BW_NOINTERACTION"]);
+      Assert.Equal(VaultStatus.Locked, svc.LastStatus);
+      Assert.False(svc.IsUnlocked);
+      Assert.Equal(("user.abc", "s3cret"), ApiKeyStore.Load()!.Value);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+    }
+  }
+
+  [Fact]
+  public async Task ApiKeyLoginOp_TrimsTheValues_AndReportsSuccess()
+  {
+    ApiKeyStore.Clear();
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
+    using var ops = new Companion.CompanionOps(svc);
+    try
+    {
+      var reply = await ops.HandleAsync(Ops.ApiKeyLogin, IpcJson.ToElement(new ApiKeyLoginRequest("  user.abc ", " s3cret\n"), IpcJson.Default.ApiKeyLoginRequest), CancellationToken.None);
+
+      Assert.Equal(new ApiKeyLoginResponse(true, null), IpcJson.Read(reply, IpcJson.Default.ApiKeyLoginResponse));
+      Assert.Equal("user.abc", factory.LastPsi!.Environment["BW_CLIENTID"]);
+      Assert.Equal("s3cret", factory.LastPsi.Environment["BW_CLIENTSECRET"]);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+    }
+  }
+
+  [Fact]
+  public async Task ApiKeyLoginOp_RejectedKey_PassesTheCliErrorThrough()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stderr: "fetch failed\n", exitCode: 1));
+    using var ops = new Companion.CompanionOps(svc);
+
+    var reply = await ops.HandleAsync(Ops.ApiKeyLogin, IpcJson.ToElement(new ApiKeyLoginRequest("user.abc", "s3cret"), IpcJson.Default.ApiKeyLoginRequest), CancellationToken.None);
+
+    Assert.Equal(new ApiKeyLoginResponse(false, "fetch failed"), IpcJson.Read(reply, IpcJson.Default.ApiKeyLoginResponse));
+  }
+
+  [Theory]
+  [InlineData("", "s3cret")]
+  [InlineData("user.abc", "   ")]
+  [InlineData(null, null)]
+  public async Task ApiKeyLoginOp_EmptyValues_FailWithoutCallingTheCli(string? clientId, string? clientSecret)
+  {
+    var (svc, factory) = CreateService();
+    using var ops = new Companion.CompanionOps(svc);
+
+    var response = await ops.ApiKeyLoginAsync(clientId, clientSecret);
+
+    Assert.False(response.Success);
+    Assert.Equal("Enter both the client ID and the client secret", response.Error);
+    Assert.Null(factory.LastPsi);
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_AlreadyLoggedIn_TreatedAsSuccess()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stderr: "You are already logged in as user@test.com.\n", exitCode: 1));
+    try
+    {
+      var (success, _) = await svc.LoginWithApiKeyAsync("user.abc", "s3cret");
+      Assert.True(success);
+      Assert.Equal(VaultStatus.Locked, svc.LastStatus);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+    }
+  }
+
+  [Theory]
+  [InlineData("client_id or client_secret is incorrect. Try again.")]
+  [InlineData("Invalid API Key; Organization API Key currently not supported")]
+  public async Task LoginWithApiKey_RejectedKey_ReturnsErrorAndClearsStoredKey(string stderr)
+  {
+    ApiKeyStore.Save("user.old", "stale");
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stderr: stderr + "\n", exitCode: 1));
+
+    var (success, error) = await svc.LoginWithApiKeyAsync("user.old", "stale");
+
+    Assert.False(success);
+    Assert.Equal(stderr, error);
+    Assert.Null(ApiKeyStore.Load());
+  }
+
+  [Fact]
+  public async Task LoginWithApiKey_TransientFailure_KeepsStoredKey()
+  {
+    ApiKeyStore.Save("user.abc", "s3cret");
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stderr: "fetch failed\n", exitCode: 1));
+    try
+    {
+      var (success, _) = await svc.LoginWithApiKeyAsync("user.abc", "s3cret");
+      Assert.False(success);
+      Assert.Equal(("user.abc", "s3cret"), ApiKeyStore.Load()!.Value);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+    }
+  }
+
+  [Fact]
+  public async Task GetVaultStatus_UnauthenticatedWithStoredApiKey_LogsInSilentlyAndReturnsLocked()
+  {
+    var tempPath = Path.Combine(Path.GetTempPath(), $"bw_test_{Guid.NewGuid():N}.json");
+    try
+    {
+      var settings = new BitwardenSettingsManager(tempPath);
+      settings.UseApiKeyAuthentication.Value = true;
+      ApiKeyStore.Save("user.abc", "s3cret");
+      var factory = new FakeProcessFactory();
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
+      factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+      factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unauthenticated\"}\n", exitCode: 0));
+      factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
+
+      var result = await svc.GetVaultStatusAsync();
+
+      Assert.Equal(VaultStatus.Locked, result);
+      Assert.Equal("login --apikey", factory.LastArgs);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+      File.Delete(tempPath);
+    }
+  }
+
+  [Fact]
+  public async Task GetVaultStatus_UnauthenticatedWithApiKeyModeOff_DoesNotLogIn()
+  {
+    ApiKeyStore.Save("user.abc", "s3cret");
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unauthenticated\"}\n", exitCode: 0));
+    try
+    {
+      Assert.Equal(VaultStatus.Unauthenticated, await svc.GetVaultStatusAsync());
+      Assert.Equal("status", factory.LastArgs);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+    }
+  }
+
+  [Fact]
+  public async Task Unlock_NotLoggedInWithStoredApiKey_LogsInAgainAndRetriesUnlock()
+  {
+    var tempPath = Path.Combine(Path.GetTempPath(), $"bw_test_{Guid.NewGuid():N}.json");
+    try
+    {
+      var settings = new BitwardenSettingsManager(tempPath);
+      settings.UseApiKeyAuthentication.Value = true;
+      ApiKeyStore.Save("user.abc", "s3cret");
+      var factory = new FakeProcessFactory();
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
+      factory.Enqueue(new FakeCliProcess(stderr: "You are not logged in.\n", exitCode: 1));
+      factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
+      factory.Enqueue(new FakeCliProcess(stdout: "session_key_abc\n", exitCode: 0));
+
+      var (success, _) = await svc.UnlockAsync("pass");
+
+      Assert.True(success);
+      Assert.True(svc.IsUnlocked);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+      File.Delete(tempPath);
+    }
+  }
+
+  [Fact]
+  public async Task Unlock_NotLoggedInAndApiKeyReloginFails_ResetsToLoggedOut()
+  {
+    var tempPath = Path.Combine(Path.GetTempPath(), $"bw_test_{Guid.NewGuid():N}.json");
+    try
+    {
+      var settings = new BitwardenSettingsManager(tempPath);
+      settings.UseApiKeyAuthentication.Value = true;
+      ApiKeyStore.Save("user.abc", "s3cret");
+      var factory = new FakeProcessFactory();
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
+      factory.Enqueue(new FakeCliProcess(stderr: "You are not logged in.\n", exitCode: 1));
+      factory.Enqueue(new FakeCliProcess(stderr: "client_id or client_secret is incorrect. Try again.\n", exitCode: 1));
+
+      var (success, _) = await svc.UnlockAsync("pass");
+
+      Assert.False(success);
+      Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
+      Assert.Null(ApiKeyStore.Load());
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+      File.Delete(tempPath);
+    }
+  }
+
+  [Fact]
+  public async Task TogglingApiKeyAuthentication_ClearsStoredCredentialsAndLogsOut()
+  {
+    var tempPath = Path.Combine(Path.GetTempPath(), $"bw_test_{Guid.NewGuid():N}.json");
+    try
+    {
+      var settings = new BitwardenSettingsManager(tempPath);
+      settings.RememberSession.Value = true;
+      var factory = new FakeProcessFactory();
+      var svc = new BitwardenCliService(settings, factory.Create);
+      svc.SetSession("some-session-key");
+      SessionStore.Save("some-session-key");
+      ApiKeyStore.Save("user.abc", "s3cret");
+      factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
+
+      settings.UseApiKeyAuthentication.Value = true;
+      var raiseMethod = settings.Settings.GetType().GetMethod(
+          "RaiseSettingsChanged",
+          System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+      raiseMethod.Invoke(settings.Settings, null);
+
+      await Task.Delay(200, TestContext.Current.CancellationToken);
+
+      Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
+      Assert.Null(SessionStore.Load());
+      Assert.Null(ApiKeyStore.Load());
+      Assert.Equal("logout", factory.LastArgs);
+    }
+    finally
+    {
+      SessionStore.Clear();
+      ApiKeyStore.Clear();
+      File.Delete(tempPath);
+    }
+  }
+
+  [Fact]
+  public async Task Logout_ClearsStoredApiKey()
+  {
+    ApiKeyStore.Save("user.abc", "s3cret");
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
+
+    await svc.LogoutAsync();
+
+    Assert.Null(ApiKeyStore.Load());
   }
 }

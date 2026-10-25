@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using HoobiBitwarden.Ipc;
@@ -12,12 +13,20 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
+  private SettingsWindow? _settingsWindow;
+  private readonly Dictionary<Type, DialogWindow> _dialogs = [];
   private FiltersResponse? _filters;
 
   public WindowCoordinator(Stream input, Stream output) =>
     Channel = new PipeChannel(input, output, HandleRequestAsync, OnEvent);
 
   public PipeChannel Channel { get; }
+
+  internal Action<nint> ReturnForeground { get; set; } = WindowAlertInterop.ReturnForeground;
+
+  internal Action<Window> TakeForeground { get; set; } = WindowAlertInterop.TakeForeground;
+
+  internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlertInterop.WindowCentre;
 
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
 
@@ -47,6 +56,8 @@ internal sealed class WindowCoordinator : IDisposable
           _ = LoadFiltersAsync();
         _ = OnVaultChangedAsync();
       });
+    else if (op == Ops.SettingsChanged)
+      Dispatcher.UIThread.Post(() => _ = OnSettingsChangedAsync());
   }
 
   internal void OnLocked()
@@ -66,6 +77,8 @@ internal sealed class WindowCoordinator : IDisposable
 
   internal Task OnVaultChangedAsync() => Task.WhenAll(_itemWindows.Values.Select(w => w.ViewModel?.LoadAsync() ?? Task.CompletedTask));
 
+  internal Task OnSettingsChangedAsync() => _settingsWindow?.ViewModel?.LoadAsync() ?? Task.CompletedTask;
+
   private async Task<JsonElement?> HandleRequestAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
   {
     switch (op)
@@ -81,6 +94,29 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowGenerator:
         await Dispatcher.UIThread.InvokeAsync(ShowGenerator);
+        return null;
+      case Ops.ShowSettings:
+        await Dispatcher.UIThread.InvokeAsync(ShowSettings);
+        return null;
+      case Ops.ShowApiKeyLogin:
+        var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowApiKeyLogin((nint)(dialog?.ReturnWindow ?? 0)));
+        return null;
+      case Ops.ShowUnlock:
+        var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowUnlock((nint)unlock.ReturnWindow, unlock.RememberSession, unlock.WindowsHello));
+        return null;
+      case Ops.ShowSetServer:
+        var server = IpcJson.Read(payload, IpcJson.Default.SetServerDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowSetServer((nint)server.ReturnWindow, server.Region, server.Url));
+        return null;
+      case Ops.ShowLogin:
+        var login = IpcJson.Read(payload, IpcJson.Default.LoginDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowLogin((nint)login.ReturnWindow, login.RememberSession, login.CustomDataDir));
+        return null;
+      case Ops.ShowReprompt:
+        var reprompt = IpcJson.Read(payload, IpcJson.Default.RepromptDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowReprompt((nint)reprompt.ReturnWindow, reprompt.Token, reprompt.ItemName, reprompt.WindowsHello));
         return null;
       case Ops.NewItem:
         Dispatcher.UIThread.Post(() => _ = ShowNewItemAsync());
@@ -141,6 +177,74 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
+  public SettingsWindow ShowSettings()
+  {
+    if (_settingsWindow is null)
+    {
+      var viewModel = new SettingsViewModel(Channel);
+      var window = new SettingsWindow(viewModel);
+      window.Closed += (_, _) => _settingsWindow = null;
+      _settingsWindow = window;
+      _ = viewModel.LoadAsync();
+    }
+
+    BringToFront(_settingsWindow);
+    return _settingsWindow;
+  }
+
+  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0) =>
+    ShowDialog(() => new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel)), returnWindow);
+
+  public UnlockWindow ShowUnlock(nint returnWindow = 0, bool rememberSession = false, bool windowsHello = false) =>
+    ShowDialog(() => new UnlockWindow(new UnlockViewModel(Channel, rememberSession, windowsHello)), returnWindow);
+
+  public SetServerWindow ShowSetServer(nint returnWindow = 0, string region = ServerRegions.Cloud, string? url = null) =>
+    ShowDialog(() => new SetServerWindow(new SetServerViewModel(Channel, region, url)), returnWindow);
+
+  public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null) =>
+    ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir)), returnWindow);
+
+  public RepromptWindow ShowReprompt(nint returnWindow, string token, string itemName, bool windowsHello)
+  {
+    if (_dialogs.TryGetValue(typeof(RepromptWindow), out var existing) && ((RepromptWindow)existing).ViewModel?.Token != token)
+      existing.Close();
+    return ShowDialog(() => new RepromptWindow(new RepromptViewModel(Channel, token, itemName, windowsHello)), returnWindow);
+  }
+
+  private T ShowDialog<T>(Func<T> create, nint returnWindow) where T : DialogWindow
+  {
+    var anchor = AnchorOf(returnWindow);
+    var created = false;
+    if (!_dialogs.TryGetValue(typeof(T), out var existing))
+    {
+      var window = create();
+      window.Closed += (_, _) =>
+      {
+        _dialogs.Remove(typeof(T));
+        ReturnForeground(window.ReturnWindow);
+      };
+      if (anchor is { } point)
+      {
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Position = point;
+      }
+      _dialogs[typeof(T)] = existing = window;
+      created = true;
+    }
+
+    if (returnWindow != 0)
+      existing.ReturnWindow = returnWindow;
+    existing.Show();
+    if (created && anchor is { } centre)
+      existing.CentreOnScreenOf(centre);
+    if (existing.WindowState == WindowState.Minimized)
+      existing.WindowState = WindowState.Normal;
+    existing.Activate();
+    TakeForeground(existing);
+    existing.FocusFirstInput();
+    return (T)existing;
+  }
+
   // The extension lists collections with bw, so a new item window opens from the last list and refreshes it afterwards.
   private async Task<FiltersResponse?> LoadFiltersAsync()
   {
@@ -189,7 +293,7 @@ internal sealed class WindowCoordinator : IDisposable
   }
 
   // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused.
-  private static void BringToFront(Window window)
+  private void BringToFront(Window window)
   {
     window.Show();
     if (window.WindowState == WindowState.Minimized)
@@ -198,6 +302,8 @@ internal sealed class WindowCoordinator : IDisposable
     window.Topmost = true;
     window.Topmost = topmost;
     window.Activate();
+    TakeForeground(window);
+    (window as SettingsWindow)?.FocusSearch();
   }
 
   public void Dispose() => Channel.Dispose();

@@ -1,6 +1,6 @@
 # Settings
 
-Open settings from the gear icon in the vault browser. All settings take effect immediately.
+Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)).
 
 ## Available Settings
 
@@ -12,13 +12,29 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | Off |
 | **Description** | Persist the Bitwarden session key in Windows Credential Manager so the vault stays unlocked across restarts. When disabled, the session key is stored only in memory and lost when the extension process exits. |
 
+### Use API Key Authentication
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | Off |
+| **Description** | Log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) (`bw login --apikey`) instead of your email and master password. Use this when your account uses FIDO2 or Duo two-step login. The login form asks for the Client ID and Client Secret, and the extension stores them in Windows Credential Manager. When you are logged out, the extension logs in again with the stored key, so you only unlock with your master password. Changing this setting logs you out and deletes the stored API key and session key. Logging out also deletes the stored API key. See [API key login](Getting-Started#api-key-login). |
+
 ### Integrate with Bitwarden Desktop App
 
 | | |
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show **Use Windows Hello**. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. |
+| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. |
+
+### Automatically Prompt for Biometrics
+
+| | |
+|---|---|
+| **Type** | Toggle (shown under **Integrate with Bitwarden Desktop App**) |
+| **Default** | On |
+| **Description** | Start Windows Hello when you open the Bitwarden page on a locked vault, so you do not select **Unlock Vault** first. The prompt starts only from that page open: not when PowerToys or Command Palette starts, not on the Command Palette home page, not from a Dock band refresh, and not when the vault locks while you are on another page. If the vault locks while the Bitwarden page is open, select **Unlock Vault** or open the page again. After a cancelled or failed Windows Hello prompt, the page does not prompt again until the vault unlocks. With **Remember Session** on, the extension first tries the stored session and prompts only when that fails. |
 
 ### Show Website Icons
 

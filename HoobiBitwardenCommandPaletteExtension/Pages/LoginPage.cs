@@ -10,12 +10,12 @@ internal sealed partial class LoginPage : ContentPage
 {
   private readonly LoginForm _form;
 
-  public LoginPage(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
+  public LoginPage(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null, Action<string, string>? onApiKeySubmit = null)
   {
     Name = "Login";
     Title = "Login to Bitwarden";
     Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
-    _form = new LoginForm(settings, onSubmit);
+    _form = new LoginForm(settings, onSubmit, onApiKeySubmit);
   }
 
   public override IContent[] GetContent()
@@ -31,8 +31,12 @@ internal sealed partial class LoginForm : FormContent
 
   private const string NoMethodValue = "none";
 
+  private const string ApiKeyHelpUrl = "https://bitwarden.com/help/personal-api-key/";
+
   private readonly BitwardenSettingsManager? _settings;
   private readonly Action<string, string, int?>? _onSubmit;
+  private readonly Action<string, string>? _onApiKeySubmit;
+  private readonly bool _useApiKey;
 
   private string BuildTemplate()
   {
@@ -41,9 +45,10 @@ internal sealed partial class LoginForm : FormContent
         _settings?.CliDirectoryOverride.Value,
         _settings?.UsePortableDataDirectory.Value ?? false,
         _settings?.CliDataDirectoryOverride.Value);
-    var dataDirWarningBlock = customDataDir != null
+    var dataDirWarningBlock = customDataDir != null && !_useApiKey
         ? BuildCustomDataDirWarningBlock(customDataDir)
         : string.Empty;
+    var credentialBlocks = _useApiKey ? ApiKeyCredentialBlocks : PasswordCredentialBlocks;
     return $$"""
     {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -60,6 +65,30 @@ internal sealed partial class LoginForm : FormContent
                 "style": "heading"
             },
             {{dataDirWarningBlock}}
+            {{credentialBlocks}}
+            {
+                "type": "ActionSet",
+                "actions": [
+                    {
+                        "type": "Action.Submit",
+                        "title": "{{SubmitButtonTitle}}"
+                    }
+                ]
+            },
+            {
+                "type": "Input.Toggle",
+                "id": "RememberSession",
+                "title": "Remember session (stay unlocked between launches)",
+                "valueOn": "true",
+                "valueOff": "false",
+                "value": "{{(rememberChecked ? "true" : "false")}}"
+            }
+        ]
+    }
+    """;
+  }
+
+  private const string PasswordCredentialBlocks = $$"""
             {
                 "type": "Input.Text",
                 "label": "Email",
@@ -93,48 +122,58 @@ internal sealed partial class LoginForm : FormContent
             },
             {
                 "type": "TextBlock",
-                "text": "For Duo Push or WebAuthn, run `bw login` in a terminal first, then unlock here with your master password.",
+                "text": "For Duo Push or WebAuthn, turn on 'Use API Key Authentication' in settings, or run `bw login` in a terminal first, then unlock here with your master password.",
                 "wrap": true,
                 "isSubtle": true,
                 "size": "small"
             },
+""";
+
+  private const string ApiKeyCredentialBlocks = $$"""
             {
-                "type": "ActionSet",
-                "actions": [
-                    {
-                        "type": "Action.Submit",
-                        "title": "{{SubmitButtonTitle}}"
-                    }
-                ]
+                "type": "Input.Text",
+                "label": "Client ID",
+                "id": "ClientId",
+                "isRequired": true,
+                "errorMessage": "Client ID is required",
+                "placeholder": "user.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
             },
             {
-                "type": "Input.Toggle",
-                "id": "RememberSession",
-                "title": "Remember session (stay unlocked between launches)",
-                "valueOn": "true",
-                "valueOff": "false",
-                "value": "{{(rememberChecked ? "true" : "false")}}"
-            }
-        ]
-    }
-    """;
-  }
+                "type": "Input.Text",
+                "label": "Client Secret",
+                "style": "Password",
+                "id": "ClientSecret",
+                "isRequired": true,
+                "errorMessage": "Client secret is required",
+                "placeholder": "Enter your client secret"
+            },
+            {
+                "type": "TextBlock",
+                "text": "Find your personal API key in the Bitwarden web vault under Settings > Security > Keys > View API key. It is stored in Windows Credential Manager, so you only enter it once. [Learn more]({{ApiKeyHelpUrl}})",
+                "wrap": true,
+                "isSubtle": true,
+                "size": "small"
+            },
+""";
 
-  public LoginForm(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null)
+  public LoginForm(BitwardenSettingsManager? settings = null, Action<string, string, int?>? onSubmit = null, Action<string, string>? onApiKeySubmit = null)
   {
     _settings = settings;
     _onSubmit = onSubmit;
+    _onApiKeySubmit = onApiKeySubmit;
+    _useApiKey = settings?.UseApiKeyAuthentication.Value == true;
     TemplateJson = BuildTemplate();
   }
 
   public override ICommandResult SubmitForm(string inputs, string data)
   {
     var formInput = JsonNode.Parse(inputs)?.AsObject();
-    var email = formInput?["Email"]?.GetValue<string>()?.Trim();
-    var password = formInput?["MasterPassword"]?.GetValue<string>();
+    var (first, second) = _useApiKey
+        ? (formInput?["ClientId"]?.GetValue<string>()?.Trim(), formInput?["ClientSecret"]?.GetValue<string>()?.Trim())
+        : (formInput?["Email"]?.GetValue<string>()?.Trim(), formInput?["MasterPassword"]?.GetValue<string>());
 
     // Stay armed on an empty submit: disarming here would disable Enter for the rest of the form's life.
-    if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+    if (string.IsNullOrEmpty(first) || string.IsNullOrEmpty(second))
       return CommandResult.KeepOpen();
 
     EnterKeySubmitService.Disarm();
@@ -146,9 +185,15 @@ internal sealed partial class LoginForm : FormContent
       _settings.SaveSettings();
     }
 
+    if (_useApiKey)
+    {
+      _onApiKeySubmit?.Invoke(first, second);
+      return CommandResult.GoBack();
+    }
+
     int? twoFactorMethod = ParseTwoFactorMethod(formInput?["TwoFactorMethod"]?.GetValue<string>());
 
-    _onSubmit?.Invoke(email, password, twoFactorMethod);
+    _onSubmit?.Invoke(first, second, twoFactorMethod);
     return CommandResult.GoBack();
   }
 

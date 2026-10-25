@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -23,6 +24,36 @@ internal static partial class WindowAlertInterop
     FlashWindowEx(ref info);
   }
 
+  internal static void ReturnForeground(nint hwnd)
+  {
+    if (hwnd != 0 && IsWindow(hwnd))
+      SetForegroundWindow(hwnd);
+  }
+
+  internal static void TakeForeground(TopLevel window)
+  {
+    if (window.TryGetPlatformHandle() is { HandleDescriptor: "HWND", Handle: var hwnd })
+      ReturnForeground(hwnd);
+  }
+
+  internal static PixelPoint? WindowCentre(nint hwnd) =>
+    hwnd != 0 && IsWindow(hwnd) && GetWindowRect(hwnd, out var rect)
+      ? new PixelPoint((rect.Left + rect.Right) / 2, (rect.Top + rect.Bottom) / 2)
+      : null;
+
+  [StructLayout(LayoutKind.Sequential)]
+  private struct Rect
+  {
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+  }
+
+  [LibraryImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool GetWindowRect(nint hWnd, out Rect lpRect);
+
   [StructLayout(LayoutKind.Sequential)]
   private struct FlashWindowInfo
   {
@@ -36,6 +67,14 @@ internal static partial class WindowAlertInterop
   [LibraryImport("user32.dll")]
   [return: MarshalAs(UnmanagedType.Bool)]
   private static partial bool MessageBeep(uint uType);
+
+  [LibraryImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool IsWindow(nint hWnd);
+
+  [LibraryImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool SetForegroundWindow(nint hWnd);
 
   [LibraryImport("user32.dll")]
   [return: MarshalAs(UnmanagedType.Bool)]

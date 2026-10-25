@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
@@ -20,6 +21,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private readonly BitwardenSettingsManager? _settings;
     private readonly Lock _itemsLock = new();
     private IListItem[] _currentItems = [];
+    private const int PageSize = 40;
+    private VaultList? _vaultList;
+    private volatile bool _loadMoreRefetch;
     private long _buildGeneration;
     private long _publishedGeneration;
     private bool _initialLoadStarted;
@@ -40,7 +44,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private ListItem? _syncItem;
     private readonly Timer _iconRefreshTimer;
     private readonly Timer _searchDebounceTimer;
-    // BuildListItems allocates 5-15 commands per result, so a per-keystroke rebuild lags on large vaults
+    // BuildVaultItems allocates 5-15 commands per result, so a per-keystroke rebuild lags on large vaults
     private const int SearchDebounceMs = 100;
     // A pure trailing-edge debounce would hide icon progress for 10-30s on a cold load, so a rebuild is forced every IconRefreshMaxWaitMs
     private const int IconRefreshDebounceMs = 500;
@@ -103,13 +107,14 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     public override IListItem[] GetItems()
     {
+        var openedByUser = _autoBiometricGate.TryConsume();
         lock (_itemsLock)
         {
             if (!_initialLoadStarted)
             {
                 _initialLoadStarted = true;
                 CaptureContext(force: true);
-                DebugLogService.Log("Page", $"GetItems: first call, LastStatus={_service.LastStatus}");
+                DebugLogService.Log("Page", $"GetItems: first call, LastStatus={_service.LastStatus}, openedByUser={openedByUser}");
 
                 if (_service.LastStatus != null)
                 {
@@ -117,12 +122,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     switch (_service.LastStatus)
                     {
                         case VaultStatus.Unlocked when _service.IsCacheLoaded:
-                            var text = _currentSearchText;
-                            SyncFilters();
-                            var loadedResults = Search(text);
-                            DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedResults.Count} items");
-                            _currentItems = BuildListItems(loadedResults, text);
-                            Filters = _filters;
+                            TryPublishVaultList(out var loadedCount);
+                            DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedCount} items");
                             IsLoading = false;
                             ReverifyIfSuspiciouslyEmpty();
                             break;
@@ -137,7 +138,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                         case VaultStatus.Locked:
                             _currentItems = BuildLockedItems();
                             IsLoading = false;
-                            _ = Task.Run(TryAutoTriggerBiometric);
+                            _ = Task.Run(() => TryAutoTriggerBiometric("GetItems first", openedByUser));
                             break;
                         case VaultStatus.CliNotFound:
                             _currentItems = BuildCliNotFoundItems();
@@ -154,20 +155,33 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 IsLoading = true;
                 _currentItems = BuildLoadingPlaceholder("Checking vault status...", "bw status");
                 DebugLogService.Log("Page", "GetItems: warmup not complete, starting InitializeAsync");
-                _ = Task.Run(InitializeAsync);
+                _ = Task.Run(() => InitializeAsync(openedByUser));
                 return _currentItems;
             }
 
-            if (CaptureContext() && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var refetchAfterLoadMore = _loadMoreRefetch;
+            _loadMoreRefetch = false;
+            var captured = (openedByUser || !refetchAfterLoadMore) && CaptureContext();
+            var contextMs = timer.ElapsedMilliseconds;
+            var published = -1;
+            if (!_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
-                TryPublishVaultList(out _);
+                if (captured)
+                    TryPublishVaultList(out published, keepPage: !openedByUser);
+                else if (openedByUser)
+                    ShowFirstPage();
             }
+            SyncHasMoreItems();
+
+            var pager = _vaultList?.Pager;
+            DebugLogService.Log("Page", $"GetItems later: context {(captured ? $"{contextMs}ms" : "skipped")}, rebuild {(published >= 0 ? $"{timer.ElapsedMilliseconds - contextMs}ms for {published} items" : "skipped")}, returned {_currentItems.Length} items (page {pager?.Page ?? 0} of {pager?.PageCount ?? 0}) in {timer.ElapsedMilliseconds}ms");
 
             if (_initComplete && !_handlingAction)
                 IsLoading = false;
 
             if (_service.LastStatus == VaultStatus.Locked && !_handlingAction)
-                _ = Task.Run(TryAutoTriggerBiometric);
+                _ = Task.Run(() => TryAutoTriggerBiometric("GetItems later", openedByUser));
 
             return _currentItems;
         }
@@ -218,11 +232,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (!_service.IsCacheLoaded)
             await _service.RefreshCacheAsync().ConfigureAwait(false);
 
-        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
-            return;
-
-        var published = TryPublishVaultList(out _);
-        IsLoading = false;
+        var published = !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded && TryPublishVaultList(out _);
+        if (!_handlingAction)
+            IsLoading = false;
         if (published) RaiseItemsChanged();
     }
 
@@ -233,9 +245,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RebuildVaultListSafely();
     }
 
-    private void RebuildVaultListSafely()
+    private void RebuildVaultListSafely(bool keepPage = false)
     {
-        try { RebuildVaultList(); }
+        try { RebuildVaultList(keepPage); }
         catch (Exception ex)
         {
             DebugLogService.Log("Page", $"RebuildVaultList failed: {ex.GetType().Name}: {ex.Message}");
@@ -334,7 +346,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 break;
             case VaultStatus.Locked:
                 _currentItems = BuildLockedItems();
-                TryAutoTriggerBiometric();
+                TryAutoTriggerBiometric("rebuild", openedByUser: false);
                 break;
             case VaultStatus.CliNotFound:
                 _currentItems = BuildCliNotFoundItems();
@@ -350,11 +362,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _ = Task.Delay(300).ContinueWith(_ => RaiseItemsChanged(), TaskScheduler.Default);
     }
 
-    private async Task InitializeAsync()
+    private async Task InitializeAsync(bool openedByUser)
     {
         try
         {
-            DebugLogService.Log("Page", "InitializeAsync: awaiting warmup");
+            DebugLogService.Log("Page", $"InitializeAsync: awaiting warmup, openedByUser={openedByUser}");
             // A concurrent bw status call can hang the CLI, so await the ongoing warmup instead
 #pragma warning disable VSTHRD003 // WarmupTask is a ThreadPool task; InitializeAsync is already on ThreadPool via Task.Run
             await _service.WarmupTask.ConfigureAwait(false);
@@ -375,7 +387,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     break;
                 case VaultStatus.Locked:
                     _currentItems = BuildLockedItems();
-                    TryAutoTriggerBiometric();
+                    TryAutoTriggerBiometric("InitializeAsync", openedByUser);
                     break;
                 case VaultStatus.Unlocked:
                     if (!_service.IsCacheLoaded)
@@ -572,7 +584,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         {
             PlaceholderText = "Enter device verification code...";
             var code = _currentSearchText.Trim();
-            var canSubmit = code.Length >= 6 && code.Length <= 8 && long.TryParse(code, out _);
+            var canSubmit = TwoFactorRules.IsNumericCode(code);
             ICommand command = canSubmit
                 ? new AnonymousCommand(() => OnDeviceVerificationSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
                 : new NoOpCommand();
@@ -591,10 +603,15 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         PlaceholderText = "Search your vault... (try url:github)";
 
-        var item = new ListItem(new Pages.LoginPage(_settings, OnLoginSubmitted))
+        ICommand loginCommand = CompanionHost.Current is { } companion
+            ? new AnonymousCommand(_settings?.UseApiKeyAuthentication.Value == true ? (Action)companion.ShowApiKeyLogin : companion.ShowLogin) { Name = "Log in", Result = CommandResult.KeepOpen() }
+            : new Pages.LoginPage(_settings, OnLoginSubmitted, OnApiKeyLoginSubmitted);
+        var item = new ListItem(loginCommand)
         {
             Title = "Login to Bitwarden",
-            Subtitle = _errorMessage ?? "Sign in with your email and master password",
+            Subtitle = _errorMessage ?? (_settings?.UseApiKeyAuthentication.Value == true
+                ? "Sign in with your personal API key"
+                : "Sign in with your email and master password"),
             Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png"),
         };
 
@@ -611,19 +628,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         BuildLogoutItem(),
     ]);
 
-    internal static (string Placeholder, string TypedNoun, string EmptyHint, Func<string, bool> Validator) DescribeTwoFactorMethod(int? method) => method switch
-    {
-        0 => ("Enter your authenticator code...", "authenticator code", "Type the 6-digit code from your authenticator app", IsNumericCode),
-        1 => ("Enter the code sent to your email...", "email code", "Check your inbox for the code Bitwarden just sent", IsNumericCode),
-        3 => ("Touch your YubiKey...", "YubiKey OTP", "Touch your YubiKey to insert its one-time code", IsYubiKeyOtp),
-        _ => ("Enter your 2FA code...", "2FA code", "Type your 6-8 digit code above and press Enter", IsNumericCode),
-    };
-
-    private static bool IsNumericCode(string code) =>
-        code.Length >= 6 && code.Length <= 8 && long.TryParse(code, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _);
-
-    private static bool IsYubiKeyOtp(string code) =>
-        code.Length >= 32 && code.Length <= 64 && code.All(c => char.IsLetterOrDigit(c));
+    internal static (string Placeholder, string TypedNoun, string EmptyHint, Func<string, bool> Validator) DescribeTwoFactorMethod(int? method) =>
+        TwoFactorRules.Describe(method);
 
     private ListItem BuildBackToLoginItem() => new(new AnonymousCommand(OnBackToLoginRequested)
     {
@@ -651,7 +657,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true && _settings?.AutoBiometricUnlock.Value == true;
         ICommand command = biometricEnabled && !_biometricClickFailed
             ? new AnonymousCommand(OnBiometricUnlockRequested) { Name = "Unlock with Windows Hello", Result = CommandResult.KeepOpen() }
-            : new Pages.UnlockVaultPage(_settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
+            : CompanionHost.Current is { } companion
+                ? new AnonymousCommand(() => companion.ShowUnlock(_settings?.RememberSession.Value == true, _settings?.UseDesktopIntegration.Value == true)) { Name = "Unlock", Result = CommandResult.KeepOpen() }
+                : new Pages.UnlockVaultPage(_settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
 
         var item = new ListItem(command)
         {
@@ -666,7 +674,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return item;
     }
 
-    private ListItem BuildSetServerItem() => new(new Pages.SetServerPage(OnSetServerSubmitted))
+    private ListItem BuildSetServerItem() => new(CompanionHost.Current is { } companion
+        ? (ICommand)new AnonymousCommand(companion.ShowSetServer) { Name = "Set server", Result = CommandResult.KeepOpen() }
+        : new Pages.SetServerPage(OnSetServerSubmitted))
     {
         Title = "Set Bitwarden Server",
         Subtitle = BitwardenCliService.ServerUrl ?? "bitwarden.com",
@@ -707,6 +717,14 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Title = "Generate password",
         Subtitle = "Open the generator for a new password or passphrase",
         Icon = new IconInfo(""),
+    };
+
+    private static ListItem BuildSettingsItem(CompanionHost companion) => new(new AnonymousCommand(companion.ShowSettings)
+    { Name = "Bitwarden settings", Result = CommandResult.Dismiss() })
+    {
+        Title = "Bitwarden settings",
+        Subtitle = "Open the settings window",
+        Icon = new IconInfo(""),
     };
 
     private ListItem BuildLockItem() => new(new AnonymousCommand(OnLockRequested)
@@ -766,28 +784,16 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private void OnFilterSelected()
     {
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded) return;
-        _ = Task.Run(RebuildVaultListSafely);
+        _ = Task.Run(() => RebuildVaultListSafely());
     }
 
     internal static bool MatchesCommand(string search, string command)
         => search.Length >= 2 && command.StartsWith(search, StringComparison.OrdinalIgnoreCase);
 
-    private IListItem[] BuildListItems(List<BitwardenItem> items, string searchText)
+    private VaultList BuildVaultList(List<BitwardenItem> items, string searchText, long generation, int keepShown)
     {
         var list = new List<IListItem>();
-        var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
-        var showContextTag = _settings?.ShowContextTag.Value != false;
-        var totpTagStyle = _settings?.TotpTagStyle.Value ?? "off";
-        var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
-        var showProtectedTag = _settings?.ShowProtectedTag.Value != false;
-        var showWebsiteIcons = _settings?.ShowWebsiteIcons.Value != false;
-        var organizationTagStyle = _settings?.OrganizationTagStyle.Value ?? "name";
-        var totpTracked = new List<(ListItem, BitwardenItem, Tag[])>();
-
-        var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
-        var contextTagsUsed = 0;
-        var capContextTags = showContextTag && string.IsNullOrWhiteSpace(searchText) && contextLimit > 0;
-
+        var tail = new List<IListItem>();
         var search = (searchText ?? "").Trim();
         var boostSync = MatchesCommand(search, "sync");
         var boostLock = MatchesCommand(search, "lock");
@@ -796,50 +802,77 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var companion = CompanionHost.Current;
         var boostNew = companion != null && (MatchesCommand(search, "new item") || MatchesCommand(search, "new login") || MatchesCommand(search, "new password"));
         var boostGenerate = companion != null && MatchesCommand(search, "generate password");
+        var boostSettings = companion != null && MatchesCommand(search, "settings");
 
         if (boostNew) list.Add(BuildNewItemItem(companion!));
         if (boostGenerate) list.Add(BuildGenerateItem(companion!));
+        if (boostSettings) list.Add(BuildSettingsItem(companion!));
         if (boostSync) list.Add(BuildSyncItem());
         if (boostLock) list.Add(BuildLockItem());
         if (boostLogout) list.Add(BuildLogoutItem());
         if (boostDebug) list.Add(BuildCopyDebugLogItem());
 
-        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug && !boostNew && !boostGenerate)
+        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug && !boostNew && !boostGenerate && !boostSettings)
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
-        else
+
+        if (companion != null && !boostNew) tail.Add(BuildNewItemItem(companion));
+        if (companion != null && !boostGenerate) tail.Add(BuildGenerateItem(companion));
+        if (companion != null && !boostSettings) tail.Add(BuildSettingsItem(companion));
+        if (!boostSync) tail.Add(BuildSyncItem());
+        tail.Add(BuildSetServerItem());
+        if (!boostLock) tail.Add(BuildLockItem());
+        if (!boostLogout) tail.Add(BuildLogoutItem());
+        if (DebugLogService.Enabled && !boostDebug)
+            tail.Add(BuildCopyDebugLogItem());
+
+        var vaultList = new VaultList(items, searchText ?? string.Empty, generation, list.ToArray(), tail.ToArray())
         {
-            var iconPriority = 0;
-            foreach (var item in items)
+            Pager = ListPager.First(items.Count, PageSize, keepShown),
+        };
+        BuildVaultItems(vaultList);
+
+        _syncTimer ??= new Timer(OnSyncTimerTick, null, 10000, 10000);
+
+        return vaultList;
+    }
+
+    private void BuildVaultItems(VaultList list)
+    {
+        var showWatchtower = _settings?.ShowWatchtowerTags.Value != false;
+        var showContextTag = _settings?.ShowContextTag.Value != false;
+        var totpTagStyle = _settings?.TotpTagStyle.Value ?? "off";
+        var showPasskeyTag = _settings?.ShowPasskeyTag.Value != false;
+        var showProtectedTag = _settings?.ShowProtectedTag.Value != false;
+        var showWebsiteIcons = _settings?.ShowWebsiteIcons.Value != false;
+        var organizationTagStyle = _settings?.OrganizationTagStyle.Value ?? "name";
+
+        var contextLimit = int.TryParse(_settings?.ContextItemLimit.Value, out var lv) ? lv : 3;
+        var capContextTags = showContextTag && string.IsNullOrWhiteSpace(list.SearchText) && contextLimit > 0;
+
+        for (var i = list.Built.Count; i < list.Pager.Shown; i++)
+        {
+            var item = list.Results[i];
+            var allowContextTag = showContextTag;
+            if (capContextTags)
             {
-                var allowContextTag = showContextTag;
-                if (capContextTags)
-                {
-                    var isContextMatch = _context != null && ContextAwarenessService.ContextScore(_context, item) > 0;
-                    allowContextTag = isContextMatch && contextTagsUsed < contextLimit;
-                    if (allowContextTag) contextTagsUsed++;
-                }
-                var contextForTags = capContextTags ? null : _context;
-                var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
-                var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, iconPriority++, organizationName, organizationTagStyle);
-                list.Add(listItem);
-                if (totpTagStyle == "live" && item.HasTotp)
-                {
-                    var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
-                    totpTracked.Add((listItem, item, baseTags));
-                }
+                var isContextMatch = _context != null && ContextAwarenessService.ContextScore(_context, item) > 0;
+                allowContextTag = isContextMatch && list.ContextTagsUsed < contextLimit;
+                if (allowContextTag) list.ContextTagsUsed++;
+            }
+            var contextForTags = capContextTags ? null : _context;
+            var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
+            var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, i, organizationName, organizationTagStyle);
+            list.Built.Add(listItem);
+            if (totpTagStyle == "live" && item.HasTotp)
+            {
+                var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
+                list.Totp.Add((listItem, item, baseTags));
             }
         }
 
-        if (companion != null && !boostNew) list.Add(BuildNewItemItem(companion));
-        if (companion != null && !boostGenerate) list.Add(BuildGenerateItem(companion));
-        if (!boostSync) list.Add(BuildSyncItem());
-        list.Add(BuildSetServerItem());
-        if (!boostLock) list.Add(BuildLockItem());
-        if (!boostLogout) list.Add(BuildLogoutItem());
-        if (DebugLogService.Enabled && !boostDebug)
-            list.Add(BuildCopyDebugLogItem());
+        list.Refresh();
 
-        _totpItems = totpTracked.Count > 0 ? totpTracked : null;
+        _totpItems = list.Totp.Count > 0 ? list.Totp.ToList() : null;
         if (_totpItems != null)
             _totpTimer ??= new Timer(OnTotpTimerTick, null, 1000, 1000);
         else
@@ -847,10 +880,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             _totpTimer?.Dispose();
             _totpTimer = null;
         }
-
-        _syncTimer ??= new Timer(OnSyncTimerTick, null, 10000, 10000);
-
-        return list.ToArray();
     }
 
     private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null, int iconPriority = int.MaxValue, string? organizationName = null, string organizationTagStyle = "off")
@@ -907,7 +936,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
             return;
-        RebuildVaultListSafely();
+        RebuildVaultListSafely(keepPage: true);
     }
 
     private void OnSyncTimerTick(object? state)
@@ -943,7 +972,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Checking vault status...", "bw status");
-        _ = Task.Run(InitializeAsync);
+        _ = Task.Run(() => InitializeAsync(openedByUser: false));
     }
 
     private void OnAutoLocked()
@@ -1119,20 +1148,32 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         });
     }
 
-    private void TryAutoTriggerBiometric()
+    internal static Func<nint> PaletteWindow { get; set; } = CommandPaletteModalScope.ForegroundCommandPalette;
+
+    internal static bool IsPaletteOpen(Func<nint> foregroundPalette) => foregroundPalette() != 0;
+
+    private readonly AutoBiometricGate _autoBiometricGate = new();
+
+    public override string PlaceholderText
     {
-        if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
-            return;
+        get
+        {
+            _autoBiometricGate.Arm();
+            DebugLogService.Log("Page", "PlaceholderText read by the host (navigation)");
+            return base.PlaceholderText;
+        }
+        set => base.PlaceholderText = value;
+    }
 
-        // Startup warmup fires WarmupCompleted before the palette is opened; prompting Windows Hello then shows a dialog with no context
-        if (!_initialLoadStarted)
-            return;
-
+    private void TryAutoTriggerBiometric(string caller, bool openedByUser)
+    {
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true
                             && _settings?.AutoBiometricUnlock.Value == true;
         var rememberSession = _settings?.RememberSession.Value == true;
-
-        if (!biometricEnabled && !rememberSession)
+        var paletteOpen = IsPaletteOpen(PaletteWindow);
+        var veto = AutoBiometricGate.Veto(openedByUser, _autoBiometricTriggered, _biometricClickFailed, _handlingAction, paletteOpen, biometricEnabled, rememberSession);
+        DebugLogService.Log("Page", $"Auto biometric from {caller}: {(veto is null ? "allowed" : $"skipped ({veto})")}; openedByUser={openedByUser}, triggered={_autoBiometricTriggered}, clickFailed={_biometricClickFailed}, handlingAction={_handlingAction}, initialLoadStarted={_initialLoadStarted}, paletteOpen={paletteOpen}, foreground={CommandPaletteModalScope.DescribeForeground()}, biometric={biometricEnabled}, rememberSession={rememberSession}");
+        if (veto is not null)
             return;
 
         _autoBiometricTriggered = true;
@@ -1276,27 +1317,87 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _pendingTwoFactorMethod = null;
     }
 
-    private void RebuildVaultList()
+    private void RebuildVaultList(bool keepPage = false)
     {
-        if (TryPublishVaultList(out _))
+        if (TryPublishVaultList(out _, keepPage))
             RaiseItemsChanged();
     }
 
-    private bool TryPublishVaultList(out int resultCount)
+    private bool TryPublishVaultList(out int resultCount, bool keepPage = false)
     {
         var generation = Interlocked.Increment(ref _buildGeneration);
         var text = _currentSearchText;
+        int keepShown;
+        lock (_itemsLock)
+            keepShown = keepPage && _vaultList is { } previous && previous.SearchText == text ? previous.Pager.Shown : 0;
         SyncFilters();
         var results = Search(text);
         resultCount = results.Count;
-        var built = BuildListItems(results, text);
+        var built = BuildVaultList(results, text, generation, keepShown);
         lock (_itemsLock)
         {
             if (text != _currentSearchText || generation <= _publishedGeneration || _service.LastStatus != VaultStatus.Unlocked) return false;
             _publishedGeneration = generation;
-            _currentItems = built;
+            _vaultList = built;
+            _currentItems = built.Shown;
             Filters = _filters;
+            SyncHasMoreItems();
             return true;
+        }
+    }
+
+    // Command Palette reuses a ListItemViewModel only for the same IListItem reference (ListViewModel._vmCache), so a batch keeps the shown instances and adds new ones after them.
+    public override void LoadMore()
+    {
+        lock (_itemsLock)
+        {
+            if (_vaultList is { } list && list.Generation == _publishedGeneration && ReferenceEquals(_currentItems, list.Shown) && list.Pager.HasMore)
+            {
+                list.Pager = list.Pager.Next();
+                BuildVaultItems(list);
+                _currentItems = list.Shown;
+                _loadMoreRefetch = true;
+                DebugLogService.Log("Page", $"LoadMore: page {list.Pager.Page} of {list.Pager.PageCount}, {_currentItems.Length} items");
+            }
+            SyncHasMoreItems();
+        }
+
+        // The host keeps its pending-batch guard until ItemsChanged, so this raises even when no batch was added.
+        RaiseItemsChanged();
+    }
+
+    private void ShowFirstPage()
+    {
+        if (_vaultList is not { } list || !ReferenceEquals(_currentItems, list.Shown)) return;
+        var first = ListPager.First(list.Results.Count, PageSize);
+        if (first == list.Pager) return;
+        list.Pager = first;
+        list.Refresh();
+        _currentItems = list.Shown;
+    }
+
+    private void SyncHasMoreItems() =>
+        HasMoreItems = _vaultList is { } list && ReferenceEquals(_currentItems, list.Shown) && list.Pager.HasMore;
+
+    private sealed class VaultList(List<BitwardenItem> results, string searchText, long generation, IListItem[] head, IListItem[] tail)
+    {
+        internal List<BitwardenItem> Results { get; } = results;
+        internal string SearchText { get; } = searchText;
+        internal long Generation { get; } = generation;
+        internal List<ListItem> Built { get; } = [];
+        internal List<(ListItem, BitwardenItem, Tag[])> Totp { get; } = [];
+        internal ListPager Pager { get; set; }
+        internal int ContextTagsUsed { get; set; }
+        internal IListItem[] Shown { get; private set; } = [];
+
+        internal void Refresh()
+        {
+            var items = new List<IListItem>(head.Length + Pager.Shown + tail.Length);
+            items.AddRange(head);
+            items.AddRange(Built.Take(Pager.Shown));
+            if (!Pager.HasMore)
+                items.AddRange(tail);
+            Shown = items.ToArray();
         }
     }
 
@@ -1353,6 +1454,28 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             {
                 RecoverFromFailedRefresh(ex);
             }
+        });
+    }
+
+    private void OnApiKeyLoginSubmitted(string clientId, string clientSecret)
+    {
+        DebugLogService.Log("Action", "API key login submitted by user");
+        _handlingAction = true;
+        ClearSearchText();
+        _errorMessage = null;
+        ResetPendingLogin();
+        _currentItems = [];
+        IsLoading = true;
+        RaiseItemsChanged();
+
+        RunAction(async () =>
+        {
+            ShowLoadingStatus("Logging in...", "bw login --apikey");
+            var (success, error) = await _service.LoginWithApiKeyAsync(clientId, clientSecret);
+            if (!success)
+                _errorMessage = error ?? "Login failed";
+            _currentItems = success ? BuildLockedItems() : BuildUnauthenticatedItems();
+            RaiseItemsChanged();
         });
     }
 

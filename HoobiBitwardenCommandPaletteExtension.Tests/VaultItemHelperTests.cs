@@ -233,12 +233,14 @@ public class VaultItemHelperTests
     {
       Assert.Equal("Open in window", VaultItemHelper.GetDefaultCommand(note).Name);
       Assert.NotEqual("Open in window", VaultItemHelper.GetDefaultCommand(login).Name);
-      Assert.IsType<RepromptPage>(VaultItemHelper.GetDefaultCommand(protectedNote, new BitwardenCliService()));
+      Assert.Equal("Verify password", VaultItemHelper.GetDefaultCommand(protectedNote, new BitwardenCliService()).Name);
     }
     finally
     {
       Companion.CompanionHost.Current = null;
     }
+
+    Assert.IsType<RepromptPage>(VaultItemHelper.GetDefaultCommand(protectedNote, new BitwardenCliService()));
   }
 
   [Fact]

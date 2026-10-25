@@ -1,0 +1,74 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.Views.SettingsWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:ipc="using:HoobiBitwarden.Ipc"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:SettingsViewModel"
+    Title="Bitwarden settings"
+    Width="520"
+    Height="700"
+    MinWidth="380"
+    MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid RowDefinitions="48,*" Background="Transparent">
+        <Grid x:Name="AppTitleBar" ColumnDefinitions="Auto,*,46" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+            <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+            <TextBox x:Name="SearchBox" Grid.Column="1" MaxWidth="260" Margin="16,0,8,0" VerticalAlignment="Center" PlaceholderText="Search settings" TextAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}" AutomationProperties.Name="Search settings" />
+        </Grid>
+
+        <ScrollViewer x:Name="Scroller" Grid.Row="1">
+            <StackPanel Margin="24,0,24,24">
+                <TextBlock x:Name="ErrorText" Classes="Warn" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <ItemsControl x:Name="SectionList" ItemsSource="{Binding Sections}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SettingsSectionViewModel">
+                            <StackPanel IsVisible="{Binding IsShown}">
+                                <TextBlock Classes="GroupHeader" Text="{Binding Title}" IsVisible="{Binding HasTitle}" />
+                                <Border Classes="Group">
+                                    <ItemsControl Classes="Rows" ItemsSource="{Binding Rows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:SettingRowViewModel">
+                                                <Border Classes="Row Switch" Classes.Child="{Binding IsChild}" IsVisible="{Binding IsShown}">
+                                                    <StackPanel>
+                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding !IsText}">
+                                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                                <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                                <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
+                                                            </StackPanel>
+                                                            <ToggleSwitch Grid.Column="1" MinWidth="0" VerticalAlignment="Center" IsVisible="{Binding IsToggle}" IsChecked="{Binding BoolValue, Mode=TwoWay}" OnContent="{x:Null}" OffContent="{x:Null}" AutomationProperties.Name="{Binding Label}" />
+                                                            <ComboBox Grid.Column="1" MinWidth="200" VerticalAlignment="Center" IsVisible="{Binding IsChoice}" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
+                                                                <ComboBox.ItemTemplate>
+                                                                    <DataTemplate x:DataType="ipc:ChoiceDto">
+                                                                        <TextBlock Text="{Binding Title}" />
+                                                                    </DataTemplate>
+                                                                </ComboBox.ItemTemplate>
+                                                            </ComboBox>
+                                                        </Grid>
+                                                        <StackPanel Spacing="6" IsVisible="{Binding IsText}">
+                                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                            <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
+                                                            <TextBox Text="{Binding TextValue, Mode=OneWay}" AutomationProperties.Name="{Binding Label}" />
+                                                        </StackPanel>
+                                                        <TextBlock Classes="Warn" Margin="0,6,0,0" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

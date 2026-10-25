@@ -67,4 +67,13 @@ public class TwoFactorMethodDescriptorTests
     var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(3);
     Assert.False(d.Validator(raw));
   }
+
+  [Theory]
+  [InlineData("123456", true)]
+  [InlineData("12345678", true)]
+  [InlineData("12345", false)]
+  [InlineData("123456789", false)]
+  [InlineData("12a456", false)]
+  public void IsNumericCode_AcceptsSixToEightDigits(string raw, bool expected) =>
+    Assert.Equal(expected, HoobiBitwarden.Ipc.TwoFactorRules.IsNumericCode(raw));
 }

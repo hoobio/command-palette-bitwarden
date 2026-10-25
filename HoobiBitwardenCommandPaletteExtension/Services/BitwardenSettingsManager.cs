@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
@@ -28,61 +29,67 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting RememberSession { get; } = new(
         "rememberSession",
         "Remember Session",
-        "Securely store your session key using Windows Credential Manager so you don't need to unlock each launch",
+        "Keeps your session key in Windows Credential Manager, so the vault stays unlocked when the extension restarts",
+        false);
+
+    public ToggleSetting UseApiKeyAuthentication { get; } = new(
+        "useApiKeyAuthentication",
+        "Use API Key Authentication",
+        "Log in with your personal API key instead of your email and master password. Use it for FIDO2 or Duo two-step login. The key is kept in Windows Credential Manager, and you still unlock with your master password. Changing this setting logs you out",
         false);
 
     public ToggleSetting UseDesktopIntegration { get; } = new(
         "useDesktopIntegration",
         "Integrate with Bitwarden Desktop App",
-        "Enable Windows Hello / biometric unlock by communicating with the Bitwarden Desktop app over IPC. Requires the Desktop app to be running with 'Allow browser integration' enabled",
+        "Unlock with Windows Hello through the Bitwarden Desktop app. The Desktop app must be running with 'Allow browser integration' turned on",
         true);
 
     public ToggleSetting AutoBiometricUnlock { get; } = new(
         "autoBiometricUnlock",
         "Automatically Prompt for Biometrics",
-        "Automatically attempt Windows Hello unlock when the vault is locked, without requiring you to click 'Unlock Vault' first. Falls back to the password form if biometrics are unavailable",
+        "Prompt for Windows Hello when you open the Bitwarden page on a locked vault, without selecting Unlock first. If Windows Hello is not available, the password form opens",
         true);
 
     public ToggleSetting ShowWebsiteIcons { get; } = new(
         "showWebsiteIcons",
         "Show Website Icons",
-        "Download and display website icons for login items. Disable for privacy — a generic icon will be shown instead",
+        "Download and show website icons for login items. Turn this off for privacy: items then show a generic icon",
         true);
 
     public ToggleSetting ShowWatchtowerTags { get; } = new(
         "showWatchtowerTags",
         "Show Watchtower Tags",
-        "Display warning tags for weak, old, or insecure passwords on vault items",
+        "Show warning tags on vault items with weak, old or insecure passwords",
         true);
 
     public ToggleSetting ContextAwareness { get; } = new(
         "contextAwareness",
         "Context Awareness",
-        "Detect the foreground application to boost relevant vault items to the top of results",
+        "Detect the foreground app and move matching vault items to the top of the results",
         true);
 
     public ToggleSetting ShowContextTag { get; } = new(
         "showContextTag",
         "Show Context Tag",
-        "Display a 'Context' tag on vault items that match the foreground application",
+        "Show a 'Context' tag on vault items that match the foreground app",
         false);
 
     public ToggleSetting ShowProtectedTag { get; } = new(
         "showProtectedTag",
         "Show Protected Tag",
-        "Display a \"\uD83D\uDD12\" tag on vault items that require master password re-prompt",
+        "Show a \"\uD83D\uDD12\" tag on vault items that need the master password re-prompt",
         true);
 
     public ToggleSetting ShowPasskeyTag { get; } = new(
         "showPasskeyTag",
         "Show Passkey Tag",
-        "Display a 'Passkey' tag on vault items that support passwordless sign-in",
+        "Show a 'Passkey' tag on vault items that support passwordless sign-in",
         true);
 
     public ChoiceSetSetting TotpTagStyle { get; } = new(
         "totpTagStyle",
         "TOTP Tag Style",
-        "Display a TOTP tag on vault items with an authenticator secret",
+        "Show a TOTP tag on vault items that have an authenticator key",
         [
             new("Off", "off"),
             new("Static (show 2FA badge only)", "static"),
@@ -92,7 +99,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ChoiceSetSetting OrganizationTagStyle { get; } = new(
         "organizationTagStyle",
         "Organization Tag Style",
-        "Display an organization tag on vault items owned by a Bitwarden organization. Each organization gets a stable colour, deterministic from the organization ID",
+        "Show an organisation tag on vault items owned by a Bitwarden organisation. Each organisation keeps the same colour, based on its ID",
         [
             new("Initials (compact 1-3 char badge)", "initials"),
             new("Name (full organization name)", "name"),
@@ -102,7 +109,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ChoiceSetSetting AutoLockTimeout { get; } = new(
         "autoLockTimeout",
         "Auto-Lock Timeout",
-        "Automatically lock the vault after a period of inactivity",
+        "Lock the vault after this period of inactivity",
         [
             new("Never", "0"),
             new("1 minute", "1"),
@@ -116,13 +123,13 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting AutoClearClipboard { get; } = new(
         "autoClearClipboard",
         "Auto-Clear Clipboard",
-        "Automatically clear sensitive data from clipboard after a delay",
+        "Clear sensitive data from the clipboard after a delay",
         true);
 
     public ChoiceSetSetting ContextItemLimit { get; } = new(
         "contextItemLimit",
         "Context Items Limit",
-        "Maximum number of context-matched vault items to show when no search is typed (0 = unlimited)",
+        "The number of context-matched vault items shown before you type a search",
         [
             new("1 item", "1"),
             new("2 items", "2"),
@@ -134,7 +141,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ChoiceSetSetting BackgroundRefresh { get; } = new(
         "backgroundRefresh",
         "Background Refresh Interval",
-        "How often to automatically sync vault items in the background while the vault is open",
+        "How often the vault syncs in the background while it is unlocked",
         [
             new("Never", "0"),
             new("5 minutes", "5"),
@@ -145,12 +152,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting LiveSync { get; } = new(
         "liveSync",
         "Live Sync",
-        "Sync the vault as soon as it changes on another device, like the Bitwarden apps do. While the vault is unlocked, keeps a connection open to your server's notifications service, signed in with the access token the Bitwarden CLI stores in data.json",
+        "Sync the vault as soon as it changes on another device, as the Bitwarden apps do. While the vault is unlocked, the extension keeps a connection open to your server's notifications service. It signs in with the access token that the Bitwarden CLI stores in data.json",
         true);
     public ChoiceSetSetting ClipboardClearDelay { get; } = new(
         "clipboardClearDelay",
         "Clipboard Clear Delay",
-        "How long to wait before clearing sensitive clipboard data",
+        "How long to wait before the clipboard is cleared",
         [
             new("10 seconds", "10"),
             new("15 seconds", "15"),
@@ -162,25 +169,25 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public TextSetting CliDirectoryOverride { get; } = new(
         "cliDirectoryOverride",
         "CLI Path Override",
-        "Path to the Bitwarden CLI. Accepts a directory containing bw, or a direct path to bw/bw.exe. Leave empty to use the system PATH",
+        "Path to the Bitwarden CLI: a folder that contains bw, or the full path to bw.exe. Leave empty to use the system PATH",
         "");
 
     public ToggleSetting UsePortableDataDirectory { get; } = new(
         "usePortableDataDirectory",
         "Use CLI Path as Data Directory",
-        "Store Bitwarden CLI data (data.json) alongside the CLI executable instead of the default location. Requires CLI Path Override to be set",
+        "Keep Bitwarden CLI data (data.json) next to the CLI instead of in the default location. Needs CLI Path Override",
         false);
 
     public TextSetting CliDataDirectoryOverride { get; } = new(
         "cliDataDirectoryOverride",
         "CLI Data Directory Override",
-        "Custom directory for Bitwarden CLI data (data.json). Overrides both the default location and the portable directory toggle. Leave empty to use the default or portable location",
+        "Folder for Bitwarden CLI data (data.json). It takes priority over the default location and the portable setting. Leave empty to use one of those",
         "");
 
     public ChoiceSetSetting RepromptGracePeriod { get; } = new(
         "repromptGracePeriod",
         "Re-prompt Grace Period",
-        "After verifying your master password for a protected item, skip re-verification for this duration",
+        "After you verify your master password for a protected item, the extension does not ask again for this long",
         [
             new("No grace period", "0"),
             new("30 seconds", "30"),
@@ -192,8 +199,30 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting DebugLogging { get; } = new(
         "debugLogging",
         "Debug Logging",
-        "Show a 'Copy Debug Log' button on the vault browser to help diagnose issues. Logs are always collected in memory and cleared when the extension restarts",
+        "Show a 'Copy Debug Log' item in the vault browser and write the log to %LOCALAPPDATA%\\HoobiBitwardenCommandPalette\\logs to help diagnose problems. Log files are deleted after 7 days. Logs are collected in memory whether or not this is on",
         false);
+
+    // Settings.RaiseSettingsChanged is internal to the SDK, and the public Settings.Update(json) sets values without raising it.
+    private static readonly MethodInfo RaiseSettingsChangedMethod = typeof(Microsoft.CommandPalette.Extensions.Toolkit.Settings)
+        .GetMethod("RaiseSettingsChanged", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+    private readonly List<object> _ordered = [];
+
+    internal IReadOnlyList<object> OrderedSettings => _ordered;
+
+    internal void RaiseChanged() => RaiseSettingsChangedMethod.Invoke(Settings, null);
+
+    private readonly Dictionary<string, (string Key, string Value)> _parents = [];
+
+    internal bool TryGetParent(string key, out (string Key, string Value) parent) => _parents.TryGetValue(key, out parent);
+
+    private void AddSetting<T>(Setting<T> setting, Setting<bool>? parent = null)
+    {
+        Settings.Add(setting);
+        _ordered.Add(setting);
+        if (parent is not null)
+            _parents[setting.Key] = (parent.Key, "true");
+    }
 
     public BitwardenSettingsManager(string? settingsFilePath = null)
     {
@@ -204,44 +233,46 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         OrganizationTagStyle.Value = "name";
         BackgroundRefresh.Value = "5";
         RepromptGracePeriod.Value = "60";
-        Settings.Add(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
-        Settings.Add(RememberSession);
-        Settings.Add(UseDesktopIntegration);
-        Settings.Add(AutoBiometricUnlock);
-        Settings.Add(AutoLockTimeout);
-        Settings.Add(RepromptGracePeriod);
+        AddSetting(new SectionHeaderSetting("_section_auth", "Authentication", separator: false));
+        AddSetting(RememberSession);
+        AddSetting(UseApiKeyAuthentication);
+        AddSetting(UseDesktopIntegration);
+        AddSetting(AutoBiometricUnlock, UseDesktopIntegration);
+        AddSetting(AutoLockTimeout);
+        AddSetting(RepromptGracePeriod);
 
-        Settings.Add(new SectionHeaderSetting("_section_display", "Vault Display"));
-        Settings.Add(ShowWebsiteIcons);
-        Settings.Add(ShowWatchtowerTags);
-        Settings.Add(ShowProtectedTag);
-        Settings.Add(ShowPasskeyTag);
-        Settings.Add(TotpTagStyle);
-        Settings.Add(OrganizationTagStyle);
-        Settings.Add(BackgroundRefresh);
-        Settings.Add(LiveSync);
+        AddSetting(new SectionHeaderSetting("_section_display", "Vault Display"));
+        AddSetting(ShowWebsiteIcons);
+        AddSetting(ShowWatchtowerTags);
+        AddSetting(ShowProtectedTag);
+        AddSetting(ShowPasskeyTag);
+        AddSetting(TotpTagStyle);
+        AddSetting(OrganizationTagStyle);
+        AddSetting(BackgroundRefresh);
+        AddSetting(LiveSync);
 
-        Settings.Add(new SectionHeaderSetting("_section_context", "Context Awareness"));
-        Settings.Add(ContextAwareness);
-        Settings.Add(ShowContextTag);
-        Settings.Add(ContextItemLimit);
+        AddSetting(new SectionHeaderSetting("_section_context", "Context Awareness"));
+        AddSetting(ContextAwareness);
+        AddSetting(ShowContextTag, ContextAwareness);
+        AddSetting(ContextItemLimit, ContextAwareness);
 
-        Settings.Add(new SectionHeaderSetting("_section_clipboard", "Clipboard"));
-        Settings.Add(AutoClearClipboard);
-        Settings.Add(ClipboardClearDelay);
+        AddSetting(new SectionHeaderSetting("_section_clipboard", "Clipboard"));
+        AddSetting(AutoClearClipboard);
+        AddSetting(ClipboardClearDelay, AutoClearClipboard);
 
-        Settings.Add(new SectionHeaderSetting("_section_cli", "Bitwarden CLI"));
-        Settings.Add(CliDirectoryOverride);
-        Settings.Add(UsePortableDataDirectory);
-        Settings.Add(CliDataDirectoryOverride);
+        AddSetting(new SectionHeaderSetting("_section_cli", "Bitwarden CLI"));
+        AddSetting(CliDirectoryOverride);
+        AddSetting(UsePortableDataDirectory);
+        AddSetting(CliDataDirectoryOverride);
 
-        Settings.Add(new SectionHeaderSetting("_section_advanced", "Advanced"));
-        Settings.Add(DebugLogging);
+        AddSetting(new SectionHeaderSetting("_section_advanced", "Advanced"));
+        AddSetting(DebugLogging);
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();
         SyncClipboardSettings();
         SyncRepromptSettings();
+        DebugLogService.LogDirectory = Path.Combine(Path.GetDirectoryName(FilePath) is { Length: > 0 } dir ? dir : SettingsDir, "logs");
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("startup");
     }
@@ -336,6 +367,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     private IEnumerable<(string Key, object? Value)> AllSettings()
     {
         yield return (RememberSession.Key, (object?)RememberSession.Value);
+        yield return (UseApiKeyAuthentication.Key, (object?)UseApiKeyAuthentication.Value);
         yield return (UseDesktopIntegration.Key, (object?)UseDesktopIntegration.Value);
         yield return (AutoBiometricUnlock.Key, (object?)AutoBiometricUnlock.Value);
         yield return (AutoLockTimeout.Key, AutoLockTimeout.Value);

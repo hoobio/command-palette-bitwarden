@@ -59,13 +59,47 @@ public class CompanionHostTests
   }
 
   [Fact]
-  public void Prewarm_WhenLockedOrLoggedOut_DoesNotStartTheCompanion()
+  public async Task Prewarm_WhenLoggedOut_StartsTheCompanionOnce_ForTheDialogs()
   {
-    var ops = new CompanionOps(new BitwardenCliService());
-    using var host = new CompanionHost(ops);
-    host.Prewarm();
-    ops.RaiseVaultChanged();
-    Assert.Null(host.Process);
+    var service = new BitwardenCliService();
+    var host = new CompanionHost(new CompanionOps(service));
+    try
+    {
+      Assert.False(service.IsUnlocked);
+      host.Prewarm();
+      var started = host.Process!.Id;
+      host.Prewarm();
+      Assert.Equal(started, host.Process!.Id);
+      using var companion = System.Diagnostics.Process.GetProcessById(started);
+
+      host.Dispose();
+      await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+    }
+    finally
+    {
+      host.Dispose();
+    }
+  }
+
+  [Fact]
+  public async Task StatusChange_WhileLocked_StartsTheCompanion()
+  {
+    var service = new BitwardenCliService();
+    var host = new CompanionHost(new CompanionOps(service));
+    try
+    {
+      Assert.Null(host.Process);
+      service.NotifyStatusChanged();
+      var started = host.Process!.Id;
+      using var companion = System.Diagnostics.Process.GetProcessById(started);
+
+      host.Dispose();
+      await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+    }
+    finally
+    {
+      host.Dispose();
+    }
   }
 
   [Fact]
@@ -103,6 +137,25 @@ public class CompanionHostTests
     service.SetSession("session-key");
     using var host = new CompanionHost(new CompanionOps(service), exePath: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.exe"));
     host.Prewarm();
+    Assert.Null(host.Process);
+  }
+
+  [Fact]
+  public void ShowApiKeyLogin_WithoutTheCompanionExe_DoesNotThrow()
+  {
+    using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), exePath: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.exe"));
+    host.ShowApiKeyLogin();
+    Assert.Null(host.Process);
+  }
+
+  [Fact]
+  public void ShowUnlockAndSetServer_WithoutTheCompanionExe_DoNotThrow()
+  {
+    using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), exePath: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.exe"));
+    host.ShowUnlock(true, true);
+    host.ShowSetServer();
+    host.ShowLogin();
+    host.ShowReprompt(Guid.NewGuid().ToString(), () => { });
     Assert.Null(host.Process);
   }
 
