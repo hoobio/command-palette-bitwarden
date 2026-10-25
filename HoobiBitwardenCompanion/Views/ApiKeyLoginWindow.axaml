@@ -1,8 +1,9 @@
-<Window
+<views:DialogWindow
     x:Class="HoobiBitwardenCompanion.Views.ApiKeyLoginWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:ApiKeyLoginViewModel"
     Title="Log in with your API key"
@@ -30,9 +31,9 @@
                 <TextBlock Text="Log in with your API key" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Classes="Caption" TextWrapping="Wrap" Text="In the Bitwarden web vault, open Settings &gt; Security &gt; Keys and select View API key." />
                 <TextBlock Text="Client ID" Margin="0,8,0,0" />
-                <TextBox x:Name="ClientIdBox" PlaceholderText="user.xxxxxxxx-..." Text="{Binding ClientId, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" KeyDown="OnInputKeyDown" />
+                <TextBox x:Name="ClientIdBox" PlaceholderText="user.xxxxxxxx-..." Text="{Binding ClientId, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
                 <TextBlock Text="Client secret" />
-                <TextBox x:Name="ClientSecretBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Client secret" Text="{Binding ClientSecret, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" KeyDown="OnInputKeyDown" />
+                <TextBox x:Name="ClientSecretBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Client secret" Text="{Binding ClientSecret, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
                 <Border x:Name="ErrorAlert" Classes="Alert" Classes.Danger="True" Margin="0,4,0,0" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
                 </Border>
@@ -44,4 +45,4 @@
             <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
         </StackPanel>
     </Grid>
-</Window>
+</views:DialogWindow>

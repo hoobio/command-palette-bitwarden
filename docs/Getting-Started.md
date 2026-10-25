@@ -35,7 +35,7 @@ dotnet build -c Debug -p:Platform=x64
 
 1. Open the Command Palette (default: `Win + Ctrl + Space`)
 2. Type **"Bitwarden"** to open the vault browser
-3. If your vault is locked, you'll be prompted for your master password
+3. If your vault is locked, select **Unlock Vault**. The companion window opens and asks for your master password. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead. See [Unlock](Companion-Window#unlock).
 4. Once unlocked, vault items are cached locally and refreshed every 5 minutes
 
 ### API key login
@@ -50,7 +50,7 @@ The extension stores the API key in Windows Credential Manager. When the CLI ses
 
 ## Setting Your Server
 
-Select **Set Bitwarden Server** from the vault browser to pick a preset (**Bitwarden Cloud** for `bitwarden.com`, **Bitwarden EU** for `https://vault.bitwarden.eu`) or type a self-hosted server URL. The default is `https://vault.bitwarden.com`. Only the exact hosts `bitwarden.com` and its subdomains are treated as cloud. A self-hosted server on a host that only contains "bitwarden.com" in its name is treated as self-hosted.
+Select **Set Bitwarden Server** from the vault browser. The companion window opens, where you pick a region (**Bitwarden Cloud** for `bitwarden.com`, **Bitwarden EU** for `https://vault.bitwarden.eu`) or enter a self-hosted server URL. If the companion is not available, the item opens a list in Command Palette instead. See [Server URL](Companion-Window#server-url). The default is `https://vault.bitwarden.com`. Only the exact hosts `bitwarden.com` and its subdomains are treated as cloud. A self-hosted server on a host that only contains "bitwarden.com" in its name is treated as self-hosted.
 
 ## Sign-in Security
 

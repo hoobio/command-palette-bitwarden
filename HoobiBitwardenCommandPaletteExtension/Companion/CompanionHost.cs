@@ -65,6 +65,27 @@ internal sealed partial class CompanionHost : IDisposable
     _ = SendAsync(Ops.ShowApiKeyLogin, IpcJson.ToElement(new DialogRequest(returnWindow), IpcJson.Default.DialogRequest));
   }
 
+  public void ShowUnlock(bool rememberSession, bool windowsHello)
+  {
+    var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
+    _ = CommandPaletteModalScope.Enter();
+    _ = SendAsync(Ops.ShowUnlock, IpcJson.ToElement(new UnlockDialogRequest(returnWindow, rememberSession, windowsHello), IpcJson.Default.UnlockDialogRequest));
+  }
+
+  public void ShowSetServer()
+  {
+    var url = BitwardenCliService.ServerUrl;
+    var region = Pages.SetServerPage.DetectPreset(url) switch
+    {
+      "bitwarden.com" => ServerRegions.Cloud,
+      "bitwarden.eu" => ServerRegions.Eu,
+      _ => ServerRegions.SelfHosted,
+    };
+    var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
+    _ = CommandPaletteModalScope.Enter();
+    _ = SendAsync(Ops.ShowSetServer, IpcJson.ToElement(new SetServerDialogRequest(returnWindow, region, url), IpcJson.Default.SetServerDialogRequest));
+  }
+
   public void RotateItem(string id) =>
     _ = SendAsync(Ops.RotateItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
 

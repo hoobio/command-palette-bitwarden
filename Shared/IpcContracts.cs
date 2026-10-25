@@ -39,6 +39,17 @@ internal static class Ops
   public const string RotateItem = "rotateItem";
   public const string ShowApiKeyLogin = "showApiKeyLogin";
   public const string ApiKeyLogin = "apiKeyLogin";
+  public const string ShowUnlock = "showUnlock";
+  public const string Unlock = "unlock";
+  public const string ShowSetServer = "showSetServer";
+  public const string SetServer = "setServer";
+}
+
+internal static class ServerRegions
+{
+  public const string Cloud = "cloud";
+  public const string Eu = "eu";
+  public const string SelfHosted = "selfHosted";
 }
 
 internal static class GeneratorKinds
@@ -141,6 +152,27 @@ internal sealed record DialogRequest(long ReturnWindow);
 internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
 
 internal sealed record ApiKeyLoginResponse(bool Success, string? Error);
+
+internal sealed record UnlockDialogRequest(long ReturnWindow, bool RememberSession, bool WindowsHello);
+
+internal sealed record UnlockRequest(string Password, bool RememberSession, bool Biometric = false);
+
+internal sealed record UnlockResponse(bool Success, string? Error, bool LoggedOut = false);
+
+internal sealed record SetServerDialogRequest(long ReturnWindow, string Region, string? Url);
+
+internal sealed record SetServerRequest(
+  string Region,
+  string? BaseUrl,
+  string? WebVaultUrl = null,
+  string? ApiUrl = null,
+  string? IdentityUrl = null,
+  string? IconsUrl = null,
+  string? NotificationsUrl = null,
+  string? EventsUrl = null,
+  string? KeyConnectorUrl = null);
+
+internal sealed record SetServerResponse(bool Success, string? Error);
 
 internal sealed record SecretResponse(string Value);
 
@@ -266,6 +298,12 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 [JsonSerializable(typeof(DialogRequest))]
 [JsonSerializable(typeof(ApiKeyLoginRequest))]
 [JsonSerializable(typeof(ApiKeyLoginResponse))]
+[JsonSerializable(typeof(UnlockDialogRequest))]
+[JsonSerializable(typeof(UnlockRequest))]
+[JsonSerializable(typeof(UnlockResponse))]
+[JsonSerializable(typeof(SetServerDialogRequest))]
+[JsonSerializable(typeof(SetServerRequest))]
+[JsonSerializable(typeof(SetServerResponse))]
 [JsonSerializable(typeof(RepromptRequest))]
 [JsonSerializable(typeof(SecretResponse))]
 [JsonSerializable(typeof(TotpResponse))]

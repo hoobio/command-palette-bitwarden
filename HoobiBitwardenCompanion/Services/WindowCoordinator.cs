@@ -12,7 +12,7 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
-  private ApiKeyLoginWindow? _apiKeyLoginWindow;
+  private readonly Dictionary<Type, DialogWindow> _dialogs = [];
   private FiltersResponse? _filters;
 
   public WindowCoordinator(Stream input, Stream output) =>
@@ -89,6 +89,14 @@ internal sealed class WindowCoordinator : IDisposable
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
         await Dispatcher.UIThread.InvokeAsync(() => ShowApiKeyLogin((nint)(dialog?.ReturnWindow ?? 0)));
         return null;
+      case Ops.ShowUnlock:
+        var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowUnlock((nint)unlock.ReturnWindow, unlock.RememberSession, unlock.WindowsHello));
+        return null;
+      case Ops.ShowSetServer:
+        var server = IpcJson.Read(payload, IpcJson.Default.SetServerDialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowSetServer((nint)server.ReturnWindow, server.Region, server.Url));
+        return null;
       case Ops.NewItem:
         Dispatcher.UIThread.Post(() => _ = ShowNewItemAsync());
         return null;
@@ -148,23 +156,32 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
-  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0)
+  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0) =>
+    ShowDialog(() => new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel)), returnWindow);
+
+  public UnlockWindow ShowUnlock(nint returnWindow = 0, bool rememberSession = false, bool windowsHello = false) =>
+    ShowDialog(() => new UnlockWindow(new UnlockViewModel(Channel, rememberSession, windowsHello)), returnWindow);
+
+  public SetServerWindow ShowSetServer(nint returnWindow = 0, string region = ServerRegions.Cloud, string? url = null) =>
+    ShowDialog(() => new SetServerWindow(new SetServerViewModel(Channel, region, url)), returnWindow);
+
+  private T ShowDialog<T>(Func<T> create, nint returnWindow) where T : DialogWindow
   {
-    if (_apiKeyLoginWindow is null)
+    if (!_dialogs.TryGetValue(typeof(T), out var existing))
     {
-      var window = new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel));
+      var window = create();
       window.Closed += (_, _) =>
       {
-        _apiKeyLoginWindow = null;
+        _dialogs.Remove(typeof(T));
         ReturnForeground(window.ReturnWindow);
       };
-      _apiKeyLoginWindow = window;
+      _dialogs[typeof(T)] = existing = window;
     }
 
     if (returnWindow != 0)
-      _apiKeyLoginWindow.ReturnWindow = returnWindow;
-    BringToFront(_apiKeyLoginWindow);
-    return _apiKeyLoginWindow;
+      existing.ReturnWindow = returnWindow;
+    BringToFront(existing);
+    return (T)existing;
   }
 
   // The extension lists collections with bw, so a new item window opens from the last list and refreshes it afterwards.

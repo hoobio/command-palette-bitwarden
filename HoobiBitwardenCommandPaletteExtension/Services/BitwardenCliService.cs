@@ -728,6 +728,8 @@ internal sealed partial class BitwardenCliService
 
   internal BitwardenSettingsManager? Settings => _settings;
 
+  internal void NotifyStatusChanged() => StatusChanged?.Invoke();
+
   public async Task<(bool Success, string? Error)> VerifyWithBiometricsAsync(Action<string>? onStatus = null)
   {
     DebugLogService.Log("Reprompt", "Verifying via biometrics");

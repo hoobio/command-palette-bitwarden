@@ -656,7 +656,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true && _settings?.AutoBiometricUnlock.Value == true;
         ICommand command = biometricEnabled && !_biometricClickFailed
             ? new AnonymousCommand(OnBiometricUnlockRequested) { Name = "Unlock with Windows Hello", Result = CommandResult.KeepOpen() }
-            : new Pages.UnlockVaultPage(_settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
+            : CompanionHost.Current is { } companion
+                ? new AnonymousCommand(() => companion.ShowUnlock(_settings?.RememberSession.Value == true, _settings?.UseDesktopIntegration.Value == true)) { Name = "Unlock", Result = CommandResult.KeepOpen() }
+                : new Pages.UnlockVaultPage(_settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
 
         var item = new ListItem(command)
         {
@@ -671,7 +673,9 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         return item;
     }
 
-    private ListItem BuildSetServerItem() => new(new Pages.SetServerPage(OnSetServerSubmitted))
+    private ListItem BuildSetServerItem() => new(CompanionHost.Current is { } companion
+        ? (ICommand)new AnonymousCommand(companion.ShowSetServer) { Name = "Set server", Result = CommandResult.KeepOpen() }
+        : new Pages.SetServerPage(OnSetServerSubmitted))
     {
         Title = "Set Bitwarden Server",
         Subtitle = BitwardenCliService.ServerUrl ?? "bitwarden.com",

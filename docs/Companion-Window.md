@@ -135,6 +135,28 @@ When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bi
 
 The window stays open when you switch to another app, for example to copy the values from the web vault. While the extension logs in, the boxes and buttons are disabled. A failed login shows the error from the CLI and keeps the values. A successful login clears the values, closes the window and returns focus to Command Palette. Command Palette then shows **Unlock**. The window does not close when the vault is locked, because you are logged out, not locked.
 
+## Unlock
+
+When the vault is locked, **Unlock Vault** opens the **Unlock your vault** window. Command Palette stays open behind it. The window has a masked **Master password** box with an eye button, a **Remember session** box, an **Unlock** button and **Cancel**. **Use Windows Hello** shows when **Integrate with Bitwarden Desktop App** is on in [Settings](Settings#integrate-with-bitwarden-desktop-app). `Enter` in the password box unlocks. `Esc` and **Cancel** close the window.
+
+- **Remember session** starts with the value of the setting. **Unlock** saves the box value to the setting, as the Command Palette form does.
+- **Unlock** and **Use Windows Hello** disable the boxes and buttons while the extension works. Windows Hello waits for the Windows Hello prompt.
+- A wrong password shows "Invalid password entered" and keeps the window open and the password in the box. Other CLI errors show as the CLI reports them.
+- A successful unlock clears the password, closes the window and returns focus to Command Palette. Command Palette then loads the vault and shows the item list.
+- If the CLI reports that you are not logged in, the window closes and Command Palette shows **Login to Bitwarden**.
+- The window stays open when the vault is locked, because it is the way to unlock.
+- The item in Command Palette still starts Windows Hello at once when **Automatically Prompt for Biometrics** is on, and it opens the window when Windows Hello fails.
+
+## Server URL
+
+**Set Bitwarden Server** opens the **Set Bitwarden server** window. Command Palette stays open behind it. The window has these parts:
+
+- **Region** is **Bitwarden Cloud (bitwarden.com)**, **Bitwarden EU (vault.bitwarden.eu)** or **Self-hosted**. The box starts with the region of the current server.
+- **Server URL** shows for **Self-hosted**. It must start with `http://` or `https://`.
+- **Advanced URL overrides** shows for **Self-hosted**. It has **Web Vault URL**, **API URL**, **Identity URL**, **Icons URL**, **Notifications URL**, **Events URL** and **Key Connector URL**. A blank box derives the URL from the server URL. A filled box must start with `https://`.
+
+**Save** logs out of a locked or unlocked vault first, as the Command Palette list does, and then saves the server. A URL that is not valid, or an error from the CLI, shows in the window and keeps the values. A saved server closes the window and returns focus to Command Palette, which then shows **Login to Bitwarden**. `Esc` and **Cancel** close the window.
+
 ## Locked vault
 
 When the vault locks or auto-locks, every item window removes the values it shows, closes an open edit form without saving, stops the verification code and shows that the vault is locked. New item windows close without saving. An open generator, in a dialog or in its own window, removes its value and history. Unlock the vault in Command Palette. The open item windows then load the item again.

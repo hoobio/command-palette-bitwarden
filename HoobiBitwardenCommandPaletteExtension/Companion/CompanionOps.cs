@@ -91,6 +91,11 @@ internal sealed partial class CompanionOps : IDisposable
         case Ops.ApiKeyLogin:
           var login = IpcJson.Read(payload, IpcJson.Default.ApiKeyLoginRequest);
           return IpcJson.ToElement(await ApiKeyLoginAsync(login.ClientId, login.ClientSecret), IpcJson.Default.ApiKeyLoginResponse);
+        case Ops.Unlock:
+          var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockRequest);
+          return IpcJson.ToElement(await UnlockAsync(unlock.Password, unlock.RememberSession, unlock.Biometric), IpcJson.Default.UnlockResponse);
+        case Ops.SetServer:
+          return IpcJson.ToElement(await SetServerAsync(IpcJson.Read(payload, IpcJson.Default.SetServerRequest)), IpcJson.Default.SetServerResponse);
         case Ops.ListFilters:
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
         case Ops.CreateItem:

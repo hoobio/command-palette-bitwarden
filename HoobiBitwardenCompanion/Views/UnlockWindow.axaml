@@ -1,0 +1,47 @@
+<views:DialogWindow
+    x:Class="HoobiBitwardenCompanion.Views.UnlockWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:views="using:HoobiBitwardenCompanion.Views"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:UnlockViewModel"
+    Title="Unlock your vault"
+    Width="440"
+    Height="380"
+    MinWidth="340"
+    MinHeight="340"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid RowDefinitions="48,*,Auto" Background="Transparent">
+        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="16" VerticalAlignment="Center" />
+                <TextBlock Text="Unlock your vault" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel Margin="24,8,24,16" Spacing="8">
+                <TextBlock Text="Unlock your vault" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="Master password" Margin="0,8,0,0" />
+                <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Master password" Text="{Binding Password, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                <CheckBox x:Name="RememberBox" Content="Remember session" IsChecked="{Binding RememberSession, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                <Border x:Name="ErrorAlert" Classes="Alert" Classes.Danger="True" Margin="0,4,0,0" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,8,24,24">
+            <Button x:Name="UnlockButton" Theme="{StaticResource AccentButtonStyle}" Content="Unlock" Command="{Binding SubmitCommand}" IsEnabled="{Binding !IsBusy}" />
+            <Button x:Name="HelloButton" Content="Use Windows Hello" Command="{Binding SubmitBiometricCommand}" IsVisible="{Binding WindowsHello}" IsEnabled="{Binding !IsBusy}" />
+            <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
+        </StackPanel>
+    </Grid>
+</views:DialogWindow>

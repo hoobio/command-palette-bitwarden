@@ -29,7 +29,7 @@ internal sealed partial class SetServerPage : DynamicListPage
     RaiseItemsChanged();
   }
 
-  private static string DetectPreset(string? serverUrl)
+  internal static string DetectPreset(string? serverUrl)
   {
     if (string.IsNullOrEmpty(serverUrl) || VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.com"))
       return "bitwarden.com";
