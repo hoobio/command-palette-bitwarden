@@ -21,6 +21,9 @@ public class CompanionOpsTests
     public List<string> Opened { get; } = [];
     public BitwardenCliService Service { get; } = new();
     public string ExpectedPassword { get; set; } = "correct";
+    public bool BiometricEnabled { get; set; }
+    public bool BiometricVerifies { get; set; }
+    public int BiometricPrompts { get; private set; }
     public CompanionOps Ops { get; }
 
     public Harness(params BitwardenItem[] items)
@@ -32,7 +35,13 @@ public class CompanionOpsTests
         password => Task.FromResult(password == ExpectedPassword),
         SecretCopies.Add,
         (text, sensitive) => TextCopies.Add((text, sensitive)),
-        Opened.Add);
+        Opened.Add,
+        verifyBiometric: () =>
+        {
+          BiometricPrompts++;
+          return Task.FromResult(BiometricVerifies);
+        },
+        biometricEnabled: () => BiometricEnabled);
     }
   }
 
@@ -301,6 +310,38 @@ public class CompanionOpsTests
       RepromptPage.GracePeriodSeconds = 60;
       RepromptPage.ClearGracePeriod();
     }
+  }
+
+  [Fact]
+  public async Task VerifyReprompt_WithWindowsHello_IsCheckedByTheExtension_AndOnlyWhenTheSettingIsOn()
+  {
+    RepromptPage.ClearGracePeriod();
+    var id = NewId();
+    var h = new Harness(Login(id, reprompt: 1));
+    var request = new RepromptRequest(id, null, Ops.GetItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest), Biometric: true);
+
+    Assert.False(h.Ops.GetItem(id).BiometricAvailable);
+    var off = await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken));
+    Assert.Equal(IpcErrors.Invalid, off.Code);
+    Assert.Equal(0, h.BiometricPrompts);
+
+    h.BiometricEnabled = true;
+    Assert.True(h.Ops.GetItem(id).BiometricAvailable);
+    var denied = IpcJson.Read(await h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken), IpcJson.Default.RepromptResponse);
+    Assert.False(denied.Verified);
+    Assert.Null(denied.Result);
+    Assert.False(RepromptPage.IsWithinGracePeriod(id));
+
+    h.BiometricVerifies = true;
+    var verified = IpcJson.Read(await h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken), IpcJson.Default.RepromptResponse);
+    Assert.True(verified.Verified);
+    Assert.NotEmpty(IpcJson.Read(verified.Result, IpcJson.Default.ItemDto).Fields);
+    Assert.True(RepromptPage.IsWithinGracePeriod(id));
+    Assert.NotNull(verified.Grace);
+    Assert.Equal(2, h.BiometricPrompts);
+    var plain = NewId();
+    Assert.False(new Harness(Login(plain)) { BiometricEnabled = true }.Ops.GetItem(plain).BiometricAvailable);
+    RepromptPage.ClearGracePeriod();
   }
 
   [Fact]

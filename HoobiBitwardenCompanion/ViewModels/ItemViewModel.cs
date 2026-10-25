@@ -205,6 +205,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public partial bool IsVerifying { get; private set; }
 
   [ObservableProperty]
+  public partial bool BiometricAvailable { get; private set; }
+
+  [ObservableProperty]
   public partial string? PasswordError { get; private set; }
 
   [ObservableProperty]
@@ -287,18 +290,22 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _pendingWrite?.Done.TrySetResult((false, null, IpcErrors.Reprompt));
   }
 
-  internal async Task SubmitPasswordAsync(string? password)
+  internal Task SubmitPasswordAsync(string? password) => string.IsNullOrEmpty(password) ? Task.CompletedTask : SubmitAsync(password, biometric: false);
+
+  internal Task SubmitBiometricAsync() => SubmitAsync(null, biometric: true);
+
+  private async Task SubmitAsync(string? password, bool biometric)
   {
-    if (IsVerifying || string.IsNullOrEmpty(password))
+    if (IsVerifying)
       return;
     IsVerifying = true;
     PasswordError = null;
     try
     {
       if (_pendingWrite is { } pending)
-        await VerifyPendingAsync(pending, password);
+        await VerifyPendingAsync(pending, password, biometric);
       else
-        await VerifyRepromptAsync(password);
+        await VerifyRepromptAsync(password, biometric);
     }
     finally
     {
@@ -306,9 +313,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
   }
 
-  private async Task VerifyPendingAsync((string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done) pending, string password)
+  private async Task VerifyPendingAsync((string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done) pending, string? password, bool biometric)
   {
-    var (ok, reply, _) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, pending.Op, pending.Payload), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
+    var (ok, reply, _) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, pending.Op, pending.Payload, biometric), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
     if (!ok)
     {
       FailPassword(ErrorMessage);
@@ -318,7 +325,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
     if (!result.Verified)
     {
-      FailPassword(DescribeFailedReprompt(result));
+      FailPassword(DescribeFailedReprompt(result, biometric));
       return;
     }
 
@@ -401,6 +408,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     TypeGlyph = GlyphFor(item.Type);
     IconPath = item.IconPath;
     HasPassword = item.HasPassword;
+    BiometricAvailable = item.BiometricAvailable;
     ItemType = item.Type;
     _inOrganization = item.OrganizationName is not null;
     RepromptRequired = item.RepromptRequired;
@@ -466,10 +474,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       await RunAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(Id, index, _revisionDate), IpcJson.Default.UriRequest), _ => { });
   }
 
-  public async Task<bool> VerifyRepromptAsync(string password)
+  public async Task<bool> VerifyRepromptAsync(string? password, bool biometric = false)
   {
     var (op, payload, onSuccess) = _repromptRetry ?? (Ops.GetItem, ItemPayload, reply => Apply(IpcJson.Read(reply, IpcJson.Default.ItemDto)));
-    var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest));
+    var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload, biometric), IpcJson.Default.RepromptRequest),
+      biometric ? Timeout.InfiniteTimeSpan : null);
     if (!ok)
     {
       if (error == IpcErrors.Stale)
@@ -482,7 +491,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
     if (!result.Verified)
     {
-      PasswordError = DescribeFailedReprompt(result);
+      PasswordError = DescribeFailedReprompt(result, biometric);
       return false;
     }
 
@@ -920,9 +929,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _ => "Something went wrong.",
   };
 
-  private static string DescribeFailedReprompt(RepromptResponse result) => result.CooldownSeconds > 0
+  private static string DescribeFailedReprompt(RepromptResponse result, bool biometric) => result.CooldownSeconds > 0
     ? $"Too many failed attempts. Try again in {result.CooldownSeconds}s."
-    : "Incorrect master password.";
+    : biometric ? "Windows Hello verification was cancelled or denied." : "Incorrect master password.";
 
   internal static string GlyphFor(int type) => type switch
   {

@@ -131,6 +131,8 @@
                                     <TextBlock Text="Verify" />
                                 </StackPanel>
                             </Button>
+                            <Button x:Name="BiometricButton" Content="Use Windows Hello" IsVisible="{Binding BiometricAvailable}" IsEnabled="{Binding !IsVerifying}" Click="OnBiometricClick" />
+
                         </StackPanel>
                     </Border>
                 </Border>

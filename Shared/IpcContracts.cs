@@ -132,7 +132,7 @@ internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDa
 
 internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
-internal sealed record RepromptRequest(string Id, string Password, string? Op = null, JsonElement? Payload = null);
+internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
 internal sealed record SecretResponse(string Value);
 
@@ -160,7 +160,8 @@ internal sealed record ItemDto(
   IReadOnlyList<AttachmentDto>? Attachments = null,
   string? IconPath = null,
   GraceDto? Grace = null,
-  bool HasPassword = false);
+  bool HasPassword = false,
+  bool BiometricAvailable = false);
 
 internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
 

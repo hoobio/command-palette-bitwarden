@@ -140,6 +140,8 @@ internal sealed partial class ItemView : UserControl
 
   private void OnVerifyClick(object? sender, RoutedEventArgs e) => _ = SubmitPasswordAsync();
 
+  private void OnBiometricClick(object? sender, RoutedEventArgs e) => _ = (DataContext as ItemViewModel)?.SubmitBiometricAsync();
+
   private void OnPasswordKeyDown(object? sender, KeyEventArgs e)
   {
     if (e.Key == Key.Enter)

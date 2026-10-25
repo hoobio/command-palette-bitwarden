@@ -72,9 +72,17 @@ public class ItemWindowTests(AvaloniaSession session)
       };
     }
 
+    public bool BiometricAvailable { get; set; }
+
+    public bool BiometricVerifies { get; set; }
+
+    public List<RepromptRequest> Verifications { get; } = [];
+
     private JsonElement VerifyReprompt(RepromptRequest request)
     {
-      var ok = request.Password == "correct";
+      lock (Requests)
+        Verifications.Add(request);
+      var ok = request.Biometric ? BiometricVerifies : request.Password == "correct";
       if (ok)
       {
         RepromptRequired = false;
@@ -103,7 +111,8 @@ public class ItemWindowTests(AvaloniaSession session)
         .. WithNotes ? [new FieldDto(ItemFields.Notes, "Notes", "Additional options", null, true, IsMultiline: true)] : Array.Empty<FieldDto>(),
       ],
       Grace: RepromptRequired ? null : _grace,
-      HasPassword: true);
+      HasPassword: true,
+      BiometricAvailable: BiometricAvailable);
   }
 
   private static FieldViewModel Field(ItemViewModel vm, string key) => vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == key);
@@ -253,6 +262,41 @@ public class ItemWindowTests(AvaloniaSession session)
 
     Assert.Equal("oct", copied);
     Assert.Equal(1, extension.Count(Ops.Copy));
+    window.Close();
+  });
+
+  [Fact]
+  public Task PasswordPanel_OffersWindowsHello_OnlyWhenTheExtensionAllowsIt() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { RepromptRequired = true };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(ItemId, channel);
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+    window.UpdateLayout();
+    var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BiometricButton");
+    Assert.False(button.IsEffectivelyVisible);
+
+    extension.BiometricAvailable = true;
+    await vm.LoadAsync();
+    window.UpdateLayout();
+    Assert.True(button.IsEffectivelyVisible);
+
+    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    AvaloniaSession.WaitFor(() => vm.PasswordError is not null);
+    Assert.Equal("Windows Hello verification was cancelled or denied.", vm.PasswordError);
+    var request = Assert.Single(extension.Verifications);
+    Assert.True(request.Biometric);
+    Assert.Null(request.Password);
+    Assert.True(vm.RepromptRequired);
+
+    extension.BiometricVerifies = true;
+    await vm.SubmitBiometricAsync();
+    Assert.False(vm.RepromptRequired);
+    Assert.NotEmpty(vm.Groups);
+    Assert.Null(vm.PasswordError);
     window.Close();
   });
 
