@@ -404,10 +404,15 @@ public class VaultToolsTests(AvaloniaSession session)
     Assert.Equal("Password replaced and copied", h.Toasts[^1]);
     Assert.Equal(["Saving the new password to Bitwarden…", null], h.BusyMessages);
     Assert.False(vm.IsBusy);
+    var alerts = 0;
+    vm.WriteFailed += () => alerts++;
+    Assert.False(vm.IsWriteFailure);
 
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Unknown;
     await vm.RotateCommand.ExecuteAsync(null);
     Assert.Contains("nothing was copied", vm.ErrorMessage, StringComparison.Ordinal);
+    Assert.True(vm.IsWriteFailure);
+    Assert.Equal(1, alerts);
 
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Conflict;
     await vm.RotateCommand.ExecuteAsync(null);
@@ -416,6 +421,9 @@ public class VaultToolsTests(AvaloniaSession session)
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Failed;
     await vm.RotateCommand.ExecuteAsync(null);
     Assert.Equal("Bitwarden did not save the new password. Nothing was copied.", vm.ErrorMessage);
+    Assert.Equal(3, alerts);
+    vm.ErrorMessage = null;
+    Assert.False(vm.IsWriteFailure);
 
     h.Extension.FailWith.Clear();
     h.Extension.Reprompt = true;

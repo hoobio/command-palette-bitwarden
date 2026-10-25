@@ -580,10 +580,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private async Task OnEditFailedAsync(string? error)
   {
     if (error == IpcErrors.Failed)
-      ErrorMessage = "Bitwarden did not save the change.";
+      FailWrite("Bitwarden did not save the change.");
     if (error is not (IpcErrors.Conflict or IpcErrors.Unknown))
       return;
     ErrorMessage = null;
+    WriteFailed?.Invoke();
     var (title, message) = error == IpcErrors.Conflict
       ? ("Item changed", "This item changed in the vault after you started editing.")
       : ("Save not confirmed", "Bitwarden did not confirm the change. Reload the item to see what the vault holds.");
@@ -594,8 +595,23 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
     else
     {
-      ErrorMessage = Describe(new IpcException(error));
+      FailWrite(Describe(new IpcException(error)), alert: false);
     }
+  }
+
+  internal event Action? WriteFailed;
+
+  [ObservableProperty]
+  public partial bool IsWriteFailure { get; private set; }
+
+  partial void OnErrorMessageChanged(string? value) => IsWriteFailure = false;
+
+  private void FailWrite(string? message, bool alert = true)
+  {
+    ErrorMessage = message;
+    IsWriteFailure = true;
+    if (alert)
+      WriteFailed?.Invoke();
   }
 
   [RelayCommand]
@@ -723,13 +739,15 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       return;
     if (error is IpcErrors.Conflict or IpcErrors.Unknown or IpcErrors.Stale)
       await LoadAsync();
-    ErrorMessage = error switch
+    var failure = error switch
     {
       IpcErrors.Unknown => "Bitwarden did not confirm the new password, so nothing was copied. Check the item before you use the password.",
       IpcErrors.Conflict or IpcErrors.Stale => "This item changed in the vault. The password was not replaced and nothing was copied.",
       IpcErrors.Failed => "Bitwarden did not save the new password. Nothing was copied.",
-      _ => ErrorMessage,
+      _ => null,
     };
+    if (failure is not null)
+      FailWrite(failure);
   }
 
   internal async Task RotateAfterLoadAsync()

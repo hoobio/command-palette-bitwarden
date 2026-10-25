@@ -330,8 +330,12 @@ public class EditTests(AvaloniaSession session)
     h.Extension.FailWith = IpcErrors.Failed;
     await vm.EditCommand.ExecuteAsync(null);
     h.Extension.FailOp = null;
+    var alerts = 0;
+    vm.WriteFailed += () => alerts++;
     await vm.SaveCommand.ExecuteAsync(null);
     Assert.Equal("Bitwarden did not save the change.", vm.ErrorMessage);
+    Assert.True(vm.IsWriteFailure);
+    Assert.Equal(1, alerts);
   });
 
   [Fact]

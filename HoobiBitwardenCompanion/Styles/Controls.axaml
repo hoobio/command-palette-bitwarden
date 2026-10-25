@@ -669,6 +669,15 @@
         <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
     </Style>
 
+    <Style Selector="Border.Alert.Danger">
+        <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+        <Setter Property="TextElement.FontWeight" Value="SemiBold" />
+    </Style>
+
     <Style Selector="Panel.Ring">
         <Setter Property="Width" Value="32" />
         <Setter Property="Height" Value="32" />

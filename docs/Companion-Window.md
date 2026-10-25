@@ -37,6 +37,7 @@ All item types also show Custom fields, Additional options (notes) and Item hist
 - The copy button copies through the extension. Secrets are excluded from clipboard history and cleared after the time set in [Settings](Settings), also after you close the window.
 - The verification code changes at the end of each period. The ring shows the seconds left in the current period. The ring and the number turn yellow for the last 5 seconds.
 - The open button on a website opens it in your browser. Only `http` and `https` addresses open.
+- When a save, a rotate or another change does not reach the vault, the window plays the Windows error sound, flashes its taskbar button until you switch to it, and shows a red message with a warning icon at the top of the item.
 - A failed request shows as a yellow message at the top of the item. Red is used only for actions that you cannot undo. When an action fails because the item changed in the vault, the window reloads the item and a yellow message at the top says so.
 - The result of a successful action (copy, save, rotate, attach, download or delete an attachment, copy from the generator) shows in a small toast at the bottom centre of the monitor that holds the window, above the taskbar, as in Command Palette. The toast names the field or file, never its value. It does not take focus, has no taskbar button and goes away after about 2 seconds. A new result replaces the text and starts the 2 seconds again.
 

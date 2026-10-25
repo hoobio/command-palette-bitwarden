@@ -19,6 +19,8 @@ internal sealed partial class ItemWindow : Window
     DataContext = viewModel;
     Topmost = AlwaysOnTop;
     AppTitleBar.PointerPressed += OnTitleBarPointerPressed;
+    if (viewModel is not null)
+      viewModel.WriteFailed += () => WindowAlertInterop.Raise(this);
   }
 
   internal ItemViewModel? ViewModel => DataContext as ItemViewModel;
