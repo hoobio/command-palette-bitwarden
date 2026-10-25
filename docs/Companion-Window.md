@@ -116,7 +116,7 @@ The generator window has **Save as new item** at the bottom. It opens a [new ite
 
 **Rotate** (next to the **Password** label in the item window of a login that has a password) or **Rotate password** (in the Command Palette more-commands menu) opens the **Rotate password** dialog in the item window:
 
-1. The **Current password** row is at the top. It is masked. Press and hold the eye button to show it; it is masked and cleared again when you release the button. The copy button copies it through the extension.
+1. The item's first website (a link that opens in your browser) and its username (with a copy button) are at the top, so you can sign in to the site from the dialog. The **Current password** row is below them. It is masked. Press and hold the eye button to show it; it is masked and cleared again when you release the button. The copy button copies it through the extension.
 2. The generator is below it, with the saved options. Change the options or select **Regenerate** until you have the password that you want.
 3. **Save** saves the value that the dialog shows. The extension uses its own copy of that generated value, so the saved password is the one that you saw. The save has the same checks as an edit: the item must not have changed in the vault, and the extension reads the item back and compares the password. The old password goes into password history.
 4. The extension copies the new password with the clipboard clear timer.
