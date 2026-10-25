@@ -253,9 +253,9 @@
                                 Margin="16"
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Center">
-                                <Grid Name="DialogSpace" RowDefinitions="*,Auto" Margin="24">
+                                <Grid Name="DialogSpace" RowDefinitions="*,Auto">
                                     <ScrollViewer Name="ContentScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                        <StackPanel Spacing="12">
+                                        <StackPanel Spacing="12" Margin="24,24,24,0">
                                             <StackPanel.Styles>
                                                 <Style Selector="TextBlock">
                                                     <Setter Property="TextWrapping" Value="Wrap" />
@@ -276,7 +276,7 @@
                                                 Foreground="{TemplateBinding Foreground}" />
                                         </StackPanel>
                                     </ScrollViewer>
-                                    <Grid Name="CommandSpace" Grid.Row="1" Margin="0,24,0,0" ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto,Auto">
+                                    <Grid Name="CommandSpace" Grid.Row="1" Margin="24" ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto,Auto">
                                         <Button Name="PrimaryButton" Theme="{StaticResource AccentButtonStyle}" Content="{TemplateBinding PrimaryButtonText}" IsEnabled="{TemplateBinding IsPrimaryButtonEnabled}" IsVisible="False" />
                                         <Button Name="SecondaryButton" Theme="{StaticResource DangerButtonStyle}" Content="{TemplateBinding SecondaryButtonText}" IsEnabled="{TemplateBinding IsSecondaryButtonEnabled}" IsVisible="False" />
                                         <Button Name="CloseButton" Theme="{StaticResource DialogCloseButtonStyle}" Content="{TemplateBinding CloseButtonText}" IsVisible="False" />
@@ -554,6 +554,8 @@
         <Setter Property="MinHeight" Value="32" />
         <Setter Property="Height" Value="32" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="ButtonSpinnerLocation" Value="Right" />
     </Style>
 

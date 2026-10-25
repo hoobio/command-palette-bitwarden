@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -44,12 +45,17 @@ internal sealed partial class GeneratorView : UserControl
       viewModel.OnLocked();
   }
 
+  private const double DialogChromeHeight = 320;
+
   internal static FAContentDialog CreateDialog(GeneratorViewModel viewModel, string title = "Generator", string primaryLabel = "Use password", string closeLabel = "Close")
   {
+    // The dialog host does not bound the dialog height, so this scroll area does; the negative margin puts its scroll bar on the dialog edge.
+    var scroll = new ScrollViewer { Margin = new Thickness(0, 0, -24, 0), Content = new GeneratorView { DataContext = viewModel, Margin = new Thickness(0, 0, 24, 0) } };
+    scroll.AttachedToVisualTree += (_, _) => scroll.MaxHeight = Math.Max(200, (TopLevel.GetTopLevel(scroll)?.Bounds.Height ?? 800) - DialogChromeHeight);
     var dialog = new FAContentDialog
     {
       Title = title,
-      Content = new ScrollViewer { MaxHeight = 560, Content = new GeneratorView { DataContext = viewModel } },
+      Content = scroll,
       PrimaryButtonText = primaryLabel,
       CloseButtonText = closeLabel,
       DefaultButton = FAContentDialogButton.Close,
