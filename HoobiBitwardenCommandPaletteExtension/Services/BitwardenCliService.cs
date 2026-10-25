@@ -1864,6 +1864,7 @@ internal sealed partial class BitwardenCliService
       HasPasskey = login?["fido2Credentials"] is JsonArray fido && fido.Count > 0,
       Uris = ParseUris(login),
       PasswordRevisionDate = DateTime.TryParse(Text(login, "passwordRevisionDate"), out var prd) ? prd.ToUniversalTime() : null,
+      PasswordHistory = node is JsonObject obj && obj.ContainsKey("passwordHistory") ? ParsePasswordHistory(obj["passwordHistory"]) : null,
       CardholderName = Text(card, "cardholderName"),
       CardBrand = Text(card, "brand"),
       CardNumber = ProtectedSecret.From(Text(card, "number")),
@@ -1883,6 +1884,12 @@ internal sealed partial class BitwardenCliService
   }
 
   private static string? Text(JsonNode? node, string key) => node?[key]?.GetValue<string>();
+
+  internal static List<PasswordHistoryEntry> ParsePasswordHistory(JsonNode? history) =>
+    [.. (history as JsonArray ?? [])
+      .Select(h => (Password: ProtectedSecret.From(Text(h, "password")), Used: Text(h, "lastUsedDate")))
+      .Where(h => h.Password != null)
+      .Select(h => new PasswordHistoryEntry(h.Password!, DateTime.TryParse(h.Used, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var used) ? used : default))];
 
   private static string? JoinNonEmpty(string separator, params string?[] parts)
   {

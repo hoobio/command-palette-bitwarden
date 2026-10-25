@@ -32,6 +32,7 @@ public class VaultToolsTests(AvaloniaSession session)
     public int Type { get; set; } = 1;
 
     public bool HasPassword { get; set; } = true;
+    public int? PasswordHistoryCount { get; set; }
 
     public List<JsonElement?> Payloads(string op)
     {
@@ -62,7 +63,7 @@ public class VaultToolsTests(AvaloniaSession session)
         case Ops.GetItem:
           return IpcJson.ToElement(new ItemDto(ItemId, "GitHub", Type, "Work", null, false, false, false, Revision, Revision, null,
             [new FieldDto(ItemFields.Username, "Username", "Login credentials", "octocat", false), new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true)],
-            Attachments: [.. Attachments], HasPassword: HasPassword), IpcJson.Default.ItemDto);
+            Attachments: [.. Attachments], HasPassword: HasPassword, PasswordHistoryCount: PasswordHistoryCount), IpcJson.Default.ItemDto);
         case Ops.Reveal:
           return IpcJson.ToElement(new SecretResponse("hunter2"), IpcJson.Default.SecretResponse);
         case Ops.ListFilters:
@@ -408,6 +409,23 @@ public class VaultToolsTests(AvaloniaSession session)
     h.Extension.FailWith[Ops.UploadAttachment] = IpcErrors.TooLarge;
     await vm.AddAttachmentCommand.ExecuteAsync(null);
     Assert.Equal("The file is larger than the 500 MB that Bitwarden allows.", vm.ErrorMessage);
+  });
+
+  [Fact]
+  public Task PasswordHistoryCard_HiddenOnlyWhenTheCountIsZero() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    var vm = h.Item();
+    await vm.LoadAsync();
+    Assert.True(vm.CanShowHistory);
+
+    h.Extension.PasswordHistoryCount = 0;
+    await vm.LoadAsync();
+    Assert.False(vm.CanShowHistory);
+
+    h.Extension.PasswordHistoryCount = 2;
+    await vm.LoadAsync();
+    Assert.True(vm.CanShowHistory);
   });
 
   [Fact]

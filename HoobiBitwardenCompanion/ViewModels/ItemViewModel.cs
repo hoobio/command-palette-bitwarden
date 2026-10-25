@@ -120,6 +120,10 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   [NotifyPropertyChangedFor(nameof(CanRotate))]
   public partial bool HasPassword { get; private set; }
 
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(CanShowHistory))]
+  public partial int? PasswordHistoryCount { get; private set; }
+
   internal event Action? Removed;
 
   [ObservableProperty]
@@ -153,7 +157,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public bool CanEdit => IsReadOnly && ItemType is >= 1 and <= 5;
 
-  public bool CanShowHistory => IsReadOnly && ItemType == 1 && !IsPrompting && Groups.All(g => g.Name != HistoryGroup);
+  public bool CanShowHistory => IsReadOnly && ItemType == 1 && !IsPrompting && PasswordHistoryCount != 0 && Groups.All(g => g.Name != HistoryGroup);
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(CanShowHistory), nameof(CanEdit), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
@@ -429,6 +433,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     TypeGlyph = GlyphFor(item.Type);
     IconPath = item.IconPath;
     HasPassword = item.HasPassword;
+    PasswordHistoryCount = item.PasswordHistoryCount;
     BiometricAvailable = item.BiometricAvailable;
     ItemType = item.Type;
     _inOrganization = item.OrganizationName is not null;

@@ -33,7 +33,7 @@ All item types also show Custom fields, Additional options (notes) and Item hist
 
 - Secret fields (password, card number, security code, SSH private key, hidden custom fields, notes) are masked. Select the eye button to show or hide one value.
 - You cannot select the text of a shown password, card number, security code or verification code, so `Ctrl+C` cannot go around the extension's clipboard. A shown note or SSH private key lets you select part of the text. `Ctrl+C` or **Copy** in its menu sends the selected range to the extension, and the extension copies that part of its own value through the secure clipboard. The companion never puts the selection on the clipboard.
-- For a login, a **Password history** group with **Show password history** is below the fields. It shows the date of each old password. The values are masked, and the copy button copies through the extension.
+- For a login with old passwords, a **Password history** group with **Show password history** is below the fields. The group does not show when the item has no password history. It shows the date of each old password. The values are masked, and the copy button copies through the extension. The extension reads the history from its vault cache, so no Bitwarden CLI process starts.
 - The copy button copies through the extension. Secrets are excluded from clipboard history and cleared after the time set in [Settings](Settings), also after you close the window.
 - The verification code changes at the end of each period. The ring shows the seconds left in the current period. The ring and the number turn yellow for the last 5 seconds.
 - The open button on a website opens it in your browser. Only `http` and `https` addresses open.
