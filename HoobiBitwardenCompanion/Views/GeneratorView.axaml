@@ -28,7 +28,7 @@
             <TabStripItem Content="Passphrase" />
         </TabStrip>
 
-        <Border Classes="Group" Margin="0,8,0,0">
+        <Border Classes="Group" Margin="0,16,0,0">
             <Border Classes="Row Field" MinHeight="64">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
                     <SelectableTextBlock x:Name="ValueText" Text="{Binding Value}" FontFamily="{StaticResource MonoFontFamily}" FontSize="18" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
