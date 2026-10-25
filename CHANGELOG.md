@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.13.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.12.0...v1.13.0) (2026-10-25)
+
+
+### Features
+
+* add a Bitwarden settings command with a searchable settings window ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+* add a Generate password command ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* add a New item command and polish the companion window ([#223](https://github.com/hoobio/command-palette-bitwarden/issues/223)) ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* add API key login and move login forms to the companion window ([#226](https://github.com/hoobio/command-palette-bitwarden/issues/226)) ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+* **companion:** unlock protected items with Windows Hello ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* open the login, unlock, server and re-prompt forms in the companion window ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+* **search:** add a filter dropdown for the static search filters ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* write the debug log to disk while Debug Logging is on ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+
+
+### Bug Fixes
+
+* centre the Windows Hello icon on the unlock button ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+* **companion:** keep only copied generator values in history ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* **companion:** make a failed save sound, flash and show in red ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* **companion:** move edit and delete into the title bar and rotate onto the password row ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* **companion:** reveal password boxes while the reveal button is held ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* **companion:** rotate via the generator and show write progress ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* give each item its own icon stream so shared hosts all render ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* prompt Windows Hello automatically only when the user opens the Bitwarden page ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+* show the loading state after a login instead of 'Vault items not loaded' ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+
+
+### Performance Improvements
+
+* cache the CLI version probe and read login state from the data file ([209bcc8](https://github.com/hoobio/command-palette-bitwarden/commit/209bcc8904d6c1d383361be6f4b688f39598848d))
+* generate passwords and passphrases in the extension ([40f22a6](https://github.com/hoobio/command-palette-bitwarden/commit/40f22a6c3b3414be1886f25b52ed0875ed8ae1ca))
+* keep password history in the vault cache and start fewer bw processes ([#225](https://github.com/hoobio/command-palette-bitwarden/issues/225)) ([209bcc8](https://github.com/hoobio/command-palette-bitwarden/commit/209bcc8904d6c1d383361be6f4b688f39598848d))
+* page the vault list and serve website icons as cached file paths ([71f32a2](https://github.com/hoobio/command-palette-bitwarden/commit/71f32a2a28f93add1423c612b45243d597e1f83a))
+* skip the cache refresh when the CLI data file has not changed ([209bcc8](https://github.com/hoobio/command-palette-bitwarden/commit/209bcc8904d6c1d383361be6f4b688f39598848d))
+* skip the vault status check from the fallback while locked ([209bcc8](https://github.com/hoobio/command-palette-bitwarden/commit/209bcc8904d6c1d383361be6f4b688f39598848d))
+
 ## [1.12.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.11.2...v1.12.0) (2026-10-24)
 
 
