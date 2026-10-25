@@ -160,10 +160,16 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 return _currentItems;
             }
 
-            if (CaptureContext() && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var captured = CaptureContext();
+            var contextMs = timer.ElapsedMilliseconds;
+            var published = -1;
+            if (captured && !_handlingAction && _service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
             {
-                TryPublishVaultList(out _);
+                TryPublishVaultList(out published);
             }
+
+            DebugLogService.Log("Page", $"GetItems later: context {(captured ? $"{contextMs}ms" : "skipped")}, rebuild {(published >= 0 ? $"{timer.ElapsedMilliseconds - contextMs}ms for {published} items" : "skipped")}, returned {_currentItems.Length} items in {timer.ElapsedMilliseconds}ms");
 
             if (_initComplete && !_handlingAction)
                 IsLoading = false;
