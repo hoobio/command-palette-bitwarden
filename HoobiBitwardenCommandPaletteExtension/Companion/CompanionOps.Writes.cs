@@ -78,6 +78,19 @@ internal sealed partial class CompanionOps
     _copyText(history[index].Password, true);
   }
 
+  internal async Task<SavedResponse> CreateItemAsync(EditableItem item)
+  {
+    Validate(item);
+    var organizationId = item.OrganizationId is null ? null : RequireGuid(item.OrganizationId);
+    var collectionIds = organizationId is null ? null : RequireIds(item.CollectionIds, atLeastOne: true);
+    RequireUnlocked();
+    var node = NewItemJson(item.Type);
+    Apply(node, item);
+    node["organizationId"] = organizationId;
+    node["collectionIds"] = collectionIds is null ? null : new JsonArray([.. collectionIds.Select(c => (JsonNode?)JsonValue.Create(c))]);
+    return Saved(await _service.CreateItemAsync(node)) ?? throw new IpcException(IpcErrors.Failed);
+  }
+
   internal async Task<SavedResponse> UpdateItemAsync(EditableItem item, bool verified = false)
   {
     Validate(item);
@@ -148,6 +161,20 @@ internal sealed partial class CompanionOps
     if (!valid)
       throw new IpcException(IpcErrors.Invalid);
   }
+
+  internal static JsonObject NewItemJson(int type) => new()
+  {
+    ["organizationId"] = null,
+    ["collectionIds"] = null,
+    ["folderId"] = null,
+    ["type"] = type,
+    ["name"] = string.Empty,
+    ["notes"] = null,
+    ["favorite"] = false,
+    ["fields"] = new JsonArray(),
+    ["reprompt"] = 0,
+    ["passwordHistory"] = new JsonArray(),
+  };
 
   internal static void Apply(JsonObject node, EditableItem item)
   {

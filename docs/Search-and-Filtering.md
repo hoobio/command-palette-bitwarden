@@ -32,6 +32,8 @@ Use prefix syntax to narrow results. Filters can be combined freely.
 | `is:insecure` / `is:http` | `is:insecure` | Logins with an `http://` URI |
 | `is:watchtower` / `is:flagged` | `is:watchtower` | Any login triggering a Watchtower warning |
 
+`org:none` lists items that are not in an organisation (the **My vault** entry in the dropdown), and `folder:none` lists items that are not in a folder. `folder:` and `org:` also accept a folder or organisation ID.
+
 ### Item Types
 
 Valid values for `type:` filter: `login`, `card`, `identity`, `securenote`, `sshkey`
@@ -55,6 +57,18 @@ url:"github.com/foo"
 ```
 
 Quotes apply to every filter, not just `org:`.
+
+## Filter Dropdown
+
+The vault search page has a filter dropdown next to the search box. One entry is selected at a time. The selected filter is applied in addition to anything you type, so typed filters and text still narrow the results further (all conditions must match).
+
+The dropdown lists, in order:
+
+1. **All items** (default, no filter)
+2. Static filters: Favourites, Protected, Weak passwords, Old passwords, Insecure URLs, Watchtower, Has TOTP, Has passkey, Has password, Has URL, Has notes, In a folder, Logins, Cards, Identities, Secure notes, SSH keys
+3. **My vault** (items that are not in an organisation) and each of your organisations. Organisation names longer than 24 characters are shortened.
+
+Folders are not in the dropdown. Type `folder:` to filter by folder. The organisation entries are built from the loaded vault and refresh after a sync. If the selected organisation no longer exists, the dropdown returns to **All items**. The dropdown is not shown on the login, unlock and two-factor screens.
 
 ## Sort Order
 

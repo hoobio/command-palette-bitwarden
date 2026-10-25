@@ -26,4 +26,5 @@
     <x:String x:Key="Glyph.Organization">&#xE2F6;</x:String>
     <x:String x:Key="Glyph.Team">&#xEDA9;</x:String>
     <x:String x:Key="Glyph.Import">&#xE111;</x:String>
+    <x:String x:Key="Glyph.Fingerprint">&#xE8AF;</x:String>
 </ResourceDictionary>

@@ -33,6 +33,20 @@ internal sealed partial class GeneratorViewModel : ObservableObject
 
   internal Action<string>? UseRequested { get; set; }
 
+  internal long? EntryId => _entryId;
+
+  public FieldViewModel? CurrentPassword { get; init; }
+
+  public bool HasCurrentPassword => CurrentPassword is not null;
+
+  public FieldViewModel? Website { get; init; }
+
+  public bool HasWebsite => Website is not null;
+
+  public FieldViewModel? Username { get; init; }
+
+  public bool HasUsername => Username is not null;
+
   internal Action<string>? Toast { get; set; }
 
   public ObservableCollection<GeneratedRowViewModel> History { get; } = [];
@@ -113,15 +127,26 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     Capitalize,
     IncludeNumber);
 
-  partial void OnSelectedTabChanged(int value)
+  private static readonly HashSet<string> OptionNames =
+  [
+    nameof(SelectedTab), nameof(Length), nameof(Uppercase), nameof(Lowercase), nameof(Numbers), nameof(Special), nameof(MinNumber),
+    nameof(MinSpecial), nameof(AvoidAmbiguous), nameof(Words), nameof(Separator), nameof(Capitalize), nameof(IncludeNumber),
+  ];
+
+  private bool _ready;
+  private int _request;
+
+  protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
   {
-    Value = null;
-    _entryId = null;
+    base.OnPropertyChanged(e);
+    if (_ready && e.PropertyName is { } name && OptionNames.Contains(name))
+      _ = RegenerateAsync();
   }
 
   public async Task InitializeAsync()
   {
     await RegenerateAsync();
+    _ready = true;
     await LoadHistoryAsync();
   }
 
@@ -129,9 +154,12 @@ internal sealed partial class GeneratorViewModel : ObservableObject
   private async Task RegenerateAsync()
   {
     var options = ToOptions();
+    var request = ++_request;
     try
     {
       var generated = IpcJson.Read(await _channel.RequestAsync(Ops.Generate, IpcJson.ToElement(options, IpcJson.Default.GeneratorOptions)), IpcJson.Default.GeneratedResponse);
+      if (request != _request)
+        return;
       Value = generated.Value;
       _entryId = generated.EntryId;
       ErrorMessage = null;
@@ -139,7 +167,13 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
-      ErrorMessage = Describe(ex);
+      if (request == _request)
+      {
+        Value = null;
+        _entryId = null;
+        ErrorMessage = Describe(ex);
+      }
+
       return;
     }
 
@@ -151,8 +185,6 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     {
       StatusMessage = "The generator options were not saved.";
     }
-
-    await LoadHistoryAsync();
   }
 
   [RelayCommand(CanExecute = nameof(HasValue))]
@@ -176,7 +208,10 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
       ErrorMessage = Describe(ex);
+      return;
     }
+
+    await LoadHistoryAsync();
   }
 
   internal async Task LoadHistoryAsync()
@@ -209,7 +244,7 @@ internal sealed partial class GeneratorViewModel : ObservableObject
   private static string Describe(Exception ex) => ex switch
   {
     IpcException { Code: IpcErrors.Invalid } => "Check the generator options. A password needs 5 to 128 characters and at least one character type, a passphrase 3 to 20 words.",
-    IpcException { Code: IpcErrors.Failed } => "Bitwarden did not generate a value.",
+    IpcException { Code: IpcErrors.Failed } => "These options cannot make a value. Lower the minimums or raise the length.",
     _ => ItemViewModel.Describe(ex),
   };
 }

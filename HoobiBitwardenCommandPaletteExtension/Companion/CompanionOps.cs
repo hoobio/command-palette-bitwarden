@@ -33,6 +33,8 @@ internal sealed partial class CompanionOps : IDisposable
   private readonly Action<string, bool> _copyText;
   private readonly Action<string> _openUrl;
   private readonly Func<Task<List<VaultCollection>?>> _loadCollections;
+  private readonly Func<Task<bool>> _verifyBiometric;
+  private readonly Func<bool> _biometricEnabled;
   private readonly SemaphoreSlim _collectionsGate = new(1, 1);
   private List<VaultCollection>? _collections;
   private (DateTime Refresh, int Writes) _collectionsStamp;
@@ -43,9 +45,13 @@ internal sealed partial class CompanionOps : IDisposable
     Action<ProtectedSecret>? copySecret = null,
     Action<string, bool>? copyText = null,
     Action<string>? openUrl = null,
-    Func<Task<List<VaultCollection>?>>? loadCollections = null)
+    Func<Task<List<VaultCollection>?>>? loadCollections = null,
+    Func<Task<bool>>? verifyBiometric = null,
+    Func<bool>? biometricEnabled = null)
   {
     _service = service;
+    _verifyBiometric = verifyBiometric ?? (async () => (await service.VerifyWithBiometricsAsync()).Success);
+    _biometricEnabled = biometricEnabled ?? (() => service.Settings?.UseDesktopIntegration.Value == true);
     _verifyPassword = verifyPassword ?? service.VerifyMasterPasswordAsync;
     _copySecret = copySecret ?? SecureClipboardService.CopySensitive;
     _copyText = copyText ?? CopyText;
@@ -81,11 +87,13 @@ internal sealed partial class CompanionOps : IDisposable
       {
         case Ops.VerifyReprompt:
           var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
-          return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password, verify.Op, verify.Payload), IpcJson.Default.RepromptResponse);
+          return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password, verify.Op, verify.Payload, verify.Biometric), IpcJson.Default.RepromptResponse);
         case Ops.ListFilters:
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
+        case Ops.CreateItem:
+          return IpcJson.ToElement(await CreateItemAsync(IpcJson.Read(payload, IpcJson.Default.EditableItem)), IpcJson.Default.SavedResponse);
         case Ops.Generate:
-          return IpcJson.ToElement(await GenerateAsync(IpcJson.Read(payload, IpcJson.Default.GeneratorOptions)), IpcJson.Default.GeneratedResponse);
+          return IpcJson.ToElement(Generate(IpcJson.Read(payload, IpcJson.Default.GeneratorOptions)), IpcJson.Default.GeneratedResponse);
         case Ops.ListGeneratorHistory:
           return IpcJson.ToElement(ListGeneratorHistory(), IpcJson.Default.GeneratorHistoryResponse);
         case Ops.CopyGenerated:
@@ -136,9 +144,9 @@ internal sealed partial class CompanionOps : IDisposable
       case Ops.Copy:
         var copy = IpcJson.Read(payload, IpcJson.Default.FieldRequest);
         if (copy.Field?.StartsWith(ItemFields.HistoryPrefix, StringComparison.Ordinal) == true)
-          await CopyPasswordHistoryAsync(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
+          await CopyPasswordHistoryAsync(copy.Id, copy.Start is null && copy.Length is null ? copy.Field : throw new IpcException(IpcErrors.Invalid), copy.RevisionDate, IsVerified(copy.Id, verifiedId));
         else
-          Copy(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId));
+          Copy(copy.Id, copy.Field, copy.RevisionDate, IsVerified(copy.Id, verifiedId), copy.Start, copy.Length);
         return null;
       case Ops.GetEditableItem:
         var editable = IpcJson.Read(payload, IpcJson.Default.ItemRequest);
@@ -198,7 +206,9 @@ internal sealed partial class CompanionOps : IDisposable
       locked ? [] : MapFields(item),
       locked ? null : item.Attachments.Select(a => new AttachmentDto(a.Id, a.FileName, a.SizeName)).ToList(),
       _service.ShowWebsiteIcons ? CachedIconPath(item) : null,
-      item.Reprompt == 1 && !locked ? RepromptPage.GetGrace(item.Id) : null);
+      item.Reprompt == 1 && !locked ? RepromptPage.GetGrace(item.Id) : null,
+      item.Password is not null,
+      item.Reprompt == 1 && _biometricEnabled());
   }
 
   internal async Task<FiltersResponse> ListFiltersAsync()
@@ -310,17 +320,24 @@ internal sealed partial class CompanionOps : IDisposable
     return (secret ?? throw new IpcException(IpcErrors.Invalid)).Reveal();
   }
 
-  internal void Copy(string? id, string? field, DateTime? revisionDate = null, bool verified = false)
+  internal void Copy(string? id, string? field, DateTime? revisionDate = null, bool verified = false, int? start = null, int? length = null)
   {
     var item = FindGranted(id, revisionDate, verified);
-    if (field == ItemFields.Totp)
+    var ranged = start is not null || length is not null;
+    if (field == ItemFields.Totp && !ranged)
     {
       _copyText(ComputeTotp(item).Code, true);
       return;
     }
 
-    var (secret, text) = Resolve(item, field);
-    if (secret != null)
+    var (secret, text) = field == ItemFields.Totp ? (null, null) : Resolve(item, field);
+    if (ranged)
+    {
+      if (secret is null || start is not { } from || length is not { } count || from < 0 || count <= 0 || from > secret.Length - count)
+        throw new IpcException(IpcErrors.Invalid);
+      _copyText(secret.Use(value => new string(value.Slice(from, count))), true);
+    }
+    else if (secret != null)
       _copySecret(secret);
     else
       _copyText(text!, item.Reprompt == 1);
@@ -336,16 +353,18 @@ internal sealed partial class CompanionOps : IDisposable
     _openUrl(VaultItemHelper.ToSafeWebUrl(item.Uris[index].Uri) ?? throw new IpcException(IpcErrors.Invalid));
   }
 
-  internal async Task<RepromptResponse> VerifyRepromptAsync(string? id, string? password, string? op = null, JsonElement? payload = null)
+  internal async Task<RepromptResponse> VerifyRepromptAsync(string? id, string? password, string? op = null, JsonElement? payload = null, bool biometric = false)
   {
+    if (biometric && !_biometricEnabled())
+      throw new IpcException(IpcErrors.Invalid);
     var item = Find(id);
     if (item.Reprompt == 1)
     {
       var cooldown = RepromptPage.GetCooldownSecondsRemaining();
-      if (cooldown > 0 || string.IsNullOrEmpty(password))
+      if (cooldown > 0 || (!biometric && string.IsNullOrEmpty(password)))
         return new RepromptResponse(false, cooldown);
 
-      if (!await _verifyPassword(password))
+      if (!await (biometric ? _verifyBiometric() : _verifyPassword(password!)))
       {
         RepromptPage.RecordFailure();
         return new RepromptResponse(false, RepromptPage.GetCooldownSecondsRemaining());

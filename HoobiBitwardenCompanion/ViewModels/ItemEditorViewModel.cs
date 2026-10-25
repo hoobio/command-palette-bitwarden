@@ -72,11 +72,18 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
     Fingerprint = item.SshKey?.Fingerprint;
     Fields = [.. item.Fields.Select(f => new CustomFieldViewModel(this, f))];
 
-    CanChangeOwner = item.OrganizationId is null;
+    CanChangeOwner = item.Id is null || item.OrganizationId is null;
     SelectedOwner = Owners.FirstOrDefault(o => o.Value == item.OrganizationId) ?? Owners[0];
     RebuildCollections(item.CollectionIds);
     _original = Serialize(ToDto());
   }
+
+  public static EditableItem Blank(int type) => new(
+    null, type, string.Empty, null, null, [], false, false, null, null, [],
+    Login: type == 1 ? new LoginEdit(null, null, null, []) : null,
+    Card: type == 3 ? new CardEdit(null, null, null, null, null, null) : null,
+    Identity: type == 4 ? new IdentityEdit(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null) : null,
+    SshKey: type == 5 ? new SshKeyEdit(null, null, null) : null);
 
   public int Type { get; }
 
@@ -242,9 +249,9 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
     OnPropertyChanged(nameof(HasCollections));
   }
 
-  internal void MarkSaved(DateTime revision)
+  internal void MarkSaved(string id, DateTime revision, string? organizationId, IReadOnlyList<string> collectionIds)
   {
-    _source = ToDto() with { RevisionDate = revision, OrganizationId = _source.OrganizationId, CollectionIds = _source.CollectionIds };
+    _source = ToDto() with { Id = id, RevisionDate = revision, OrganizationId = organizationId, CollectionIds = collectionIds };
     _original = Serialize(_source);
   }
 

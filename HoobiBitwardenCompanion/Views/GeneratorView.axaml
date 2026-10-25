@@ -5,12 +5,49 @@
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:GeneratorViewModel">
     <StackPanel>
+        <Border x:Name="CurrentPasswordGroup" Classes="Group" Margin="0,0,0,12" IsVisible="{Binding HasCurrentPassword}">
+            <StackPanel Classes="Rows">
+                <Border Classes="Row Field" IsVisible="{Binding HasWebsite}">
+                    <StackPanel DataContext="{Binding Website}" x:DataType="vm:FieldViewModel">
+                        <TextBlock Classes="FieldLabel" Text="Website" />
+                        <Button x:Name="WebsiteLink" Theme="{StaticResource CaptionLinkButtonStyle}" FontSize="13" HorizontalAlignment="Left" Command="{Binding OpenCommand}" ToolTip.Tip="Open in browser">
+                            <TextBlock Text="{Binding DisplayValue}" TextTrimming="CharacterEllipsis" />
+                        </Button>
+                    </StackPanel>
+                </Border>
+                <Border Classes="Row Field" IsVisible="{Binding HasUsername}">
+                    <Grid DataContext="{Binding Username}" x:DataType="vm:FieldViewModel" ColumnDefinitions="*,Auto">
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock Classes="FieldLabel" Text="Username" />
+                            <SelectableTextBlock x:Name="UsernameText" Text="{Binding DisplayValue}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button x:Name="CopyUsernameButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy" AutomationProperties.Name="Copy username" />
+                    </Grid>
+                </Border>
+                <Border Classes="Row Field" DataContext="{Binding CurrentPassword}" x:DataType="vm:FieldViewModel">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock Classes="FieldLabel" Text="Current password" />
+                            <TextBlock x:Name="CurrentPasswordText" Text="{Binding DisplayValue}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" FontSize="13" LetterSpacing="1" />
+                        </StackPanel>
+                        <Button x:Name="PeekButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" ToolTip.Tip="Hold to show" AutomationProperties.Name="Hold to show">
+                            <Panel>
+                                <TextBlock Text="{StaticResource Glyph.Eye}" IsVisible="{Binding !IsRevealed}" />
+                                <TextBlock Classes="Icon Accent" Text="{StaticResource Glyph.EyeOff}" IsVisible="{Binding IsRevealed}" />
+                            </Panel>
+                        </Button>
+                        <Button x:Name="CopyCurrentButton" Grid.Column="2" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy" AutomationProperties.Name="Copy current password" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Border>
+
         <TabStrip x:Name="KindTabs" SelectedIndex="{Binding SelectedTab}">
             <TabStripItem Content="Password" />
             <TabStripItem Content="Passphrase" />
         </TabStrip>
 
-        <Border Classes="Group" Margin="0,8,0,0">
+        <Border Classes="Group" Margin="0,16,0,0">
             <Border Classes="Row Field" MinHeight="64">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
                     <SelectableTextBlock x:Name="ValueText" Text="{Binding Value}" FontFamily="{StaticResource MonoFontFamily}" FontSize="18" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />

@@ -45,13 +45,19 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   public bool IsPlain => !IsSensitive && !IsMono;
 
+  public bool CanRotate => Key == ItemFields.Password && _owner is { CanRotate: true };
+
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(DisplayValue))]
   public partial string? RevealedValue { get; set; }
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(DisplayValue))]
+  [NotifyPropertyChangedFor(nameof(DisplayValue), nameof(IsSelectableSecret), nameof(IsFixedSecret))]
   public partial bool IsRevealed { get; set; }
+
+  public bool IsSelectableSecret => IsSecret && IsMultiline && IsRevealed;
+
+  public bool IsFixedSecret => IsSecret && !IsSelectableSecret;
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(DisplayValue))]
@@ -73,6 +79,20 @@ internal sealed partial class FieldViewModel : ObservableObject
     ? TotpCode ?? Mask
     : IsSecret ? (IsRevealed ? RevealedValue ?? string.Empty : Mask) : _value ?? string.Empty;
 
+  internal bool IsHeld { get; private set; }
+
+  internal Task PeekAsync()
+  {
+    IsHeld = true;
+    return _owner?.PeekAsync(this) ?? Task.CompletedTask;
+  }
+
+  internal void Unpeek()
+  {
+    IsHeld = false;
+    Wipe();
+  }
+
   internal void Wipe()
   {
     IsRevealed = false;
@@ -88,4 +108,7 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   [RelayCommand]
   private Task OpenAsync() => _owner?.OpenUriAsync(this) ?? Task.CompletedTask;
+
+  [RelayCommand]
+  private Task RotateAsync() => _owner?.RotateCommand.ExecuteAsync(null) ?? Task.CompletedTask;
 }

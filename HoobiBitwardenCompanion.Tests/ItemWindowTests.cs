@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
@@ -14,6 +15,7 @@ namespace HoobiBitwardenCompanion.Tests;
 public class ItemWindowTests(AvaloniaSession session)
 {
   private static readonly string ItemId = Guid.NewGuid().ToString();
+  private const string Notes = "line one\nline two";
 
   private sealed class FakeExtension
   {
@@ -38,10 +40,18 @@ public class ItemWindowTests(AvaloniaSession session)
       return Handle(op, payload, verified: false);
     }
 
+    public bool WithNotes { get; set; }
+
+    public List<JsonElement?> CopyPayloads { get; } = [];
+
     private JsonElement? Handle(string op, JsonElement? payload, bool verified)
     {
       lock (Requests)
+      {
         Requests.Add(op);
+        if (op == Ops.Copy)
+          CopyPayloads.Add(payload);
+      }
       if (ErrorCode is { } code)
         throw new IpcException(code);
       if (RepromptEveryOp && !verified && op is Ops.Reveal or Ops.Copy or Ops.GetTotp)
@@ -55,16 +65,24 @@ public class ItemWindowTests(AvaloniaSession session)
       return op switch
       {
         Ops.GetItem => IpcJson.ToElement(Item(), IpcJson.Default.ItemDto),
-        Ops.Reveal => IpcJson.ToElement(new SecretResponse("hunter2"), IpcJson.Default.SecretResponse),
+        Ops.Reveal => IpcJson.ToElement(new SecretResponse(IpcJson.Read(payload, IpcJson.Default.FieldRequest).Field == ItemFields.Notes ? Notes : "hunter2"), IpcJson.Default.SecretResponse),
         Ops.GetTotp => IpcJson.ToElement(new TotpResponse($"00000{++TotpCalls}", TotpRemaining, 30), IpcJson.Default.TotpResponse),
         Ops.VerifyReprompt => VerifyReprompt(IpcJson.Read(payload, IpcJson.Default.RepromptRequest)),
         _ => null,
       };
     }
 
+    public bool BiometricAvailable { get; set; }
+
+    public bool BiometricVerifies { get; set; }
+
+    public List<RepromptRequest> Verifications { get; } = [];
+
     private JsonElement VerifyReprompt(RepromptRequest request)
     {
-      var ok = request.Password == "correct";
+      lock (Requests)
+        Verifications.Add(request);
+      var ok = request.Biometric ? BiometricVerifies : request.Password == "correct";
       if (ok)
       {
         RepromptRequired = false;
@@ -90,8 +108,11 @@ public class ItemWindowTests(AvaloniaSession session)
         new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true),
         new FieldDto(ItemFields.Totp, "Verification code (TOTP)", "Login credentials", null, true),
         new FieldDto(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://github.com", false, CanOpen: true),
+        .. WithNotes ? [new FieldDto(ItemFields.Notes, "Notes", "Additional options", null, true, IsMultiline: true)] : Array.Empty<FieldDto>(),
       ],
-      Grace: RepromptRequired ? null : _grace);
+      Grace: RepromptRequired ? null : _grace,
+      HasPassword: true,
+      BiometricAvailable: BiometricAvailable);
   }
 
   private static FieldViewModel Field(ItemViewModel vm, string key) => vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == key);
@@ -192,6 +213,90 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.Contains(texts, t => t is not SelectableTextBlock && t.Text == "000001");
     Assert.DoesNotContain(texts, t => t is SelectableTextBlock && t.Text is "hunter2" or "000001");
     Assert.Contains(texts, t => t is SelectableTextBlock && t.Text == "octocat");
+    window.Close();
+  });
+
+  [Fact]
+  public Task ItemWindow_RevealedNotes_CopyASelectionThroughTheExtensionOnly() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { WithNotes = true };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var toasts = new List<string>();
+    var vm = new ItemViewModel(ItemId, channel) { Toast = (message, _) => toasts.Add(message) };
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+    var notes = Field(vm, ItemFields.Notes);
+    Assert.False(notes.IsSelectableSecret);
+    await notes.ToggleRevealCommand.ExecuteAsync(null);
+    await Field(vm, ItemFields.Password).ToggleRevealCommand.ExecuteAsync(null);
+    window.UpdateLayout();
+
+    var visible = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible).ToList();
+    Assert.DoesNotContain(visible, t => t is SelectableTextBlock && t.Text == "hunter2");
+    var block = visible.OfType<SelectableTextBlock>().Single(t => t.Text == Notes);
+    var clipboard = window.Clipboard!;
+    await clipboard.SetTextAsync("untouched");
+    block.SelectionStart = 9;
+    block.SelectionEnd = 5;
+    block.Copy();
+
+    AvaloniaSession.WaitFor(() => extension.Count(Ops.Copy) == 1);
+    var request = IpcJson.Read(Assert.Single(extension.CopyPayloads), IpcJson.Default.FieldRequest);
+    Assert.Equal((ItemFields.Notes, 5, 4), (request.Field, request.Start, request.Length));
+    AvaloniaSession.WaitFor(() => toasts.Count == 1);
+    Assert.Equal("Copied selected text", toasts[0]);
+    Assert.Equal("untouched", await clipboard.TryGetTextAsync());
+
+    var username = visible.OfType<SelectableTextBlock>().Single(t => t.Text == "octocat");
+    username.SelectionStart = 0;
+    username.SelectionEnd = 3;
+    username.Copy();
+    var copied = await clipboard.TryGetTextAsync();
+    for (var i = 0; i < 100 && copied != "oct"; i++)
+    {
+      await Task.Delay(10);
+      copied = await clipboard.TryGetTextAsync();
+    }
+
+    Assert.Equal("oct", copied);
+    Assert.Equal(1, extension.Count(Ops.Copy));
+    window.Close();
+  });
+
+  [Fact]
+  public Task PasswordPanel_OffersWindowsHello_OnlyWhenTheExtensionAllowsIt() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { RepromptRequired = true };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(ItemId, channel);
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+    window.UpdateLayout();
+    var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BiometricButton");
+    Assert.False(button.IsEffectivelyVisible);
+
+    extension.BiometricAvailable = true;
+    await vm.LoadAsync();
+    window.UpdateLayout();
+    Assert.True(button.IsEffectivelyVisible);
+
+    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    AvaloniaSession.WaitFor(() => vm.PasswordError is not null);
+    Assert.Equal("Windows Hello verification was cancelled or denied.", vm.PasswordError);
+    var request = Assert.Single(extension.Verifications);
+    Assert.True(request.Biometric);
+    Assert.Null(request.Password);
+    Assert.True(vm.RepromptRequired);
+
+    extension.BiometricVerifies = true;
+    await vm.SubmitBiometricAsync();
+    Assert.False(vm.RepromptRequired);
+    Assert.NotEmpty(vm.Groups);
+    Assert.Null(vm.PasswordError);
     window.Close();
   });
 
@@ -317,6 +422,22 @@ public class ItemWindowTests(AvaloniaSession session)
 
     Assert.True(vm.GraceVisible);
     Assert.InRange(vm.GraceRemaining.TotalSeconds, 50, 60);
+
+    vm.KeepOpenCommand.Execute(null);
+    Assert.False(vm.GraceVisible);
+    await vm.LoadAsync();
+    Assert.False(vm.GraceVisible);
+    Assert.False(vm.RepromptRequired);
+
+    vm.RepromptRequired = true;
+    await vm.VerifyRepromptAsync("correct");
+    Assert.True(vm.GraceVisible);
+    vm.KeepOpenCommand.Execute(null);
+
+    vm.OnLocked();
+    await vm.LoadAsync();
+    await vm.VerifyRepromptAsync("correct");
+    Assert.True(vm.GraceVisible);
   });
 
   [Fact]

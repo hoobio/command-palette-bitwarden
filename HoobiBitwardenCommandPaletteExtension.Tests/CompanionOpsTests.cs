@@ -21,6 +21,9 @@ public class CompanionOpsTests
     public List<string> Opened { get; } = [];
     public BitwardenCliService Service { get; } = new();
     public string ExpectedPassword { get; set; } = "correct";
+    public bool BiometricEnabled { get; set; }
+    public bool BiometricVerifies { get; set; }
+    public int BiometricPrompts { get; private set; }
     public CompanionOps Ops { get; }
 
     public Harness(params BitwardenItem[] items)
@@ -32,7 +35,13 @@ public class CompanionOpsTests
         password => Task.FromResult(password == ExpectedPassword),
         SecretCopies.Add,
         (text, sensitive) => TextCopies.Add((text, sensitive)),
-        Opened.Add);
+        Opened.Add,
+        verifyBiometric: () =>
+        {
+          BiometricPrompts++;
+          return Task.FromResult(BiometricVerifies);
+        },
+        biometricEnabled: () => BiometricEnabled);
     }
   }
 
@@ -192,6 +201,29 @@ public class CompanionOpsTests
   }
 
   [Fact]
+  public async Task Copy_WithARange_CopiesThatSliceOfTheSecret_AsSensitive()
+  {
+    var id = NewId();
+    var item = Login(id);
+    var h = new Harness(item);
+
+    await h.Ops.HandleAsync(Ops.Copy, IpcJson.ToElement(new FieldRequest(id, ItemFields.Notes, item.RevisionDate, 7, 4), IpcJson.Default.FieldRequest), TestContext.Current.CancellationToken);
+
+    Assert.Equal(("note", true), Assert.Single(h.TextCopies));
+    Assert.Empty(h.SecretCopies);
+    foreach (var (field, start, length) in new (string, int?, int?)[]
+    {
+      (ItemFields.Notes, 8, 4), (ItemFields.Notes, -1, 2), (ItemFields.Notes, 0, 0), (ItemFields.Notes, 0, null), (ItemFields.Notes, int.MaxValue, 2),
+      (ItemFields.Username, 0, 2), (ItemFields.Totp, 0, 2),
+    })
+      Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.Copy(id, field, start: start, length: length))));
+    var history = await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.Copy,
+      IpcJson.ToElement(new FieldRequest(id, ItemFields.HistoryPrefix + "0", item.RevisionDate, 0, 1), IpcJson.Default.FieldRequest), TestContext.Current.CancellationToken));
+    Assert.Equal(IpcErrors.Invalid, history.Code);
+    Assert.Single(h.TextCopies);
+  }
+
+  [Fact]
   public void Copy_MissingValue_IsNotFound()
   {
     var id = NewId();
@@ -278,6 +310,38 @@ public class CompanionOpsTests
       RepromptPage.GracePeriodSeconds = 60;
       RepromptPage.ClearGracePeriod();
     }
+  }
+
+  [Fact]
+  public async Task VerifyReprompt_WithWindowsHello_IsCheckedByTheExtension_AndOnlyWhenTheSettingIsOn()
+  {
+    RepromptPage.ClearGracePeriod();
+    var id = NewId();
+    var h = new Harness(Login(id, reprompt: 1));
+    var request = new RepromptRequest(id, null, Ops.GetItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest), Biometric: true);
+
+    Assert.False(h.Ops.GetItem(id).BiometricAvailable);
+    var off = await Assert.ThrowsAsync<IpcException>(() => h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken));
+    Assert.Equal(IpcErrors.Invalid, off.Code);
+    Assert.Equal(0, h.BiometricPrompts);
+
+    h.BiometricEnabled = true;
+    Assert.True(h.Ops.GetItem(id).BiometricAvailable);
+    var denied = IpcJson.Read(await h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken), IpcJson.Default.RepromptResponse);
+    Assert.False(denied.Verified);
+    Assert.Null(denied.Result);
+    Assert.False(RepromptPage.IsWithinGracePeriod(id));
+
+    h.BiometricVerifies = true;
+    var verified = IpcJson.Read(await h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken), IpcJson.Default.RepromptResponse);
+    Assert.True(verified.Verified);
+    Assert.NotEmpty(IpcJson.Read(verified.Result, IpcJson.Default.ItemDto).Fields);
+    Assert.True(RepromptPage.IsWithinGracePeriod(id));
+    Assert.NotNull(verified.Grace);
+    Assert.Equal(2, h.BiometricPrompts);
+    var plain = NewId();
+    Assert.False(new Harness(Login(plain)) { BiometricEnabled = true }.Ops.GetItem(plain).BiometricAvailable);
+    RepromptPage.ClearGracePeriod();
   }
 
   [Fact]

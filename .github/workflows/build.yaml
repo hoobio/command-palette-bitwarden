@@ -163,7 +163,7 @@ jobs:
           $exclusions = Get-Content "${{ github.workspace }}/.github/coverage-exclusions.json" | ConvertFrom-Json
           $excludeFromThreshold = $exclusions | Select-Object -ExpandProperty pattern
 
-          $changedFiles = git diff --name-only origin/${{ github.base_ref }}...HEAD -- '*.cs' |
+          $changedFiles = git diff --name-only --diff-filter=d origin/${{ github.base_ref }}...HEAD -- '*.cs' |
             Where-Object { $_ -notmatch '\.Tests[\\/]' } |
             ForEach-Object { (Resolve-Path $_).Path }
 

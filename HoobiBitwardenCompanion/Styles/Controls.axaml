@@ -134,6 +134,23 @@
             </Style>
         </ControlTheme>
 
+        <ControlTheme x:Key="CaptionLinkButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Background" Value="#00242936" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#00242936" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#00242936" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorTertiaryBrush}" />
+            </Style>
+        </ControlTheme>
+
         <ControlTheme x:Key="CaptionButtonTheme" TargetType="Button" BasedOn="{StaticResource FluentDrawnCaptionButton}">
             <Setter Property="Width" Value="{StaticResource CaptionButtonWidth}" />
             <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
@@ -143,6 +160,12 @@
             </Style>
             <Style Selector="^.Close:pressed /template/ Border">
                 <Setter Property="Background" Value="{DynamicResource CaptionCloseBackgroundPressed}" />
+            </Style>
+            <Style Selector="^.Danger">
+                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+            </Style>
+            <Style Selector="^:disabled">
+                <Setter Property="Opacity" Value="0.4" />
             </Style>
         </ControlTheme>
 
@@ -230,9 +253,9 @@
                                 Margin="16"
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Center">
-                                <Grid Name="DialogSpace" RowDefinitions="*,Auto" Margin="24">
+                                <Grid Name="DialogSpace" RowDefinitions="*,Auto">
                                     <ScrollViewer Name="ContentScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                        <StackPanel Spacing="12">
+                                        <StackPanel Spacing="12" Margin="24,24,24,0">
                                             <StackPanel.Styles>
                                                 <Style Selector="TextBlock">
                                                     <Setter Property="TextWrapping" Value="Wrap" />
@@ -253,7 +276,7 @@
                                                 Foreground="{TemplateBinding Foreground}" />
                                         </StackPanel>
                                     </ScrollViewer>
-                                    <Grid Name="CommandSpace" Grid.Row="1" Margin="0,24,0,0" ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto,Auto">
+                                    <Grid Name="CommandSpace" Grid.Row="1" Margin="24" ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto,Auto">
                                         <Button Name="PrimaryButton" Theme="{StaticResource AccentButtonStyle}" Content="{TemplateBinding PrimaryButtonText}" IsEnabled="{TemplateBinding IsPrimaryButtonEnabled}" IsVisible="False" />
                                         <Button Name="SecondaryButton" Theme="{StaticResource DangerButtonStyle}" Content="{TemplateBinding SecondaryButtonText}" IsEnabled="{TemplateBinding IsSecondaryButtonEnabled}" IsVisible="False" />
                                         <Button Name="CloseButton" Theme="{StaticResource DialogCloseButtonStyle}" Content="{TemplateBinding CloseButtonText}" IsVisible="False" />
@@ -354,6 +377,18 @@
 
     <Style Selector="Button.CaptionButton">
         <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="TextBox.revealPasswordButton">
+        <Setter Property="styles:HoldToReveal.IsEnabled" Value="True" />
+    </Style>
+
+    <Style Selector="TextBox.revealPasswordButton /template/ ToggleButton">
+        <Setter Property="Width" Value="36" />
+    </Style>
+
+    <Style Selector="TextBox.revealPasswordButton /template/ ToggleButton /template/ ui|FAFontIcon#Glyph">
+        <Setter Property="FontSize" Value="16" />
     </Style>
 
     <Style Selector="Border.Row.Switch ToggleSwitch">
@@ -519,6 +554,8 @@
         <Setter Property="MinHeight" Value="32" />
         <Setter Property="Height" Value="32" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="TextAlignment" Value="Center" />
         <Setter Property="ButtonSpinnerLocation" Value="Right" />
     </Style>
 
@@ -630,6 +667,15 @@
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="TextElement.FontSize" Value="{StaticResource ControlContentThemeFontSize}" />
         <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    </Style>
+
+    <Style Selector="Border.Alert.Danger">
+        <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+        <Setter Property="TextElement.FontWeight" Value="SemiBold" />
     </Style>
 
     <Style Selector="Panel.Ring">

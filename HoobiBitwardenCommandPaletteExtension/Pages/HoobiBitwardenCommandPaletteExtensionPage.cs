@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
@@ -53,6 +54,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private volatile bool _cliInstalling;
     private bool _cliInstallFailed;
     private string? _cliInstallStatus;
+    private VaultSearchFilters? _filters;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -79,7 +81,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Title = $"Bitwarden {version}";
 #endif
         Name = "Open";
-        PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+        PlaceholderText = "Search your vault... (try url:github)";
         CaptureContext();
     }
 
@@ -116,9 +118,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     {
                         case VaultStatus.Unlocked when _service.IsCacheLoaded:
                             var text = _currentSearchText;
+                            SyncFilters();
                             var loadedResults = Search(text);
                             DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedResults.Count} items");
                             _currentItems = BuildListItems(loadedResults, text);
+                            Filters = _filters;
                             IsLoading = false;
                             ReverifyIfSuspiciouslyEmpty();
                             break;
@@ -290,6 +294,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         IsLoading = false;
         _initComplete = true;
         DebugLogService.Log("Page", $"RebuildForCurrentStatus: status={_service.LastStatus}, cacheLoaded={_service.IsCacheLoaded}");
+        if (_service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
+            Filters = null;
 
         switch (_service.LastStatus)
         {
@@ -583,7 +589,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             return WithDebugLog([hint, BuildBackToLoginItem()]);
         }
 
-        PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+        PlaceholderText = "Search your vault... (try url:github)";
 
         var item = new ListItem(new Pages.LoginPage(_settings, OnLoginSubmitted))
         {
@@ -687,6 +693,22 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Icon = new IconInfo("\uE9D9"),
     };
 
+    private static ListItem BuildNewItemItem(CompanionHost companion) => new(new AnonymousCommand(companion.ShowNewItem)
+    { Name = "New item", Result = CommandResult.Dismiss() })
+    {
+        Title = "New Bitwarden item",
+        Subtitle = "Create a new login, new password, note, card, identity or SSH key",
+        Icon = new IconInfo(""),
+    };
+
+    private static ListItem BuildGenerateItem(CompanionHost companion) => new(new AnonymousCommand(companion.ShowGenerator)
+    { Name = "Generate password", Result = CommandResult.Dismiss() })
+    {
+        Title = "Generate password",
+        Subtitle = "Open the generator for a new password or passphrase",
+        Icon = new IconInfo(""),
+    };
+
     private ListItem BuildLockItem() => new(new AnonymousCommand(OnLockRequested)
     { Name = "Lock", Result = CommandResult.KeepOpen() })
     {
@@ -728,7 +750,23 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private List<BitwardenItem> Search(string? query = null)
     {
         var limit = int.TryParse(_settings?.ContextItemLimit.Value, out var v) ? v : 3;
-        return _service.SearchCached(query, _context, limit);
+        return _service.SearchCached(query, _context, limit, _filters?.Selected.Filter);
+    }
+
+    private void SyncFilters()
+    {
+        lock (_itemsLock)
+        {
+            var entries = SearchFilterCatalog.Build(_service.GetOrganizations());
+            if (_filters != null && _filters.Entries.SequenceEqual(entries)) return;
+            _filters = new VaultSearchFilters(entries, _filters?.CurrentFilterId ?? SearchFilterCatalog.AllId, OnFilterSelected);
+        }
+    }
+
+    private void OnFilterSelected()
+    {
+        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded) return;
+        _ = Task.Run(RebuildVaultListSafely);
     }
 
     internal static bool MatchesCommand(string search, string command)
@@ -755,13 +793,18 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         var boostLock = MatchesCommand(search, "lock");
         var boostLogout = MatchesCommand(search, "logout");
         var boostDebug = DebugLogService.Enabled && MatchesCommand(search, "debug");
+        var companion = CompanionHost.Current;
+        var boostNew = companion != null && (MatchesCommand(search, "new item") || MatchesCommand(search, "new login") || MatchesCommand(search, "new password"));
+        var boostGenerate = companion != null && MatchesCommand(search, "generate password");
 
+        if (boostNew) list.Add(BuildNewItemItem(companion!));
+        if (boostGenerate) list.Add(BuildGenerateItem(companion!));
         if (boostSync) list.Add(BuildSyncItem());
         if (boostLock) list.Add(BuildLockItem());
         if (boostLogout) list.Add(BuildLogoutItem());
         if (boostDebug) list.Add(BuildCopyDebugLogItem());
 
-        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug)
+        if (items.Count == 0 && !boostSync && !boostLock && !boostLogout && !boostDebug && !boostNew && !boostGenerate)
             list.Add(new ListItem(new NoOpCommand()) { Title = "No results found" });
         else
         {
@@ -787,6 +830,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             }
         }
 
+        if (companion != null && !boostNew) list.Add(BuildNewItemItem(companion));
+        if (companion != null && !boostGenerate) list.Add(BuildGenerateItem(companion));
         if (!boostSync) list.Add(BuildSyncItem());
         list.Add(BuildSetServerItem());
         if (!boostLock) list.Add(BuildLockItem());
@@ -1241,6 +1286,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         var generation = Interlocked.Increment(ref _buildGeneration);
         var text = _currentSearchText;
+        SyncFilters();
         var results = Search(text);
         resultCount = results.Count;
         var built = BuildListItems(results, text);
@@ -1249,6 +1295,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             if (text != _currentSearchText || generation <= _publishedGeneration || _service.LastStatus != VaultStatus.Unlocked) return false;
             _publishedGeneration = generation;
             _currentItems = built;
+            Filters = _filters;
             return true;
         }
     }
@@ -1341,7 +1388,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _pendingEmail = null;
                 ReplacePendingPassword(null);
                 _pendingTwoFactorMethod = null;
-                PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+                PlaceholderText = "Search your vault... (try url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
                 RebuildVaultList();
@@ -1380,7 +1427,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _deviceVerificationRequired = false;
                 _pendingEmail = null;
                 ReplacePendingPassword(null);
-                PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+                PlaceholderText = "Search your vault... (try url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
                 RebuildVaultList();

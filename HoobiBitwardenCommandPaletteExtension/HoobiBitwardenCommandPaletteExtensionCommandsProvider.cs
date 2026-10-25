@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -27,12 +28,25 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         _settingsManager = new BitwardenSettingsManager();
         _service = new BitwardenCliService(_settingsManager);
         _fallbackItem = new BitwardenFallbackItem(_service, _settingsManager);
-        CompanionHost.Current = new CompanionHost(new CompanionOps(_service));
+        var companion = new CompanionHost(new CompanionOps(_service));
+        CompanionHost.Current = companion;
         _commands = [
             new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(_service, _settingsManager))
             {
                 Title = DisplayName,
                 Subtitle = "Search your vault",
+            },
+            new CommandItem(new CompanionCommand("New item", _service, companion.ShowNewItem))
+            {
+                Title = "New Bitwarden item",
+                Subtitle = "Create a new login, new password, note, card, identity or SSH key",
+                Icon = new IconInfo(""),
+            },
+            new CommandItem(new CompanionCommand("Generate password", _service, companion.ShowGenerator))
+            {
+                Title = "Generate password",
+                Subtitle = "Open the generator for a new password or passphrase",
+                Icon = new IconInfo(""),
             },
         ];
 
@@ -43,4 +57,25 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
     public override ICommandItem[] TopLevelCommands() => _commands;
 
     public override IFallbackCommandItem[] FallbackCommands() => [_fallbackItem];
+
+    private sealed partial class CompanionCommand : InvokableCommand
+    {
+        private readonly BitwardenCliService _service;
+        private readonly Action _show;
+
+        public CompanionCommand(string name, BitwardenCliService service, Action show)
+        {
+            _service = service;
+            _show = show;
+            Name = name;
+        }
+
+        public override ICommandResult Invoke()
+        {
+            if (!_service.IsUnlocked)
+                return CommandResult.ShowToast("Unlock your vault in Bitwarden first.");
+            _show();
+            return CommandResult.Dismiss();
+        }
+    }
 }

@@ -23,7 +23,7 @@ internal static partial class VaultItemHelper
     BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item, priority) : new IconInfo("\uE774"),
     BitwardenItemType.SecureNote => new IconInfo("\uE70B"),
     BitwardenItemType.Card => showWebsiteIcons && item.CardBrand != null
-      ? GetCardBrandIcon(item.CardBrand, priority)
+      ? GetCardBrandIcon(item.CardBrand, item.Id, priority)
       : new IconInfo("\uE8C7"),
     BitwardenItemType.Identity => new IconInfo("\uE77B"),
     BitwardenItemType.SshKey => new IconInfo("\uE8D7"),
@@ -107,7 +107,7 @@ internal static partial class VaultItemHelper
 
     AddCustomFieldContextItems(items, item, id, reprompt);
 
-    if (companion is not null && item.Type == BitwardenItemType.Login)
+    if (companion is not null && item.Type == BitwardenItemType.Login && item.Password is not null)
     {
       items.Add(new CommandContextItem(Track(id, new AnonymousCommand(() => companion.RotateItem(id)) { Name = "Rotate password", Result = CommandResult.Dismiss() }))
       {
@@ -402,7 +402,7 @@ internal static partial class VaultItemHelper
     return $"{GetVaultBaseUrl()}/images/{slug}-{theme}.png";
   }
 
-  internal static IconInfo GetCardBrandIcon(string brand, int priority = int.MaxValue)
+  internal static IconInfo GetCardBrandIcon(string brand, string? itemId = null, int priority = int.MaxValue)
   {
     if (!BitwardenCliService.ServerUrlResolved)
       return new IconInfo("\uE8C7");
@@ -412,7 +412,8 @@ internal static partial class VaultItemHelper
       CardBrandCacheKey(brand, isDark),
       GetCardBrandImageUrl(brand, isDark),
       new IconInfo("\uE8C7"),
-      priority);
+      priority,
+      itemId);
   }
 
   private static string CardBrandCacheKey(string brand, bool isDark) =>
@@ -449,7 +450,7 @@ internal static partial class VaultItemHelper
       iconBase = serverUrl + "/icons";
     var iconUrl = $"{iconBase}/{host}/icon.png";
 
-    return FaviconService.GetOrQueue(host, iconUrl, priority: priority);
+    return FaviconService.GetOrQueue(host, iconUrl, new IconInfo(""), priority, item.Id);
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>

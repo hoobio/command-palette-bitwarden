@@ -16,11 +16,14 @@ internal static class Ops
   public const string OpenUri = "openUri";
   public const string VerifyReprompt = "verifyReprompt";
   public const string ShowItem = "showItem";
+  public const string NewItem = "newItem";
+  public const string ShowGenerator = "showGenerator";
   public const string Locked = "locked";
   public const string ListFilters = "listFilters";
   public const string VaultChanged = "vaultChanged";
   public const string GetEditableItem = "getEditableItem";
   public const string GetPasswordHistory = "getPasswordHistory";
+  public const string CreateItem = "createItem";
   public const string UpdateItem = "updateItem";
   public const string DeleteItem = "deleteItem";
   public const string ArchiveItem = "archiveItem";
@@ -125,11 +128,11 @@ internal sealed record Envelope(long Id, string Type, string? Op = null, JsonEle
 
 internal sealed record ItemRequest(string Id);
 
-internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDate);
+internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDate, int? Start = null, int? Length = null);
 
 internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
-internal sealed record RepromptRequest(string Id, string Password, string? Op = null, JsonElement? Payload = null);
+internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
 internal sealed record SecretResponse(string Value);
 
@@ -156,7 +159,9 @@ internal sealed record ItemDto(
   IReadOnlyList<FieldDto> Fields,
   IReadOnlyList<AttachmentDto>? Attachments = null,
   string? IconPath = null,
-  GraceDto? Grace = null);
+  GraceDto? Grace = null,
+  bool HasPassword = false,
+  bool BiometricAvailable = false);
 
 internal sealed record AttachmentDto(string Id, string FileName, string? SizeName);
 
@@ -168,10 +173,10 @@ internal sealed record GeneratorOptions(
   bool Uppercase = true,
   bool Lowercase = true,
   bool Numbers = true,
-  bool Special = false,
+  bool Special = true,
   int MinNumber = 1,
   int MinSpecial = 1,
-  bool AvoidAmbiguous = false,
+  bool AvoidAmbiguous = true,
   int Words = 4,
   string Separator = "-",
   bool Capitalize = false,
@@ -185,7 +190,7 @@ internal sealed record GeneratorHistoryResponse(IReadOnlyList<GeneratedEntry> En
 
 internal sealed record HistoryEntryRequest(long Id);
 
-internal sealed record RotateRequest(string Id, DateTime RevisionDate, GeneratorOptions Options);
+internal sealed record RotateRequest(string Id, DateTime RevisionDate, GeneratorOptions? Options = null, long? EntryId = null);
 
 internal sealed record FilterRef(string Id, string Name, string? OrganizationId = null);
 

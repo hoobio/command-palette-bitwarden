@@ -19,6 +19,7 @@ dotnet build .\HoobiBitwardenCommandPaletteExtension\HoobiBitwardenCommandPalett
 
 # 3. Register the loose layout, then restart PowerToys
 $out = '.\HoobiBitwardenCommandPaletteExtension\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64'
+New-Item -ItemType Directory -Force "$out\Assets" | Out-Null
 Copy-Item "$out\..\..\..\..\..\Assets\*" "$out\Assets" -Recurse -Force
 Add-AppxPackage -Register -Path "$out\AppxManifest.xml" -ForceUpdateFromAnyVersion
 Start-Process 'shell:AppsFolder\Microsoft.PowerToysWin32'

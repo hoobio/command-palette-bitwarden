@@ -20,7 +20,7 @@ public class CompanionWriteOpsTests
 
   private sealed class FakeVault
   {
-    private readonly List<(string Args, FakeCliProcess Process)> _pending = [];
+    private readonly List<(string Args, FakeCliProcess Process, string? Id)> _pending = [];
     private int _tick;
 
     public Dictionary<string, JsonObject> Items { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -50,15 +50,23 @@ public class CompanionWriteOpsTests
         if (args.StartsWith("get item ", StringComparison.Ordinal))
           return new FakeCliProcess(Items.TryGetValue(args[9..], out var item) ? item.ToJsonString() + "\n" : "Not found.\n");
 
+        if (args == "create item")
+        {
+          var id = Guid.NewGuid().ToString();
+          var created = new FakeCliProcess(WriteOutput ?? $"{{\"id\":\"{id}\"}}\n", WriteError ?? "");
+          _pending.Add((args, created, id));
+          return created;
+        }
+
         var process = new FakeCliProcess(WriteOutput ?? EchoOutput ?? "", WriteError ?? "");
-        _pending.Add((args, process));
+        _pending.Add((args, process, null));
         return process;
       }
     }
 
     private void Flush()
     {
-      foreach (var (args, process) in _pending)
+      foreach (var (args, process, createdId) in _pending)
       {
         var stdin = process.GetStdinContent();
         if (stdin.Length > 0)
@@ -70,6 +78,12 @@ public class CompanionWriteOpsTests
           continue;
         switch (parts[0])
         {
+          case "create":
+            var created = (JsonObject)body!;
+            created["id"] = createdId;
+            created["revisionDate"] = stamp;
+            Items[createdId!] = OnWrite?.Invoke(args, created) ?? created;
+            break;
           case "edit" when parts[1] == "item":
             var edited = (JsonObject)body!;
             edited["revisionDate"] = stamp;
@@ -184,6 +198,99 @@ public class CompanionWriteOpsTests
     Assert.Equal("New login", sent["name"]!.GetValue<string>());
     Assert.Equal("brand-new-secret", sent["login"]!["password"]!.GetValue<string>());
     Assert.Equal("New login", h.Service.GetCachedItem(id)!.Name);
+  }
+
+  [Fact]
+  public async Task Create_SendsBase64JsonOnStdin_AndAddsTheItemToTheCache()
+  {
+    var h = new Harness();
+    var item = new EditableItem(null, 1, "New login", null, null, [], false, false, "a note", null, [new CustomFieldEdit("api", "field-secret", 1)],
+      Login: new LoginEdit("jane", "brand-new-secret", "JBSWY3DPEHPK3PXP", [new UriEdit("example.com")]));
+
+    var saved = IpcJson.Read(await h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem), IpcJson.Default.SavedResponse);
+
+    var create = Assert.Single(h.Vault.Started, p => p.Arguments.StartsWith("create", StringComparison.Ordinal));
+    Assert.Equal("create item", create.Arguments);
+    Assert.Empty(create.ArgumentList);
+    Assert.True(create.RedirectStandardInput);
+    Assert.All(h.Vault.Started, psi => Assert.DoesNotContain("brand-new-secret", psi.Arguments, StringComparison.Ordinal));
+    var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Vault.Stdin))))!;
+    Assert.Equal(("New login", "brand-new-secret", 1), (sent["name"]!.GetValue<string>(), sent["login"]!["password"]!.GetValue<string>(), sent["type"]!.GetValue<int>()));
+    Assert.Equal("New login", h.Service.GetCachedItem(saved.Id)!.Name);
+    Assert.Equal(1, h.CacheUpdates);
+    Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item with { Name = " " }, IpcJson.Default.EditableItem))).Code);
+  }
+
+  [Fact]
+  public async Task Create_InAnOrganisation_IsOneCreateCarryingTheOwnerAndCollections()
+  {
+    var h = new Harness();
+    var item = new EditableItem(null, 2, "Org note", null, OrgId, [CollectionId], false, false, "n", null, []);
+
+    var saved = IpcJson.Read(await h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem), IpcJson.Default.SavedResponse);
+
+    Assert.Equal("create item", Assert.Single(h.Vault.Started, p => BitwardenCliService.IsDataWrite(p.Arguments)).Arguments);
+    var sent = JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(Assert.Single(h.Vault.Stdin))))!;
+    Assert.Equal(OrgId, sent["organizationId"]!.GetValue<string>());
+    Assert.Equal(CollectionId, Assert.Single(sent["collectionIds"]!.AsArray())!.GetValue<string>());
+    Assert.Equal(OrgId, h.Service.GetCachedItem(saved.Id)!.OrganizationId);
+
+    h.Vault.Started.Clear();
+    Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item with { CollectionIds = [] }, IpcJson.Default.EditableItem))).Code);
+    Assert.Empty(h.Vault.Started);
+
+    h.Vault.OnWrite = (_, created) =>
+    {
+      created["organizationId"] = null;
+      return created;
+    };
+    h.Vault.Override = args => args.StartsWith("list ", StringComparison.Ordinal) ? new FakeCliProcess("[]\n") : null;
+    Assert.Equal(IpcErrors.Unknown, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem, item, IpcJson.Default.EditableItem))).Code);
+    Assert.Contains(h.Vault.Started, p => p.Arguments == "list items");
+  }
+
+  [Fact]
+  public async Task Create_WhoseOutputHasNoId_IsFailed()
+  {
+    var h = new Harness();
+    h.Vault.WriteOutput = "Something went wrong\n";
+    Assert.Equal(IpcErrors.Failed, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem,
+      new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem))).Code);
+    h.Service.ClearSession();
+    Assert.Equal(IpcErrors.Locked, (await Assert.ThrowsAsync<IpcException>(() => h.Handle(Ops.CreateItem,
+      new EditableItem(null, 2, "Note", null, null, [], false, false, null, null, []), IpcJson.Default.EditableItem))).Code);
+  }
+
+  [Fact]
+  public async Task Create_WhoseFollowUpSyncFails_IsUnknown_NotFailed()
+  {
+    var h = new Harness();
+    h.Service.WriteTimeoutMs = 50;
+    var never = new FakeCliProcess(0);
+    h.Vault.Override = args => args switch
+    {
+      "create item" => never,
+      "sync" => throw new InvalidOperationException("sync could not start"),
+      "list items" or "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
+      _ => null,
+    };
+    var save = h.Handle(Ops.CreateItem, new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem);
+    await Task.Delay(200, TestContext.Current.CancellationToken);
+    never.StdoutStream.Complete();
+    never.StderrStream.Complete();
+
+    string? code = null;
+    try
+    {
+      await save;
+    }
+    catch (IpcException ex)
+    {
+      code = ex.Code;
+    }
+
+    Assert.Equal(IpcErrors.Unknown, code);
+    Assert.Single(h.Vault.Started, p => p.Arguments == "create item");
   }
 
   [Fact]

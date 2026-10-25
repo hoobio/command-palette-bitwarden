@@ -13,6 +13,9 @@ namespace HoobiBitwardenCompanion.ViewModels;
 internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 {
   private const string HistoryGroup = "Password history";
+  private const string SavingChanges = "Saving changes…";
+
+  public static readonly Choice[] TypeChoices = [new("1", "Login"), new("2", "Secure note"), new("3", "Card"), new("4", "Identity"), new("5", "SSH key")];
 
   private static readonly Dictionary<string, Bitmap?> Icons = new(StringComparer.OrdinalIgnoreCase);
 
@@ -28,6 +31,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private FiltersResponse? _filters;
   private readonly DispatcherTimer _graceTimer;
   private GraceDto? _grace;
+  private bool _keepOpen;
+  private bool _createUncertain;
   private (string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done)? _pendingWrite;
 
   public ItemViewModel(string id, PipeChannel channel)
@@ -38,9 +43,46 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _graceTimer.Tick += (_, _) => TickGrace();
     _totpTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
     _totpTimer.Tick += (_, _) => _ = TickAsync();
+    Groups.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanShowHistory));
   }
 
-  public string Id { get; }
+  internal static ItemViewModel ForNew(PipeChannel channel, EditableItem item, FiltersResponse filters) => new(string.Empty, channel)
+  {
+    _filters = filters,
+    IsNew = true,
+    IsLoading = false,
+    ItemType = item.Type,
+    Title = TypeChoices.First(c => c.Value == item.Type.ToString(CultureInfo.InvariantCulture)).Label,
+    TypeGlyph = GlyphFor(item.Type),
+    SelectedType = TypeChoices.First(c => c.Value == item.Type.ToString(CultureInfo.InvariantCulture)),
+    Editor = new ItemEditorViewModel(item, filters),
+  };
+
+  public string Id { get; private set; }
+
+  internal event Action? Saved;
+
+  internal event Action? Discarded;
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
+  public partial bool IsNew { get; private set; }
+
+  [ObservableProperty]
+  public partial Choice? SelectedType { get; set; }
+
+  partial void OnSelectedTypeChanged(Choice? value)
+  {
+    if (!IsNew || Editor is not { } old || _filters is not { } filters || value?.Value is not { } text
+      || int.Parse(text, CultureInfo.InvariantCulture) is var type && type == old.Type)
+      return;
+    var editor = new ItemEditorViewModel(ItemEditorViewModel.Blank(type), filters) { Name = old.Name, Notes = old.Notes, Favorite = old.Favorite };
+    editor.SelectedFolder = editor.Folders.FirstOrDefault(f => f == old.SelectedFolder) ?? editor.Folders[0];
+    ItemType = type;
+    Title = value.Label;
+    TypeGlyph = GlyphFor(type);
+    Editor = editor;
+  }
 
   internal bool IsTotpRunning => _totpTimer.IsEnabled;
 
@@ -54,6 +96,14 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Func<Task<string?>>? OpenGenerator { get; set; }
 
+  internal Func<Task<long?>>? OpenRotateGenerator { get; set; }
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsBusy))]
+  public partial string? BusyMessage { get; private set; }
+
+  public bool IsBusy => BusyMessage is not null && !IsPrompting;
+
   internal Action<string, bool>? Toast { get; set; }
 
   internal PipeChannel Channel => _channel;
@@ -64,7 +114,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public bool CanAttach => IsReadOnly && !IsPrompting && ItemType is >= 1 and <= 5;
 
-  public bool CanRotate => IsReadOnly && ItemType == 1;
+  public bool CanRotate => IsReadOnly && ItemType == 1 && HasPassword;
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(CanRotate))]
+  public partial bool HasPassword { get; private set; }
 
   internal event Action? Removed;
 
@@ -72,19 +126,34 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsReadOnly), nameof(CanEdit), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
   public partial ItemEditorViewModel? Editor { get; private set; }
 
-  partial void OnEditorChanged(ItemEditorViewModel? value)
+  partial void OnEditorChanged(ItemEditorViewModel? oldValue, ItemEditorViewModel? newValue)
   {
-    if (value is not null)
-      value.Generate = () => OpenGenerator?.Invoke() ?? Task.FromResult<string?>(null);
+    if (oldValue is not null)
+      oldValue.PropertyChanged -= OnEditorPropertyChanged;
+    if (newValue is not null)
+    {
+      newValue.Generate = () => OpenGenerator?.Invoke() ?? Task.FromResult<string?>(null);
+      newValue.PropertyChanged += OnEditorPropertyChanged;
+    }
+
+    OnPropertyChanged(nameof(HeaderTitle));
   }
+
+  private void OnEditorPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+  {
+    if (e.PropertyName == nameof(ItemEditorViewModel.Name))
+      OnPropertyChanged(nameof(HeaderTitle));
+  }
+
+  public string HeaderTitle => Editor is { Name: { Length: > 0 } name } ? name : Title;
 
   public bool IsEditing => Editor is not null;
 
-  public bool IsReadOnly => Editor is null;
+  public bool IsReadOnly => Editor is null && !IsNew;
 
   public bool CanEdit => IsReadOnly && ItemType is >= 1 and <= 5;
 
-  public bool CanShowHistory => IsReadOnly && ItemType == 1;
+  public bool CanShowHistory => IsReadOnly && ItemType == 1 && !IsPrompting && Groups.All(g => g.Name != HistoryGroup);
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(CanShowHistory), nameof(CanEdit), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
@@ -93,6 +162,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public ObservableCollection<FieldGroupViewModel> Groups { get; } = [];
 
   [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(HeaderTitle))]
   public partial string Title { get; set; } = "Loading";
 
   [ObservableProperty]
@@ -142,13 +212,16 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public partial bool IsLoading { get; set; } = true;
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsPrompting), nameof(CanAttach), nameof(ShowAttachments))]
+  [NotifyPropertyChangedFor(nameof(IsPrompting), nameof(CanAttach), nameof(ShowAttachments), nameof(CanShowHistory))]
   public partial bool RepromptRequired { get; set; }
 
   public bool IsPrompting => RepromptRequired || _pendingWrite is not null;
 
   [ObservableProperty]
   public partial bool IsVerifying { get; private set; }
+
+  [ObservableProperty]
+  public partial bool BiometricAvailable { get; private set; }
 
   [ObservableProperty]
   public partial string? PasswordError { get; private set; }
@@ -165,21 +238,34 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
-  partial void OnRepromptRequiredChanged(bool value) => OnPropertyChanged(nameof(GraceVisible));
+  partial void OnRepromptRequiredChanged(bool value)
+  {
+    if (value)
+      _keepOpen = false;
+    OnPropertyChanged(nameof(GraceVisible));
+  }
 
   private void SetGrace(GraceDto? grace)
   {
-    _grace = grace;
+    _grace = _keepOpen ? null : grace;
     OnPropertyChanged(nameof(GraceVisible));
-    if (grace is null)
+    if (_grace is not { } kept)
     {
       _graceTimer.Stop();
       GraceRemaining = TimeSpan.Zero;
       return;
     }
 
-    GraceRemaining = grace.ExpiresUtc - UtcNow();
+    GraceRemaining = kept.ExpiresUtc - UtcNow();
     _graceTimer.Start();
+  }
+
+  // ponytail: keeps only this window's view open; the extension grace still expires, so a later reveal or copy asks again.
+  [RelayCommand]
+  private void KeepOpen()
+  {
+    _keepOpen = true;
+    SetGrace(null);
   }
 
   internal void TickGrace()
@@ -212,8 +298,10 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _pendingWrite = pending;
     PasswordError = null;
     OnPropertyChanged(nameof(IsPrompting));
+    OnPropertyChanged(nameof(IsBusy));
     OnPropertyChanged(nameof(CanAttach));
     OnPropertyChanged(nameof(ShowAttachments));
+    OnPropertyChanged(nameof(CanShowHistory));
     OnPropertyChanged(nameof(GraceVisible));
   }
 
@@ -223,18 +311,22 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _pendingWrite?.Done.TrySetResult((false, null, IpcErrors.Reprompt));
   }
 
-  internal async Task SubmitPasswordAsync(string? password)
+  internal Task SubmitPasswordAsync(string? password) => string.IsNullOrEmpty(password) ? Task.CompletedTask : SubmitAsync(password, biometric: false);
+
+  internal Task SubmitBiometricAsync() => SubmitAsync(null, biometric: true);
+
+  private async Task SubmitAsync(string? password, bool biometric)
   {
-    if (IsVerifying || string.IsNullOrEmpty(password))
+    if (IsVerifying)
       return;
     IsVerifying = true;
     PasswordError = null;
     try
     {
       if (_pendingWrite is { } pending)
-        await VerifyPendingAsync(pending, password);
+        await VerifyPendingAsync(pending, password, biometric);
       else
-        await VerifyRepromptAsync(password);
+        await VerifyRepromptAsync(password, biometric);
     }
     finally
     {
@@ -242,9 +334,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
   }
 
-  private async Task VerifyPendingAsync((string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done) pending, string password)
+  private async Task VerifyPendingAsync((string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done) pending, string? password, bool biometric)
   {
-    var (ok, reply, _) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, pending.Op, pending.Payload), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
+    var (ok, reply, _) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, pending.Op, pending.Payload, biometric), IpcJson.Default.RepromptRequest), Timeout.InfiniteTimeSpan);
     if (!ok)
     {
       FailPassword(ErrorMessage);
@@ -254,7 +346,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
     if (!result.Verified)
     {
-      FailPassword(DescribeFailedReprompt(result));
+      FailPassword(DescribeFailedReprompt(result, biometric));
       return;
     }
 
@@ -277,7 +369,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public async Task LoadAsync()
   {
-    if (IsEditing)
+    if (IsEditing || IsNew)
       return;
     IsLoading = true;
     try
@@ -318,6 +410,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _filters = null;
     Editor = null;
     RepromptRequired = false;
+    _keepOpen = false;
     SetGrace(null);
     _pendingWrite?.Done.TrySetResult((false, null, IpcErrors.Locked));
     StatusMessage = null;
@@ -335,6 +428,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     IsProtected = item.Reprompt;
     TypeGlyph = GlyphFor(item.Type);
     IconPath = item.IconPath;
+    HasPassword = item.HasPassword;
+    BiometricAvailable = item.BiometricAvailable;
     ItemType = item.Type;
     _inOrganization = item.OrganizationName is not null;
     RepromptRequired = item.RepromptRequired;
@@ -379,8 +474,19 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     });
   }
 
+  internal Task PeekAsync(FieldViewModel field) => RunAsync(Ops.Reveal, FieldPayload(field.Key), reply =>
+  {
+    if (!field.IsHeld)
+      return;
+    field.RevealedValue = IpcJson.Read(reply, IpcJson.Default.SecretResponse).Value;
+    field.IsRevealed = true;
+  });
+
   public Task CopyAsync(FieldViewModel field) =>
     RunAsync(Ops.Copy, FieldPayload(field.Key), _ => Notify($"Copied {field.Label}"));
+
+  public Task CopySelectionAsync(FieldViewModel field, int start, int length) =>
+    RunAsync(Ops.Copy, FieldPayload(field.Key, start, length), _ => Notify("Copied selected text"));
 
   public async Task OpenUriAsync(FieldViewModel field)
   {
@@ -389,10 +495,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       await RunAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(Id, index, _revisionDate), IpcJson.Default.UriRequest), _ => { });
   }
 
-  public async Task<bool> VerifyRepromptAsync(string password)
+  public async Task<bool> VerifyRepromptAsync(string? password, bool biometric = false)
   {
     var (op, payload, onSuccess) = _repromptRetry ?? (Ops.GetItem, ItemPayload, reply => Apply(IpcJson.Read(reply, IpcJson.Default.ItemDto)));
-    var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload), IpcJson.Default.RepromptRequest));
+    var (ok, reply, error) = await SendAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(Id, password, op, payload, biometric), IpcJson.Default.RepromptRequest),
+      biometric ? Timeout.InfiniteTimeSpan : null);
     if (!ok)
     {
       if (error == IpcErrors.Stale)
@@ -405,7 +512,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     var result = IpcJson.Read(reply, IpcJson.Default.RepromptResponse);
     if (!result.Verified)
     {
-      PasswordError = DescribeFailedReprompt(result);
+      PasswordError = DescribeFailedReprompt(result, biometric);
       return false;
     }
 
@@ -430,21 +537,37 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (Editor is not { } editor || editor.Validate() is not null)
       return;
+    var creating = editor.Id is null;
+    if (creating && _createUncertain
+      && !await AskAsync("Save another copy?", "Bitwarden may have saved this item already. Check the vault before you save it again.", "Save copy", "Cancel"))
+      return;
     var item = editor.ToDto();
-    var (ok, reply, error) = await WriteAsync(Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem));
+    var (ok, reply, error) = await WriteAsync(creating ? Ops.CreateItem : Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem), SavingChanges);
     if (!ok)
     {
+      if (creating && error is null or IpcErrors.Unknown)
+      {
+        _createUncertain = true;
+        ErrorMessage = Describe(new IpcException(IpcErrors.Unknown));
+        return;
+      }
+
       await OnEditFailedAsync(error);
       return;
     }
 
     var saved = IpcJson.Read(reply, IpcJson.Default.SavedResponse);
-    editor.MarkSaved(saved.RevisionDate);
-    if (item.OrganizationId is { } organization
+    _createUncertain = false;
+    Id = saved.Id;
+    IsNew = false;
+    editor.MarkSaved(saved.Id, saved.RevisionDate, creating ? item.OrganizationId : editor.OriginalOrganizationId, creating ? item.CollectionIds : editor.OriginalCollectionIds);
+    if (creating)
+      Saved?.Invoke();
+    if (!creating && item.OrganizationId is { } organization
       && (organization != editor.OriginalOrganizationId || !item.CollectionIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(editor.OriginalCollectionIds)))
     {
       var request = new WriteRequest(saved.Id, saved.RevisionDate, OrganizationId: organization, CollectionIds: item.CollectionIds);
-      (ok, reply, error) = await WriteAsync(editor.OriginalOrganizationId is null ? Ops.MoveItem : Ops.SetCollections, IpcJson.ToElement(request, IpcJson.Default.WriteRequest));
+      (ok, reply, error) = await WriteAsync(editor.OriginalOrganizationId is null ? Ops.MoveItem : Ops.SetCollections, IpcJson.ToElement(request, IpcJson.Default.WriteRequest), SavingChanges);
       if (!ok)
       {
         await OnEditFailedAsync(error);
@@ -462,10 +585,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private async Task OnEditFailedAsync(string? error)
   {
     if (error == IpcErrors.Failed)
-      ErrorMessage = "Bitwarden did not save the change.";
+      FailWrite("Bitwarden did not save the change.");
     if (error is not (IpcErrors.Conflict or IpcErrors.Unknown))
       return;
     ErrorMessage = null;
+    WriteFailed?.Invoke();
     var (title, message) = error == IpcErrors.Conflict
       ? ("Item changed", "This item changed in the vault after you started editing.")
       : ("Save not confirmed", "Bitwarden did not confirm the change. Reload the item to see what the vault holds.");
@@ -476,8 +600,23 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     }
     else
     {
-      ErrorMessage = Describe(new IpcException(error));
+      FailWrite(Describe(new IpcException(error)), alert: false);
     }
+  }
+
+  internal event Action? WriteFailed;
+
+  [ObservableProperty]
+  public partial bool IsWriteFailure { get; private set; }
+
+  partial void OnErrorMessageChanged(string? value) => IsWriteFailure = false;
+
+  private void FailWrite(string? message, bool alert = true)
+  {
+    ErrorMessage = message;
+    IsWriteFailure = true;
+    if (alert)
+      WriteFailed?.Invoke();
   }
 
   [RelayCommand]
@@ -489,6 +628,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       return false;
     Editor = null;
     ErrorMessage = null;
+    if (IsNew)
+      Discarded?.Invoke();
     return true;
   }
 
@@ -526,7 +667,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     async Task<string?> AttemptAsync(string op, bool permanent)
     {
       var payload = IpcJson.ToElement(new WriteRequest(Id, _revisionDate, permanent), IpcJson.Default.WriteRequest);
-      var (ok, _, error) = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
+      var busy = permanent ? "Deleting the item…" : op == Ops.ArchiveItem ? "Archiving the item…" : "Moving the item to the trash…";
+      var (ok, _, error) = await BusyAsync(busy, () => SendAsync(op, payload, Timeout.InfiniteTimeSpan));
       var message = ErrorMessage;
       ErrorMessage = null;
       if (ok || error == IpcErrors.Reprompt)
@@ -550,10 +692,23 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private string ArchiveLabel => _archiveUnavailable || _inOrganization ? "Move to Trash" : "Archive";
 
-  private async Task<(bool Ok, JsonElement? Reply, string? Error)> WriteAsync(string op, JsonElement payload)
+  private Task<(bool Ok, JsonElement? Reply, string? Error)> WriteAsync(string op, JsonElement payload, string busyMessage) => BusyAsync(busyMessage, async () =>
   {
     var sent = await SendAsync(op, payload, Timeout.InfiniteTimeSpan);
     return sent.Error == IpcErrors.Reprompt ? await RetryWithPasswordAsync(op, payload) : sent;
+  });
+
+  private async Task<T> BusyAsync<T>(string message, Func<Task<T>> run)
+  {
+    BusyMessage = message;
+    try
+    {
+      return await run();
+    }
+    finally
+    {
+      BusyMessage = null;
+    }
   }
 
   private async Task<(bool Ok, JsonElement? Reply, string? Error)> RetryWithPasswordAsync(string op, JsonElement payload)
@@ -574,12 +729,10 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   [RelayCommand]
   private async Task RotateAsync()
   {
-    if (!await AskAsync("Rotate password", $"Replace the password for {Title}? The old password is kept in password history.", "Rotate", "Cancel"))
+    if (OpenRotateGenerator is null || await OpenRotateGenerator() is not { } entryId)
       return;
-    var options = CompanionSettings.LoadGenerator();
-    if (options.Kind is not (GeneratorKinds.Password or GeneratorKinds.Passphrase))
-      options = options with { Kind = GeneratorKinds.Password };
-    var (ok, _, error) = await WriteAsync(Ops.RotatePassword, IpcJson.ToElement(new RotateRequest(Id, _revisionDate, options), IpcJson.Default.RotateRequest));
+    var (ok, _, error) = await WriteAsync(Ops.RotatePassword, IpcJson.ToElement(new RotateRequest(Id, _revisionDate, EntryId: entryId), IpcJson.Default.RotateRequest),
+      "Saving the new password to Bitwarden…");
     if (ok)
     {
       await LoadAsync();
@@ -591,13 +744,15 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       return;
     if (error is IpcErrors.Conflict or IpcErrors.Unknown or IpcErrors.Stale)
       await LoadAsync();
-    ErrorMessage = error switch
+    var failure = error switch
     {
       IpcErrors.Unknown => "Bitwarden did not confirm the new password, so nothing was copied. Check the item before you use the password.",
       IpcErrors.Conflict or IpcErrors.Stale => "This item changed in the vault. The password was not replaced and nothing was copied.",
       IpcErrors.Failed => "Bitwarden did not save the new password. Nothing was copied.",
-      _ => ErrorMessage,
+      _ => null,
     };
+    if (failure is not null)
+      FailWrite(failure);
   }
 
   internal async Task RotateAfterLoadAsync()
@@ -612,7 +767,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (PickOpenPath is null || await PickOpenPath() is not { Length: > 0 } path)
       return;
-    var (ok, _, error) = await WriteAsync(Ops.UploadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, Path: path), IpcJson.Default.AttachmentRequest));
+    var (ok, _, error) = await WriteAsync(Ops.UploadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, Path: path), IpcJson.Default.AttachmentRequest), "Uploading attachment…");
     if (ok)
     {
       await LoadAsync();
@@ -628,7 +783,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (PickSavePath is null || await PickSavePath(attachment.FileName) is not { Length: > 0 } path)
       return;
-    var (ok, _, error) = await WriteAsync(Ops.DownloadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id, path), IpcJson.Default.AttachmentRequest));
+    var (ok, _, error) = await WriteAsync(Ops.DownloadAttachment, IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id, path), IpcJson.Default.AttachmentRequest), "Downloading attachment…");
     if (ok)
       Notify($"Saved {attachment.FileName}");
     else if (error == IpcErrors.Stale)
@@ -646,7 +801,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     request.Danger = async () =>
     {
       var payload = IpcJson.ToElement(new AttachmentRequest(Id, _revisionDate, attachment.Id), IpcJson.Default.AttachmentRequest);
-      var (ok, _, error) = await SendAsync(Ops.DeleteAttachment, payload, Timeout.InfiniteTimeSpan);
+      var (ok, _, error) = await BusyAsync("Deleting attachment…", () => SendAsync(Ops.DeleteAttachment, payload, Timeout.InfiniteTimeSpan));
       var message = ErrorMessage;
       ErrorMessage = null;
       if (ok || error == IpcErrors.Reprompt)
@@ -674,15 +829,11 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     var existing = Groups.FirstOrDefault(g => g.Name == HistoryGroup);
     if (existing is not null)
       Groups.Remove(existing);
-    if (history.LastUsed.Count == 0)
-    {
-      Notify("This item has no password history.", success: false);
-      return;
-    }
-
-    Groups.Add(new FieldGroupViewModel(HistoryGroup, [.. history.LastUsed.Select((used, i) => new FieldViewModel(this, new FieldDto(
-      ItemFields.HistoryPrefix + i.ToString(CultureInfo.InvariantCulture), used.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), HistoryGroup, FieldViewModel.Mask, false)))]));
-  });
+    Groups.Add(new FieldGroupViewModel(HistoryGroup, history.LastUsed.Count == 0
+      ? [new FieldViewModel(null, new FieldDto(HistoryGroup, "No previous passwords", HistoryGroup, null, false), canCopy: false)]
+      : [.. history.LastUsed.Select((used, i) => new FieldViewModel(this, new FieldDto(
+        ItemFields.HistoryPrefix + i.ToString(CultureInfo.InvariantCulture), used.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), HistoryGroup, FieldViewModel.Mask, false)))]));
+  }, Timeout.InfiniteTimeSpan);
 
   private async Task<FiltersResponse?> LoadFiltersAsync()
   {
@@ -710,9 +861,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private Task<bool> AskAsync(string title, string message, string primary, string close) =>
     Confirm?.Invoke(title, message, primary, close) ?? Task.FromResult(false);
 
-  private async Task RunAsync(string op, JsonElement payload, Action<JsonElement?> onSuccess)
+  private async Task RunAsync(string op, JsonElement payload, Action<JsonElement?> onSuccess, TimeSpan? timeout = null)
   {
-    var (ok, reply, error) = await SendAsync(op, payload);
+    var (ok, reply, error) = await SendAsync(op, payload, timeout);
     if (ok)
     {
       onSuccess(reply);
@@ -794,7 +945,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   private JsonElement ItemPayload => IpcJson.ToElement(new ItemRequest(Id), IpcJson.Default.ItemRequest);
 
-  private JsonElement FieldPayload(string field) => IpcJson.ToElement(new FieldRequest(Id, field, _revisionDate), IpcJson.Default.FieldRequest);
+  private JsonElement FieldPayload(string field, int? start = null, int? length = null) =>
+    IpcJson.ToElement(new FieldRequest(Id, field, _revisionDate, start, length), IpcJson.Default.FieldRequest);
 
   private static FieldViewModel HistoryField(string label, DateTime value) =>
     new(null, new FieldDto(label, label, "Item history", value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), false), canCopy: false);
@@ -816,9 +968,9 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     _ => "Something went wrong.",
   };
 
-  private static string DescribeFailedReprompt(RepromptResponse result) => result.CooldownSeconds > 0
+  private static string DescribeFailedReprompt(RepromptResponse result, bool biometric) => result.CooldownSeconds > 0
     ? $"Too many failed attempts. Try again in {result.CooldownSeconds}s."
-    : "Incorrect master password.";
+    : biometric ? "Windows Hello verification was cancelled or denied." : "Incorrect master password.";
 
   internal static string GlyphFor(int type) => type switch
   {

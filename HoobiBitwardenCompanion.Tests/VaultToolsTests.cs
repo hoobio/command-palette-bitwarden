@@ -2,6 +2,7 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
@@ -24,10 +25,13 @@ public class VaultToolsTests(AvaloniaSession session)
 
     public List<(string Op, JsonElement? Payload)> Requests { get; } = [];
     public List<AttachmentDto> Attachments { get; } = [new("att1", "report.pdf", "4 KB"), new("att2", "scan.png", "1.2 MB")];
+    public List<GeneratedEntry> Generated { get; } = [];
     public List<GeneratedEntry> History { get; } = [];
     public Dictionary<string, string> FailWith { get; } = [];
     public bool Reprompt { get; set; }
     public int Type { get; set; } = 1;
+
+    public bool HasPassword { get; set; } = true;
 
     public List<JsonElement?> Payloads(string op)
     {
@@ -50,7 +54,7 @@ public class VaultToolsTests(AvaloniaSession session)
         return IpcJson.ToElement(new RepromptResponse(true, 0, await HandleAsync(verify.Op!, verify.Payload, cancellationToken)), IpcJson.Default.RepromptResponse);
       }
 
-      if (Reprompt && op is Ops.DownloadAttachment or Ops.UploadAttachment or Ops.DeleteAttachment or Ops.RotatePassword)
+      if (Reprompt && op is Ops.DownloadAttachment or Ops.UploadAttachment or Ops.DeleteAttachment or Ops.RotatePassword or Ops.Copy)
         throw new IpcException(IpcErrors.Reprompt);
 
       switch (op)
@@ -58,7 +62,9 @@ public class VaultToolsTests(AvaloniaSession session)
         case Ops.GetItem:
           return IpcJson.ToElement(new ItemDto(ItemId, "GitHub", Type, "Work", null, false, false, false, Revision, Revision, null,
             [new FieldDto(ItemFields.Username, "Username", "Login credentials", "octocat", false), new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true)],
-            Attachments: [.. Attachments]), IpcJson.Default.ItemDto);
+            Attachments: [.. Attachments], HasPassword: HasPassword), IpcJson.Default.ItemDto);
+        case Ops.Reveal:
+          return IpcJson.ToElement(new SecretResponse("hunter2"), IpcJson.Default.SecretResponse);
         case Ops.ListFilters:
           return IpcJson.ToElement(new FiltersResponse([new FilterRef(FolderId, "Work"), new FilterRef(Guid.NewGuid().ToString(), "Personal")], [], []), IpcJson.Default.FiltersResponse);
         case Ops.GetEditableItem:
@@ -67,8 +73,13 @@ public class VaultToolsTests(AvaloniaSession session)
           var options = IpcJson.Read(payload, IpcJson.Default.GeneratorOptions);
           var value = options.Kind == GeneratorKinds.Passphrase ? "correct-horse-battery-staple" : new string('x', options.Length);
           var entry = new GeneratedEntry(++_entry, options.Kind, Revision);
-          History.Insert(0, entry);
+          Generated.Insert(0, entry);
           return IpcJson.ToElement(new GeneratedResponse(value, entry.Id), IpcJson.Default.GeneratedResponse);
+        case Ops.CopyGenerated:
+          var copied = IpcJson.Read(payload, IpcJson.Default.HistoryEntryRequest).Id;
+          if (!History.Exists(e => e.Id == copied))
+            History.Insert(0, Generated.Single(e => e.Id == copied));
+          return null;
         case Ops.ListGeneratorHistory:
           return IpcJson.ToElement(new GeneratorHistoryResponse([.. History]), IpcJson.Default.GeneratorHistoryResponse);
         case Ops.UploadAttachment or Ops.DeleteAttachment or Ops.RotatePassword:
@@ -106,6 +117,10 @@ public class VaultToolsTests(AvaloniaSession session)
 
     public List<string> Toasts { get; } = [];
 
+    public List<string?> BusyMessages { get; } = [];
+
+    public long? RotateEntry { get; set; }
+
     public ItemViewModel Item()
     {
       var vm = new ItemViewModel(ItemId, Channel)
@@ -119,6 +134,12 @@ public class VaultToolsTests(AvaloniaSession session)
         PickSavePath = _ => Task.FromResult(Picked),
         PickOpenPath = () => Task.FromResult(Picked),
         Toast = (message, _) => Toasts.Add(message),
+        OpenRotateGenerator = () => Task.FromResult(RotateEntry),
+      };
+      vm.PropertyChanged += (_, e) =>
+      {
+        if (e.PropertyName == nameof(ItemViewModel.BusyMessage))
+          BusyMessages.Add(vm.BusyMessage);
       };
       RepromptDriver.Attach(vm, () => Password, _ => { });
       return vm;
@@ -155,36 +176,49 @@ public class VaultToolsTests(AvaloniaSession session)
     var vm = new GeneratorViewModel(h.Channel) { Toast = toasts.Add };
     string? used = null;
     vm.UseRequested = v => used = v;
-    Assert.Equal(((decimal?)20m, true, false), (vm.Length, vm.Numbers, vm.Special));
+    Assert.Equal(((decimal?)20m, true, true, true), (vm.Length, vm.Numbers, vm.Special, vm.AvoidAmbiguous));
 
     vm.Length = 24;
-    vm.Special = true;
+    vm.Special = false;
     await vm.InitializeAsync();
 
     Assert.Equal(new string('x', 24), vm.Value);
     var sent = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.Generate)), IpcJson.Default.GeneratorOptions);
-    Assert.Equal((GeneratorKinds.Password, 24, true), (sent.Kind, sent.Length, sent.Special));
+    Assert.Equal((GeneratorKinds.Password, 24, false), (sent.Kind, sent.Length, sent.Special));
     Assert.Equal(24, CompanionSettings.LoadGenerator().Length);
-    Assert.Single(vm.History);
-    Assert.True(vm.HasHistory);
+    Assert.Empty(vm.History);
+    Assert.False(vm.HasHistory);
 
     await vm.CopyCommand.ExecuteAsync(null);
+    Assert.Single(vm.History);
+    Assert.True(vm.HasHistory);
     await vm.History[0].CopyCommand.ExecuteAsync(null);
+    Assert.Single(vm.History);
     Assert.All(h.Extension.Payloads(Ops.CopyGenerated), p => Assert.Equal(1, IpcJson.Read(p, IpcJson.Default.HistoryEntryRequest).Id));
     Assert.Equal(["Copied", "Copied"], toasts);
     Assert.Null(vm.StatusMessage);
     vm.UseCommand.Execute(null);
     Assert.Equal(new string('x', 24), used);
 
+    var requests = h.Extension.Payloads(Ops.Generate).Count;
     vm.SelectedTab = 1;
-    Assert.Null(vm.Value);
-    await vm.RegenerateCommand.ExecuteAsync(null);
-    Assert.Equal("correct-horse-battery-staple", vm.Value);
+    AvaloniaSession.WaitFor(() => vm.Value == "correct-horse-battery-staple");
+    Assert.Equal(requests + 1, h.Extension.Payloads(Ops.Generate).Count);
+
+    vm.Words = 5;
+    AvaloniaSession.WaitFor(() => h.Extension.Payloads(Ops.Generate).Count == requests + 2);
+    Assert.Equal(5, IpcJson.Read(h.Extension.Payloads(Ops.Generate)[^1], IpcJson.Default.GeneratorOptions).Words);
+    vm.Capitalize = true;
+    AvaloniaSession.WaitFor(() => h.Extension.Payloads(Ops.Generate).Count == requests + 3);
+    Assert.True(IpcJson.Read(h.Extension.Payloads(Ops.Generate)[^1], IpcJson.Default.GeneratorOptions).Capitalize);
     Assert.Equal(GeneratorKinds.Passphrase, new GeneratorViewModel(h.Channel).Kind);
 
     h.Extension.FailWith[Ops.Generate] = IpcErrors.Invalid;
     await vm.RegenerateCommand.ExecuteAsync(null);
     Assert.StartsWith("Check the generator options", vm.ErrorMessage, StringComparison.Ordinal);
+    Assert.Null(vm.Value);
+    Assert.Null(vm.EntryId);
+    Assert.False(vm.UseCommand.CanExecute(null));
 
     vm.OnLocked();
     Assert.Null(vm.Value);
@@ -198,7 +232,9 @@ public class VaultToolsTests(AvaloniaSession session)
     using var h = new Harness();
     var vm = new GeneratorViewModel(h.Channel) { Special = true };
     await vm.InitializeAsync();
+    await vm.CopyCommand.ExecuteAsync(null);
     await vm.RegenerateCommand.ExecuteAsync(null);
+    await vm.CopyCommand.ExecuteAsync(null);
     var window = new Window { Width = 460, Height = 900, Background = Avalonia.Media.Brushes.Transparent, Content = new GeneratorView { DataContext = vm, Margin = new Avalonia.Thickness(24) } };
     window.Show();
     window.UpdateLayout();
@@ -249,6 +285,64 @@ public class VaultToolsTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task RotateDialog_HoldsToShowTheCurrentPassword_AndSavesTheShownEntry() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    var item = h.Item();
+    await item.LoadAsync();
+    var window = new Window { Width = 600, Height = 900 };
+    window.Show();
+
+    var shown = GeneratorView.ShowForRotateAsync(window, item);
+    AvaloniaSession.WaitFor(() => window.GetVisualDescendants().OfType<GeneratorView>().FirstOrDefault()?.DataContext is GeneratorViewModel { HasValue: true });
+    var view = window.GetVisualDescendants().OfType<GeneratorView>().Single();
+    var vm = (GeneratorViewModel)view.DataContext!;
+    window.UpdateLayout();
+    Assert.Equal("Rotate password", window.GetVisualDescendants().OfType<FluentAvalonia.UI.Controls.FAContentDialog>().Single().Title);
+    Assert.Equal("Cancel", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CloseButton").Content);
+    Assert.True(view.FindControl<Border>("CurrentPasswordGroup")!.IsEffectivelyVisible);
+    Assert.Equal("octocat", view.FindControl<SelectableTextBlock>("UsernameText")!.Text);
+    Assert.True(vm.HasUsername);
+    Assert.False(vm.HasWebsite);
+    var text = view.FindControl<TextBlock>("CurrentPasswordText")!;
+    Assert.Equal(FieldViewModel.Mask, text.Text);
+
+    var peek = view.FindControl<Button>("PeekButton")!;
+    var centre = peek.TranslatePoint(new Point(peek.Bounds.Width / 2, peek.Bounds.Height / 2), window)!.Value;
+    window.MouseDown(centre, MouseButton.Left);
+    AvaloniaSession.WaitFor(() => text.Text == "hunter2");
+    window.MouseUp(centre, MouseButton.Left);
+    Assert.Equal(FieldViewModel.Mask, text.Text);
+    Assert.Null(vm.CurrentPassword!.RevealedValue);
+
+    await vm.CurrentPassword.CopyCommand.ExecuteAsync(null);
+    Assert.Equal(ItemFields.Password, IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.Copy)), IpcJson.Default.FieldRequest).Field);
+
+    var copyEvent = new Avalonia.Interactivity.RoutedEventArgs(SelectableTextBlock.CopyingToClipboardEvent);
+    view.FindControl<SelectableTextBlock>("ValueText")!.RaiseEvent(copyEvent);
+    Assert.True(copyEvent.Handled);
+    AvaloniaSession.WaitFor(() => h.Extension.Payloads(Ops.CopyGenerated).Count == 1);
+
+    await vm.RegenerateCommand.ExecuteAsync(null);
+    var save = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PrimaryButton");
+    Assert.Equal("Save", save.Content);
+    save.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+    AvaloniaSession.WaitFor(() => shown.IsCompleted);
+    Assert.Equal(h.Extension.Generated[0].Id, await shown);
+
+    h.Extension.Reprompt = true;
+    var prompted = GeneratorView.ShowForRotateAsync(window, item);
+    AvaloniaSession.WaitFor(() => window.GetVisualDescendants().OfType<GeneratorView>().FirstOrDefault()?.DataContext is GeneratorViewModel { HasValue: true });
+    var second = (GeneratorViewModel)window.GetVisualDescendants().OfType<GeneratorView>().Single().DataContext!;
+    await second.CurrentPassword!.CopyCommand.ExecuteAsync(null);
+    AvaloniaSession.WaitFor(() => prompted.IsCompleted);
+    Assert.Null(await prompted);
+    Assert.True(item.IsPrompting);
+    window.Close();
+    File.Delete(CompanionSettings.FilePath);
+  });
+
+  [Fact]
   public Task Attachments_RenderAsAStackedGroup_AndDownloadToThePickedPath() => session.RunAsync(async () =>
   {
     using var h = new Harness();
@@ -275,6 +369,7 @@ public class VaultToolsTests(AvaloniaSession session)
     var request = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.DownloadAttachment)), IpcJson.Default.AttachmentRequest);
     Assert.Equal((ItemId, "att1", h.Picked, Revision), (request.Id, request.AttachmentId, request.Path, request.RevisionDate));
     Assert.Equal("Saved report.pdf", h.Toasts[^1]);
+    Assert.Equal(["Downloading attachment…", null], h.BusyMessages);
 
     h.Extension.FailWith[Ops.DownloadAttachment] = IpcErrors.Premium;
     await vm.Attachments[0].DownloadCommand.ExecuteAsync(null);
@@ -297,12 +392,14 @@ public class VaultToolsTests(AvaloniaSession session)
     Assert.Equal(Ops.UploadAttachment, upload.Op);
     Assert.Equal(h.Picked, IpcJson.Read(upload.Payload, IpcJson.Default.AttachmentRequest).Path);
     Assert.Equal("Attached notes.txt", h.Toasts[^1]);
+    Assert.Equal(["Uploading attachment…", null], h.BusyMessages);
 
     h.Extension.Reprompt = true;
     await vm.Attachments[1].DeleteCommand.ExecuteAsync(null);
     Assert.Equal("Delete attachment|\"scan.png\" will be deleted permanently. You cannot undo this.||Delete attachment", h.Prompts[^1]);
     Assert.Equal(Ops.DeleteAttachment, IpcJson.Read(h.Extension.Payloads(Ops.VerifyReprompt)[^1], IpcJson.Default.RepromptRequest).Op);
     Assert.Equal("Deleted scan.png", h.Toasts[^1]);
+    Assert.Contains("Deleting attachment…", h.BusyMessages);
 
     h.Extension.FailWith[Ops.DeleteAttachment] = IpcErrors.Failed;
     await vm.Attachments[0].DeleteCommand.ExecuteAsync(null);
@@ -314,30 +411,37 @@ public class VaultToolsTests(AvaloniaSession session)
   });
 
   [Fact]
-  public Task Rotate_ConfirmsFirst_AndReportsEveryOutcome() => session.RunAsync(async () =>
+  public Task Rotate_SavesTheGeneratorValue_AndReportsEveryOutcome() => session.RunAsync(async () =>
   {
-    File.Delete(CompanionSettings.FilePath);
     using var h = new Harness();
     var vm = h.Item();
     await vm.LoadAsync();
     Assert.True(vm.CanRotate);
+    var password = vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == ItemFields.Password);
+    Assert.True(password.CanRotate);
+    Assert.False(vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == ItemFields.Username).CanRotate);
 
-    h.Answer = false;
-    await vm.RotateCommand.ExecuteAsync(null);
-    Assert.Equal("Rotate password|Replace the password for GitHub? The old password is kept in password history.|Rotate|Cancel", Assert.Single(h.Prompts));
+    await password.RotateCommand.ExecuteAsync(null);
     Assert.Empty(h.Extension.Payloads(Ops.RotatePassword));
+    Assert.Empty(h.Prompts);
+    Assert.Empty(h.BusyMessages);
 
-    h.Answer = true;
+    h.RotateEntry = 7;
     await vm.RotateCommand.ExecuteAsync(null);
     var rotate = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.RotatePassword)), IpcJson.Default.RotateRequest);
-    Assert.Equal((ItemId, Revision, GeneratorKinds.Password), (rotate.Id, rotate.RevisionDate, rotate.Options.Kind));
+    Assert.Equal((ItemId, Revision, 7L, null), (rotate.Id, rotate.RevisionDate, rotate.EntryId, rotate.Options));
     Assert.Equal("Password replaced and copied", h.Toasts[^1]);
+    Assert.Equal(["Saving the new password to Bitwarden…", null], h.BusyMessages);
+    Assert.False(vm.IsBusy);
+    var alerts = 0;
+    vm.WriteFailed += () => alerts++;
+    Assert.False(vm.IsWriteFailure);
 
-    CompanionSettings.SaveGenerator(new GeneratorOptions("username"));
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Unknown;
     await vm.RotateCommand.ExecuteAsync(null);
-    Assert.Equal(GeneratorKinds.Password, IpcJson.Read(h.Extension.Payloads(Ops.RotatePassword)[^1], IpcJson.Default.RotateRequest).Options.Kind);
     Assert.Contains("nothing was copied", vm.ErrorMessage, StringComparison.Ordinal);
+    Assert.True(vm.IsWriteFailure);
+    Assert.Equal(1, alerts);
 
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Conflict;
     await vm.RotateCommand.ExecuteAsync(null);
@@ -346,6 +450,9 @@ public class VaultToolsTests(AvaloniaSession session)
     h.Extension.FailWith[Ops.RotatePassword] = IpcErrors.Failed;
     await vm.RotateCommand.ExecuteAsync(null);
     Assert.Equal("Bitwarden did not save the new password. Nothing was copied.", vm.ErrorMessage);
+    Assert.Equal(3, alerts);
+    vm.ErrorMessage = null;
+    Assert.False(vm.IsWriteFailure);
 
     h.Extension.FailWith.Clear();
     h.Extension.Reprompt = true;
@@ -353,14 +460,19 @@ public class VaultToolsTests(AvaloniaSession session)
     await vm.RotateCommand.ExecuteAsync(null);
     Assert.Equal(Ops.RotatePassword, IpcJson.Read(h.Extension.Payloads(Ops.VerifyReprompt)[^1], IpcJson.Default.RepromptRequest).Op);
 
+    h.Extension.HasPassword = false;
+    await vm.LoadAsync();
+    Assert.False(vm.CanRotate);
+    Assert.False(vm.Groups.SelectMany(g => g.Fields).Single(f => f.Key == ItemFields.Password).CanRotate);
+
+    h.Extension.HasPassword = true;
     h.Extension.Type = 3;
     await vm.LoadAsync();
     Assert.False(vm.CanRotate);
-    File.Delete(CompanionSettings.FilePath);
   });
 
   [Fact]
-  public Task Coordinator_RotateItem_OpensTheWindow_AndConfirmsAfterLoading() => session.RunAsync(async () =>
+  public Task Coordinator_RotateItem_OpensTheWindow_AndTheGeneratorAfterLoading() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();
     using var pair = new ChannelPair(extension.HandleAsync);
@@ -371,18 +483,54 @@ public class VaultToolsTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() => reply.IsCompleted);
     AvaloniaSession.WaitFor(() => coordinator.ItemWindows.Count == 1);
     var window = coordinator.ItemWindows.Single();
-    var prompts = new List<string>();
-    window.ViewModel!.Confirm = (title, _, _, _) =>
+    var opened = 0;
+    window.ViewModel!.OpenRotateGenerator = () =>
     {
-      prompts.Add(title);
-      return Task.FromResult(false);
+      opened++;
+      return Task.FromResult<long?>(null);
     };
-    AvaloniaSession.WaitFor(() => prompts.Count == 1);
-    Assert.Equal("Rotate password", prompts[0]);
+    AvaloniaSession.WaitFor(() => opened == 1);
     Assert.Single(extension.Payloads(Ops.GetItem));
     Assert.Empty(extension.Payloads(Ops.RotatePassword));
     window.Close();
     await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Coordinator_ShowGenerator_IsOneWindow_AndSavesTheValueAsANewLogin() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+
+    var reply = pair.Extension.RequestAsync(Ops.ShowGenerator, null);
+    AvaloniaSession.WaitFor(() => reply.IsCompleted);
+    var window = coordinator.ShowGenerator();
+    Assert.Same(window, coordinator.ShowGenerator());
+    var vm = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.HasValue);
+    Assert.Single(extension.Payloads(Ops.Generate));
+    window.UpdateLayout();
+    Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "CurrentPasswordGroup").IsEffectivelyVisible);
+    var save = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveAsNewItemButton");
+    Assert.True(save.IsEffectivelyEnabled);
+
+    save.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+    AvaloniaSession.WaitFor(() => coordinator.NewItemWindows.Count == 1);
+    var created = coordinator.NewItemWindows.Single().ViewModel!;
+    Assert.True(created.Editor!.IsLogin);
+    Assert.Equal(vm.Value, created.Editor.Password);
+    Assert.False(created.Editor.IsDirty);
+
+    coordinator.OnLocked();
+    Assert.False(vm.HasValue);
+    Assert.Empty(coordinator.NewItemWindows);
+    window.Close();
+    Assert.NotSame(window, coordinator.ShowGenerator());
+    coordinator.ShowGenerator().Close();
+    await Task.CompletedTask;
+    File.Delete(CompanionSettings.FilePath);
   });
 
   [Fact]

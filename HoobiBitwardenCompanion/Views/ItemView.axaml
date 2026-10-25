@@ -16,7 +16,7 @@
                     </Panel>
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Title}" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding HeaderTitle}" FontSize="{StaticResource SubtitleTextBlockFontSize}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <WrapPanel Margin="0,2,0,0" ItemSpacing="6" LineSpacing="6">
                         <Border Classes="Badge">
                             <Border.IsVisible>
@@ -66,7 +66,19 @@
                                 <TextBlock Text="Protected" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
-                        <Border Classes="Badge Accent" IsVisible="{Binding IsEditing}">
+                        <Border x:Name="NewItemBadge" Classes="Badge Accent" IsVisible="{Binding IsNew}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Add}" />
+                                <TextBlock Text="New item" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="Badge Accent">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsEditing" />
+                                    <Binding Path="!IsNew" />
+                                </MultiBinding>
+                            </Border.IsVisible>
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Edit}" />
                                 <TextBlock Text="Editing" VerticalAlignment="Center" />
@@ -78,21 +90,24 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*">
-        <Grid x:Name="Toolbar" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,24,4">
-            <WrapPanel ItemSpacing="8" LineSpacing="8">
-                <Button x:Name="EditButton" Content="Edit" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" />
-                <Button x:Name="HistoryButton" Content="Password history" Command="{Binding ShowPasswordHistoryCommand}" IsVisible="{Binding CanShowHistory}" />
-                <Button x:Name="RotateButton" Content="Rotate password" Command="{Binding RotateCommand}" IsVisible="{Binding CanRotate}" />
-                <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditing}" />
-                <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelEditCommand}" IsVisible="{Binding IsEditing}" />
-            </WrapPanel>
-            <Button x:Name="DeleteButton" Grid.Column="1" VerticalAlignment="Top" Theme="{StaticResource DangerIconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
-        </Grid>
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <ContentControl x:Name="Header" Margin="0,0,24,0" Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,12,24,16" IsVisible="{Binding IsEditing}">
+            <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" />
+            <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelEditCommand}" />
+        </StackPanel>
 
         <StackPanel Grid.Row="1" Margin="0,0,24,0">
-            <Border x:Name="ErrorAlert" Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
+            <StackPanel x:Name="BusyPanel" Spacing="6" Margin="0,4,0,8" IsVisible="{Binding IsBusy}">
+                <ProgressBar x:Name="BusyBar" IsIndeterminate="True" />
+                <TextBlock x:Name="BusyText" Classes="Caption" TextWrapping="Wrap" Text="{Binding BusyMessage}" />
+            </StackPanel>
+            <Border x:Name="ErrorAlert" Classes="Alert" Classes.Danger="{Binding IsWriteFailure}" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Warning}" FontSize="18" VerticalAlignment="Top" IsVisible="{Binding IsWriteFailure}" />
+                    <TextBlock x:Name="ErrorText" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding ErrorMessage}" />
+                </Grid>
             </Border>
             <Border x:Name="StatusAlert" Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock TextWrapping="Wrap" Text="{Binding StatusMessage}" />
@@ -104,8 +119,6 @@
 
         <ScrollViewer Grid.Row="2" IsVisible="{Binding !IsEditing}">
             <StackPanel Margin="{StaticResource PageGutter}">
-                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,8,-8,0" />
-
                 <Border x:Name="PasswordPanel" Classes="Group" Margin="0,8,0,0" IsVisible="{Binding IsPrompting}">
                     <Border Classes="Row" Padding="16,20">
                         <StackPanel Spacing="8">
@@ -115,19 +128,31 @@
                             </StackPanel>
                             <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Master password" IsEnabled="{Binding !IsVerifying}" KeyDown="OnPasswordKeyDown" />
                             <TextBlock x:Name="PasswordErrorText" Classes="Caption Warn" TextWrapping="Wrap" Text="{Binding PasswordError}" IsVisible="{Binding PasswordError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                            <Button x:Name="VerifyButton" Margin="0,8,0,0" Theme="{StaticResource AccentButtonStyle}" IsEnabled="{Binding !IsVerifying}" Click="OnVerifyClick">
-                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
-                                    <ui:FAProgressRing x:Name="VerifyRing" Width="14" Height="14" IsIndeterminate="True" IsVisible="{Binding IsVerifying}" />
-                                    <TextBlock Text="Verify" />
-                                </StackPanel>
-                            </Button>
+                            <Grid Margin="0,8,0,0" ColumnDefinitions="Auto,*">
+                                <Button x:Name="VerifyButton" Theme="{StaticResource AccentButtonStyle}" IsEnabled="{Binding !IsVerifying}" Click="OnVerifyClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                        <ui:FAProgressRing x:Name="VerifyRing" Width="14" Height="14" IsIndeterminate="True" IsVisible="{Binding IsVerifying}" />
+                                        <TextBlock Text="Verify" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="BiometricButton" Grid.Column="1" HorizontalAlignment="Right" IsVisible="{Binding BiometricAvailable}" IsEnabled="{Binding !IsVerifying}" Click="OnBiometricClick" ToolTip.Tip="Verify with Windows Hello">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.Fingerprint}" FontSize="16" VerticalAlignment="Center" />
+                                        <TextBlock Text="Use Windows Hello" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
                         </StackPanel>
                     </Border>
                 </Border>
 
                 <StackPanel x:Name="GracePanel" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding GraceVisible}">
                     <ProgressBar x:Name="GraceBar" Height="3" Minimum="0" Maximum="1" Value="{Binding GraceFraction}" />
-                    <TextBlock x:Name="GraceText" Classes="Caption" Text="{Binding GraceCaption}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock x:Name="GraceText" Classes="Caption" Text="{Binding GraceCaption}" VerticalAlignment="Center" />
+                        <Button x:Name="KeepOpenButton" Grid.Column="1" Theme="{StaticResource CaptionLinkButtonStyle}" Content="Keep open" Command="{Binding KeepOpenCommand}" />
+                    </Grid>
                 </StackPanel>
 
                 <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}" IsVisible="{Binding !IsPrompting}">
@@ -149,7 +174,10 @@
                                                     <Border Classes="Row Field" IsVisible="{Binding CanCopy}">
                                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                                             <StackPanel VerticalAlignment="Center">
-                                                                <TextBlock Classes="FieldLabel" Text="{Binding Label}" />
+                                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                    <TextBlock Classes="FieldLabel" Text="{Binding Label}" VerticalAlignment="Center" />
+                                                                    <Button x:Name="RotateButton" Theme="{StaticResource CaptionLinkButtonStyle}" Content="Rotate" Command="{Binding RotateCommand}" IsVisible="{Binding CanRotate}" ToolTip.Tip="Replace this password" />
+                                                                </StackPanel>
                                                                 <TextBlock
                                                                     Text="{Binding DisplayValue}"
                                                                     FontFamily="{StaticResource MonoFontFamily}"
@@ -162,7 +190,14 @@
                                                                     FontFamily="{StaticResource MonoFontFamily}"
                                                                     FontSize="13"
                                                                     LetterSpacing="1"
-                                                                    IsVisible="{Binding IsSecret}" />
+                                                                    IsVisible="{Binding IsFixedSecret}" />
+                                                                <SelectableTextBlock
+                                                                    Text="{Binding DisplayValue}"
+                                                                    TextWrapping="Wrap"
+                                                                    FontFamily="{StaticResource MonoFontFamily}"
+                                                                    FontSize="13"
+                                                                    LetterSpacing="1"
+                                                                    IsVisible="{Binding IsSelectableSecret}" />
                                                                 <SelectableTextBlock
                                                                     Text="{Binding DisplayValue}"
                                                                     TextWrapping="Wrap"
@@ -201,6 +236,21 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <StackPanel x:Name="PasswordHistoryGroup" IsVisible="{Binding CanShowHistory}">
+                    <TextBlock Classes="GroupHeader" Text="Password history" />
+                    <Border Classes="Group">
+                        <Button x:Name="HistoryButton" Theme="{StaticResource AddRowButtonStyle}" Command="{Binding ShowPasswordHistoryCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Panel Width="16">
+                                    <TextBlock Classes="Icon" Text="{StaticResource Glyph.Password}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" IsVisible="{Binding !ShowPasswordHistoryCommand.IsRunning}" />
+                                    <ui:FAProgressRing x:Name="HistoryRing" Width="14" Height="14" IsIndeterminate="True" IsVisible="{Binding ShowPasswordHistoryCommand.IsRunning}" />
+                                </Panel>
+                                <TextBlock Text="Show password history" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </Border>
+                </StackPanel>
+
                 <StackPanel x:Name="AttachmentsGroup" IsVisible="{Binding ShowAttachments}">
                     <TextBlock Classes="GroupHeader" Text="Attachments" />
                     <Border Classes="Group">
@@ -235,7 +285,20 @@
         </ScrollViewer>
 
         <ScrollViewer x:Name="EditorScroll" Grid.Row="2" IsVisible="{Binding IsEditing}">
-            <views:ItemEditView x:Name="EditView" Margin="{StaticResource PageGutter}" DataContext="{Binding Editor}" />
+            <StackPanel Margin="{StaticResource PageGutter}">
+                <StackPanel x:Name="NewItemPanel" IsVisible="{Binding IsNew}">
+                    <TextBlock Classes="GroupHeader" Text="Item type" Margin="4,8,4,8" />
+                    <Border Classes="Group">
+                        <Border Classes="Row Edit">
+                            <StackPanel>
+                                <TextBlock Classes="FieldLabel" Text="Type" />
+                                <ComboBox x:Name="TypeBox" HorizontalAlignment="Stretch" ItemsSource="{x:Static vm:ItemViewModel.TypeChoices}" SelectedItem="{Binding SelectedType}" />
+                            </StackPanel>
+                        </Border>
+                    </Border>
+                </StackPanel>
+                <views:ItemEditView x:Name="EditView" DataContext="{Binding Editor}" />
+            </StackPanel>
         </ScrollViewer>
     </Grid>
 </UserControl>

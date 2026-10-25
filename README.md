@@ -98,3 +98,7 @@ dotnet publish -c Release -p:Platform=x64
 ## License
 
 [MIT](LICENSE)
+
+### Third-party notices
+
+The passphrase generator uses the [EFF large wordlist](https://www.eff.org/dice) by the Electronic Frontier Foundation, licensed under [CC BY 3.0 US](https://creativecommons.org/licenses/by/3.0/us/). The file is bundled unchanged as `HoobiBitwardenCommandPaletteExtension/Resources/eff_large_wordlist.txt`.
