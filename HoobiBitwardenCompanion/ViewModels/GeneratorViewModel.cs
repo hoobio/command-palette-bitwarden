@@ -168,7 +168,12 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
       if (request == _request)
+      {
+        Value = null;
+        _entryId = null;
         ErrorMessage = Describe(ex);
+      }
+
       return;
     }
 

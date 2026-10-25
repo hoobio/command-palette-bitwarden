@@ -58,5 +58,9 @@
   {
     "pattern": "HoobiBitwardenCompanion[\\\\/]App\\.axaml\\.cs$",
     "reason": "Avalonia application bootstrap, runs only under the desktop lifetime"
+  },
+  {
+    "pattern": "WindowAlertInterop\\.cs$",
+    "reason": "Win32 MessageBeep and FlashWindowEx on a live window handle, cannot be exercised in unit tests"
   }
 ]

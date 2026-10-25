@@ -429,6 +429,11 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.False(vm.GraceVisible);
     Assert.False(vm.RepromptRequired);
 
+    vm.RepromptRequired = true;
+    await vm.VerifyRepromptAsync("correct");
+    Assert.True(vm.GraceVisible);
+    vm.KeepOpenCommand.Execute(null);
+
     vm.OnLocked();
     await vm.LoadAsync();
     await vm.VerifyRepromptAsync("correct");

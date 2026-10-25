@@ -238,7 +238,12 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
-  partial void OnRepromptRequiredChanged(bool value) => OnPropertyChanged(nameof(GraceVisible));
+  partial void OnRepromptRequiredChanged(bool value)
+  {
+    if (value)
+      _keepOpen = false;
+    OnPropertyChanged(nameof(GraceVisible));
+  }
 
   private void SetGrace(GraceDto? grace)
   {

@@ -216,6 +216,9 @@ public class VaultToolsTests(AvaloniaSession session)
     h.Extension.FailWith[Ops.Generate] = IpcErrors.Invalid;
     await vm.RegenerateCommand.ExecuteAsync(null);
     Assert.StartsWith("Check the generator options", vm.ErrorMessage, StringComparison.Ordinal);
+    Assert.Null(vm.Value);
+    Assert.Null(vm.EntryId);
+    Assert.False(vm.UseCommand.CanExecute(null));
 
     vm.OnLocked();
     Assert.Null(vm.Value);
@@ -314,6 +317,11 @@ public class VaultToolsTests(AvaloniaSession session)
 
     await vm.CurrentPassword.CopyCommand.ExecuteAsync(null);
     Assert.Equal(ItemFields.Password, IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.Copy)), IpcJson.Default.FieldRequest).Field);
+
+    var copyEvent = new Avalonia.Interactivity.RoutedEventArgs(SelectableTextBlock.CopyingToClipboardEvent);
+    view.FindControl<SelectableTextBlock>("ValueText")!.RaiseEvent(copyEvent);
+    Assert.True(copyEvent.Handled);
+    AvaloniaSession.WaitFor(() => h.Extension.Payloads(Ops.CopyGenerated).Count == 1);
 
     await vm.RegenerateCommand.ExecuteAsync(null);
     var save = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PrimaryButton");

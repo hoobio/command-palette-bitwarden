@@ -19,6 +19,16 @@ internal sealed partial class GeneratorView : UserControl
     PeekButton.AddHandler(PointerPressedEvent, OnPeekPressed, RoutingStrategies.Tunnel);
     PeekButton.AddHandler(PointerReleasedEvent, OnPeekReleased, RoutingStrategies.Tunnel);
     PeekButton.AddHandler(PointerCaptureLostEvent, (_, _) => CurrentPassword?.Unpeek());
+    AddHandler(SelectableTextBlock.CopyingToClipboardEvent, OnCopyingToClipboard);
+  }
+
+  // Ctrl+C on the generated value goes through the extension's secure clipboard, not the plain one.
+  private void OnCopyingToClipboard(object? sender, RoutedEventArgs e)
+  {
+    if (e.Source is not SelectableTextBlock { Name: "ValueText" } || DataContext is not GeneratorViewModel viewModel)
+      return;
+    e.Handled = true;
+    _ = viewModel.CopyCommand.ExecuteAsync(null);
   }
 
   private FieldViewModel? CurrentPassword => (DataContext as GeneratorViewModel)?.CurrentPassword;
