@@ -15,7 +15,7 @@ internal sealed partial class CompanionOps
   private void RaiseSettingsChanged(object sender, Settings e) => SettingsChanged?.Invoke();
 
   internal SettingsResponse GetSettings() =>
-    new([.. Manager().OrderedSettings.Select(DescribeSetting).OfType<SettingDto>()]);
+    new(Manager().OrderedSettings.Select(DescribeSetting).OfType<SettingDto>().ToArray());
 
   internal SetSettingResponse SetSetting(SetSettingRequest request)
   {
@@ -54,7 +54,7 @@ internal sealed partial class CompanionOps
   {
     SectionHeaderSetting section => new SettingDto(section.Key, SettingKinds.Section, section.Label ?? string.Empty, null, null, null),
     ToggleSetting toggle => new SettingDto(toggle.Key, SettingKinds.Toggle, toggle.Label ?? string.Empty, toggle.Description, toggle.Value ? "true" : "false", null),
-    ChoiceSetSetting choice => new SettingDto(choice.Key, SettingKinds.Choice, choice.Label ?? string.Empty, choice.Description, choice.Value, [.. choice.Choices.Select(c => new ChoiceDto(c.Title, c.Value))]),
+    ChoiceSetSetting choice => new SettingDto(choice.Key, SettingKinds.Choice, choice.Label ?? string.Empty, choice.Description, choice.Value, choice.Choices.Select(c => new ChoiceDto(c.Title, c.Value)).ToArray()),
     TextSetting text => new SettingDto(text.Key, SettingKinds.Text, text.Label ?? string.Empty, text.Description, text.Value ?? string.Empty, null),
     _ => null,
   };

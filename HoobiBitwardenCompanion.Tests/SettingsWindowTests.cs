@@ -152,11 +152,11 @@ public class SettingsWindowTests(AvaloniaSession session)
     Assert.Equal(("cliPath", @"C:\tools\bw"), Assert.Single(extension.Sets));
 
     box.Text = @"D:\bw";
-    box.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent) { Source = box });
+    box.RaiseEvent(new FocusChangedEventArgs(InputElement.LostFocusEvent) { Source = box });
     AvaloniaSession.WaitFor(() => row.TextValue == @"D:\bw");
     Assert.Equal(("cliPath", @"D:\bw"), extension.Sets[1]);
 
-    box.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent) { Source = box });
+    box.RaiseEvent(new FocusChangedEventArgs(InputElement.LostFocusEvent) { Source = box });
     await Task.Delay(100, TestContext.Current.CancellationToken);
     Assert.Equal(2, extension.Sets.Count);
     window.Close();
