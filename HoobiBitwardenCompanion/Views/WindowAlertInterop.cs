@@ -23,6 +23,12 @@ internal static partial class WindowAlertInterop
     FlashWindowEx(ref info);
   }
 
+  internal static void ReturnForeground(nint hwnd)
+  {
+    if (hwnd != 0 && IsWindow(hwnd))
+      SetForegroundWindow(hwnd);
+  }
+
   [StructLayout(LayoutKind.Sequential)]
   private struct FlashWindowInfo
   {
@@ -36,6 +42,14 @@ internal static partial class WindowAlertInterop
   [LibraryImport("user32.dll")]
   [return: MarshalAs(UnmanagedType.Bool)]
   private static partial bool MessageBeep(uint uType);
+
+  [LibraryImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool IsWindow(nint hWnd);
+
+  [LibraryImport("user32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool SetForegroundWindow(nint hWnd);
 
   [LibraryImport("user32.dll")]
   [return: MarshalAs(UnmanagedType.Bool)]

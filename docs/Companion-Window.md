@@ -129,6 +129,12 @@ For an item with master password re-prompt, the window shows the item header and
 
 If the item changes in the vault while the window is open, the window loads the new version and does not show or copy the old value.
 
+## API key login
+
+When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bitwarden** opens the **Log in with your API key** window. Command Palette stays open behind it. The window has a **Client ID** box and a masked **Client secret** box, with an eye button to show the secret. `Enter` in either box logs in. `Esc` and **Cancel** close the window.
+
+The window stays open when you switch to another app, for example to copy the values from the web vault. While the extension logs in, the boxes and buttons are disabled. A failed login shows the error from the CLI and keeps the values. A successful login clears the values, closes the window and returns focus to Command Palette. Command Palette then shows **Unlock**. The window does not close when the vault is locked, because you are logged out, not locked.
+
 ## Locked vault
 
 When the vault locks or auto-locks, every item window removes the values it shows, closes an open edit form without saving, stops the verification code and shows that the vault is locked. New item windows close without saving. An open generator, in a dialog or in its own window, removes its value and history. Unlock the vault in Command Palette. The open item windows then load the item again.

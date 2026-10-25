@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json.Nodes;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -976,11 +977,14 @@ public class BitwardenCliServiceMockedTests
     ApiKeyStore.Clear();
     var (svc, factory) = CreateService();
     factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
+    var statusChanged = 0;
+    svc.StatusChanged += () => statusChanged++;
     try
     {
       var (success, error) = await svc.LoginWithApiKeyAsync("user.abc", "s3cret");
 
       Assert.True(success);
+      Assert.Equal(1, statusChanged);
       Assert.Null(error);
       Assert.Equal("login --apikey", factory.LastArgs);
       Assert.Equal("user.abc", factory.LastPsi!.Environment["BW_CLIENTID"]);
@@ -994,6 +998,55 @@ public class BitwardenCliServiceMockedTests
     {
       ApiKeyStore.Clear();
     }
+  }
+
+  [Fact]
+  public async Task ApiKeyLoginOp_TrimsTheValues_AndReportsSuccess()
+  {
+    ApiKeyStore.Clear();
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "You are logged in!\n", exitCode: 0));
+    using var ops = new Companion.CompanionOps(svc);
+    try
+    {
+      var reply = await ops.HandleAsync(Ops.ApiKeyLogin, IpcJson.ToElement(new ApiKeyLoginRequest("  user.abc ", " s3cret\n"), IpcJson.Default.ApiKeyLoginRequest), CancellationToken.None);
+
+      Assert.Equal(new ApiKeyLoginResponse(true, null), IpcJson.Read(reply, IpcJson.Default.ApiKeyLoginResponse));
+      Assert.Equal("user.abc", factory.LastPsi!.Environment["BW_CLIENTID"]);
+      Assert.Equal("s3cret", factory.LastPsi.Environment["BW_CLIENTSECRET"]);
+    }
+    finally
+    {
+      ApiKeyStore.Clear();
+    }
+  }
+
+  [Fact]
+  public async Task ApiKeyLoginOp_RejectedKey_PassesTheCliErrorThrough()
+  {
+    var (svc, factory) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stderr: "fetch failed\n", exitCode: 1));
+    using var ops = new Companion.CompanionOps(svc);
+
+    var reply = await ops.HandleAsync(Ops.ApiKeyLogin, IpcJson.ToElement(new ApiKeyLoginRequest("user.abc", "s3cret"), IpcJson.Default.ApiKeyLoginRequest), CancellationToken.None);
+
+    Assert.Equal(new ApiKeyLoginResponse(false, "fetch failed"), IpcJson.Read(reply, IpcJson.Default.ApiKeyLoginResponse));
+  }
+
+  [Theory]
+  [InlineData("", "s3cret")]
+  [InlineData("user.abc", "   ")]
+  [InlineData(null, null)]
+  public async Task ApiKeyLoginOp_EmptyValues_FailWithoutCallingTheCli(string? clientId, string? clientSecret)
+  {
+    var (svc, factory) = CreateService();
+    using var ops = new Companion.CompanionOps(svc);
+
+    var response = await ops.ApiKeyLoginAsync(clientId, clientSecret);
+
+    Assert.False(response.Success);
+    Assert.Equal("Enter both the client ID and the client secret", response.Error);
+    Assert.Null(factory.LastPsi);
   }
 
   [Fact]

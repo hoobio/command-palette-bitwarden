@@ -961,6 +961,7 @@ internal sealed partial class BitwardenCliService
       {
         ApiKeyStore.Save(clientId, clientSecret);
         SetStatus(VaultStatus.Locked);
+        StatusChanged?.Invoke();
         DebugLogService.Log("Auth", "API key login successful, vault locked");
         return (true, null);
       }

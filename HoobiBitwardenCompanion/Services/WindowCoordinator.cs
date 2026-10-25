@@ -12,12 +12,15 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
+  private ApiKeyLoginWindow? _apiKeyLoginWindow;
   private FiltersResponse? _filters;
 
   public WindowCoordinator(Stream input, Stream output) =>
     Channel = new PipeChannel(input, output, HandleRequestAsync, OnEvent);
 
   public PipeChannel Channel { get; }
+
+  internal Action<nint> ReturnForeground { get; set; } = WindowAlertInterop.ReturnForeground;
 
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
 
@@ -82,6 +85,10 @@ internal sealed class WindowCoordinator : IDisposable
       case Ops.ShowGenerator:
         await Dispatcher.UIThread.InvokeAsync(ShowGenerator);
         return null;
+      case Ops.ShowApiKeyLogin:
+        var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowApiKeyLogin((nint)(dialog?.ReturnWindow ?? 0)));
+        return null;
       case Ops.NewItem:
         Dispatcher.UIThread.Post(() => _ = ShowNewItemAsync());
         return null;
@@ -139,6 +146,25 @@ internal sealed class WindowCoordinator : IDisposable
 
     BringToFront(_generatorWindow);
     return _generatorWindow;
+  }
+
+  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0)
+  {
+    if (_apiKeyLoginWindow is null)
+    {
+      var window = new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel));
+      window.Closed += (_, _) =>
+      {
+        _apiKeyLoginWindow = null;
+        ReturnForeground(window.ReturnWindow);
+      };
+      _apiKeyLoginWindow = window;
+    }
+
+    if (returnWindow != 0)
+      _apiKeyLoginWindow.ReturnWindow = returnWindow;
+    BringToFront(_apiKeyLoginWindow);
+    return _apiKeyLoginWindow;
   }
 
   // The extension lists collections with bw, so a new item window opens from the last list and refreshes it afterwards.

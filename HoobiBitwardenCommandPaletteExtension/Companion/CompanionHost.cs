@@ -58,6 +58,13 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void ShowGenerator() => _ = SendAsync(Ops.ShowGenerator, null);
 
+  public void ShowApiKeyLogin()
+  {
+    var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
+    _ = CommandPaletteModalScope.Enter();
+    _ = SendAsync(Ops.ShowApiKeyLogin, IpcJson.ToElement(new DialogRequest(returnWindow), IpcJson.Default.DialogRequest));
+  }
+
   public void RotateItem(string id) =>
     _ = SendAsync(Ops.RotateItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest));
 

@@ -93,6 +93,8 @@ internal static partial class CommandPaletteModalScope
     }
   }
 
+  internal static nint ForegroundCommandPalette() => GetForegroundMainWindow();
+
   private static nint GetForegroundMainWindow()
   {
     var hwnd = GetForegroundWindow();

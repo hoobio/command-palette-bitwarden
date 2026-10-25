@@ -107,6 +107,14 @@ public class CompanionHostTests
   }
 
   [Fact]
+  public void ShowApiKeyLogin_WithoutTheCompanionExe_DoesNotThrow()
+  {
+    using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), exePath: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.exe"));
+    host.ShowApiKeyLogin();
+    Assert.Null(host.Process);
+  }
+
+  [Fact]
   public async Task TimedOutRequest_KillsTheCompanion_BeforeStartingANewOne()
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), requestTimeout: TimeSpan.FromMilliseconds(1));

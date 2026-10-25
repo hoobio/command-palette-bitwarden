@@ -37,6 +37,8 @@ internal static class Ops
   public const string CopyGenerated = "copyGenerated";
   public const string RotatePassword = "rotatePassword";
   public const string RotateItem = "rotateItem";
+  public const string ShowApiKeyLogin = "showApiKeyLogin";
+  public const string ApiKeyLogin = "apiKeyLogin";
 }
 
 internal static class GeneratorKinds
@@ -133,6 +135,12 @@ internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDa
 internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
+
+internal sealed record DialogRequest(long ReturnWindow);
+
+internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
+
+internal sealed record ApiKeyLoginResponse(bool Success, string? Error);
 
 internal sealed record SecretResponse(string Value);
 
@@ -255,6 +263,9 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 [JsonSerializable(typeof(ItemRequest))]
 [JsonSerializable(typeof(FieldRequest))]
 [JsonSerializable(typeof(UriRequest))]
+[JsonSerializable(typeof(DialogRequest))]
+[JsonSerializable(typeof(ApiKeyLoginRequest))]
+[JsonSerializable(typeof(ApiKeyLoginResponse))]
 [JsonSerializable(typeof(RepromptRequest))]
 [JsonSerializable(typeof(SecretResponse))]
 [JsonSerializable(typeof(TotpResponse))]

@@ -88,6 +88,9 @@ internal sealed partial class CompanionOps : IDisposable
         case Ops.VerifyReprompt:
           var verify = IpcJson.Read(payload, IpcJson.Default.RepromptRequest);
           return IpcJson.ToElement(await VerifyRepromptAsync(verify.Id, verify.Password, verify.Op, verify.Payload, verify.Biometric), IpcJson.Default.RepromptResponse);
+        case Ops.ApiKeyLogin:
+          var login = IpcJson.Read(payload, IpcJson.Default.ApiKeyLoginRequest);
+          return IpcJson.ToElement(await ApiKeyLoginAsync(login.ClientId, login.ClientSecret), IpcJson.Default.ApiKeyLoginResponse);
         case Ops.ListFilters:
           return IpcJson.ToElement(await ListFiltersAsync(), IpcJson.Default.FiltersResponse);
         case Ops.CreateItem:
@@ -181,6 +184,16 @@ internal sealed partial class CompanionOps : IDisposable
       default:
         throw new IpcException(IpcErrors.Invalid);
     }
+  }
+
+  internal async Task<ApiKeyLoginResponse> ApiKeyLoginAsync(string? clientId, string? clientSecret)
+  {
+    var id = clientId?.Trim();
+    var secret = clientSecret?.Trim();
+    if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(secret))
+      return new ApiKeyLoginResponse(false, "Enter both the client ID and the client secret");
+    var (success, error) = await _service.LoginWithApiKeyAsync(id, secret);
+    return new ApiKeyLoginResponse(success, success ? null : error ?? "Login failed");
   }
 
   private static bool IsVerified(string? id, string? verifiedId) =>

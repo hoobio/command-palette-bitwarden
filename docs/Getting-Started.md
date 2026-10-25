@@ -43,7 +43,7 @@ dotnet build -c Debug -p:Platform=x64
 If your account uses FIDO2 (WebAuthn) or Duo two-step login, the CLI cannot complete a password login. Turn on **Use API Key Authentication** in [Settings](Settings) and log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) instead:
 
 1. In the Bitwarden web vault, go to **Settings > Security > Keys** and select **View API key**.
-2. Open the **Login to Bitwarden** item and enter the **Client ID** and **Client Secret**.
+2. Select **Login to Bitwarden**. The companion window opens. Paste the **Client ID** and **Client Secret** into it and select **Log in**. The window stays open when you switch to the web vault, so the values are kept. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead.
 3. Unlock the vault with your master password.
 
 The extension stores the API key in Windows Credential Manager. When the CLI session ends, the extension logs in again with the stored key, so you only enter your master password. API key login skips two-step login. The API key cannot decrypt the vault without the master password.

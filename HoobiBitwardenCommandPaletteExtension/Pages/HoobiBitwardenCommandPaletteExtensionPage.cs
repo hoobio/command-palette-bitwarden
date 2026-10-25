@@ -591,7 +591,10 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         PlaceholderText = "Search your vault... (try url:github)";
 
-        var item = new ListItem(new Pages.LoginPage(_settings, OnLoginSubmitted, OnApiKeyLoginSubmitted))
+        ICommand loginCommand = _settings?.UseApiKeyAuthentication.Value == true && CompanionHost.Current is { } companion
+            ? new AnonymousCommand(companion.ShowApiKeyLogin) { Name = "Log in", Result = CommandResult.KeepOpen() }
+            : new Pages.LoginPage(_settings, OnLoginSubmitted, OnApiKeyLoginSubmitted);
+        var item = new ListItem(loginCommand)
         {
             Title = "Login to Bitwarden",
             Subtitle = _errorMessage ?? (_settings?.UseApiKeyAuthentication.Value == true
