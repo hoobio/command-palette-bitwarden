@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
 using HoobiBitwardenCompanion.ViewModels;
+using HoobiBitwardenCompanion.Views;
 
 namespace HoobiBitwardenCompanion.Tests;
 
@@ -362,9 +363,14 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
 
     Assert.All(new Window[] { login, unlock, reprompt }, window => Assert.True(window.Topmost));
     Assert.Equal(new Window[] { login, unlock, reprompt }, taken);
+
+    var settings = coordinator.ShowSettings();
+    Assert.Equal(new Window[] { login, unlock, reprompt, settings }, taken);
+    Assert.Equal(ItemWindow.AlwaysOnTop, settings.Topmost);
     login.Close();
     unlock.Close();
     reprompt.Close();
+    settings.Close();
     await Task.CompletedTask;
   });
 

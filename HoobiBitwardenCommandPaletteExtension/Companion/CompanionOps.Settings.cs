@@ -14,8 +14,13 @@ internal sealed partial class CompanionOps
 
   private void RaiseSettingsChanged(object sender, Settings e) => SettingsChanged?.Invoke();
 
-  internal SettingsResponse GetSettings() =>
-    new(Manager().OrderedSettings.Select(DescribeSetting).OfType<SettingDto>().ToArray());
+  internal SettingsResponse GetSettings()
+  {
+    var manager = Manager();
+    return new(manager.OrderedSettings.Select(DescribeSetting).OfType<SettingDto>()
+      .Select(s => manager.TryGetParent(s.Key, out var parent) ? s with { Parent = parent.Key, ParentValue = parent.Value } : s)
+      .ToArray());
+  }
 
   internal SetSettingResponse SetSetting(SetSettingRequest request)
   {

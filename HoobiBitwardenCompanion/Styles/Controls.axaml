@@ -432,6 +432,10 @@
         <Setter Property="MinHeight" Value="48" />
     </Style>
 
+    <Style Selector="Border.Row.Switch.Child">
+        <Setter Property="Padding" Value="40,8,16,8" />
+    </Style>
+
     <Style Selector="Border.Row.KeyValue">
         <Setter Property="Padding" Value="16,0" />
         <Setter Property="Height" Value="36" />

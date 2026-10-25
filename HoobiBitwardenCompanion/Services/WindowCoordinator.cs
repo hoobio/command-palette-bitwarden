@@ -280,7 +280,7 @@ internal sealed class WindowCoordinator : IDisposable
   }
 
   // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused.
-  private static void BringToFront(Window window)
+  private void BringToFront(Window window)
   {
     window.Show();
     if (window.WindowState == WindowState.Minimized)
@@ -289,6 +289,8 @@ internal sealed class WindowCoordinator : IDisposable
     window.Topmost = true;
     window.Topmost = topmost;
     window.Activate();
+    TakeForeground(window);
+    (window as SettingsWindow)?.FocusSearch();
   }
 
   public void Dispose() => Channel.Dispose();

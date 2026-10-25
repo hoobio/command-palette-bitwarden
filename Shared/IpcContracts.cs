@@ -327,7 +327,7 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 
 internal sealed record ChoiceDto(string Title, string Value);
 
-internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices);
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null);
 
 internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
 

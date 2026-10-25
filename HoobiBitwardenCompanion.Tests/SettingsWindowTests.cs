@@ -71,8 +71,28 @@ public class SettingsWindowTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() =>
     {
       window.UpdateLayout();
-      return window.GetVisualDescendants().OfType<TextBox>().Any(t => t.IsEffectivelyVisible);
+      return window.GetVisualDescendants().OfType<TextBox>().Any(t => t.IsEffectivelyVisible && t.DataContext is SettingRowViewModel);
     });
+
+  private static void UseDependentSchema(FakeExtension extension)
+  {
+    extension.Schema.Clear();
+    extension.Schema.AddRange(
+    [
+      new("_section_a", SettingKinds.Section, "General", null, null, null),
+      new("desktop", SettingKinds.Toggle, "Desktop app", "Use the desktop app", "false", null),
+      new("biometrics", SettingKinds.Toggle, "Prompt for biometrics", "Ask for Windows Hello", "true", null, "desktop", "true"),
+      new("other", SettingKinds.Toggle, "Other", "Something else", "true", null),
+      new("_section_b", SettingKinds.Section, "Paths", null, null, null),
+      new("cliPath", SettingKinds.Text, "CLI path", "Path to bw", string.Empty, null),
+    ]);
+  }
+
+  private static TextBox SearchBox(SettingsWindow window) =>
+    window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
+
+  private static IEnumerable<string> ShownKeys(SettingsViewModel vm) =>
+    vm.Sections.SelectMany(s => s.Rows).Where(r => r.IsShown).Select(r => r.Key).ToList();
 
   [Fact]
   public Task ShowSettings_IsOneNormalWindow_AndRendersEachKind() => session.RunAsync(async () =>
@@ -246,5 +266,114 @@ public class SettingsWindowTests(AvaloniaSession session)
     Assert.True(window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "ErrorText").IsEffectivelyVisible);
     Assert.Empty(window.ViewModel!.Sections);
     window.Close();
+  });
+
+  [Fact]
+  public Task Child_IsHiddenWhileTheParentIsOff_AndShownAfterTheToggle() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseDependentSchema(extension);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    WaitForRows(window);
+    var rows = window.ViewModel!.Sections.SelectMany(s => s.Rows).ToDictionary(r => r.Key);
+
+    Assert.Equal(["desktop", "other", "cliPath"], ShownKeys(window.ViewModel!));
+    Assert.DoesNotContain(window.GetVisualDescendants().OfType<ToggleSwitch>(), t => t.IsEffectivelyVisible && t.DataContext is SettingRowViewModel { Key: "biometrics" });
+
+    Find<ToggleSwitch>(window, "desktop").IsChecked = true;
+    AvaloniaSession.WaitFor(() => rows["biometrics"].IsShown);
+    Assert.True(Find<ToggleSwitch>(window, "biometrics").IsChecked);
+    Assert.Equal(["desktop", "biometrics", "other", "cliPath"], ShownKeys(window.ViewModel!));
+
+    Find<ToggleSwitch>(window, "desktop").IsChecked = false;
+    AvaloniaSession.WaitFor(() => !rows["biometrics"].IsShown);
+    Assert.Equal("true", rows["biometrics"].CurrentValue);
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 2);
+    Assert.Equal(("desktop", "true"), extension.Sets[0]);
+    Assert.Equal(("desktop", "false"), extension.Sets[1]);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Search_FiltersRowsByLabelAndDescription_AndHidesEmptySections() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseDependentSchema(extension);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    WaitForRows(window);
+    var vm = window.ViewModel!;
+
+    vm.SearchText = "SOMETHING";
+    Assert.Equal(["other"], ShownKeys(vm));
+    Assert.Equal([true, false], vm.Sections.Select(s => s.IsShown));
+
+    vm.SearchText = "path";
+    Assert.Equal(["cliPath"], ShownKeys(vm));
+    Assert.Equal([false, true], vm.Sections.Select(s => s.IsShown));
+
+    vm.SearchText = "nothing matches this";
+    Assert.Empty(ShownKeys(vm));
+    Assert.All(vm.Sections, s => Assert.False(s.IsShown));
+
+    vm.SearchText = string.Empty;
+    Assert.Equal(["desktop", "other", "cliPath"], ShownKeys(vm));
+    Assert.All(vm.Sections, s => Assert.True(s.IsShown));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Search_HitOnAHiddenChild_ShowsItsParent() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseDependentSchema(extension);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    WaitForRows(window);
+    var vm = window.ViewModel!;
+
+    vm.SearchText = "windows hello";
+    Assert.Equal(["desktop"], ShownKeys(vm));
+    Assert.Equal([true, false], vm.Sections.Select(s => s.IsShown));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Escape_ClearsTheSearch_AndCtrlFFocusesTheBox() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseDependentSchema(extension);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    WaitForRows(window);
+    var vm = window.ViewModel!;
+    var box = SearchBox(window);
+
+    box.Text = "something";
+    AvaloniaSession.WaitFor(() => vm.SearchText == "something");
+    Assert.Equal(["other"], ShownKeys(vm));
+
+    box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape, Source = box });
+    AvaloniaSession.WaitFor(() => vm.SearchText.Length == 0);
+    Assert.True(string.IsNullOrEmpty(box.Text));
+    Assert.Equal(["desktop", "other", "cliPath"], ShownKeys(vm));
+
+    Find<TextBox>(window, "cliPath").Focus();
+    window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F, KeyModifiers = KeyModifiers.Control, Source = window });
+    AvaloniaSession.WaitFor(() => box.IsFocused);
+    window.Close();
+    await Task.CompletedTask;
   });
 }

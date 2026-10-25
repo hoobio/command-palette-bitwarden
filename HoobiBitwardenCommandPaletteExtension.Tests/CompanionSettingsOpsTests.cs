@@ -64,6 +64,30 @@ public class CompanionSettingsOpsTests : IDisposable
   }
 
   [Fact]
+  public async Task GetSettings_CarriesTheParent_AndEachChildFollowsItsParent()
+  {
+    var settings = await GetAsync();
+    var dependencies = new[]
+    {
+      ("autoBiometricUnlock", "useDesktopIntegration"),
+      ("showContextTag", "contextAwareness"),
+      ("contextItemLimit", "contextAwareness"),
+      ("clipboardClearDelay", "autoClearClipboard"),
+    };
+
+    foreach (var (child, parent) in dependencies)
+    {
+      var childIndex = settings.ToList().FindIndex(s => s.Key == child);
+      Assert.Equal((parent, "true"), (settings[childIndex].Parent, settings[childIndex].ParentValue));
+      var parentIndex = settings.ToList().FindIndex(s => s.Key == parent);
+      Assert.True(parentIndex < childIndex);
+      Assert.All(settings.Skip(parentIndex + 1).Take(childIndex - parentIndex - 1), s => Assert.Equal(parent, s.Parent));
+    }
+
+    Assert.Equal(dependencies.Length, settings.Count(s => s.Parent is not null));
+  }
+
+  [Fact]
   public async Task SetSetting_Toggle_ChangesTheValue_RaisesSettingsChanged_AndSaves()
   {
     var raised = 0;

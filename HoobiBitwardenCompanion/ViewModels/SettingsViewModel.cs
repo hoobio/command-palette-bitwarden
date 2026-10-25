@@ -13,6 +13,33 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
 
+  [ObservableProperty]
+  public partial string SearchText { get; set; } = string.Empty;
+
+  partial void OnSearchTextChanged(string value) => RefreshVisibility();
+
+  internal void RefreshVisibility()
+  {
+    var query = SearchText.Trim();
+    var rows = Sections.SelectMany(s => s.Rows).ToList();
+    var byKey = rows.ToDictionary(r => r.Key);
+    bool ParentOn(SettingRowViewModel row) => row.Parent is null || !byKey.TryGetValue(row.Parent, out var owner) || owner.CurrentValue == row.ParentValue;
+    bool Matches(SettingRowViewModel row) => query.Length == 0
+      || row.Label.Contains(query, StringComparison.OrdinalIgnoreCase)
+      || (row.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    foreach (var row in rows)
+      row.IsShown = ParentOn(row) && Matches(row);
+
+    if (query.Length > 0)
+      foreach (var child in rows.Where(r => r.Parent is not null && !ParentOn(r) && Matches(r)))
+        if (byKey.TryGetValue(child.Parent!, out var parent))
+          parent.IsShown = true;
+
+    foreach (var section in Sections)
+      section.IsShown = section.Rows.Any(r => r.IsShown);
+  }
+
   internal async Task LoadAsync()
   {
     IReadOnlyList<SettingDto> settings;
@@ -27,7 +54,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
     }
 
     ErrorMessage = null;
-    var signature = string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}"));
+    var signature = string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}:{s.Parent}:{s.ParentValue}"));
     if (signature != _signature)
     {
       _signature = signature;
@@ -54,14 +81,21 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
 
       if (current is null)
         Sections.Add(current = new SettingsSectionViewModel(string.Empty));
-      current.Rows.Add(new SettingRowViewModel(channel, setting));
+      var row = new SettingRowViewModel(channel, setting);
+      row.ValueChanged += RefreshVisibility;
+      current.Rows.Add(row);
     }
+
+    RefreshVisibility();
   }
 }
 
-internal sealed class SettingsSectionViewModel(string title)
+internal sealed partial class SettingsSectionViewModel(string title) : ObservableObject
 {
   public string Title { get; } = title;
+
+  [ObservableProperty]
+  public partial bool IsShown { get; set; } = true;
 
   public bool HasTitle => Title.Length > 0;
 
@@ -85,11 +119,31 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     Kind = setting.Kind;
     Label = setting.Label;
     Description = setting.Description;
+    Parent = setting.Parent;
+    ParentValue = setting.ParentValue;
     Choices = setting.Choices ?? [];
     Apply(setting);
   }
 
+  internal event Action? ValueChanged;
+
   public string Key { get; }
+
+  public string? Parent { get; }
+
+  public string? ParentValue { get; }
+
+  public bool IsChild => Parent is not null;
+
+  [ObservableProperty]
+  public partial bool IsShown { get; set; } = true;
+
+  internal string CurrentValue => Kind switch
+  {
+    SettingKinds.Toggle => _boolValue ? "true" : "false",
+    SettingKinds.Choice => _selectedChoice?.Value ?? _committed,
+    _ => _committed,
+  };
 
   public string Kind { get; }
 
@@ -117,7 +171,10 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     get => _boolValue;
     set
     {
-      if (SetProperty(ref _boolValue, value) && !_applying)
+      if (!SetProperty(ref _boolValue, value))
+        return;
+      ValueChanged?.Invoke();
+      if (!_applying)
         _ = SubmitAsync(value ? "true" : "false");
     }
   }
@@ -127,7 +184,10 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     get => _selectedChoice;
     set
     {
-      if (SetProperty(ref _selectedChoice, value) && !_applying && value is not null)
+      if (!SetProperty(ref _selectedChoice, value))
+        return;
+      ValueChanged?.Invoke();
+      if (!_applying && value is not null)
         _ = SubmitAsync(value.Value);
     }
   }

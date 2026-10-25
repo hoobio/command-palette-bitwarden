@@ -1,6 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -20,12 +22,27 @@ internal sealed partial class SettingsWindow : Window
     AddHandler(GotFocusEvent, OnGotFocus);
     AddHandler(LostFocusEvent, OnLostFocus);
     AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+    SearchBox.TextChanged += OnSearchTextChanged;
   }
 
   internal SettingsViewModel? ViewModel => DataContext as SettingsViewModel;
 
+  internal void FocusSearch()
+  {
+    SearchBox.Focus();
+    SearchBox.SelectAll();
+  }
+
+  private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+  {
+    if (string.IsNullOrEmpty(SearchBox.Text))
+      Scroller.ScrollToHome();
+  }
+
   private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
   {
+    if (e.Source is Visual source && (source == SearchBox || SearchBox.IsVisualAncestorOf(source)))
+      return;
     if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
       BeginMoveDrag(e);
   }
@@ -44,8 +61,22 @@ internal sealed partial class SettingsWindow : Window
     _ = row.CommitTextAsync(box.Text ?? string.Empty);
   }
 
-  private static void OnKeyDown(object? sender, KeyEventArgs e)
+  private void OnKeyDown(object? sender, KeyEventArgs e)
   {
+    if (e.Key == Key.Escape && !string.IsNullOrEmpty(SearchBox.Text))
+    {
+      SearchBox.Clear();
+      e.Handled = true;
+      return;
+    }
+
+    if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+    {
+      FocusSearch();
+      e.Handled = true;
+      return;
+    }
+
     if (e.Key != Key.Enter || e.Source is not TextBox { DataContext: SettingRowViewModel row } box)
       return;
     e.Handled = true;
