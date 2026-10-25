@@ -53,6 +53,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private volatile bool _cliInstalling;
     private bool _cliInstallFailed;
     private string? _cliInstallStatus;
+    private VaultSearchFilters? _filters;
 
     public HoobiBitwardenCommandPaletteExtensionPage(BitwardenCliService service, BitwardenSettingsManager? settings = null)
     {
@@ -116,9 +117,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     {
                         case VaultStatus.Unlocked when _service.IsCacheLoaded:
                             var text = _currentSearchText;
+                            SyncFilters();
                             var loadedResults = Search(text);
                             DebugLogService.Log("Page", $"GetItems: unlocked + cache loaded, {loadedResults.Count} items");
                             _currentItems = BuildListItems(loadedResults, text);
+                            Filters = _filters;
                             IsLoading = false;
                             ReverifyIfSuspiciouslyEmpty();
                             break;
@@ -290,6 +293,8 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         IsLoading = false;
         _initComplete = true;
         DebugLogService.Log("Page", $"RebuildForCurrentStatus: status={_service.LastStatus}, cacheLoaded={_service.IsCacheLoaded}");
+        if (_service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded)
+            Filters = null;
 
         switch (_service.LastStatus)
         {
@@ -728,7 +733,23 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private List<BitwardenItem> Search(string? query = null)
     {
         var limit = int.TryParse(_settings?.ContextItemLimit.Value, out var v) ? v : 3;
-        return _service.SearchCached(query, _context, limit);
+        return _service.SearchCached(query, _context, limit, _filters?.Selected.Filter);
+    }
+
+    private void SyncFilters()
+    {
+        lock (_itemsLock)
+        {
+            var entries = SearchFilterCatalog.Build(_service.GetOrganizations(), _service.GetFolders());
+            if (_filters != null && _filters.Entries.SequenceEqual(entries)) return;
+            _filters = new VaultSearchFilters(entries, _filters?.CurrentFilterId ?? SearchFilterCatalog.AllId, OnFilterSelected);
+        }
+    }
+
+    private void OnFilterSelected()
+    {
+        if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked || !_service.IsCacheLoaded) return;
+        _ = Task.Run(RebuildVaultListSafely);
     }
 
     internal static bool MatchesCommand(string search, string command)
@@ -1241,6 +1262,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         var generation = Interlocked.Increment(ref _buildGeneration);
         var text = _currentSearchText;
+        SyncFilters();
         var results = Search(text);
         resultCount = results.Count;
         var built = BuildListItems(results, text);
@@ -1249,6 +1271,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             if (text != _currentSearchText || generation <= _publishedGeneration || _service.LastStatus != VaultStatus.Unlocked) return false;
             _publishedGeneration = generation;
             _currentItems = built;
+            Filters = _filters;
             return true;
         }
     }

@@ -961,11 +961,13 @@ internal sealed partial class BitwardenCliService
     return string.IsNullOrEmpty(stderr) ? "Failed to set server URL" : stderr;
   }
 
-  public List<BitwardenItem> SearchCached(string? query = null, ForegroundContext? context = null, int maxContextItems = 0)
+  public List<BitwardenItem> SearchCached(string? query = null, ForegroundContext? context = null, int maxContextItems = 0, (string Key, string Value)? extraFilter = null)
   {
     lock (_cacheLock)
     {
       var (filters, textQuery) = ParseSearchFilters(query);
+      if (extraFilter is { } extra)
+        filters.Add(extra);
 
       IEnumerable<BitwardenItem> results = _cache;
 
@@ -1156,8 +1158,10 @@ internal sealed partial class BitwardenCliService
 
   internal IEnumerable<BitwardenItem> ApplyFilter(IEnumerable<BitwardenItem> items, (string Key, string Value) filter) => filter.Key switch
   {
+    "folder" when filter.Value.Equals("none", StringComparison.OrdinalIgnoreCase) => items.Where(i => i.FolderId == null),
     "folder" => items.Where(i =>
     {
+      if (i.FolderId != null && i.FolderId == filter.Value) return true;
       var name = GetFolderName(i.FolderId);
       return name != null && name.Contains(filter.Value, StringComparison.OrdinalIgnoreCase);
     }),
@@ -1165,6 +1169,7 @@ internal sealed partial class BitwardenCliService
         i.Type == BitwardenItemType.Login && i.Uris.Any(u => u.Uri.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))),
     "type" => items.Where(i => i.Type.ToString().Equals(filter.Value, StringComparison.OrdinalIgnoreCase)
         || ((int)i.Type).ToString(System.Globalization.CultureInfo.InvariantCulture) == filter.Value),
+    "org" when filter.Value.Equals("none", StringComparison.OrdinalIgnoreCase) => items.Where(i => i.OrganizationId == null),
     "org" => ApplyOrgFilter(items, filter.Value),
     "has" => filter.Value switch
     {
