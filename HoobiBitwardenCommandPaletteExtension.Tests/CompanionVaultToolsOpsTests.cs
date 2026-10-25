@@ -324,7 +324,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
   }
 
   [Fact]
-  public async Task Generate_ReturnsTheValue_AndKeepsItInMaskedHistory()
+  public async Task Generate_ReturnsTheValue_AndListsItInMaskedHistoryOnlyOnceCopied()
   {
     var h = new Harness();
 
@@ -332,28 +332,63 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
 
     Assert.Equal(20, generated.Value.Length);
     Assert.Empty(h.Bw.Args);
+    Assert.Empty(h.Ops.ListGeneratorHistory().Entries);
+
+    await h.Handle(Ops.CopyGenerated, new HistoryEntryRequest(generated.EntryId), IpcJson.Default.HistoryEntryRequest);
+    await h.Handle(Ops.CopyGenerated, new HistoryEntryRequest(generated.EntryId), IpcJson.Default.HistoryEntryRequest);
+
+    Assert.Equal(new[] { generated.Value, generated.Value }, h.SecretCopies);
     var history = IpcJson.Read(await h.Ops.HandleAsync(Ops.ListGeneratorHistory, null, TestContext.Current.CancellationToken), IpcJson.Default.GeneratorHistoryResponse);
     var entry = Assert.Single(history.Entries);
     Assert.Equal((generated.EntryId, GeneratorKinds.Password), (entry.Id, entry.Kind));
     Assert.DoesNotContain(generated.Value, JsonSerializer.Serialize(history, IpcJson.Default.GeneratorHistoryResponse), StringComparison.Ordinal);
-
-    await h.Handle(Ops.CopyGenerated, new HistoryEntryRequest(entry.Id), IpcJson.Default.HistoryEntryRequest);
-    Assert.Equal(generated.Value, Assert.Single(h.SecretCopies));
   }
 
   [Fact]
-  public async Task History_KeepsTheLatestFifty_AndIsWipedOnLock()
+  public async Task Generate_KeepsOnlyTheLatestUncopiedValues()
+  {
+    var h = new Harness();
+    var ids = new List<long>();
+    for (var i = 0; i < CompanionOps.RecentLimit + 1; i++)
+      ids.Add(IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).EntryId);
+
+    Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.CopyGenerated, new HistoryEntryRequest(ids[0]), IpcJson.Default.HistoryEntryRequest));
+    await h.Handle(Ops.CopyGenerated, new HistoryEntryRequest(ids[1]), IpcJson.Default.HistoryEntryRequest);
+    Assert.Equal(ids[1], Assert.Single(h.Ops.ListGeneratorHistory().Entries).Id);
+  }
+
+  [Fact]
+  public void Push_DisposesTheEvictedValues()
+  {
+    var list = new List<(GeneratedEntry Entry, ProtectedSecret Value)>();
+    var secrets = Enumerable.Range(0, 4).Select(i => ProtectedSecret.From("value" + i)!).ToList();
+    for (var i = 0; i < secrets.Count; i++)
+      CompanionOps.Push(list, (new GeneratedEntry(i, GeneratorKinds.Password, RevisionDate), secrets[i]), 2);
+
+    Assert.Equal((3L, 2L), (list[0].Entry.Id, list[1].Entry.Id));
+    Assert.Equal(2, list.Count);
+    Assert.All(secrets.Take(2), s => Assert.False(s.TryUse(v => v.Length, out _)));
+    Assert.All(secrets.Skip(2), s => Assert.True(s.TryUse(v => v.Length, out _)));
+  }
+
+  [Fact]
+  public async Task History_KeepsTheLatestFiftyCopied_AndLockWipesItAndTheUncopiedValues()
   {
     var h = new Harness();
     var ids = new List<long>();
     for (var i = 0; i < CompanionOps.HistoryLimit + 5; i++)
-      ids.Add(IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).EntryId);
+    {
+      var id = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).EntryId;
+      await h.Handle(Ops.CopyGenerated, new HistoryEntryRequest(id), IpcJson.Default.HistoryEntryRequest);
+      ids.Add(id);
+    }
 
     var entries = h.Ops.ListGeneratorHistory().Entries;
     Assert.Equal(CompanionOps.HistoryLimit, entries.Count);
     Assert.Equal(ids[^1], entries[0].Id);
     Assert.DoesNotContain(entries, e => e.Id == ids[0]);
     Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.CopyGenerated, new HistoryEntryRequest(ids[0]), IpcJson.Default.HistoryEntryRequest));
+    var uncopied = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse).EntryId;
 
     h.Service.ClearSession();
     h.Ops.RaiseIfLocked();
@@ -361,6 +396,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     h.Service.SetSession("session-key");
     Assert.Empty(h.Ops.ListGeneratorHistory().Entries);
     Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.CopyGenerated, new HistoryEntryRequest(ids[^1]), IpcJson.Default.HistoryEntryRequest));
+    Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.CopyGenerated, new HistoryEntryRequest(uncopied), IpcJson.Default.HistoryEntryRequest));
   }
 
   private static RotateRequest Rotate(string id) => new(id, RevisionDate, new GeneratorOptions());
@@ -389,6 +425,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     var id = NewId();
     var h = new Harness(Login(id));
     var generated = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse);
+    Assert.Empty(h.Ops.ListGeneratorHistory().Entries);
 
     await h.Handle(Ops.RotatePassword, new RotateRequest(id, RevisionDate, EntryId: generated.EntryId), IpcJson.Default.RotateRequest);
 
@@ -446,6 +483,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     h.Bw.OnEdit = body => body["login"]!["password"] = "something-else";
     Assert.Equal(IpcErrors.Failed, await h.Fails(Ops.RotatePassword, Rotate(id), IpcJson.Default.RotateRequest));
     Assert.Empty(h.TextCopies);
+    Assert.Empty(h.Ops.ListGeneratorHistory().Entries);
   }
 
   [Fact]

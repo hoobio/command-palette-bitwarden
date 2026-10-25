@@ -157,8 +157,6 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     {
       StatusMessage = "The generator options were not saved.";
     }
-
-    await LoadHistoryAsync();
   }
 
   [RelayCommand(CanExecute = nameof(HasValue))]
@@ -182,7 +180,10 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
       ErrorMessage = Describe(ex);
+      return;
     }
+
+    await LoadHistoryAsync();
   }
 
   internal async Task LoadHistoryAsync()

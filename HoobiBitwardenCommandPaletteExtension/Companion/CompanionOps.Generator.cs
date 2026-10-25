@@ -12,8 +12,10 @@ namespace HoobiBitwardenCommandPaletteExtension.Companion;
 internal sealed partial class CompanionOps
 {
   internal const int HistoryLimit = 50;
+  internal const int RecentLimit = 20;
 
   private readonly Lock _historyLock = new();
+  private readonly List<(GeneratedEntry Entry, ProtectedSecret Value)> _recent = [];
   private readonly List<(GeneratedEntry Entry, ProtectedSecret Value)> _history = [];
   private long _historyId;
 
@@ -21,7 +23,12 @@ internal sealed partial class CompanionOps
   {
     RequireUnlocked();
     var value = RequireGenerated(options, PasswordGenerator.Generate(options));
-    return new GeneratedResponse(value, Remember(value, options.Kind));
+    lock (_historyLock)
+    {
+      var entry = new GeneratedEntry(++_historyId, options.Kind, DateTime.UtcNow);
+      Push(_recent, (entry, ProtectedSecret.From(value)!), RecentLimit);
+      return new GeneratedResponse(value, entry.Id);
+    }
   }
 
   internal GeneratorHistoryResponse ListGeneratorHistory()
@@ -34,7 +41,7 @@ internal sealed partial class CompanionOps
   internal void CopyGenerated(long id)
   {
     RequireUnlocked();
-    _copySecret(FindGenerated(id));
+    _copySecret(Keep(id) ?? throw new IpcException(IpcErrors.NotFound));
   }
 
   internal async Task<SavedResponse> RotatePasswordAsync(RotateRequest request, bool verified = false)
@@ -61,8 +68,11 @@ internal sealed partial class CompanionOps
     });
     var response = Saved(saved) ?? throw new IpcException(IpcErrors.Failed);
     _copyText(password, true);
-    if (request.EntryId is null)
-      Remember(password, options!.Kind);
+    if (request.EntryId is { } kept)
+      Keep(kept);
+    else
+      lock (_historyLock)
+        Push(_history, (new GeneratedEntry(++_historyId, options!.Kind, DateTime.UtcNow), ProtectedSecret.From(password)!), HistoryLimit);
     return response;
   }
 
@@ -70,8 +80,34 @@ internal sealed partial class CompanionOps
   {
     ProtectedSecret? value;
     lock (_historyLock)
-      value = _history.Find(h => h.Entry.Id == id).Value;
+      value = _history.Find(h => h.Entry.Id == id).Value ?? _recent.Find(h => h.Entry.Id == id).Value;
     return value ?? throw new IpcException(IpcErrors.NotFound);
+  }
+
+  private ProtectedSecret? Keep(long id)
+  {
+    lock (_historyLock)
+    {
+      if (_history.Find(h => h.Entry.Id == id).Value is { } listed)
+        return listed;
+      var index = _recent.FindIndex(h => h.Entry.Id == id);
+      if (index < 0)
+        return null;
+      var recent = _recent[index];
+      _recent.RemoveAt(index);
+      Push(_history, recent, HistoryLimit);
+      return recent.Value;
+    }
+  }
+
+  internal static void Push(List<(GeneratedEntry Entry, ProtectedSecret Value)> list, (GeneratedEntry Entry, ProtectedSecret Value) item, int limit)
+  {
+    list.Insert(0, item);
+    while (list.Count > limit)
+    {
+      list[^1].Value.Dispose();
+      list.RemoveAt(list.Count - 1);
+    }
   }
 
   internal static string RequireGenerated(GeneratorOptions options, string value)
@@ -84,26 +120,12 @@ internal sealed partial class CompanionOps
     return valid ? value : throw new IpcException(IpcErrors.Failed);
   }
 
-  private long Remember(string value, string kind)
-  {
-    lock (_historyLock)
-    {
-      var entry = new GeneratedEntry(++_historyId, kind, DateTime.UtcNow);
-      _history.Insert(0, (entry, ProtectedSecret.From(value)!));
-      while (_history.Count > HistoryLimit)
-      {
-        _history[^1].Value.Dispose();
-        _history.RemoveAt(_history.Count - 1);
-      }
-
-      return entry.Id;
-    }
-  }
-
   private void ClearGeneratorHistory()
   {
     lock (_historyLock)
     {
+      _recent.ForEach(h => h.Value.Dispose());
+      _recent.Clear();
       _history.ForEach(h => h.Value.Dispose());
       _history.Clear();
     }
