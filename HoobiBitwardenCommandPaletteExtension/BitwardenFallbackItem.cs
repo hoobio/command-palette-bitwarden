@@ -52,20 +52,16 @@ internal sealed partial class BitwardenFallbackItem : FallbackCommandItem, IDisp
       return;
     }
 
+    if (!_service.IsUnlocked)
+    {
+      ClearResult(ct);
+      return;
+    }
+
     _ = Task.Run(async () =>
     {
       try
       {
-        if (!_service.IsUnlocked)
-        {
-          var status = await _service.GetVaultStatusAsync();
-          if (status != VaultStatus.Unlocked)
-          {
-            ClearResult(ct);
-            return;
-          }
-        }
-
         await _service.RefreshCacheAsync();
         if (ct.IsCancellationRequested)
           return;
