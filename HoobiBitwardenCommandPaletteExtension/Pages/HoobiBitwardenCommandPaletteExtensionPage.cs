@@ -104,13 +104,14 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     public override IListItem[] GetItems()
     {
+        var openedByUser = _autoBiometricGate.TryConsume();
         lock (_itemsLock)
         {
             if (!_initialLoadStarted)
             {
                 _initialLoadStarted = true;
                 CaptureContext(force: true);
-                DebugLogService.Log("Page", $"GetItems: first call, LastStatus={_service.LastStatus}");
+                DebugLogService.Log("Page", $"GetItems: first call, LastStatus={_service.LastStatus}, openedByUser={openedByUser}");
 
                 if (_service.LastStatus != null)
                 {
@@ -138,7 +139,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                         case VaultStatus.Locked:
                             _currentItems = BuildLockedItems();
                             IsLoading = false;
-                            _ = Task.Run(TryAutoTriggerBiometric);
+                            _ = Task.Run(() => TryAutoTriggerBiometric("GetItems first", openedByUser));
                             break;
                         case VaultStatus.CliNotFound:
                             _currentItems = BuildCliNotFoundItems();
@@ -155,7 +156,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 IsLoading = true;
                 _currentItems = BuildLoadingPlaceholder("Checking vault status...", "bw status");
                 DebugLogService.Log("Page", "GetItems: warmup not complete, starting InitializeAsync");
-                _ = Task.Run(InitializeAsync);
+                _ = Task.Run(() => InitializeAsync(openedByUser));
                 return _currentItems;
             }
 
@@ -168,7 +169,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 IsLoading = false;
 
             if (_service.LastStatus == VaultStatus.Locked && !_handlingAction)
-                _ = Task.Run(TryAutoTriggerBiometric);
+                _ = Task.Run(() => TryAutoTriggerBiometric("GetItems later", openedByUser));
 
             return _currentItems;
         }
@@ -335,7 +336,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 break;
             case VaultStatus.Locked:
                 _currentItems = BuildLockedItems();
-                TryAutoTriggerBiometric();
+                TryAutoTriggerBiometric("rebuild", openedByUser: false);
                 break;
             case VaultStatus.CliNotFound:
                 _currentItems = BuildCliNotFoundItems();
@@ -351,11 +352,11 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _ = Task.Delay(300).ContinueWith(_ => RaiseItemsChanged(), TaskScheduler.Default);
     }
 
-    private async Task InitializeAsync()
+    private async Task InitializeAsync(bool openedByUser)
     {
         try
         {
-            DebugLogService.Log("Page", "InitializeAsync: awaiting warmup");
+            DebugLogService.Log("Page", $"InitializeAsync: awaiting warmup, openedByUser={openedByUser}");
             // A concurrent bw status call can hang the CLI, so await the ongoing warmup instead
 #pragma warning disable VSTHRD003 // WarmupTask is a ThreadPool task; InitializeAsync is already on ThreadPool via Task.Run
             await _service.WarmupTask.ConfigureAwait(false);
@@ -376,7 +377,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                     break;
                 case VaultStatus.Locked:
                     _currentItems = BuildLockedItems();
-                    TryAutoTriggerBiometric();
+                    TryAutoTriggerBiometric("InitializeAsync", openedByUser);
                     break;
                 case VaultStatus.Unlocked:
                     if (!_service.IsCacheLoaded)
@@ -953,7 +954,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Checking vault status...", "bw status");
-        _ = Task.Run(InitializeAsync);
+        _ = Task.Run(() => InitializeAsync(openedByUser: false));
     }
 
     private void OnAutoLocked()
@@ -1133,49 +1134,28 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     internal static bool IsPaletteOpen(Func<nint> foregroundPalette) => foregroundPalette() != 0;
 
-    internal const long ShownWindowMs = 10_000;
+    private readonly AutoBiometricGate _autoBiometricGate = new();
 
-    private long _shownTicks;
-
-    // Command Palette reads PlaceholderText only when the user navigates to the page (ListViewModel.InitializeProperties); a Dock band refresh calls GetItems without it.
     public override string PlaceholderText
     {
         get
         {
-            Volatile.Write(ref _shownTicks, Environment.TickCount64);
+            _autoBiometricGate.Arm();
+            DebugLogService.Log("Page", "PlaceholderText read by the host (navigation)");
             return base.PlaceholderText;
         }
         set => base.PlaceholderText = value;
     }
 
-    internal static bool WasShownRecently(long shownTicks, long nowTicks) => shownTicks != 0 && nowTicks - shownTicks <= ShownWindowMs;
-
-    private void TryAutoTriggerBiometric()
+    private void TryAutoTriggerBiometric(string caller, bool openedByUser)
     {
-        if (_autoBiometricTriggered || _biometricClickFailed || _handlingAction)
-            return;
-
-        // Startup warmup fires WarmupCompleted before the palette is opened; prompting Windows Hello then shows a dialog with no context
-        if (!_initialLoadStarted)
-            return;
-
-        if (!WasShownRecently(Volatile.Read(ref _shownTicks), Environment.TickCount64))
-        {
-            DebugLogService.Log("Page", "Auto biometric skipped: Bitwarden page not opened by the user");
-            return;
-        }
-
-        if (!IsPaletteOpen(PaletteWindow))
-        {
-            DebugLogService.Log("Page", "Auto biometric skipped: Command Palette not open");
-            return;
-        }
-
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true
                             && _settings?.AutoBiometricUnlock.Value == true;
         var rememberSession = _settings?.RememberSession.Value == true;
-
-        if (!biometricEnabled && !rememberSession)
+        var paletteOpen = IsPaletteOpen(PaletteWindow);
+        var veto = AutoBiometricGate.Veto(openedByUser, _autoBiometricTriggered, _biometricClickFailed, _handlingAction, paletteOpen, biometricEnabled, rememberSession);
+        DebugLogService.Log("Page", $"Auto biometric from {caller}: {(veto is null ? "allowed" : $"skipped ({veto})")}; openedByUser={openedByUser}, triggered={_autoBiometricTriggered}, clickFailed={_biometricClickFailed}, handlingAction={_handlingAction}, initialLoadStarted={_initialLoadStarted}, paletteOpen={paletteOpen}, foreground={CommandPaletteModalScope.DescribeForeground()}, biometric={biometricEnabled}, rememberSession={rememberSession}");
+        if (veto is not null)
             return;
 
         _autoBiometricTriggered = true;

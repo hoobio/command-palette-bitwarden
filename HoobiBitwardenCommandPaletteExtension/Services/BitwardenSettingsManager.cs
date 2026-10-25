@@ -47,7 +47,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting AutoBiometricUnlock { get; } = new(
         "autoBiometricUnlock",
         "Automatically Prompt for Biometrics",
-        "Prompt for Windows Hello when you open Command Palette on a locked vault, without selecting Unlock first. If Windows Hello is not available, the password form opens",
+        "Prompt for Windows Hello when you open the Bitwarden page on a locked vault, without selecting Unlock first. If Windows Hello is not available, the password form opens",
         true);
 
     public ToggleSetting ShowWebsiteIcons { get; } = new(

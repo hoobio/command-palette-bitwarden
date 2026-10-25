@@ -28,6 +28,14 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | On |
 | **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show **Use Windows Hello**. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. |
 
+### Automatically Prompt for Biometrics
+
+| | |
+|---|---|
+| **Type** | Toggle (shown under **Integrate with Bitwarden Desktop App**) |
+| **Default** | On |
+| **Description** | Start Windows Hello when you open the Bitwarden page on a locked vault, so you do not select **Unlock Vault** first. The prompt starts only from that page open: not when PowerToys or Command Palette starts, not on the Command Palette home page, not from a Dock band refresh, and not when the vault locks while you are on another page. If the vault locks while the Bitwarden page is open, select **Unlock Vault** or open the page again. After a cancelled or failed Windows Hello prompt, the page does not prompt again until the vault unlocks. With **Remember Session** on, the extension first tries the stored session and prompts only when that fails. |
+
 ### Show Website Icons
 
 | | |
