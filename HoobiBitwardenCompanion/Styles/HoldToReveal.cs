@@ -31,12 +31,12 @@ internal static class HoldToReveal
 
   public static void SetIsEnabled(TextBox box, bool value) => box.SetValue(IsEnabledProperty, value);
 
-  // Handled on tunnel so the template's reveal ToggleButton never sees the press and cannot latch on click.
+  // Handled on tunnel so the reveal ToggleButton never sees the press and cannot latch on click; FluentAvalonia puts it in InnerRightContent, so it has no TemplatedParent.
   private static void OnPressed(object? sender, PointerPressedEventArgs e)
   {
     if (sender is not TextBox box
       || (e.Source as Visual)?.FindAncestorOfType<ToggleButton>(includeSelf: true) is not { } button
-      || !ReferenceEquals(button.TemplatedParent, box))
+      || !ReferenceEquals(button.FindAncestorOfType<TextBox>(), box))
       return;
     e.Handled = true;
     e.Pointer.Capture(box);
@@ -51,9 +51,10 @@ internal static class HoldToReveal
     e.Pointer.Capture(null);
   }
 
+  // Taking capture from the reveal button raises its capture-lost event, which bubbles here; only the box losing capture ends the hold.
   private static void OnCaptureLost(object? sender, PointerCaptureLostEventArgs e)
   {
-    if (sender is TextBox box)
+    if (sender is TextBox box && ReferenceEquals(e.Source, box))
       box.RevealPassword = false;
   }
 }
