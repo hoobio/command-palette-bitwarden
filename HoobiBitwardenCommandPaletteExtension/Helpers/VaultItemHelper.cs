@@ -449,7 +449,7 @@ internal static partial class VaultItemHelper
       iconBase = serverUrl + "/icons";
     var iconUrl = $"{iconBase}/{host}/icon.png";
 
-    return FaviconService.GetOrQueue(host, iconUrl, priority: priority);
+    return FaviconService.GetOrQueue(host, iconUrl, new IconInfo(""), priority);
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>

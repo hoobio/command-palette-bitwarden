@@ -52,11 +52,17 @@ internal static partial class FaviconService
         fallback ??= new IconInfo("");
         if (_iconInfoCache.TryGetValue(host, out var cachedIcon))
             return cachedIcon;
-        if (_memCache.TryGetValue(host, out var cachedBytes))
-            return cachedBytes is not null ? CacheAndReturnIcon(host, cachedBytes) : fallback;
-
         var posPath = GetPositivePath(host);
         var negPath = GetNegativePath(host);
+
+        if (_memCache.TryGetValue(host, out var cachedBytes))
+        {
+            if (cachedBytes is not null)
+                return CacheAndReturnIcon(host, cachedBytes);
+            if (File.Exists(negPath) && !IsExpired(negPath, NegativeTtl))
+                return fallback;
+            _memCache.TryRemove(host, out _);
+        }
 
         if (File.Exists(posPath) && !IsExpired(posPath, PositiveTtl))
         {
