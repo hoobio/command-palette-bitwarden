@@ -129,6 +129,7 @@ public class CompanionDialogOpsTests
   public async Task UnlockOp_Biometric_UnavailableDesktopApp_ReportsTheFailure()
   {
     var (svc, factory, settingsPath) = CreateService();
+    svc.Settings!.CliDataDirectoryOverride.Value = Path.Combine(Path.GetTempPath(), $"bw_nodata_{Guid.NewGuid():N}");
     using var ops = new CompanionOps(svc);
     try
     {

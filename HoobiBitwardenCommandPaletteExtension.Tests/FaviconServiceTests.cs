@@ -57,7 +57,7 @@ public class FaviconServiceTests
     var second = FaviconService.GetOrQueue(host, "https://icons.invalid/icon.png");
 
     Assert.Same(first, second);
-    Assert.True(Path.IsPathFullyQualified(first.Light.Icon));
+    Assert.True(Path.IsPathFullyQualified(first.Light.Icon ?? string.Empty));
     Assert.Equal(path, first.Light.Icon);
   }
 

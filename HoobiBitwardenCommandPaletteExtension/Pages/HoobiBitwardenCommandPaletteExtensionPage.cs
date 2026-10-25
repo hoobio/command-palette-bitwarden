@@ -825,7 +825,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (DebugLogService.Enabled && !boostDebug)
             tail.Add(BuildCopyDebugLogItem());
 
-        var vaultList = new VaultList(items, searchText, generation, list.ToArray(), tail.ToArray())
+        var vaultList = new VaultList(items, searchText ?? string.Empty, generation, list.ToArray(), tail.ToArray())
         {
             Pager = ListPager.First(items.Count, PageSize, keepShown),
         };

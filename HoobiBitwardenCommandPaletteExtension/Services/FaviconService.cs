@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -15,7 +14,9 @@ namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal static partial class FaviconService
 {
-    internal static string CacheDir { get; set; } = ResolveCacheDir();
+    internal static string CacheDir { get; set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "HoobiBitwardenCommandPalette", "Icons");
 
     private static readonly TimeSpan PositiveTtl = TimeSpan.FromDays(7);
     private static readonly TimeSpan NegativeTtl = TimeSpan.FromMinutes(5);
@@ -225,20 +226,6 @@ internal static partial class FaviconService
     }
 
     // MSIX redirects new AppData writes to a per-package location that the Command Palette process cannot see, so a path icon must name the real package folder.
-    private static string ResolveCacheDir()
-    {
-        try
-        {
-            return Path.Combine(Windows.Storage.ApplicationData.Current.LocalCacheFolder.Path, "Icons");
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or COMException)
-        {
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "HoobiBitwardenCommandPalette", "Icons");
-        }
-    }
-
     internal static bool IsSvg(string contentType, byte[] bytes)
     {
         if (contentType.Contains("svg", StringComparison.OrdinalIgnoreCase))

@@ -1,7 +1,9 @@
 using System;
+using System.Runtime.InteropServices;
 
 namespace HoobiBitwardenCommandPaletteExtension.Helpers;
 
+[StructLayout(LayoutKind.Auto)]
 internal readonly record struct ListPager(int Total, int PageSize, int Shown)
 {
   internal static ListPager First(int total, int pageSize, int atLeast = 0) =>
