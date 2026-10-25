@@ -170,15 +170,15 @@ public class VaultToolsTests(AvaloniaSession session)
     var vm = new GeneratorViewModel(h.Channel) { Toast = toasts.Add };
     string? used = null;
     vm.UseRequested = v => used = v;
-    Assert.Equal(((decimal?)20m, true, false), (vm.Length, vm.Numbers, vm.Special));
+    Assert.Equal(((decimal?)20m, true, true, true), (vm.Length, vm.Numbers, vm.Special, vm.AvoidAmbiguous));
 
     vm.Length = 24;
-    vm.Special = true;
+    vm.Special = false;
     await vm.InitializeAsync();
 
     Assert.Equal(new string('x', 24), vm.Value);
     var sent = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.Generate)), IpcJson.Default.GeneratorOptions);
-    Assert.Equal((GeneratorKinds.Password, 24, true), (sent.Kind, sent.Length, sent.Special));
+    Assert.Equal((GeneratorKinds.Password, 24, false), (sent.Kind, sent.Length, sent.Special));
     Assert.Equal(24, CompanionSettings.LoadGenerator().Length);
     Assert.Single(vm.History);
     Assert.True(vm.HasHistory);

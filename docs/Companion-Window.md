@@ -102,7 +102,7 @@ The generate button in the edit form opens the generator in a dialog. **Generate
 
 | Tab | Options | Default |
 |-----|---------|---------|
-| Password | Length (5 to 128), uppercase, lowercase, numbers, special characters (`!@#$%^&*`), minimum numbers and minimum special characters (0 to 9), avoid ambiguous characters | 20 characters, uppercase, lowercase and numbers, at least 1 number |
+| Password | Length (5 to 128), uppercase, lowercase, numbers, special characters (`!@#$%^&*`), minimum numbers and minimum special characters (0 to 9), avoid ambiguous characters | 20 characters, uppercase, lowercase, numbers and special characters, at least 1 number and 1 special character, ambiguous characters avoided |
 | Passphrase | Number of words (3 to 20), word separator (one character), capitalise, include number | 4 words, separated by `-` |
 
 The Bitwarden CLI makes the values. **Regenerate** makes a new value, the copy button copies it through the extension with the clipboard clear timer and shows **Copied** in the toast, and **Use password** puts it in the password field.

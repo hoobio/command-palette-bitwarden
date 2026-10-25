@@ -320,7 +320,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
   {
     Assert.Equal("generate -ulns --length 32 --minNumber 2 --minSpecial 3 --ambiguous",
       CompanionOps.BuildGenerateArgs(new GeneratorOptions(Length: 32, Special: true, MinNumber: 2, MinSpecial: 3, AvoidAmbiguous: true)));
-    Assert.Equal("generate -s --length 5", CompanionOps.BuildGenerateArgs(new GeneratorOptions(Length: 5, Uppercase: false, Lowercase: false, Numbers: false, Special: true, MinSpecial: 0)));
+    Assert.Equal("generate -s --length 5", CompanionOps.BuildGenerateArgs(new GeneratorOptions(Length: 5, Uppercase: false, Lowercase: false, Numbers: false, Special: true, MinSpecial: 0, AvoidAmbiguous: false)));
     Assert.Equal("generate --passphrase --words 4", CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase)));
     Assert.Equal("generate --passphrase --words 6 --separator _ --capitalize --includeNumber",
       CompanionOps.BuildGenerateArgs(new GeneratorOptions(GeneratorKinds.Passphrase, Words: 6, Separator: "_", Capitalize: true, IncludeNumber: true)));
