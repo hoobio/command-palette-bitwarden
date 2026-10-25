@@ -10,6 +10,7 @@ namespace HoobiBitwardenCompanion.Services;
 internal sealed class WindowCoordinator : IDisposable
 {
   private readonly Dictionary<string, ItemWindow> _itemWindows = new(StringComparer.OrdinalIgnoreCase);
+  private readonly List<ItemWindow> _newItemWindows = [];
 
   public WindowCoordinator(Stream input, Stream output) =>
     Channel = new PipeChannel(input, output, HandleRequestAsync, OnEvent);
@@ -17,6 +18,8 @@ internal sealed class WindowCoordinator : IDisposable
   public PipeChannel Channel { get; }
 
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
+
+  public IReadOnlyCollection<ItemWindow> NewItemWindows => _newItemWindows;
 
   public async Task RunAsync(Action onClosed)
   {
@@ -42,6 +45,12 @@ internal sealed class WindowCoordinator : IDisposable
   {
     foreach (var window in _itemWindows.Values)
       window.ViewModel?.OnLocked();
+    foreach (var window in _newItemWindows.ToList())
+    {
+      window.ViewModel?.OnLocked();
+      window.Close();
+    }
+
     GeneratorView.OnLocked();
   }
 
@@ -59,6 +68,9 @@ internal sealed class WindowCoordinator : IDisposable
           await Dispatcher.UIThread.InvokeAsync(() => ShowItem(request.Id));
         else
           Dispatcher.UIThread.Post(() => RotateItem(request.Id));
+        return null;
+      case Ops.NewItem:
+        Dispatcher.UIThread.Post(() => _ = ShowNewItemAsync());
         return null;
       default:
         throw new IpcException(IpcErrors.Invalid);
@@ -94,6 +106,44 @@ internal sealed class WindowCoordinator : IDisposable
 
     if (load)
       _ = window.ViewModel?.LoadAsync();
+    BringToFront(window);
+    return window;
+  }
+
+  public async Task<ItemWindow?> ShowNewItemAsync(EditableItem? item = null)
+  {
+    FiltersResponse filters;
+    try
+    {
+      filters = IpcJson.Read(await Channel.RequestAsync(Ops.ListFilters, null), IpcJson.Default.FiltersResponse);
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
+    {
+      return null;
+    }
+
+    var viewModel = ItemViewModel.ForNew(Channel, item ?? ItemEditorViewModel.Blank(1), filters);
+    var window = new ItemWindow(viewModel);
+    Action close = window.Close;
+    Action saved = () =>
+    {
+      _newItemWindows.Remove(window);
+      _itemWindows[viewModel.Id] = window;
+    };
+    viewModel.Discarded += close;
+    viewModel.Removed += close;
+    viewModel.Saved += saved;
+    window.Closed += (_, _) =>
+    {
+      _newItemWindows.Remove(window);
+      if (_itemWindows.TryGetValue(viewModel.Id, out var keyed) && keyed == window)
+        _itemWindows.Remove(viewModel.Id);
+      viewModel.Discarded -= close;
+      viewModel.Removed -= close;
+      viewModel.Saved -= saved;
+      viewModel.Dispose();
+    };
+    _newItemWindows.Add(window);
     BringToFront(window);
     return window;
   }

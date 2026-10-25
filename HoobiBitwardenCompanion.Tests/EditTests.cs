@@ -71,6 +71,7 @@ public class EditTests(AvaloniaSession session)
         Ops.GetItem => IpcJson.ToElement(Dto(IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id), IpcJson.Default.ItemDto),
         Ops.GetEditableItem => IpcJson.ToElement(Items[IpcJson.Read(payload, IpcJson.Default.ItemRequest).Id], IpcJson.Default.EditableItem),
         Ops.UpdateItem => Save(IpcJson.Read(payload, IpcJson.Default.EditableItem)),
+        Ops.CreateItem => Save(IpcJson.Read(payload, IpcJson.Default.EditableItem) with { Id = Guid.NewGuid().ToString() }),
         Ops.MoveItem or Ops.SetCollections or Ops.DeleteItem or Ops.ArchiveItem =>
           IpcJson.ToElement(new SavedResponse(IpcJson.Read(payload, IpcJson.Default.WriteRequest).Id, Revision.AddDays(2)), IpcJson.Default.SavedResponse),
         Ops.GetPasswordHistory => IpcJson.ToElement(new PasswordHistoryResponse([Revision.AddDays(-1), Revision.AddDays(-30)]), IpcJson.Default.PasswordHistoryResponse),
@@ -550,6 +551,158 @@ public class EditTests(AvaloniaSession session)
     await vm.DeleteCommand.ExecuteAsync(null);
 
     AvaloniaSession.WaitFor(() => coordinator.ItemWindows.Count == 0);
+  });
+
+  [Fact]
+  public Task NewItem_SavesWithCreate_AndThenShowsTheSavedItem() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    using var vm = ItemViewModel.ForNew(h.Channel, ItemEditorViewModel.Blank(3), Filters);
+    vm.Confirm = h.Ask;
+    var saved = 0;
+    vm.Saved += () => saved++;
+    Assert.True(vm.IsNew);
+    Assert.False(vm.IsReadOnly);
+    Assert.True(vm.Editor!.IsCard);
+    Assert.True(vm.Editor.CanChangeOwner);
+    Assert.Equal(("Card", ItemViewModel.GlyphFor(3)), (vm.Title, vm.TypeGlyph));
+    await vm.LoadAsync();
+    Assert.Empty(h.Extension.Payloads(Ops.GetItem));
+
+    vm.Editor.Name = "New card";
+    vm.Editor.CardExpMonth = "05";
+    await vm.SaveCommand.ExecuteAsync(null);
+
+    var sent = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.CreateItem)), IpcJson.Default.EditableItem);
+    Assert.Null(sent.Id);
+    Assert.Equal(("New card", "05"), (sent.Name, sent.Card!.ExpMonth));
+    Assert.Empty(h.Extension.Payloads(Ops.UpdateItem));
+    Assert.False(vm.IsNew);
+    Assert.True(vm.IsReadOnly);
+    Assert.Equal(1, saved);
+    Assert.Equal("New card", vm.Title);
+    Assert.Equal(vm.Id, IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.GetItem)), IpcJson.Default.ItemRequest).Id);
+  });
+
+  [Fact]
+  public Task NewItem_ChangingTheType_KeepsTheSharedFields_AndCancelCloses() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    using var vm = ItemViewModel.ForNew(h.Channel, ItemEditorViewModel.Blank(1), Filters);
+    vm.Confirm = h.Ask;
+    var discarded = 0;
+    vm.Discarded += () => discarded++;
+    vm.SelectedType = ItemViewModel.TypeChoices[2];
+    Assert.True(vm.Editor!.IsCard);
+    await vm.CancelEditCommand.ExecuteAsync(null);
+    Assert.Empty(h.Prompts);
+    Assert.Equal(1, discarded);
+
+    using var typed = ItemViewModel.ForNew(h.Channel, ItemEditorViewModel.Blank(1), Filters);
+    typed.Confirm = h.Ask;
+    typed.Editor!.Name = "Router";
+    typed.Editor.Notes = "admin page";
+    typed.Editor.Favorite = true;
+    typed.Editor.SelectedFolder = typed.Editor.Folders[1];
+    typed.Editor.Username = "admin";
+    typed.SelectedType = ItemViewModel.TypeChoices[4];
+
+    var editor = typed.Editor!;
+    Assert.True(editor.IsSshKey);
+    Assert.Equal(("Router", "admin page", true, "Work"), (editor.Name, editor.Notes, editor.Favorite, editor.SelectedFolder!.Label));
+    Assert.Null(editor.Username);
+    Assert.Equal(("SSH key", 5), (typed.Title, typed.ItemType));
+
+    h.Answer = false;
+    await typed.CancelEditCommand.ExecuteAsync(null);
+    Assert.Equal(["Discard changes?|Discard|Keep editing"], h.Prompts);
+    Assert.True(typed.IsEditing);
+  });
+
+  [Fact]
+  public Task NewItem_InAnOrganisation_IsOneCreateCarryingTheOwner() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    using var vm = ItemViewModel.ForNew(h.Channel, ItemEditorViewModel.Blank(2), Filters);
+    vm.Confirm = h.Ask;
+    vm.Editor!.Name = "Org note";
+    vm.Editor.SelectedOwner = vm.Editor.Owners[1];
+    vm.Editor.Collections.Single().IsChecked = true;
+
+    await vm.SaveCommand.ExecuteAsync(null);
+
+    var sent = IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.CreateItem)), IpcJson.Default.EditableItem);
+    Assert.Equal((OrgId, CollectionId), (sent.OrganizationId, Assert.Single(sent.CollectionIds)));
+    Assert.Empty(h.Extension.Payloads(Ops.MoveItem));
+    Assert.Empty(h.Extension.Payloads(Ops.SetCollections));
+  });
+
+  [Fact]
+  public Task NewItem_WithAnUnknownOutcome_IsNotSentAgainWithoutConsent() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    using var vm = ItemViewModel.ForNew(h.Channel, ItemEditorViewModel.Blank(2), Filters);
+    vm.Confirm = h.Ask;
+    var saved = 0;
+    vm.Saved += () => saved++;
+    vm.Editor!.Name = "Note";
+    h.Extension.FailWith = IpcErrors.Unknown;
+    h.Extension.FailOp = Ops.CreateItem;
+
+    await vm.SaveCommand.ExecuteAsync(null);
+    Assert.Equal("Bitwarden did not confirm the save. Check the vault before you save again.", vm.ErrorMessage);
+    Assert.True(vm.IsNew);
+    Assert.Equal(0, saved);
+
+    h.Extension.FailWith = null;
+    h.Answer = false;
+    await vm.SaveCommand.ExecuteAsync(null);
+    Assert.Single(h.Extension.Payloads(Ops.CreateItem));
+    Assert.Equal(["Save another copy?|Save copy|Cancel"], h.Prompts);
+
+    h.Answer = true;
+    await vm.SaveCommand.ExecuteAsync(null);
+    Assert.Equal(2, h.Extension.Payloads(Ops.CreateItem).Count);
+    Assert.False(vm.IsNew);
+  });
+
+  [Fact]
+  public Task Coordinator_NewItem_OpensACreateWindow_ThenKeysItUnderTheSavedId() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    using var pair = new ChannelPair(h.Extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+
+    var reply = pair.Extension.RequestAsync(Ops.NewItem, null);
+    AvaloniaSession.WaitFor(() => reply.IsCompleted && coordinator.NewItemWindows.Count == 1);
+    var window = coordinator.NewItemWindows.Single();
+    var vm = window.ViewModel!;
+    window.UpdateLayout();
+    Assert.True(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NewItemBadge").IsEffectivelyVisible);
+    Assert.True(window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "TypeBox").IsEffectivelyVisible);
+    Assert.True(vm.Editor!.IsLogin);
+    Assert.Empty(coordinator.ItemWindows);
+
+    vm.Editor.Name = "Created";
+    await vm.SaveCommand.ExecuteAsync(null);
+    Assert.Empty(coordinator.NewItemWindows);
+    Assert.Same(window, coordinator.ShowItem(vm.Id));
+    Assert.Same(window, Assert.Single(coordinator.ItemWindows));
+
+    await coordinator.ShowNewItemAsync();
+    var second = coordinator.NewItemWindows.Single();
+    second.ViewModel!.Editor!.Name = "Unsaved";
+    coordinator.OnLocked();
+    Assert.Empty(coordinator.NewItemWindows);
+
+    var third = (await coordinator.ShowNewItemAsync())!;
+    await third.ViewModel!.CancelEditCommand.ExecuteAsync(null);
+    Assert.Empty(coordinator.NewItemWindows);
+
+    h.Extension.FailWith = IpcErrors.Locked;
+    Assert.Null(await coordinator.ShowNewItemAsync());
+    window.Close();
   });
 
   [Fact]

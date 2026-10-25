@@ -15,6 +15,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private const string HistoryGroup = "Password history";
   private const string SavingChanges = "Saving changes…";
 
+  public static readonly Choice[] TypeChoices = [new("1", "Login"), new("2", "Secure note"), new("3", "Card"), new("4", "Identity"), new("5", "SSH key")];
+
   private static readonly Dictionary<string, Bitmap?> Icons = new(StringComparer.OrdinalIgnoreCase);
 
   private readonly PipeChannel _channel;
@@ -30,6 +32,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   private readonly DispatcherTimer _graceTimer;
   private GraceDto? _grace;
   private bool _keepOpen;
+  private bool _createUncertain;
   private (string Op, JsonElement Payload, TaskCompletionSource<(bool Ok, JsonElement? Reply, string? Error)> Done)? _pendingWrite;
 
   public ItemViewModel(string id, PipeChannel channel)
@@ -43,7 +46,43 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     Groups.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CanShowHistory));
   }
 
-  public string Id { get; }
+  internal static ItemViewModel ForNew(PipeChannel channel, EditableItem item, FiltersResponse filters) => new(string.Empty, channel)
+  {
+    _filters = filters,
+    IsNew = true,
+    IsLoading = false,
+    ItemType = item.Type,
+    Title = TypeChoices.First(c => c.Value == item.Type.ToString(CultureInfo.InvariantCulture)).Label,
+    TypeGlyph = GlyphFor(item.Type),
+    SelectedType = TypeChoices.First(c => c.Value == item.Type.ToString(CultureInfo.InvariantCulture)),
+    Editor = new ItemEditorViewModel(item, filters),
+  };
+
+  public string Id { get; private set; }
+
+  internal event Action? Saved;
+
+  internal event Action? Discarded;
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(CanEdit), nameof(CanShowHistory), nameof(CanRotate), nameof(CanAttach), nameof(ShowAttachments))]
+  public partial bool IsNew { get; private set; }
+
+  [ObservableProperty]
+  public partial Choice? SelectedType { get; set; }
+
+  partial void OnSelectedTypeChanged(Choice? value)
+  {
+    if (!IsNew || Editor is not { } old || _filters is not { } filters || value?.Value is not { } text
+      || int.Parse(text, CultureInfo.InvariantCulture) is var type && type == old.Type)
+      return;
+    var editor = new ItemEditorViewModel(ItemEditorViewModel.Blank(type), filters) { Name = old.Name, Notes = old.Notes, Favorite = old.Favorite };
+    editor.SelectedFolder = editor.Folders.FirstOrDefault(f => f == old.SelectedFolder) ?? editor.Folders[0];
+    ItemType = type;
+    Title = value.Label;
+    TypeGlyph = GlyphFor(type);
+    Editor = editor;
+  }
 
   internal bool IsTotpRunning => _totpTimer.IsEnabled;
 
@@ -95,7 +134,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public bool IsEditing => Editor is not null;
 
-  public bool IsReadOnly => Editor is null;
+  public bool IsReadOnly => Editor is null && !IsNew;
 
   public bool CanEdit => IsReadOnly && ItemType is >= 1 and <= 5;
 
@@ -302,7 +341,7 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
 
   public async Task LoadAsync()
   {
-    if (IsEditing)
+    if (IsEditing || IsNew)
       return;
     IsLoading = true;
     try
@@ -468,17 +507,33 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   {
     if (Editor is not { } editor || editor.Validate() is not null)
       return;
+    var creating = editor.Id is null;
+    if (creating && _createUncertain
+      && !await AskAsync("Save another copy?", "Bitwarden may have saved this item already. Check the vault before you save it again.", "Save copy", "Cancel"))
+      return;
     var item = editor.ToDto();
-    var (ok, reply, error) = await WriteAsync(Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem), SavingChanges);
+    var (ok, reply, error) = await WriteAsync(creating ? Ops.CreateItem : Ops.UpdateItem, IpcJson.ToElement(item, IpcJson.Default.EditableItem), SavingChanges);
     if (!ok)
     {
+      if (creating && error is null or IpcErrors.Unknown)
+      {
+        _createUncertain = true;
+        ErrorMessage = Describe(new IpcException(IpcErrors.Unknown));
+        return;
+      }
+
       await OnEditFailedAsync(error);
       return;
     }
 
     var saved = IpcJson.Read(reply, IpcJson.Default.SavedResponse);
-    editor.MarkSaved(saved.RevisionDate);
-    if (item.OrganizationId is { } organization
+    _createUncertain = false;
+    Id = saved.Id;
+    IsNew = false;
+    editor.MarkSaved(saved.Id, saved.RevisionDate, creating ? item.OrganizationId : editor.OriginalOrganizationId, creating ? item.CollectionIds : editor.OriginalCollectionIds);
+    if (creating)
+      Saved?.Invoke();
+    if (!creating && item.OrganizationId is { } organization
       && (organization != editor.OriginalOrganizationId || !item.CollectionIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(editor.OriginalCollectionIds)))
     {
       var request = new WriteRequest(saved.Id, saved.RevisionDate, OrganizationId: organization, CollectionIds: item.CollectionIds);
@@ -527,6 +582,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
       return false;
     Editor = null;
     ErrorMessage = null;
+    if (IsNew)
+      Discarded?.Invoke();
     return true;
   }
 

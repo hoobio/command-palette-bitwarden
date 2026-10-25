@@ -16,11 +16,13 @@ internal static class Ops
   public const string OpenUri = "openUri";
   public const string VerifyReprompt = "verifyReprompt";
   public const string ShowItem = "showItem";
+  public const string NewItem = "newItem";
   public const string Locked = "locked";
   public const string ListFilters = "listFilters";
   public const string VaultChanged = "vaultChanged";
   public const string GetEditableItem = "getEditableItem";
   public const string GetPasswordHistory = "getPasswordHistory";
+  public const string CreateItem = "createItem";
   public const string UpdateItem = "updateItem";
   public const string DeleteItem = "deleteItem";
   public const string ArchiveItem = "archiveItem";

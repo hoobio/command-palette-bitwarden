@@ -27,12 +27,19 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
         _settingsManager = new BitwardenSettingsManager();
         _service = new BitwardenCliService(_settingsManager);
         _fallbackItem = new BitwardenFallbackItem(_service, _settingsManager);
-        CompanionHost.Current = new CompanionHost(new CompanionOps(_service));
+        var companion = new CompanionHost(new CompanionOps(_service));
+        CompanionHost.Current = companion;
         _commands = [
             new CommandItem(new HoobiBitwardenCommandPaletteExtensionPage(_service, _settingsManager))
             {
                 Title = DisplayName,
                 Subtitle = "Search your vault",
+            },
+            new CommandItem(new NewItemCommand(_service, companion))
+            {
+                Title = "New Bitwarden item",
+                Subtitle = "Create a new login, new password, note, card, identity or SSH key",
+                Icon = new IconInfo(""),
             },
         ];
 
@@ -43,4 +50,25 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
     public override ICommandItem[] TopLevelCommands() => _commands;
 
     public override IFallbackCommandItem[] FallbackCommands() => [_fallbackItem];
+
+    private sealed partial class NewItemCommand : InvokableCommand
+    {
+        private readonly BitwardenCliService _service;
+        private readonly CompanionHost _companion;
+
+        public NewItemCommand(BitwardenCliService service, CompanionHost companion)
+        {
+            _service = service;
+            _companion = companion;
+            Name = "New item";
+        }
+
+        public override ICommandResult Invoke()
+        {
+            if (!_service.IsUnlocked)
+                return CommandResult.ShowToast("Unlock your vault in Bitwarden first.");
+            _companion.ShowNewItem();
+            return CommandResult.Dismiss();
+        }
+    }
 }
