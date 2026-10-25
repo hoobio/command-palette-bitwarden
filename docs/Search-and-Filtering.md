@@ -65,11 +65,10 @@ The vault search page has a filter dropdown next to the search box. One entry is
 The dropdown lists, in order:
 
 1. **All items** (default, no filter)
-2. Static filters: Favourites, Protected, Weak passwords, Old passwords, Insecure URLs, Watchtower warnings, Has TOTP, Has passkey, Has password, Has URL, Has notes, In a folder, Logins, Cards, Identities, Secure notes, SSH keys
-3. **My vault** (items that are not in an organisation) and each of your organisations
-4. **No folder** and each of your folders
+2. Static filters: Favourites, Protected, Weak passwords, Old passwords, Insecure URLs, Watchtower, Has TOTP, Has passkey, Has password, Has URL, Has notes, In a folder, Logins, Cards, Identities, Secure notes, SSH keys
+3. **My vault** (items that are not in an organisation) and each of your organisations. Organisation names longer than 24 characters are shortened.
 
-The organisation and folder entries are built from the loaded vault and refresh after a sync. If the selected organisation or folder no longer exists, the dropdown returns to **All items**. The dropdown is not shown on the login, unlock and two-factor screens.
+Folders are not in the dropdown. Type `folder:` to filter by folder. The organisation entries are built from the loaded vault and refresh after a sync. If the selected organisation no longer exists, the dropdown returns to **All items**. The dropdown is not shown on the login, unlock and two-factor screens.
 
 ## Sort Order
 

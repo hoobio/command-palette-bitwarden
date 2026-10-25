@@ -740,7 +740,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     {
         lock (_itemsLock)
         {
-            var entries = SearchFilterCatalog.Build(_service.GetOrganizations(), _service.GetFolders());
+            var entries = SearchFilterCatalog.Build(_service.GetOrganizations());
             if (_filters != null && _filters.Entries.SequenceEqual(entries)) return;
             _filters = new VaultSearchFilters(entries, _filters?.CurrentFilterId ?? SearchFilterCatalog.AllId, OnFilterSelected);
         }

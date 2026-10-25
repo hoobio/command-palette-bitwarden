@@ -28,7 +28,7 @@ public class SearchFilterCatalogTests
   [Fact]
   public void Build_StartsWithAllItemsThenStaticFilters()
   {
-    var entries = SearchFilterCatalog.Build(None, None);
+    var entries = SearchFilterCatalog.Build(None);
     Assert.Equal("All items", entries[0].Name);
     Assert.Null(entries[0].Filter);
     Assert.Equal(SearchFilterCatalog.Static, entries.Skip(1).Take(SearchFilterCatalog.Static.Length));
@@ -45,7 +45,7 @@ public class SearchFilterCatalogTests
   [Fact]
   public void Static_IdsAreUniqueAndFiltersHaveValues()
   {
-    var all = SearchFilterCatalog.Build(new Dictionary<string, string> { ["o"] = "Org" }, new Dictionary<string, string> { ["f"] = "Folder" });
+    var all = SearchFilterCatalog.Build(new Dictionary<string, string> { ["o"] = "Org" });
     Assert.Equal(all.Count, all.Select(e => e.Id).Distinct().Count());
     Assert.All(SearchFilterCatalog.Static, e => Assert.False(string.IsNullOrEmpty(e.Filter!.Value.Value)));
   }
@@ -53,27 +53,28 @@ public class SearchFilterCatalogTests
   [Fact]
   public void Build_AddsMyVaultAndOrganisationsAfterStatic()
   {
-    var entries = SearchFilterCatalog.Build(new Dictionary<string, string> { ["org-2"] = "Beta", ["org-1"] = "Acme" }, None);
+    var entries = SearchFilterCatalog.Build(new Dictionary<string, string> { ["org-2"] = "Beta", ["org-1"] = "acme" });
     var vaults = entries.Where(e => e.Section == "Vaults").ToList();
-    Assert.Equal(["My vault", "Acme", "Beta"], vaults.Select(v => v.Name));
+    Assert.Equal(["My vault", "acme", "Beta"], vaults.Select(v => v.Name));
     Assert.Equal(("org", "none"), vaults[0].Filter);
     Assert.Equal(("org", "org-1"), vaults[1].Filter);
+    Assert.Equal(entries[^1], vaults[^1]);
   }
 
-  [Fact]
-  public void Build_AddsNoFolderAndFoldersLast()
+  [Theory]
+  [InlineData("Acme", "Acme")]
+  [InlineData("Exactly twenty-four char", "Exactly twenty-four char")]
+  [InlineData("Contoso International Holdings", "Contoso International H…")]
+  [InlineData("Contoso International  Holdings", "Contoso International…")]
+  public void Truncate_ShortensLongOrganisationNames(string name, string expected)
   {
-    var entries = SearchFilterCatalog.Build(None, new Dictionary<string, string> { ["f-work"] = "Work" });
-    var folders = entries.Where(e => e.Section == "Folders").ToList();
-    Assert.Equal(["No folder", "Work"], folders.Select(v => v.Name));
-    Assert.Equal(("folder", "f-work"), folders[1].Filter);
-    Assert.Equal(entries[^1], folders[1]);
+    Assert.Equal(expected, SearchFilterCatalog.Truncate(name));
   }
 
   [Fact]
   public void Resolve_KnownId_ReturnsEntry()
   {
-    var entries = SearchFilterCatalog.Build(None, None);
+    var entries = SearchFilterCatalog.Build(None);
     Assert.Equal("Favourites", SearchFilterCatalog.Resolve(entries, "is:fav").Name);
   }
 
@@ -83,22 +84,15 @@ public class SearchFilterCatalogTests
   [InlineData("folder:deleted")]
   public void Resolve_MissingId_FallsBackToAllItems(string? id)
   {
-    var entries = SearchFilterCatalog.Build(None, None);
+    var entries = SearchFilterCatalog.Build(None);
     Assert.Same(SearchFilterCatalog.All, SearchFilterCatalog.Resolve(entries, id));
-  }
-
-  [Fact]
-  public void Build_SortsFoldersByNameIgnoringCase()
-  {
-    var entries = SearchFilterCatalog.Build(None, new Dictionary<string, string> { ["2"] = "zeta", ["1"] = "Alpha" });
-    Assert.Equal(["No folder", "Alpha", "zeta"], entries.Where(e => e.Section == "Folders").Select(e => e.Name));
   }
 
   [Fact]
   public void Build_SameInputsGiveEqualEntries()
   {
-    var folders = new Dictionary<string, string> { ["1"] = "Alpha" };
-    Assert.True(SearchFilterCatalog.Build(None, folders).SequenceEqual(SearchFilterCatalog.Build(None, folders)));
+    var organisations = new Dictionary<string, string> { ["1"] = "Alpha" };
+    Assert.True(SearchFilterCatalog.Build(organisations).SequenceEqual(SearchFilterCatalog.Build(organisations)));
   }
 
   [Fact]
