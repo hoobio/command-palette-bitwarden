@@ -78,20 +78,28 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,*">
-        <Grid x:Name="Toolbar" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,24,4">
-            <WrapPanel ItemSpacing="8" LineSpacing="8">
-                <Button x:Name="RotateButton" Content="Rotate password" Command="{Binding RotateCommand}" IsVisible="{Binding CanRotate}" IsEnabled="{Binding !IsPrompting}" />
-                <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditing}" />
-                <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelEditCommand}" IsVisible="{Binding IsEditing}" />
-            </WrapPanel>
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+        <Grid x:Name="Toolbar" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,24,0">
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
                 <Button x:Name="EditButton" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Edit}" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Edit" AutomationProperties.Name="Edit" />
                 <Button x:Name="DeleteButton" Theme="{StaticResource DangerIconButtonStyle}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
             </StackPanel>
         </Grid>
 
-        <StackPanel Grid.Row="1" Margin="0,0,24,0">
+        <WrapPanel Grid.Row="1" Margin="0,0,24,8" ItemSpacing="8" LineSpacing="8">
+            <WrapPanel.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                    <Binding Path="CanRotate" />
+                    <Binding Path="IsEditing" />
+                </MultiBinding>
+            </WrapPanel.IsVisible>
+            <Button x:Name="RotateButton" Content="Rotate password" Command="{Binding RotateCommand}" IsVisible="{Binding CanRotate}" IsEnabled="{Binding !IsPrompting}" />
+            <Button x:Name="SaveButton" Theme="{StaticResource AccentButtonStyle}" Content="Save" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditing}" />
+            <Button x:Name="CancelButton" Content="Cancel" Command="{Binding CancelEditCommand}" IsVisible="{Binding IsEditing}" />
+        </WrapPanel>
+
+        <StackPanel Grid.Row="2" Margin="0,0,24,0">
             <Border x:Name="ErrorAlert" Classes="Alert" Margin="0,4,0,8" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
             </Border>
@@ -103,10 +111,8 @@
             </Border>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="2" IsVisible="{Binding !IsEditing}">
+        <ScrollViewer Grid.Row="3" IsVisible="{Binding !IsEditing}">
             <StackPanel Margin="{StaticResource PageGutter}">
-                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ItemHeader}" Margin="0,8,-8,0" />
-
                 <Border x:Name="PasswordPanel" Classes="Group" Margin="0,8,0,0" IsVisible="{Binding IsPrompting}">
                     <Border Classes="Row" Padding="16,20">
                         <StackPanel Spacing="8">
@@ -253,7 +259,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <ScrollViewer x:Name="EditorScroll" Grid.Row="2" IsVisible="{Binding IsEditing}">
+        <ScrollViewer x:Name="EditorScroll" Grid.Row="3" IsVisible="{Binding IsEditing}">
             <views:ItemEditView x:Name="EditView" Margin="{StaticResource PageGutter}" DataContext="{Binding Editor}" />
         </ScrollViewer>
     </Grid>
