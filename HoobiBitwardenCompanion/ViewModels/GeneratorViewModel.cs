@@ -119,15 +119,26 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     Capitalize,
     IncludeNumber);
 
-  partial void OnSelectedTabChanged(int value)
+  private static readonly HashSet<string> OptionNames =
+  [
+    nameof(SelectedTab), nameof(Length), nameof(Uppercase), nameof(Lowercase), nameof(Numbers), nameof(Special), nameof(MinNumber),
+    nameof(MinSpecial), nameof(AvoidAmbiguous), nameof(Words), nameof(Separator), nameof(Capitalize), nameof(IncludeNumber),
+  ];
+
+  private bool _ready;
+  private int _request;
+
+  protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
   {
-    Value = null;
-    _entryId = null;
+    base.OnPropertyChanged(e);
+    if (_ready && e.PropertyName is { } name && OptionNames.Contains(name))
+      _ = RegenerateAsync();
   }
 
   public async Task InitializeAsync()
   {
     await RegenerateAsync();
+    _ready = true;
     await LoadHistoryAsync();
   }
 
@@ -135,9 +146,12 @@ internal sealed partial class GeneratorViewModel : ObservableObject
   private async Task RegenerateAsync()
   {
     var options = ToOptions();
+    var request = ++_request;
     try
     {
       var generated = IpcJson.Read(await _channel.RequestAsync(Ops.Generate, IpcJson.ToElement(options, IpcJson.Default.GeneratorOptions)), IpcJson.Default.GeneratedResponse);
+      if (request != _request)
+        return;
       Value = generated.Value;
       _entryId = generated.EntryId;
       ErrorMessage = null;
@@ -145,7 +159,8 @@ internal sealed partial class GeneratorViewModel : ObservableObject
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
-      ErrorMessage = Describe(ex);
+      if (request == _request)
+        ErrorMessage = Describe(ex);
       return;
     }
 

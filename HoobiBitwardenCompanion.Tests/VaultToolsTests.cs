@@ -200,10 +200,17 @@ public class VaultToolsTests(AvaloniaSession session)
     vm.UseCommand.Execute(null);
     Assert.Equal(new string('x', 24), used);
 
+    var requests = h.Extension.Payloads(Ops.Generate).Count;
     vm.SelectedTab = 1;
-    Assert.Null(vm.Value);
-    await vm.RegenerateCommand.ExecuteAsync(null);
-    Assert.Equal("correct-horse-battery-staple", vm.Value);
+    AvaloniaSession.WaitFor(() => vm.Value == "correct-horse-battery-staple");
+    Assert.Equal(requests + 1, h.Extension.Payloads(Ops.Generate).Count);
+
+    vm.Words = 5;
+    AvaloniaSession.WaitFor(() => h.Extension.Payloads(Ops.Generate).Count == requests + 2);
+    Assert.Equal(5, IpcJson.Read(h.Extension.Payloads(Ops.Generate)[^1], IpcJson.Default.GeneratorOptions).Words);
+    vm.Capitalize = true;
+    AvaloniaSession.WaitFor(() => h.Extension.Payloads(Ops.Generate).Count == requests + 3);
+    Assert.True(IpcJson.Read(h.Extension.Payloads(Ops.Generate)[^1], IpcJson.Default.GeneratorOptions).Capitalize);
     Assert.Equal(GeneratorKinds.Passphrase, new GeneratorViewModel(h.Channel).Kind);
 
     h.Extension.FailWith[Ops.Generate] = IpcErrors.Invalid;
