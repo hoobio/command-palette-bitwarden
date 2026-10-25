@@ -80,7 +80,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         Title = $"Bitwarden {version}";
 #endif
         Name = "Open";
-        PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+        PlaceholderText = "Search your vault... (try url:github)";
         CaptureContext();
     }
 
@@ -588,7 +588,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             return WithDebugLog([hint, BuildBackToLoginItem()]);
         }
 
-        PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+        PlaceholderText = "Search your vault... (try url:github)";
 
         var item = new ListItem(new Pages.LoginPage(_settings, OnLoginSubmitted))
         {
@@ -1364,7 +1364,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _pendingEmail = null;
                 ReplacePendingPassword(null);
                 _pendingTwoFactorMethod = null;
-                PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+                PlaceholderText = "Search your vault... (try url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
                 RebuildVaultList();
@@ -1403,7 +1403,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _deviceVerificationRequired = false;
                 _pendingEmail = null;
                 ReplacePendingPassword(null);
-                PlaceholderText = "Search your vault... (try is:fav, is:protected, folder:Work, has:totp, has:passkey, url:github)";
+                PlaceholderText = "Search your vault... (try url:github)";
                 ShowLoadingStatus("Syncing vault...", "bw sync");
                 await _service.SyncVaultAsync();
                 RebuildVaultList();
