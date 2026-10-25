@@ -12,19 +12,51 @@ public class DialogWindowTests(AvaloniaSession session)
     public List<(string Op, JsonElement? Payload)> Calls { get; } = [];
     public UnlockResponse Unlock { get; set; } = new(true, null);
     public SetServerResponse SetServer { get; set; } = new(true, null);
+    public SemaphoreSlim? Gate { get; set; }
 
-    public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
+    public async Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
     {
       lock (Calls)
         Calls.Add((op, payload));
-      return Task.FromResult<JsonElement?>(op switch
+      if (Gate is { } gate)
+        await gate.WaitAsync(cancellationToken);
+      return op switch
       {
         Ops.Unlock => IpcJson.ToElement(Unlock, IpcJson.Default.UnlockResponse),
         Ops.SetServer => IpcJson.ToElement(SetServer, IpcJson.Default.SetServerResponse),
         _ => throw new IpcException(IpcErrors.Invalid),
-      });
+      };
     }
   }
+
+  [Fact]
+  public Task Unlock_WhileTheRequestRuns_ShowsProgressWithText() => session.RunAsync(async () =>
+  {
+    using var gate = new SemaphoreSlim(0);
+    var extension = new FakeExtension { Gate = gate };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    coordinator.ReturnForeground = _ => { };
+    _ = coordinator.RunAsync(() => { });
+
+    var window = coordinator.ShowUnlock(0, rememberSession: false, windowsHello: true);
+    var viewModel = window.ViewModel!;
+    viewModel.Password = "hunter2";
+    var submit = viewModel.SubmitAsync();
+    AvaloniaSession.WaitFor(() => viewModel.IsBusy);
+    Assert.Equal("Unlocking your vault...", viewModel.BusyText);
+
+    gate.Release();
+    await submit;
+    Assert.False(viewModel.IsBusy);
+
+    window = coordinator.ShowUnlock(0, rememberSession: false, windowsHello: true);
+    var hello = window.ViewModel!.SubmitBiometricAsync();
+    AvaloniaSession.WaitFor(() => window.ViewModel.IsBusy);
+    Assert.Equal("Waiting for Windows Hello...", window.ViewModel.BusyText);
+    gate.Release();
+    await hello;
+  });
 
   [Fact]
   public Task ShowUnlock_IsOneWindow_TakesTheDialogValues_AndClosingReturnsTheForeground() => session.RunAsync(async () =>

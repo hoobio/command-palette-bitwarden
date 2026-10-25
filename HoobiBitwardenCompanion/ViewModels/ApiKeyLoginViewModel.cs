@@ -17,6 +17,8 @@ internal sealed partial class ApiKeyLoginViewModel(PipeChannel channel) : Dialog
     ClientSecret = null;
   }
 
+  protected override string BusyMessage => "Logging in with your API key...";
+
   protected override async Task<bool> RunStepAsync()
   {
     var request = new ApiKeyLoginRequest(ClientId?.Trim() ?? string.Empty, ClientSecret?.Trim() ?? string.Empty);

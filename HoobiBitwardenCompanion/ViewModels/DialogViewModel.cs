@@ -18,7 +18,12 @@ internal abstract partial class DialogViewModel(PipeChannel channel) : Observabl
   public partial bool IsBusy { get; private set; }
 
   [ObservableProperty]
+  public partial string? BusyText { get; private set; }
+
+  [ObservableProperty]
   public partial int Step { get; protected set; }
+
+  protected abstract string BusyMessage { get; }
 
   [RelayCommand]
   internal async Task SubmitAsync()
@@ -26,6 +31,7 @@ internal abstract partial class DialogViewModel(PipeChannel channel) : Observabl
     if (IsBusy)
       return;
     ErrorMessage = null;
+    BusyText = BusyMessage;
     IsBusy = true;
     try
     {

@@ -8,9 +8,8 @@
     x:DataType="vm:ApiKeyLoginViewModel"
     Title="Log in with your API key"
     Width="440"
-    Height="440"
+    SizeToContent="Height"
     MinWidth="340"
-    MinHeight="380"
     WindowStartupLocation="CenterScreen"
     CanMinimize="False"
     CanMaximize="False"
@@ -21,8 +20,7 @@
     <Grid RowDefinitions="48,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Lock}" FontSize="16" VerticalAlignment="Center" />
-                <TextBlock Text="Log in with your API key" FontSize="12" VerticalAlignment="Center" />
+                <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" VerticalAlignment="Center" />
             </StackPanel>
         </Grid>
 
@@ -37,6 +35,10 @@
                 <Border x:Name="ErrorAlert" Classes="Alert" Classes.Danger="True" Margin="0,4,0,0" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <TextBlock x:Name="ErrorText" TextWrapping="Wrap" Text="{Binding ErrorMessage}" />
                 </Border>
+                <StackPanel x:Name="BusyPanel" Spacing="6" Margin="0,4,0,0" IsVisible="{Binding IsBusy}">
+                    <ProgressBar IsIndeterminate="True" />
+                    <TextBlock x:Name="BusyText" Classes="Caption" TextWrapping="Wrap" Text="{Binding BusyText}" />
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 

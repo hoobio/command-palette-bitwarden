@@ -46,6 +46,8 @@ internal sealed partial class SetServerViewModel : DialogViewModel
   [ObservableProperty]
   public partial string? KeyConnectorUrl { get; set; }
 
+  protected override string BusyMessage => "Saving the server URL...";
+
   protected override async Task<bool> RunStepAsync()
   {
     var request = IsSelfHosted

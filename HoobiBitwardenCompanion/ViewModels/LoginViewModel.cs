@@ -87,6 +87,13 @@ internal sealed partial class LoginViewModel : DialogViewModel
     Step = CredentialsStep;
   }
 
+  protected override string BusyMessage => Step switch
+  {
+    CodeStep => "Checking your two-step login code...",
+    DeviceStep => "Checking your verification code...",
+    _ => "Logging in to Bitwarden...",
+  };
+
   protected override async Task<bool> RunStepAsync() => Step switch
   {
     CredentialsStep => await SignInAsync(null),

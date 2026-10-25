@@ -21,7 +21,7 @@
     <Grid RowDefinitions="48,*" Background="Transparent">
         <Grid x:Name="AppTitleBar" ColumnDefinitions="Auto,*,46" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
             <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
-            <TextBox x:Name="SearchBox" Grid.Column="1" MaxWidth="260" Margin="16,0,8,0" VerticalAlignment="Center" PlaceholderText="Search settings" Text="{Binding SearchText, Mode=TwoWay}" AutomationProperties.Name="Search settings" />
+            <TextBox x:Name="SearchBox" Grid.Column="1" MaxWidth="260" Margin="16,0,8,0" VerticalAlignment="Center" PlaceholderText="Search settings" TextAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}" AutomationProperties.Name="Search settings" />
         </Grid>
 
         <ScrollViewer x:Name="Scroller" Grid.Row="1">

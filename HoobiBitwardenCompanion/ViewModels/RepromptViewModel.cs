@@ -40,6 +40,8 @@ internal sealed partial class RepromptViewModel(PipeChannel channel, string toke
     }
   }
 
+  protected override string BusyMessage => _biometric ? "Waiting for Windows Hello..." : "Checking your master password...";
+
   protected override async Task<bool> RunStepAsync()
   {
     var password = Password ?? string.Empty;

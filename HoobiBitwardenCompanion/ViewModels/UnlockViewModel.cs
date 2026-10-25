@@ -32,6 +32,8 @@ internal sealed partial class UnlockViewModel(PipeChannel channel, bool remember
     }
   }
 
+  protected override string BusyMessage => _biometric ? "Waiting for Windows Hello..." : "Unlocking your vault...";
+
   protected override async Task<bool> RunStepAsync()
   {
     var password = Password ?? string.Empty;
