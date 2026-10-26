@@ -58,7 +58,6 @@ internal sealed partial class BitwardenCliService
   public DateTime LastRefresh { get => _lastRefresh; internal set => _lastRefresh = value; }
 
   private VaultStatus? _lastStatus;
-  private int _statusEpoch;
   private Dictionary<string, string> _folders = [];
   private Dictionary<string, string> _organizations = [];
 
@@ -419,36 +418,38 @@ internal sealed partial class BitwardenCliService
   private async Task<VaultStatus> GetVaultStatusCoreAsync()
   {
     DebugLogService.Log("Status", "GetVaultStatusAsync started");
-    var epoch = Volatile.Read(ref _statusEpoch);
+    var own = _sessionKey;
     if (!await IsCliAvailableAsync())
     {
       DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
-      return SetStatusUnlessSuperseded(VaultStatus.CliNotFound, epoch);
+      return SetStatusIfKeyAgrees(VaultStatus.CliNotFound);
     }
     DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable}), version: {_cliVersion ?? "unknown"}");
 
-    if (_sessionKey != null)
+    if (HasNewerSessionKey(own))
+      return VaultStatus.Unlocked;
+
+    if (own != null && ReferenceEquals(_sessionKey, own))
     {
       DebugLogService.Log("Status", "In-memory session key present, verifying...");
       if (await VerifySessionAsync())
-        return SetStatusUnlessSuperseded(VaultStatus.Unlocked, epoch);
+        return SetStatusIfKeyAgrees(VaultStatus.Unlocked);
       DebugLogService.Log("Status", "In-memory session verification failed");
-    }
-
-    if (Volatile.Read(ref _statusEpoch) != epoch && _lastStatus is { } newer)
-    {
-      DebugLogService.Log("Status", $"Status check superseded by {newer} before loading another session");
-      return newer;
+      if (HasNewerSessionKey(own))
+        return VaultStatus.Unlocked;
     }
 
     var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
     if (!string.IsNullOrWhiteSpace(envSession))
     {
       DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
-      ReplaceSessionKey(envSession);
+      if (!TryInstallSessionKey(envSession))
+        return VaultStatus.Unlocked;
       if (await VerifySessionAsync())
-        return SetStatusUnlessSuperseded(VaultStatus.Unlocked, epoch);
+        return SetStatusIfKeyAgrees(VaultStatus.Unlocked);
       DebugLogService.Log("Status", "BW_SESSION env var verification failed");
+      if (HasNewerSessionKey(null))
+        return VaultStatus.Unlocked;
     }
 
     if (_settings?.RememberSession.Value == true)
@@ -457,11 +458,14 @@ internal sealed partial class BitwardenCliService
       if (!string.IsNullOrEmpty(stored))
       {
         DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
-        ReplaceSessionKey(stored);
+        if (!TryInstallSessionKey(stored))
+          return VaultStatus.Unlocked;
         if (await VerifySessionAsync())
-          return SetStatusUnlessSuperseded(VaultStatus.Unlocked, epoch);
+          return SetStatusIfKeyAgrees(VaultStatus.Unlocked);
         // Keep the credential: one sync failure can be transient; HandleInvalidSession clears it on confirmed errors.
         DebugLogService.Log("Status", "Stored session verification failed (preserving credential for retry)");
+        if (HasNewerSessionKey(null))
+          return VaultStatus.Unlocked;
       }
       else
       {
@@ -477,35 +481,43 @@ internal sealed partial class BitwardenCliService
       if ((await LoginWithApiKeyAsync(apiKey.ClientId, apiKey.ClientSecret)).Success)
         fallback = VaultStatus.Locked;
     }
-    return SetStatusUnlessSuperseded(fallback, epoch);
+    return SetStatusIfKeyAgrees(fallback);
   }
 
-  // An unlock that lands while a status check runs must win: the check's older answer hid the loaded cache behind "Retrieving items from vault...".
-  private VaultStatus SetStatusUnlessSuperseded(VaultStatus status, int epoch)
+  // The live key is the unlock truth (IsUnlocked); a check result that disagrees with it is stale, e.g. CliNotFound landing after a Windows Hello unlock.
+  private VaultStatus SetStatusIfKeyAgrees(VaultStatus status)
   {
-    VaultStatus? newer;
     lock (_statusLock)
     {
-      newer = _statusEpoch == epoch ? null : _lastStatus ?? status;
-      if (newer is null)
-        WriteStatus(status);
-    }
-    if (newer is { } superseding)
-    {
-      DebugLogService.Log("Status", $"Status check result {status} superseded by {superseding}");
-      return superseding;
+      if ((status == VaultStatus.Unlocked) != (_sessionKey != null))
+      {
+        DebugLogService.Log("Status", $"Status check result {status} disagrees with the live session key, kept {_lastStatus?.ToString() ?? "none"}");
+        return _lastStatus ?? status;
+      }
+      _lastStatus = status;
     }
     ApplyStatus(status);
     return status;
   }
 
+  private bool HasNewerSessionKey(ProtectedSecret? own) => _sessionKey is { } key && !ReferenceEquals(key, own);
+
+  private bool TryInstallSessionKey(string sessionKey)
+  {
+    var secret = ProtectedSecret.From(sessionKey);
+    if (Interlocked.CompareExchange(ref _sessionKey, secret, null) != null)
+    {
+      secret?.Dispose();
+      return false;
+    }
+    UpdateLiveSync();
+    return true;
+  }
+
   private void WriteStatus(VaultStatus? status)
   {
     lock (_statusLock)
-    {
-      _statusEpoch++;
       _lastStatus = status;
-    }
   }
 
   private void AcceptSession(string sessionKey)
