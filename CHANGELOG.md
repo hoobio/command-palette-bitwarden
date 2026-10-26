@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.13.0...v1.13.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* keep the vault unlocked when a status check finishes after unlock ([626a78a](https://github.com/hoobio/command-palette-bitwarden/commit/626a78ae8a2ba812146edc9f1e8a7b193d5b9748))
+* move the item header into the companion title bar ([#227](https://github.com/hoobio/command-palette-bitwarden/issues/227)) ([626a78a](https://github.com/hoobio/command-palette-bitwarden/commit/626a78ae8a2ba812146edc9f1e8a7b193d5b9748))
+
 ## [1.13.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.12.0...v1.13.0) (2026-10-25)
 
 
