@@ -187,11 +187,10 @@ public class TextCentreTests(AvaloniaSession session)
   [Fact]
   public Task TitleBar_TextIsCentredOnTheBar() => session.RunAsync(() =>
   {
-    using var channel = new PipeChannel(new MemoryStream(), new MemoryStream(), (_, _, _) => Task.FromResult<System.Text.Json.JsonElement?>(null));
-    var window = new ItemWindow(new ItemViewModel(Guid.NewGuid().ToString(), channel) { Title = "GitHub" }) { Width = 440, Height = 620 };
+    var window = new GeneratorWindow(null) { Width = 440, Height = 680 };
     var offsets = Render(window, [("title bar", window.FindControl<Grid>("AppTitleBar")!)]);
 
-    Assert.Contains(offsets, o => o.Text == "GitHub");
+    Assert.Contains(offsets, o => o.Text == "Generator");
     AssertCentred(offsets);
   });
 }
