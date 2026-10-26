@@ -58,6 +58,7 @@ internal sealed partial class BitwardenCliService
   public DateTime LastRefresh { get => _lastRefresh; internal set => _lastRefresh = value; }
 
   private VaultStatus? _lastStatus;
+  private int _statusEpoch;
   private Dictionary<string, string> _folders = [];
   private Dictionary<string, string> _organizations = [];
 
@@ -418,10 +419,11 @@ internal sealed partial class BitwardenCliService
   private async Task<VaultStatus> GetVaultStatusCoreAsync()
   {
     DebugLogService.Log("Status", "GetVaultStatusAsync started");
+    var epoch = Volatile.Read(ref _statusEpoch);
     if (!await IsCliAvailableAsync())
     {
       DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
-      return SetStatus(VaultStatus.CliNotFound);
+      return SetStatusUnlessSuperseded(VaultStatus.CliNotFound, epoch);
     }
     DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable}), version: {_cliVersion ?? "unknown"}");
 
@@ -429,7 +431,7 @@ internal sealed partial class BitwardenCliService
     {
       DebugLogService.Log("Status", "In-memory session key present, verifying...");
       if (await VerifySessionAsync())
-        return SetStatus(VaultStatus.Unlocked);
+        return SetStatusUnlessSuperseded(VaultStatus.Unlocked, epoch);
       DebugLogService.Log("Status", "In-memory session verification failed");
     }
 
@@ -439,7 +441,7 @@ internal sealed partial class BitwardenCliService
       DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
       ReplaceSessionKey(envSession);
       if (await VerifySessionAsync())
-        return SetStatus(VaultStatus.Unlocked);
+        return SetStatusUnlessSuperseded(VaultStatus.Unlocked, epoch);
       DebugLogService.Log("Status", "BW_SESSION env var verification failed");
     }
 
@@ -451,7 +453,7 @@ internal sealed partial class BitwardenCliService
         DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
         ReplaceSessionKey(stored);
         if (await VerifySessionAsync())
-          return SetStatus(VaultStatus.Unlocked);
+          return SetStatusUnlessSuperseded(VaultStatus.Unlocked, epoch);
         // Keep the credential: one sync failure can be transient; HandleInvalidSession clears it on confirmed errors.
         DebugLogService.Log("Status", "Stored session verification failed (preserving credential for retry)");
       }
@@ -469,7 +471,16 @@ internal sealed partial class BitwardenCliService
       if ((await LoginWithApiKeyAsync(apiKey.ClientId, apiKey.ClientSecret)).Success)
         fallback = VaultStatus.Locked;
     }
-    return SetStatus(fallback);
+    return SetStatusUnlessSuperseded(fallback, epoch);
+  }
+
+  // An unlock that lands while a status check runs must win: the check's older answer hid the loaded cache behind "Retrieving items from vault...".
+  private VaultStatus SetStatusUnlessSuperseded(VaultStatus status, int epoch)
+  {
+    if (Volatile.Read(ref _statusEpoch) == epoch || _lastStatus is not { } current)
+      return SetStatus(status);
+    DebugLogService.Log("Status", $"Status check result {status} superseded by {current}");
+    return current;
   }
 
   private void AcceptSession(string sessionKey)
@@ -482,6 +493,7 @@ internal sealed partial class BitwardenCliService
 
   private VaultStatus SetStatus(VaultStatus status)
   {
+    Interlocked.Increment(ref _statusEpoch);
     _lastStatus = status;
     if (status == VaultStatus.Unlocked)
     {

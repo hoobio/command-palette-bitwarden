@@ -87,6 +87,22 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task GetVaultStatus_UnlockLandsDuringCheck_KeepsUnlocked()
+  {
+    var (svc, factory) = CreateService();
+    var version = new FakeCliProcess(0);
+    factory.Enqueue(version);
+    var check = svc.GetVaultStatusAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "session_key_abc\n", exitCode: 0));
+    Assert.True((await svc.UnlockAsync("masterpass")).Success);
+    version.StdoutStream.Complete();
+
+    Assert.Equal(VaultStatus.Unlocked, await check);
+    Assert.Equal(VaultStatus.Unlocked, svc.LastStatus);
+  }
+
+  [Fact]
   public async Task Unlock_Success_SetsSessionAndUnlocked()
   {
     var (svc, factory) = CreateService();
