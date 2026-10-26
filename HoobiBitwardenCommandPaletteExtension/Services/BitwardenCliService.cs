@@ -329,7 +329,7 @@ internal sealed partial class BitwardenCliService
     DisposeDeviceVerificationProcess();
     KillAllRunning();
     ReplaceSessionKey(null);
-    _lastStatus = null;
+    WriteStatus(null);
     _cliProbe = null;
     // Drop the in-flight check so the next status call does not coalesce onto one run against the old CLI path.
     lock (_statusLock) { _statusCheckInFlight = null; }
@@ -381,7 +381,7 @@ internal sealed partial class BitwardenCliService
   public void ClearSession()
   {
     ReplaceSessionKey(null);
-    _lastStatus = null;
+    WriteStatus(null);
     InvalidateCache();
   }
 
@@ -435,6 +435,12 @@ internal sealed partial class BitwardenCliService
       DebugLogService.Log("Status", "In-memory session verification failed");
     }
 
+    if (Volatile.Read(ref _statusEpoch) != epoch && _lastStatus is { } newer)
+    {
+      DebugLogService.Log("Status", $"Status check superseded by {newer} before loading another session");
+      return newer;
+    }
+
     var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
     if (!string.IsNullOrWhiteSpace(envSession))
     {
@@ -477,10 +483,29 @@ internal sealed partial class BitwardenCliService
   // An unlock that lands while a status check runs must win: the check's older answer hid the loaded cache behind "Retrieving items from vault...".
   private VaultStatus SetStatusUnlessSuperseded(VaultStatus status, int epoch)
   {
-    if (Volatile.Read(ref _statusEpoch) == epoch || _lastStatus is not { } current)
-      return SetStatus(status);
-    DebugLogService.Log("Status", $"Status check result {status} superseded by {current}");
-    return current;
+    VaultStatus? newer;
+    lock (_statusLock)
+    {
+      newer = _statusEpoch == epoch ? null : _lastStatus ?? status;
+      if (newer is null)
+        WriteStatus(status);
+    }
+    if (newer is { } superseding)
+    {
+      DebugLogService.Log("Status", $"Status check result {status} superseded by {superseding}");
+      return superseding;
+    }
+    ApplyStatus(status);
+    return status;
+  }
+
+  private void WriteStatus(VaultStatus? status)
+  {
+    lock (_statusLock)
+    {
+      _statusEpoch++;
+      _lastStatus = status;
+    }
   }
 
   private void AcceptSession(string sessionKey)
@@ -493,8 +518,13 @@ internal sealed partial class BitwardenCliService
 
   private VaultStatus SetStatus(VaultStatus status)
   {
-    Interlocked.Increment(ref _statusEpoch);
-    _lastStatus = status;
+    WriteStatus(status);
+    ApplyStatus(status);
+    return status;
+  }
+
+  private void ApplyStatus(VaultStatus status)
+  {
     if (status == VaultStatus.Unlocked)
     {
       ResetAutoLockTimer();
@@ -506,7 +536,6 @@ internal sealed partial class BitwardenCliService
       _autoLockTimer = null;
     }
     UpdateLiveSync();
-    return status;
   }
 
   private const int CliVersionTimeoutMs = 8_000;
@@ -552,6 +581,7 @@ internal sealed partial class BitwardenCliService
 
   private async Task<bool> VerifySessionAsync()
   {
+    var verifying = _sessionKey;
     try
     {
       // `bw status` gates the session first: inferring a dead session from an empty list showed "No items found" on an apparently-unlocked vault.
@@ -561,7 +591,7 @@ internal sealed partial class BitwardenCliService
       if (!string.Equals(status, "unlocked", StringComparison.OrdinalIgnoreCase))
       {
         DebugLogService.Log("Verify", $"bw status reports '{status ?? "null"}', session not unlocked");
-        ReplaceSessionKey(null);
+        ClearSessionKey(verifying);
         return false;
       }
 
@@ -577,8 +607,17 @@ internal sealed partial class BitwardenCliService
     {
       DebugLogService.Log("Verify", $"Session verification exception: {ex.GetType().Name}: {ex.Message}");
     }
-    ReplaceSessionKey(null);
+    ClearSessionKey(verifying);
     return false;
+  }
+
+  // An unlock can replace the key while verify runs; clearing only the verified key keeps the newer one.
+  private void ClearSessionKey(ProtectedSecret? verified)
+  {
+    if (verified is null || Interlocked.CompareExchange(ref _sessionKey, null, verified) != verified)
+      return;
+    verified.Dispose();
+    UpdateLiveSync();
   }
 
   private (bool LoggedIn, string? ServerUrl)? ReadDataFileLoginState()

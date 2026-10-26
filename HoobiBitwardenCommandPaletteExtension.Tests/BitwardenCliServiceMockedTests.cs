@@ -103,6 +103,28 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task GetVaultStatus_UnlockLandsDuringStaleKeyVerify_KeepsNewKey()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("stale-session-key");
+    var status = new FakeCliProcess(0);
+    factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    factory.Enqueue(status);
+    var check = svc.GetVaultStatusAsync();
+    while (factory.LastArgs?.Contains("status") != true)
+      await Task.Delay(10, TestContext.Current.CancellationToken);
+
+    factory.Enqueue(new FakeCliProcess(stdout: "session_key_abc\n", exitCode: 0));
+    Assert.True((await svc.UnlockAsync("masterpass")).Success);
+    status.StdoutStream.Enqueue("{\"status\":\"locked\"}\n");
+    status.StdoutStream.Complete();
+    status.StderrStream.Complete();
+
+    Assert.Equal(VaultStatus.Unlocked, await check);
+    Assert.True(svc.IsUnlocked);
+  }
+
+  [Fact]
   public async Task Unlock_Success_SetsSessionAndUnlocked()
   {
     var (svc, factory) = CreateService();
