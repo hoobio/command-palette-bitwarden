@@ -422,6 +422,7 @@ internal sealed partial class BitwardenCliService
     if (!await IsCliAvailableAsync())
     {
       DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
+      ClearSessionKey(own);
       return SetStatusIfKeyAgrees(VaultStatus.CliNotFound);
     }
     DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable}), version: {_cliVersion ?? "unknown"}");

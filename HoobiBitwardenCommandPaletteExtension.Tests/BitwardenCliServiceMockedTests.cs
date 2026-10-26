@@ -125,6 +125,18 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task GetVaultStatus_CliMissingWithOwnKey_ReturnsCliNotFound()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("session-key");
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "", exitCode: 1));
+
+    Assert.Equal(VaultStatus.CliNotFound, await svc.GetVaultStatusAsync());
+    Assert.Equal(VaultStatus.CliNotFound, svc.LastStatus);
+    Assert.False(svc.IsUnlocked);
+  }
+
+  [Fact]
   public async Task GetVaultStatus_OwnVerifyLocksVault_StillFallsBackToStatus()
   {
     var (svc, factory) = CreateService();
