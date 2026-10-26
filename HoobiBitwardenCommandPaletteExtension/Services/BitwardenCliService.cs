@@ -328,7 +328,7 @@ internal sealed partial class BitwardenCliService
     DisposeDeviceVerificationProcess();
     KillAllRunning();
     ReplaceSessionKey(null);
-    _lastStatus = null;
+    WriteStatus(null);
     _cliProbe = null;
     // Drop the in-flight check so the next status call does not coalesce onto one run against the old CLI path.
     lock (_statusLock) { _statusCheckInFlight = null; }
@@ -380,7 +380,7 @@ internal sealed partial class BitwardenCliService
   public void ClearSession()
   {
     ReplaceSessionKey(null);
-    _lastStatus = null;
+    WriteStatus(null);
     InvalidateCache();
   }
 
@@ -418,29 +418,39 @@ internal sealed partial class BitwardenCliService
   private async Task<VaultStatus> GetVaultStatusCoreAsync()
   {
     DebugLogService.Log("Status", "GetVaultStatusAsync started");
+    var own = _sessionKey;
     if (!await IsCliAvailableAsync())
     {
       DebugLogService.Log("Status", $"CLI not available (exe: {CliExecutable})");
-      return SetStatus(VaultStatus.CliNotFound);
+      ClearSessionKey(own);
+      return SetStatusIfKeyAgrees(VaultStatus.CliNotFound);
     }
     DebugLogService.Log("Status", $"CLI available (exe: {CliExecutable}), version: {_cliVersion ?? "unknown"}");
 
-    if (_sessionKey != null)
+    if (HasNewerSessionKey(own))
+      return VaultStatus.Unlocked;
+
+    if (own != null && ReferenceEquals(_sessionKey, own))
     {
       DebugLogService.Log("Status", "In-memory session key present, verifying...");
       if (await VerifySessionAsync())
-        return SetStatus(VaultStatus.Unlocked);
+        return SetStatusIfKeyAgrees(VaultStatus.Unlocked);
       DebugLogService.Log("Status", "In-memory session verification failed");
+      if (HasNewerSessionKey(own))
+        return VaultStatus.Unlocked;
     }
 
     var envSession = Environment.GetEnvironmentVariable("BW_SESSION");
     if (!string.IsNullOrWhiteSpace(envSession))
     {
       DebugLogService.Log("Status", "BW_SESSION env var found, verifying...");
-      ReplaceSessionKey(envSession);
+      if (!TryInstallSessionKey(envSession))
+        return VaultStatus.Unlocked;
       if (await VerifySessionAsync())
-        return SetStatus(VaultStatus.Unlocked);
+        return SetStatusIfKeyAgrees(VaultStatus.Unlocked);
       DebugLogService.Log("Status", "BW_SESSION env var verification failed");
+      if (HasNewerSessionKey(null))
+        return VaultStatus.Unlocked;
     }
 
     if (_settings?.RememberSession.Value == true)
@@ -449,11 +459,14 @@ internal sealed partial class BitwardenCliService
       if (!string.IsNullOrEmpty(stored))
       {
         DebugLogService.Log("Status", "Stored session found in Credential Manager, verifying...");
-        ReplaceSessionKey(stored);
+        if (!TryInstallSessionKey(stored))
+          return VaultStatus.Unlocked;
         if (await VerifySessionAsync())
-          return SetStatus(VaultStatus.Unlocked);
+          return SetStatusIfKeyAgrees(VaultStatus.Unlocked);
         // Keep the credential: one sync failure can be transient; HandleInvalidSession clears it on confirmed errors.
         DebugLogService.Log("Status", "Stored session verification failed (preserving credential for retry)");
+        if (HasNewerSessionKey(null))
+          return VaultStatus.Unlocked;
       }
       else
       {
@@ -469,7 +482,43 @@ internal sealed partial class BitwardenCliService
       if ((await LoginWithApiKeyAsync(apiKey.ClientId, apiKey.ClientSecret)).Success)
         fallback = VaultStatus.Locked;
     }
-    return SetStatus(fallback);
+    return SetStatusIfKeyAgrees(fallback);
+  }
+
+  // The live key is the unlock truth (IsUnlocked); a check result that disagrees with it is stale, e.g. CliNotFound landing after a Windows Hello unlock.
+  private VaultStatus SetStatusIfKeyAgrees(VaultStatus status)
+  {
+    lock (_statusLock)
+    {
+      if ((status == VaultStatus.Unlocked) != (_sessionKey != null))
+      {
+        DebugLogService.Log("Status", $"Status check result {status} disagrees with the live session key, kept {_lastStatus?.ToString() ?? "none"}");
+        return _lastStatus ?? status;
+      }
+      _lastStatus = status;
+    }
+    ApplyStatus(status);
+    return status;
+  }
+
+  private bool HasNewerSessionKey(ProtectedSecret? own) => _sessionKey is { } key && !ReferenceEquals(key, own);
+
+  private bool TryInstallSessionKey(string sessionKey)
+  {
+    var secret = ProtectedSecret.From(sessionKey);
+    if (Interlocked.CompareExchange(ref _sessionKey, secret, null) != null)
+    {
+      secret?.Dispose();
+      return false;
+    }
+    UpdateLiveSync();
+    return true;
+  }
+
+  private void WriteStatus(VaultStatus? status)
+  {
+    lock (_statusLock)
+      _lastStatus = status;
   }
 
   private void AcceptSession(string sessionKey)
@@ -482,7 +531,13 @@ internal sealed partial class BitwardenCliService
 
   private VaultStatus SetStatus(VaultStatus status)
   {
-    _lastStatus = status;
+    WriteStatus(status);
+    ApplyStatus(status);
+    return status;
+  }
+
+  private void ApplyStatus(VaultStatus status)
+  {
     if (status == VaultStatus.Unlocked)
     {
       ResetAutoLockTimer();
@@ -494,7 +549,6 @@ internal sealed partial class BitwardenCliService
       _autoLockTimer = null;
     }
     UpdateLiveSync();
-    return status;
   }
 
   private const int CliVersionTimeoutMs = 8_000;
@@ -540,6 +594,7 @@ internal sealed partial class BitwardenCliService
 
   private async Task<bool> VerifySessionAsync()
   {
+    var verifying = _sessionKey;
     try
     {
       // `bw status` gates the session first: inferring a dead session from an empty list showed "No items found" on an apparently-unlocked vault.
@@ -549,7 +604,7 @@ internal sealed partial class BitwardenCliService
       if (!string.Equals(status, "unlocked", StringComparison.OrdinalIgnoreCase))
       {
         DebugLogService.Log("Verify", $"bw status reports '{status ?? "null"}', session not unlocked");
-        ReplaceSessionKey(null);
+        ClearSessionKey(verifying);
         return false;
       }
 
@@ -565,8 +620,17 @@ internal sealed partial class BitwardenCliService
     {
       DebugLogService.Log("Verify", $"Session verification exception: {ex.GetType().Name}: {ex.Message}");
     }
-    ReplaceSessionKey(null);
+    ClearSessionKey(verifying);
     return false;
+  }
+
+  // An unlock can replace the key while verify runs; clearing only the verified key keeps the newer one.
+  private void ClearSessionKey(ProtectedSecret? verified)
+  {
+    if (verified is null || Interlocked.CompareExchange(ref _sessionKey, null, verified) != verified)
+      return;
+    verified.Dispose();
+    UpdateLiveSync();
   }
 
   private (bool LoggedIn, string? ServerUrl)? ReadDataFileLoginState()

@@ -18,7 +18,7 @@
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
     WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
     Background="{DynamicResource WindowGroundBrush}">
-    <Grid x:Name="Root" RowDefinitions="48,*" Background="Transparent">
+    <Grid x:Name="Root" RowDefinitions="Auto,*" Background="Transparent">
         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem
@@ -37,17 +37,89 @@
         <Grid
             x:Name="AppTitleBar"
             Background="Transparent"
-            ColumnDefinitions="Auto,*,Auto,46"
+            ColumnDefinitions="*,Auto,46"
             chrome:WindowDecorationProperties.ElementRole="User">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <Panel VerticalAlignment="Center">
-                    <Image Source="{Binding Icon}" Width="16" Height="16" IsVisible="{Binding HasIcon}" />
-                    <TextBlock Classes="Icon" Text="{Binding TypeGlyph}" FontSize="16" IsVisible="{Binding !HasIcon}" />
-                </Panel>
-                <TextBlock Text="{Binding HeaderTitle}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Pin}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" IsVisible="{Binding $parent[Window].Topmost}" />
-            </StackPanel>
-            <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Margin="24,24,8,12" IsHitTestVisible="False">
+                <Border Classes="Tile Large">
+                    <Panel>
+                        <Image Source="{Binding Icon}" Width="32" Height="32" IsVisible="{Binding HasIcon}" />
+                        <TextBlock Classes="Icon Accent" Text="{Binding TypeGlyph}" FontSize="24" HorizontalAlignment="Center" IsVisible="{Binding !HasIcon}" />
+                    </Panel>
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding HeaderTitle}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <WrapPanel Margin="0,2,0,0" ItemSpacing="6" LineSpacing="6">
+                        <TextBlock Classes="Icon" Text="{StaticResource Glyph.Pin}" FontSize="16" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" IsVisible="{Binding $parent[Window].Topmost}" />
+                        <Border Classes="Badge">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsReadOnly" />
+                                    <Binding Path="OrganizationName" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+                                </MultiBinding>
+                            </Border.IsVisible>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Organization}" />
+                                <TextBlock Text="{Binding OrganizationName}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="Badge">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsReadOnly" />
+                                    <Binding Path="FolderName" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+                                </MultiBinding>
+                            </Border.IsVisible>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Folder}" />
+                                <TextBlock Text="{Binding FolderName}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="Badge Accent">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsReadOnly" />
+                                    <Binding Path="IsFavorite" />
+                                </MultiBinding>
+                            </Border.IsVisible>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.StarFilled}" />
+                                <TextBlock Text="Favourite" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="Badge">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsReadOnly" />
+                                    <Binding Path="IsProtected" />
+                                </MultiBinding>
+                            </Border.IsVisible>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Lock}" />
+                                <TextBlock Text="Protected" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="NewItemBadge" Classes="Badge Accent" IsVisible="{Binding IsNew}">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Add}" />
+                                <TextBlock Text="New item" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="Badge Accent">
+                            <Border.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsEditing" />
+                                    <Binding Path="!IsNew" />
+                                </MultiBinding>
+                            </Border.IsVisible>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Classes="BadgeIcon" Text="{StaticResource Glyph.Edit}" />
+                                <TextBlock Text="Editing" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </WrapPanel>
+                </StackPanel>
+            </Grid>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
                 <Button x:Name="EditButton" Classes="CaptionButton" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Edit}" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Edit" AutomationProperties.Name="Edit" />
                 <Button x:Name="DeleteButton" Classes="CaptionButton Danger" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
             </StackPanel>

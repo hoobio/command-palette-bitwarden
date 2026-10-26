@@ -87,6 +87,95 @@ public class BitwardenCliServiceMockedTests
   }
 
   [Fact]
+  public async Task GetVaultStatus_UnlockLandsDuringCheck_KeepsUnlocked()
+  {
+    var (svc, factory) = CreateService();
+    var version = new FakeCliProcess(0);
+    factory.Enqueue(version);
+    var check = svc.GetVaultStatusAsync();
+
+    factory.Enqueue(new FakeCliProcess(stdout: "session_key_abc\n", exitCode: 0));
+    Assert.True((await svc.UnlockAsync("masterpass")).Success);
+    version.StdoutStream.Complete();
+
+    Assert.Equal(VaultStatus.Unlocked, await check);
+    Assert.Equal(VaultStatus.Unlocked, svc.LastStatus);
+  }
+
+  [Fact]
+  public async Task GetVaultStatus_UnlockLandsDuringStaleKeyVerify_KeepsNewKey()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("stale-session-key");
+    var status = new FakeCliProcess(0);
+    factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    factory.Enqueue(status);
+    var check = svc.GetVaultStatusAsync();
+    while (factory.LastArgs?.Contains("status") != true)
+      await Task.Delay(10, TestContext.Current.CancellationToken);
+
+    factory.Enqueue(new FakeCliProcess(stdout: "session_key_abc\n", exitCode: 0));
+    Assert.True((await svc.UnlockAsync("masterpass")).Success);
+    status.StdoutStream.Enqueue("{\"status\":\"locked\"}\n");
+    status.StdoutStream.Complete();
+    status.StderrStream.Complete();
+
+    Assert.Equal(VaultStatus.Unlocked, await check);
+    Assert.True(svc.IsUnlocked);
+  }
+
+  [Fact]
+  public async Task GetVaultStatus_CliMissingWithOwnKey_ReturnsCliNotFound()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("session-key");
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "", exitCode: 1));
+
+    Assert.Equal(VaultStatus.CliNotFound, await svc.GetVaultStatusAsync());
+    Assert.Equal(VaultStatus.CliNotFound, svc.LastStatus);
+    Assert.False(svc.IsUnlocked);
+  }
+
+  [Fact]
+  public async Task GetVaultStatus_OwnVerifyLocksVault_StillFallsBackToStatus()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("stale-session-key");
+    factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unlocked\"}\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "", stderr: "Vault is locked.", exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
+
+    Assert.Equal(VaultStatus.Locked, await svc.GetVaultStatusAsync());
+    Assert.Equal(2, factory.AllArgs.Count(a => a.StartsWith("status", StringComparison.Ordinal)));
+  }
+
+  [Fact]
+  public async Task GetVaultStatus_LockLandsDuringVerify_StaysLocked()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("session-key");
+    var folders = new FakeCliProcess(0);
+    factory.Enqueue(new FakeCliProcess(stdout: "2025.1.0\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unlocked\"}\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
+    factory.Enqueue(folders);
+    var check = svc.GetVaultStatusAsync();
+    while (factory.LastArgs?.Contains("list folders") != true)
+      await Task.Delay(10, TestContext.Current.CancellationToken);
+
+    factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0));
+    await svc.LockAsync(userInitiated: true);
+    folders.StdoutStream.Enqueue("[]\n");
+    folders.StdoutStream.Complete();
+    folders.StderrStream.Complete();
+
+    await check;
+    Assert.Equal(VaultStatus.Locked, svc.LastStatus);
+    Assert.False(svc.IsUnlocked);
+  }
+
+  [Fact]
   public async Task Unlock_Success_SetsSessionAndUnlocked()
   {
     var (svc, factory) = CreateService();
