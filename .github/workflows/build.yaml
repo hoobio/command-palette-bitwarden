@@ -135,7 +135,7 @@ jobs:
           exit 1
 
       - name: Generate coverage report
-        uses: danielpalme/ReportGenerator-GitHub-Action@d3ebf1f760f7d8ab92cc44d9bcfee7ad73722a31 # 5
+        uses: danielpalme/ReportGenerator-GitHub-Action@861674232075b2c6bd1405a04c4bb9b150653e81 # 5
         with:
           reports: ${{ github.workspace }}/coverage/**/coverage.cobertura.xml
           targetdir: ${{ github.workspace }}/coverage/report
