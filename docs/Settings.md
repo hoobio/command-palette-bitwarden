@@ -1,6 +1,6 @@
 # Settings
 
-Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)).
+Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)). The **Open settings window** button at the top of the Bitwarden page in Command Palette Settings opens the same window.
 
 ## Available Settings
 

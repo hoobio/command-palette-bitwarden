@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using HoobiBitwardenCommandPaletteExtension.Companion;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension;
@@ -56,7 +57,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
             },
         ];
 
-        Settings = _settingsManager.Settings;
+        Settings = new SettingsWithButton(_settingsManager.Settings, companion.ShowSettings);
         _ = _service.WarmCacheAsync();
     }
 
