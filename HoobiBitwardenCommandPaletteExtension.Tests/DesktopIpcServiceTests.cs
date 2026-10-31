@@ -46,6 +46,16 @@ public class DesktopIpcServiceTests
   }
 
   [Fact]
+  public void IsDesktopReachable_IsTrueOnlyWhileAServerListens()
+  {
+    var name = $"bw-test-{Guid.NewGuid():N}";
+    Assert.False(DesktopIpcService.IsDesktopReachable(name));
+
+    using var server = new System.IO.Pipes.NamedPipeServerStream(name, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+    Assert.True(DesktopIpcService.IsDesktopReachable(name));
+  }
+
+  [Fact]
   public void EncryptWithSessionKey_Returns_Base64_BinaryType2()
   {
     var sessionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));

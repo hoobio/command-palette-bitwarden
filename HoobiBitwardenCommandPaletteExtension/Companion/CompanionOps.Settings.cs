@@ -21,6 +21,7 @@ internal sealed partial class CompanionOps
     return new(manager.OrderedSettings.Select(DescribeSetting).OfType<SettingDto>()
       .Select(s => manager.TryGetParent(s.Key, out var parent) ? s with { Parent = parent.Key, ParentValue = parent.Value } : s)
       .Select(s => s with { Placeholder = PlaceholderFor(manager, s.Key), Tooltip = TooltipFor(manager, s.Key) })
+      .Select(s => s.Key == manager.UseDesktopIntegration.Key ? WithDesktopStatus(s, manager.UseDesktopIntegration.Value, _desktopReachable) : s)
       .SelectMany(s => s.Key == manager.DebugLogging.Key ? new[] { s, OpenLogsLink } : new[] { s })
       .ToArray());
   }
@@ -36,6 +37,11 @@ internal sealed partial class CompanionOps
     key == manager.CliDirectoryOverride.Key ? CliTooltip(_service.CliExecutable, manager.CliDirectoryOverride.Value, Environment.GetEnvironmentVariable("PATH"))
     : key == manager.CliDataDirectoryOverride.Key ? DataTooltip(_service.DataFileFolder, manager.CliDataDirectoryOverride.Value, _service.DataDirectory, Environment.GetEnvironmentVariable("BITWARDENCLI_APPDATA_DIR"))
     : null;
+
+  internal static SettingDto WithDesktopStatus(SettingDto row, bool enabled, Func<bool> reachable) =>
+    !enabled ? row
+    : reachable() ? row with { Status = SettingStatuses.Ok, Tooltip = "Connected to Bitwarden Desktop" }
+    : row with { Status = SettingStatuses.Error, Tooltip = "Bitwarden Desktop not reachable" };
 
   internal static string CliTooltip(string executable, string? pathOverride, string? pathVariable)
   {

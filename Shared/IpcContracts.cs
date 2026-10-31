@@ -68,6 +68,12 @@ internal static class SettingKinds
   public const string Link = "link";
 }
 
+internal static class SettingStatuses
+{
+  public const string Ok = "ok";
+  public const string Error = "error";
+}
+
 internal static class SettingKeys
 {
   public const string OpenLogs = "openLogs";
@@ -356,7 +362,7 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 
 internal sealed record ChoiceDto(string Title, string Value, string? Description = null);
 
-internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null);
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null);
 
 internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
 

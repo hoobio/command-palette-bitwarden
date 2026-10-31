@@ -41,8 +41,8 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
 
     public ToggleSetting UseDesktopIntegration { get; } = new(
         "useDesktopIntegration",
-        "Integrate with Bitwarden Desktop App",
-        "Unlocks with Windows Hello. Needs the Desktop app running with browser integration on",
+        "Unlock with Windows Hello",
+        "Needs the Bitwarden Desktop app running with browser integration on",
         true);
 
     public ToggleSetting AutoBiometricUnlock { get; } = new(

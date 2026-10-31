@@ -35,6 +35,7 @@ internal sealed partial class CompanionOps : IDisposable
   private readonly Func<Task<List<VaultCollection>?>> _loadCollections;
   private readonly Func<Task<bool>> _verifyBiometric;
   private readonly Func<bool> _biometricEnabled;
+  private readonly Func<bool> _desktopReachable;
   private readonly Lazy<AppUpdateService> _updates;
   private readonly SemaphoreSlim _collectionsGate = new(1, 1);
   private List<VaultCollection>? _collections;
@@ -49,9 +50,11 @@ internal sealed partial class CompanionOps : IDisposable
     Func<Task<List<VaultCollection>?>>? loadCollections = null,
     Func<Task<bool>>? verifyBiometric = null,
     Func<bool>? biometricEnabled = null,
-    AppUpdateService? updates = null)
+    AppUpdateService? updates = null,
+    Func<bool>? desktopReachable = null)
   {
     _service = service;
+    _desktopReachable = desktopReachable ?? (() => DesktopIpcService.IsDesktopReachable());
     _updates = new Lazy<AppUpdateService>(() => updates ?? AppUpdateService.CreateDefault());
     _verifyBiometric = verifyBiometric ?? (async () => (await service.VerifyWithBiometricsAsync()).Success);
     _biometricEnabled = biometricEnabled ?? (() => service.Settings?.UseDesktopIntegration.Value == true);

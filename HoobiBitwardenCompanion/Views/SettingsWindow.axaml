@@ -40,7 +40,11 @@
                                                     <StackPanel>
                                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding !IsText}">
                                                             <StackPanel VerticalAlignment="Center" Spacing="2">
-                                                                <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                                <WrapPanel>
+                                                                    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                                    <Ellipse Width="8" Height="8" Margin="8,0,0,0" VerticalAlignment="Center" Fill="{DynamicResource SystemFillColorSuccessBrush}" IsVisible="{Binding IsStatusOk}" ToolTip.Tip="{Binding Tooltip}" />
+                                                                    <Ellipse Width="8" Height="8" Margin="8,0,0,0" VerticalAlignment="Center" Fill="{DynamicResource SystemFillColorCriticalBrush}" IsVisible="{Binding IsStatusError}" ToolTip.Tip="{Binding Tooltip}" />
+                                                                </WrapPanel>
                                                                 <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
                                                             </StackPanel>
                                                             <ToggleSwitch Grid.Column="1" MinWidth="0" VerticalAlignment="Center" IsVisible="{Binding IsToggle}" IsChecked="{Binding BoolValue, Mode=TwoWay}" OnContent="{x:Null}" OffContent="{x:Null}" AutomationProperties.Name="{Binding Label}" />

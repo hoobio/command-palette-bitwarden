@@ -31,6 +31,22 @@ internal enum BiometricsStatus
 internal static partial class DesktopIpcService
 {
   private const int ConnectTimeoutMs = 5_000;
+  private const int ProbeTimeoutMs = 200;
+
+  // Connect-and-close sends no message, so Desktop shows no fingerprint or Windows Hello prompt.
+  internal static bool IsDesktopReachable(string? pipeName = null)
+  {
+    try
+    {
+      using var pipe = new NamedPipeClientStream(".", pipeName ?? GetWindowsPipeName(), PipeDirection.InOut);
+      pipe.Connect(ProbeTimeoutMs);
+      return true;
+    }
+    catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+    {
+      return false;
+    }
+  }
 
   public static async Task<string?> TryBiometricUnlockAsync(string? dataDirectory, Action<string>? onStatus = null)
   {

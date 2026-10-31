@@ -19,8 +19,10 @@ public class CompanionSettingsOpsTests : IDisposable
     _settingsPath = Path.Combine(_dir, "settings.json");
     _settings = new BitwardenSettingsManager(_settingsPath);
     var service = new BitwardenCliService(_settings, new FakeProcessFactory().Create) { DataFileOverride = Path.Combine(_dir, "missing.json") };
-    _ops = new CompanionOps(service);
+    _ops = new CompanionOps(service, desktopReachable: () => _desktopReachable);
   }
+
+  private bool _desktopReachable = true;
 
   public void Dispose()
   {
@@ -142,7 +144,38 @@ public class CompanionSettingsOpsTests : IDisposable
 
     Assert.Equal($"{cli}\nSet here", settings.Single(s => s.Key == "cliDirectoryOverride").Tooltip);
     Assert.Equal($"{_dir}\nSet here", settings.Single(s => s.Key == "cliDataDirectoryOverride").Tooltip);
-    Assert.Equal(2, settings.Count(s => s.Tooltip is not null));
+    Assert.Equal(["cliDataDirectoryOverride", "cliDirectoryOverride", "useDesktopIntegration"], settings.Where(s => s.Tooltip is not null).Select(s => s.Key).Order(StringComparer.Ordinal));
+  }
+
+  [Fact]
+  public async Task GetSettings_ShowsTheDesktopStatus_OnlyWhileIntegrationIsOn()
+  {
+    var row = (await GetAsync()).Single(s => s.Key == "useDesktopIntegration");
+    Assert.Equal((SettingStatuses.Ok, "Connected to Bitwarden Desktop"), (row.Status, row.Tooltip));
+
+    _desktopReachable = false;
+    row = (await GetAsync()).Single(s => s.Key == "useDesktopIntegration");
+    Assert.Equal((SettingStatuses.Error, "Bitwarden Desktop not reachable"), (row.Status, row.Tooltip));
+
+    await SetAsync("useDesktopIntegration", "false");
+    var settings = await GetAsync();
+    row = settings.Single(s => s.Key == "useDesktopIntegration");
+    Assert.Equal((null, null), (row.Status, row.Tooltip));
+    Assert.DoesNotContain(settings, s => s.Status is not null);
+  }
+
+  [Theory]
+  [InlineData(false, true, null)]
+  [InlineData(false, false, null)]
+  [InlineData(true, true, SettingStatuses.Ok)]
+  [InlineData(true, false, SettingStatuses.Error)]
+  public void WithDesktopStatus_ProbesOnlyWhenEnabled(bool enabled, bool reachable, string? status)
+  {
+    var probed = false;
+    var row = CompanionOps.WithDesktopStatus(new SettingDto("k", SettingKinds.Toggle, "L", null, "true", null), enabled, () => { probed = true; return reachable; });
+
+    Assert.Equal(status, row.Status);
+    Assert.Equal(enabled, probed);
   }
 
   [Fact]
