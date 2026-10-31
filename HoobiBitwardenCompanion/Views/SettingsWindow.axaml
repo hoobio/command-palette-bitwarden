@@ -66,7 +66,7 @@
                                                         <StackPanel Spacing="6" IsVisible="{Binding IsText}">
                                                             <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
                                                             <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
-                                                            <TextBox Text="{Binding TextValue, Mode=OneWay}" PlaceholderText="{Binding Placeholder}" AutomationProperties.Name="{Binding Label}" />
+                                                            <TextBox Text="{Binding TextValue, Mode=OneWay}" PlaceholderText="{Binding Placeholder}" ToolTip.Tip="{Binding Tooltip}" AutomationProperties.Name="{Binding Label}" />
                                                         </StackPanel>
                                                         <TextBlock Classes="Warn" Margin="0,6,0,0" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                                     </StackPanel>

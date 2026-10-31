@@ -263,6 +263,9 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   [ObservableProperty]
   public partial string? Placeholder { get; private set; }
 
+  [ObservableProperty]
+  public partial string? Tooltip { get; private set; }
+
   [RelayCommand]
   private void Open() => _activate?.Invoke();
 
@@ -308,6 +311,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     if (_pending > 0)
       return;
     Placeholder = setting.Placeholder;
+    Tooltip = setting.Tooltip;
     var value = setting.Value ?? string.Empty;
     var changed = value != _committed;
     _committed = value;

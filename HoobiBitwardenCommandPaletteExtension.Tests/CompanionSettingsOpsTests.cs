@@ -133,6 +133,42 @@ public class CompanionSettingsOpsTests : IDisposable
   }
 
   [Fact]
+  public async Task GetSettings_CarriesAPathAndSourceTooltip_OnTheTwoPathSettingsOnly()
+  {
+    var cli = Path.Combine(_dir, "bw.exe");
+    await SetAsync("cliDirectoryOverride", cli);
+    await SetAsync("cliDataDirectoryOverride", _dir);
+    var settings = await GetAsync();
+
+    Assert.Equal($"{cli}\nSet here", settings.Single(s => s.Key == "cliDirectoryOverride").Tooltip);
+    Assert.Equal($"{_dir}\nSet here", settings.Single(s => s.Key == "cliDataDirectoryOverride").Tooltip);
+    Assert.Equal(2, settings.Count(s => s.Tooltip is not null));
+  }
+
+  [Fact]
+  public void CliTooltip_NamesTheBranchTheResolverTook()
+  {
+    var onPath = Path.Combine(_dir, "bw.exe");
+    File.WriteAllText(onPath, string.Empty);
+
+    Assert.Equal(@"C:\tools\bw.exe" + "\nSet here", CompanionOps.CliTooltip(@"C:\tools\bw.exe", @"C:\tools", null));
+    Assert.Equal(@"C:\cli\bw.exe" + "\nInstalled by the extension", CompanionOps.CliTooltip(@"C:\cli\bw.exe", " ", null));
+    Assert.Equal($"{onPath}\nFound on PATH", CompanionOps.CliTooltip("bw", null, $@"C:\missing{Path.PathSeparator}{_dir}"));
+    Assert.Equal("bw\nNot found on PATH", CompanionOps.CliTooltip("bw", null, @"C:\missing"));
+    Assert.Equal("bw\nNot found on PATH", CompanionOps.CliTooltip("bw", null, null));
+  }
+
+  [Theory]
+  [InlineData(@"D:\data", @"D:\data", @"C:\cli", "x", "Set here")]
+  [InlineData(@"C:\cli", null, @"C:\cli", "x", "Next to the CLI")]
+  [InlineData(@"E:\env", null, null, @"E:\env", "From BITWARDENCLI_APPDATA_DIR")]
+  [InlineData(@"C:\Roaming\Bitwarden CLI", " ", null, "", "Default location")]
+  public void DataTooltip_NamesTheBranchTheResolverTook(string folder, string? typed, string? resolved, string? environment, string source)
+  {
+    Assert.Equal($"{folder}\n{source}", CompanionOps.DataTooltip(folder, typed, resolved, environment));
+  }
+
+  [Fact]
   public async Task GetSettings_ExplainsTheTagStyleOptionsWithTooltips_AndNothingElse()
   {
     var settings = await GetAsync();
