@@ -29,67 +29,67 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting RememberSession { get; } = new(
         "rememberSession",
         "Remember Session",
-        "Keeps your session key in Windows Credential Manager, so the vault stays unlocked when the extension restarts",
+        "Keeps session key in Windows Credential Manager",
         false);
 
     public ToggleSetting UseApiKeyAuthentication { get; } = new(
         "useApiKeyAuthentication",
         "Use API Key Authentication",
-        "Log in with your personal API key instead of your email and master password. Use it for FIDO2 or Duo two-step login. The key is kept in Windows Credential Manager, and you still unlock with your master password. Changing this setting logs you out",
+        "Logs in with a personal API key, for FIDO2 or Duo. Changing this logs you out",
         false);
 
     public ToggleSetting UseDesktopIntegration { get; } = new(
         "useDesktopIntegration",
         "Integrate with Bitwarden Desktop App",
-        "Unlock with Windows Hello through the Bitwarden Desktop app. The Desktop app must be running with 'Allow browser integration' turned on",
+        "Unlocks with Windows Hello. Needs the Desktop app running with browser integration on",
         true);
 
     public ToggleSetting AutoBiometricUnlock { get; } = new(
         "autoBiometricUnlock",
         "Automatically Prompt for Biometrics",
-        "Prompt for Windows Hello when you open the Bitwarden page on a locked vault, without selecting Unlock first. If Windows Hello is not available, the password form opens",
+        "Prompts for Windows Hello when you open a locked vault",
         true);
 
     public ToggleSetting ShowWebsiteIcons { get; } = new(
         "showWebsiteIcons",
         "Show Website Icons",
-        "Download and show website icons for login items. Turn this off for privacy: items then show a generic icon",
+        "Downloads website icons for login items",
         true);
 
     public ToggleSetting ShowWatchtowerTags { get; } = new(
         "showWatchtowerTags",
         "Show Watchtower Tags",
-        "Show warning tags on vault items with weak, old or insecure passwords",
+        "Tags weak, old or insecure passwords",
         true);
 
     public ToggleSetting ContextAwareness { get; } = new(
         "contextAwareness",
         "Context Awareness",
-        "Detect the foreground app and move matching vault items to the top of the results",
+        "Moves items that match the foreground app to the top",
         true);
 
     public ToggleSetting ShowContextTag { get; } = new(
         "showContextTag",
         "Show Context Tag",
-        "Show a 'Context' tag on vault items that match the foreground app",
+        "Tags items that match the foreground app",
         false);
 
     public ToggleSetting ShowProtectedTag { get; } = new(
         "showProtectedTag",
         "Show Protected Tag",
-        "Show a \"\uD83D\uDD12\" tag on vault items that need the master password re-prompt",
+        "Tags items that need a master password re-prompt",
         true);
 
     public ToggleSetting ShowPasskeyTag { get; } = new(
         "showPasskeyTag",
         "Show Passkey Tag",
-        "Show a 'Passkey' tag on vault items that support passwordless sign-in",
+        "Tags items that have a passkey",
         true);
 
     public ChoiceSetSetting TotpTagStyle { get; } = new(
         "totpTagStyle",
         "TOTP Tag Style",
-        "Show a TOTP tag on vault items that have an authenticator key",
+        "Tags items that have an authenticator key",
         [
             new("Off", "off"),
             new("Static (show 2FA badge only)", "static"),
@@ -99,7 +99,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ChoiceSetSetting OrganizationTagStyle { get; } = new(
         "organizationTagStyle",
         "Organization Tag Style",
-        "Show an organisation tag on vault items owned by a Bitwarden organisation. Each organisation keeps the same colour, based on its ID",
+        "Tags items owned by an organisation",
         [
             new("Initials (compact 1-3 char badge)", "initials"),
             new("Name (full organization name)", "name"),
@@ -109,7 +109,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ChoiceSetSetting AutoLockTimeout { get; } = new(
         "autoLockTimeout",
         "Auto-Lock Timeout",
-        "Lock the vault after this period of inactivity",
+        "Locks the vault after inactivity",
         [
             new("Never", "0"),
             new("1 minute", "1"),
@@ -123,13 +123,13 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting AutoClearClipboard { get; } = new(
         "autoClearClipboard",
         "Auto-Clear Clipboard",
-        "Clear sensitive data from the clipboard after a delay",
+        "Clears copied secrets from the clipboard",
         true);
 
     public ChoiceSetSetting ContextItemLimit { get; } = new(
         "contextItemLimit",
         "Context Items Limit",
-        "The number of context-matched vault items shown before you type a search",
+        "Matched items shown before you search",
         [
             new("1 item", "1"),
             new("2 items", "2"),
@@ -141,7 +141,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ChoiceSetSetting BackgroundRefresh { get; } = new(
         "backgroundRefresh",
         "Background Refresh Interval",
-        "How often the vault syncs in the background while it is unlocked",
+        "Syncs the vault on this interval while unlocked",
         [
             new("Never", "0"),
             new("5 minutes", "5"),
@@ -152,12 +152,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting LiveSync { get; } = new(
         "liveSync",
         "Live Sync",
-        "Sync the vault as soon as it changes on another device, as the Bitwarden apps do. While the vault is unlocked, the extension keeps a connection open to your server's notifications service. It signs in with the access token that the Bitwarden CLI stores in data.json",
+        "Syncs the vault when it changes on another device",
         true);
     public ChoiceSetSetting ClipboardClearDelay { get; } = new(
         "clipboardClearDelay",
         "Clipboard Clear Delay",
-        "How long to wait before the clipboard is cleared",
+        "Time before the clipboard is cleared",
         [
             new("10 seconds", "10"),
             new("15 seconds", "15"),
@@ -169,25 +169,25 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public TextSetting CliDirectoryOverride { get; } = new(
         "cliDirectoryOverride",
         "CLI Path Override",
-        "Path to the Bitwarden CLI: a folder that contains bw, or the full path to bw.exe. Leave empty to use the system PATH",
+        "Folder that contains bw, or the path to bw.exe. Empty uses PATH",
         "");
 
     public ToggleSetting UsePortableDataDirectory { get; } = new(
         "usePortableDataDirectory",
         "Use CLI Path as Data Directory",
-        "Keep Bitwarden CLI data (data.json) next to the CLI instead of in the default location. Needs CLI Path Override",
+        "Keeps CLI data next to the CLI. Needs CLI Path Override",
         false);
 
     public TextSetting CliDataDirectoryOverride { get; } = new(
         "cliDataDirectoryOverride",
         "CLI Data Directory Override",
-        "Folder for Bitwarden CLI data (data.json). It takes priority over the default location and the portable setting. Leave empty to use one of those",
+        "Folder for CLI data (data.json). Overrides the other locations",
         "");
 
     public ChoiceSetSetting RepromptGracePeriod { get; } = new(
         "repromptGracePeriod",
         "Re-prompt Grace Period",
-        "After you verify your master password for a protected item, the extension does not ask again for this long",
+        "Time before a protected item asks for the master password again",
         [
             new("No grace period", "0"),
             new("30 seconds", "30"),
@@ -199,7 +199,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting DebugLogging { get; } = new(
         "debugLogging",
         "Debug Logging",
-        "Show a 'Copy Debug Log' item in the vault browser and write the log to %LOCALAPPDATA%\\HoobiBitwardenCommandPalette\\logs to help diagnose problems. Log files are deleted after 7 days. Logs are collected in memory whether or not this is on",
+        "Writes debug logs to disk and adds a Copy Debug Log item",
         false);
 
     // Settings.RaiseSettingsChanged is internal to the SDK, and the public Settings.Update(json) sets values without raising it.

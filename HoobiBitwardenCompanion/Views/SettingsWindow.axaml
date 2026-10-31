@@ -25,7 +25,7 @@
         </Grid>
 
         <ScrollViewer x:Name="Scroller" Grid.Row="1">
-            <StackPanel Margin="24,0,24,24">
+            <StackPanel MaxWidth="880" Margin="24,0,24,24">
                 <TextBlock x:Name="ErrorText" Classes="Warn" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 <ItemsControl x:Name="SectionList" ItemsSource="{Binding Sections}">
                     <ItemsControl.ItemTemplate>
