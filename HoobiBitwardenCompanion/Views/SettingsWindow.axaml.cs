@@ -43,7 +43,11 @@ internal sealed partial class SettingsWindow : Window
   {
     if (e.Source is Visual source && (source == SearchBox || SearchBox.IsVisualAncestorOf(source)))
       return;
-    if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+    if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+      return;
+    if (e.ClickCount == 2)
+      WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    else
       BeginMoveDrag(e);
   }
 

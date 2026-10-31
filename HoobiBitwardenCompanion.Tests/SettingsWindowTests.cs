@@ -648,6 +648,7 @@ public class SettingsWindowTests(AvaloniaSession session)
     Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.DataContext is SettingRowViewModel { Key: "openLogs" });
     Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible && t.Text == "Help and feedback");
     Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.Content is "Check now");
+    Assert.True(window.CanMaximize);
     window.Close();
     await Task.CompletedTask;
   });
