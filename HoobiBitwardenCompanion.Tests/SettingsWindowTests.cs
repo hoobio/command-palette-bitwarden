@@ -33,6 +33,8 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     public UpdateResponse? Update { get; set; }
 
+    public string InstallState { get; set; } = InstallStates.Installed;
+
     public int Installs { get; private set; }
 
     public void Change(string key, string value)
@@ -69,7 +71,7 @@ public class SettingsWindowTests(AvaloniaSession session)
             : throw new IpcException(IpcErrors.Failed);
         case Ops.InstallUpdate:
           Installs++;
-          return Task.FromResult<JsonElement?>(null);
+          return Task.FromResult<JsonElement?>(IpcJson.ToElement(new InstallResponse(InstallState), IpcJson.Default.InstallResponse));
         default:
           throw new IpcException(IpcErrors.Invalid);
       }
@@ -559,6 +561,24 @@ public class SettingsWindowTests(AvaloniaSession session)
     await row.ActionCommand.ExecuteAsync(null);
     Assert.Equal(1, extension.Installs);
     Assert.Single(opened);
+    Assert.Equal((UpdateRowViewModel.InstalledText, false), (row.Description, row.UpdateAvailable));
+  }
+
+  [Theory]
+  [InlineData(InstallStates.OpenStore, UpdateRowViewModel.StoreOpenedText, true)]
+  [InlineData(InstallStates.Failed, UpdateRowViewModel.InstallNotCompletedText, false)]
+  public async Task UpdateRow_ReportsEachStoreInstallOutcome(string state, string text, bool opensStore)
+  {
+    var extension = new FakeExtension { Update = new(UpdateStates.Available, null, null, true), InstallState = state };
+    var (vm, opened, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+    var row = InfoRow<UpdateRowViewModel>(vm);
+
+    await row.CheckCommand.ExecuteAsync(null);
+    await row.ActionCommand.ExecuteAsync(null);
+
+    Assert.Equal(text, row.Description);
+    Assert.Equal(opensStore ? [UpdateRowViewModel.StoreUpdatesUri] : [], opened);
   }
 
   [Fact]

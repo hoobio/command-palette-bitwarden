@@ -66,7 +66,16 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private void OpenLogs()
   {
-    Directory.CreateDirectory(LogsDirectory);
+    try
+    {
+      Directory.CreateDirectory(LogsDirectory);
+    }
+    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+    {
+      ErrorMessage = $"Could not open {LogsDirectory}: {ex.Message}";
+      return;
+    }
+
     OpenGuarded(LogsDirectory);
   }
 
@@ -125,7 +134,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
     ErrorMessage = null;
     await LoadAboutAsync();
-    var signature =string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}:{s.Parent}:{s.ParentValue}"));
+    var signature = string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}:{s.Parent}:{s.ParentValue}"));
     if (signature != _signature)
     {
       _signature = signature;

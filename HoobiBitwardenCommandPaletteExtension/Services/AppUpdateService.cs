@@ -5,8 +5,11 @@ using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
-internal sealed class AppUpdateService(AppInfo app, IStoreUpdates? store, GitHubReleaseClient github)
+internal sealed class AppUpdateService(AppInfo app, IStoreUpdates? store, GitHubReleaseClient github, TimeSpan? timeout = null)
 {
+  private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(2);
+
+  private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
   private int _checking;
 
   internal static AppUpdateService CreateDefault()
@@ -28,10 +31,10 @@ internal sealed class AppUpdateService(AppInfo app, IStoreUpdates? store, GitHub
     try
     {
       if (store is not null)
-        return new UpdateResponse(await store.CheckAsync() ? UpdateStates.Available : UpdateStates.UpToDate, null, null, true);
+        return new UpdateResponse(await store.CheckAsync().WaitAsync(_timeout, cancellationToken) ? UpdateStates.Available : UpdateStates.UpToDate, null, null, true);
       return await github.CheckAsync(app, cancellationToken);
     }
-    catch (Exception ex) when (ex is not (OperationCanceledException or IpcException))
+    catch (Exception ex) when (ex is not IpcException && !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
     {
       DebugLogService.Log("Updates", $"Check failed: {ex.GetType().Name}: {ex.Message}");
       return new UpdateResponse(UpdateStates.Failed, null, null, app.IsStore);
@@ -42,14 +45,14 @@ internal sealed class AppUpdateService(AppInfo app, IStoreUpdates? store, GitHub
     }
   }
 
-  internal async Task InstallAsync()
+  internal async Task<InstallResponse> InstallAsync()
   {
     if (store is null)
       throw new IpcException(IpcErrors.Invalid);
 
     try
     {
-      await store.InstallAsync();
+      return new InstallResponse(await store.InstallAsync().WaitAsync(_timeout));
     }
     catch (Exception ex)
     {

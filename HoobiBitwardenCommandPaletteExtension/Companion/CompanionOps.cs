@@ -144,8 +144,7 @@ internal sealed partial class CompanionOps : IDisposable
         case Ops.CheckUpdates:
           return IpcJson.ToElement(await _updates.Value.CheckAsync(cancellationToken), IpcJson.Default.UpdateResponse);
         case Ops.InstallUpdate:
-          await _updates.Value.InstallAsync();
-          return null;
+          return IpcJson.ToElement(await _updates.Value.InstallAsync(), IpcJson.Default.InstallResponse);
         default:
           return await DispatchAsync(op, payload, null);
       }

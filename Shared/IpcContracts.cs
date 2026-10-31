@@ -99,6 +99,13 @@ internal static class UpdateStates
   public const string Failed = "failed";
 }
 
+internal static class InstallStates
+{
+  public const string Installed = "installed";
+  public const string OpenStore = "openStore";
+  public const string Failed = "failed";
+}
+
 internal static class ServerRegions
 {
   public const string Cloud = "cloud";
@@ -370,6 +377,8 @@ internal sealed record AboutResponse(string Version, string? Commit, string Chan
 
 internal sealed record UpdateResponse(string State, string? LatestVersion, string? ReleaseUrl, bool IsStore);
 
+internal sealed record InstallResponse(string State);
+
 internal sealed record SetSettingRequest(string Key, string Value);
 
 internal sealed record SetSettingResponse(bool Success, string? Error);
@@ -417,6 +426,7 @@ internal sealed record SetSettingResponse(bool Success, string? Error);
 [JsonSerializable(typeof(SetSettingResponse))]
 [JsonSerializable(typeof(AboutResponse))]
 [JsonSerializable(typeof(UpdateResponse))]
+[JsonSerializable(typeof(InstallResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);

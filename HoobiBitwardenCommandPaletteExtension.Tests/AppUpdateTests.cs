@@ -45,10 +45,14 @@ public class AppUpdateTests
       return CheckFails is null ? available : throw CheckFails;
     }
 
-    public Task InstallAsync()
+    public string InstallState { get; init; } = InstallStates.Installed;
+
+    public Task<string> InstallAsync()
     {
       Installs++;
-      return InstallFails is null ? Task.CompletedTask : throw InstallFails;
+      if (InstallFails is not null)
+        throw InstallFails;
+      return Hold is null ? Task.FromResult(InstallState) : Hold().ContinueWith(_ => InstallState, TaskScheduler.Default);
     }
   }
 
@@ -244,6 +248,40 @@ public class AppUpdateTests
     Assert.Equal((IpcErrors.Invalid, IpcErrors.Failed), (none.Code, failing.Code));
   }
 
+  [Theory]
+  [InlineData(InstallStates.Installed)]
+  [InlineData(InstallStates.OpenStore)]
+  [InlineData(InstallStates.Failed)]
+  public async Task Install_ReportsTheStoreOutcome(string state)
+  {
+    var service = Service(new AppInfo("1.13.0", null, AppChannels.Release, true), new FakeStore(true) { InstallState = state });
+
+    Assert.Equal(new InstallResponse(state), await service.InstallAsync());
+  }
+
+  [Fact]
+  public async Task Check_TimesOut_AndClearsTheGuard()
+  {
+    var app = new AppInfo("1.13.0", null, AppChannels.Release, true);
+    var hung = new AppUpdateService(app, new FakeStore(true) { Hold = () => Task.Delay(Timeout.Infinite, TestContext.Current.CancellationToken) }, ClientReturning(string.Empty), TimeSpan.FromMilliseconds(50));
+
+    var reply = await hung.CheckAsync(TestContext.Current.CancellationToken);
+
+    Assert.Equal(UpdateStates.Failed, reply.State);
+    Assert.Equal(UpdateStates.Failed, (await hung.CheckAsync(TestContext.Current.CancellationToken)).State);
+  }
+
+  [Fact]
+  public async Task Install_TimesOut_AsFailed()
+  {
+    var app = new AppInfo("1.13.0", null, AppChannels.Release, true);
+    var hung = new AppUpdateService(app, new FakeStore(true) { Hold = () => Task.Delay(Timeout.Infinite, TestContext.Current.CancellationToken) }, ClientReturning(string.Empty), TimeSpan.FromMilliseconds(50));
+
+    var error = await Assert.ThrowsAsync<IpcException>(() => hung.InstallAsync());
+
+    Assert.Equal(IpcErrors.Failed, error.Code);
+  }
+
   [Fact]
   public async Task Ops_ServeAboutCheckAndInstall_OverTheDispatcher()
   {
@@ -257,7 +295,7 @@ public class AppUpdateTests
 
     Assert.Equal(new AboutResponse("1.13.0", "626a78a", AppChannels.Release, true), about);
     Assert.Equal(UpdateStates.Available, check.State);
-    Assert.Null(install);
+    Assert.Equal(new InstallResponse(InstallStates.Installed), IpcJson.Read(install, IpcJson.Default.InstallResponse));
     Assert.Equal(1, store.Installs);
   }
 }

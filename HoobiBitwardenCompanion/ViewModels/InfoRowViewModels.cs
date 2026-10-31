@@ -66,6 +66,10 @@ internal sealed partial class UpdateRowViewModel(PipeChannel channel, Action<str
   internal const string UpToDateText = "You are on the latest version.";
   internal const string FailedText = "Could not check for updates. Try again later.";
   internal const string InstallFailedText = "Could not install the update. Try again later.";
+  internal const string InstalledText = "Update installed.";
+  internal const string StoreOpenedText = "Opened the Microsoft Store to install the update.";
+  internal const string InstallNotCompletedText = "Update did not install. Try again from the Microsoft Store.";
+  internal const string StoreUpdatesUri = "ms-windows-store://downloadsandupdates";
   internal const string StoreAvailableText = "An update is available in the Microsoft Store.";
   internal const string DefaultReleaseUrl = "https://github.com/hoobio/command-palette-bitwarden/releases/latest";
   private static readonly TimeSpan StoreTimeout = TimeSpan.FromMinutes(3);
@@ -131,7 +135,16 @@ internal sealed partial class UpdateRowViewModel(PipeChannel channel, Action<str
 
     try
     {
-      await channel.RequestAsync(Ops.InstallUpdate, null, StoreTimeout);
+      var install = IpcJson.Read(await channel.RequestAsync(Ops.InstallUpdate, null, StoreTimeout), IpcJson.Default.InstallResponse);
+      if (install.State == InstallStates.OpenStore)
+        open(StoreUpdatesUri);
+      UpdateAvailable = install.State != InstallStates.Installed;
+      Description = install.State switch
+      {
+        InstallStates.Installed => InstalledText,
+        InstallStates.OpenStore => StoreOpenedText,
+        _ => InstallNotCompletedText,
+      };
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {

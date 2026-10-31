@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using HoobiBitwarden.Ipc;
 using Windows.ApplicationModel.Store.Preview.InstallControl;
 using Windows.Services.Store;
-using Windows.System;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -11,13 +11,12 @@ internal interface IStoreUpdates
 {
   Task<bool> CheckAsync();
 
-  Task InstallAsync();
+  Task<string> InstallAsync();
 }
 
 internal sealed class StoreUpdates : IStoreUpdates
 {
   private const string ProductId = "9P5KS8T80MV3";
-  private static readonly Uri StoreUpdatesUri = new("ms-windows-store://downloadsandupdates");
 
   private StoreContext? _context;
   private IReadOnlyList<StorePackageUpdate> _updates = [];
@@ -31,18 +30,16 @@ internal sealed class StoreUpdates : IStoreUpdates
     return _updates.Count > 0;
   }
 
-  public async Task InstallAsync()
+  public async Task<string> InstallAsync()
   {
     if (_context is not { CanSilentlyDownloadStorePackageUpdates: true } context || _updates.Count == 0)
-    {
-      await Launcher.LaunchUriAsync(StoreUpdatesUri);
-      return;
-    }
+      return InstallStates.OpenStore;
 
     try
     {
       var result = await context.TrySilentDownloadAndInstallStorePackageUpdatesAsync(_updates);
       DebugLogService.Log("Updates", $"Store install finished: {result.OverallState}");
+      return result.OverallState == StorePackageUpdateState.Completed ? InstallStates.Installed : InstallStates.Failed;
     }
     catch (Exception ex)
     {

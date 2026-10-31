@@ -184,7 +184,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries) and write them to files in the log folder (see **Logs** below). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. No sensitive data (passwords, session keys, search text) is logged. The section that holds this setting is named **Diagnostics**. |
+| **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries) and writes them to files in the log folder (see **Logs** below). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. No sensitive data (passwords, session keys, search text) is logged. The section that holds this setting is named **Diagnostics**. |
 
 ### Logs
 
