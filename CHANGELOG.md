@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.13.2](https://github.com/hoobio/command-palette-bitwarden/compare/v1.13.1...v1.13.2) (2026-10-31)
+
+
+### Miscellaneous Chores
+
+* **deps:** update danielpalme/reportgenerator-github-action digest to 8616742 ([#232](https://github.com/hoobio/command-palette-bitwarden/issues/232)) ([9180d43](https://github.com/hoobio/command-palette-bitwarden/commit/9180d43977d10c0ca3d74442033d547e21adc0d9))
+* **deps:** update dependency meziantou.analyzer to 3.0.317 ([#229](https://github.com/hoobio/command-palette-bitwarden/issues/229)) ([8977b11](https://github.com/hoobio/command-palette-bitwarden/commit/8977b11b3db22412928896c52a4d3faa0605b948))
+* **deps:** update dependency meziantou.analyzer to 3.0.318 ([#233](https://github.com/hoobio/command-palette-bitwarden/issues/233)) ([21d80c5](https://github.com/hoobio/command-palette-bitwarden/commit/21d80c54d0373c9f05e00029a44d8b7cf903caa5))
+
 ## [1.13.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.13.0...v1.13.1) (2026-10-26)
 
 
