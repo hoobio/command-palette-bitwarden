@@ -198,8 +198,14 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 - A toggle is a switch. A choice is a drop-down list. A text setting is a box that saves when you press `Enter` or move to another control.
 - Each control shows its name and its description.
 - A setting that only matters when another setting is on sits under that setting, indented. The window hides it while the parent is off and shows it when you turn the parent on. A hidden setting keeps its value. **Automatically Prompt for Biometrics** sits under **Integrate with Bitwarden Desktop App**, **Show Context Tag** and **Context Items Limit** sit under **Context Awareness**, and **Clipboard Clear Delay** sits under **Auto-Clear Clipboard**.
-- The search box in the title bar filters the settings by name and description, without regard to case. A section header shows only while the section has a matching setting. A match on a hidden setting shows its parent, so you can turn the parent on.
-- `Ctrl+F` moves the focus to the search box. `Esc` clears the search and the full list returns, scrolled to the top.
+- **Use CLI Path as Data Directory** sits under **CLI Path Override** and shows only while the **CLI Path Override** box is not empty.
+- An empty **CLI Path Override** box shows the `bw` path in use as placeholder text. An empty **CLI Data Directory Override** box shows the folder that holds `data.json`.
+- An option of **TOTP Tag Style** or **Organization Tag Style** can have a tooltip that explains it.
+- A drop-down list is as wide as its widest option.
+- **Logs**, under **Debug Logging** in the **Diagnostics** section, opens the log folder in File Explorer.
+- The **Help and feedback** section has **Report a bug**, **Request a feature** and **Project on GitHub**. Each opens a page in the browser.
+- The **About** section shows the app name, the version with the short commit and the copyright line. **Support** opens the donation page. **Check for updates** has a **Check now** button and a status line. The check runs only when you select **Check now**. A Dev build does not check. For a Microsoft Store install the **Install update** button installs the update or opens the Store update list. For a sideloaded install the **View release** button opens the GitHub release. See [Update check](Architecture#update-check).
+- The search box in the title bar filters the settings, the **Help and feedback** rows and the **About** rows by name and description, without regard to case. A section header shows only while the section has a matching row. A match on a hidden setting shows its parent, so you can turn the parent on.- `Ctrl+F` moves the focus to the search box. `Esc` clears the search and the full list returns, scrolled to the top.
 - The window opens with the focus in the search box.
 - A change applies at once and has no **Save** button. It runs the same code as a change on the Command Palette settings page.
 - If the extension refuses a value, the control goes back to its old value and the window shows the reason under the control.

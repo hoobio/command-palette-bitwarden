@@ -35,6 +35,7 @@ internal sealed partial class CompanionOps : IDisposable
   private readonly Func<Task<List<VaultCollection>?>> _loadCollections;
   private readonly Func<Task<bool>> _verifyBiometric;
   private readonly Func<bool> _biometricEnabled;
+  private readonly Lazy<AppUpdateService> _updates;
   private readonly SemaphoreSlim _collectionsGate = new(1, 1);
   private List<VaultCollection>? _collections;
   private (DateTime Refresh, int Writes) _collectionsStamp;
@@ -47,9 +48,11 @@ internal sealed partial class CompanionOps : IDisposable
     Action<string>? openUrl = null,
     Func<Task<List<VaultCollection>?>>? loadCollections = null,
     Func<Task<bool>>? verifyBiometric = null,
-    Func<bool>? biometricEnabled = null)
+    Func<bool>? biometricEnabled = null,
+    AppUpdateService? updates = null)
   {
     _service = service;
+    _updates = new Lazy<AppUpdateService>(() => updates ?? AppUpdateService.CreateDefault());
     _verifyBiometric = verifyBiometric ?? (async () => (await service.VerifyWithBiometricsAsync()).Success);
     _biometricEnabled = biometricEnabled ?? (() => service.Settings?.UseDesktopIntegration.Value == true);
     _verifyPassword = verifyPassword ?? service.VerifyMasterPasswordAsync;
@@ -133,6 +136,13 @@ internal sealed partial class CompanionOps : IDisposable
           return IpcJson.ToElement(GetSettings(), IpcJson.Default.SettingsResponse);
         case Ops.SetSetting:
           return IpcJson.ToElement(SetSetting(IpcJson.Read(payload, IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
+        case Ops.GetAbout:
+          return IpcJson.ToElement(_updates.Value.About(), IpcJson.Default.AboutResponse);
+        case Ops.CheckUpdates:
+          return IpcJson.ToElement(await _updates.Value.CheckAsync(cancellationToken), IpcJson.Default.UpdateResponse);
+        case Ops.InstallUpdate:
+          await _updates.Value.InstallAsync();
+          return null;
         default:
           return await DispatchAsync(op, payload, null);
       }

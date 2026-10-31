@@ -19,8 +19,17 @@ internal sealed partial class CompanionOps
     var manager = Manager();
     return new(manager.OrderedSettings.Select(DescribeSetting).OfType<SettingDto>()
       .Select(s => manager.TryGetParent(s.Key, out var parent) ? s with { Parent = parent.Key, ParentValue = parent.Value } : s)
+      .Select(s => s with { Placeholder = PlaceholderFor(manager, s.Key) })
+      .SelectMany(s => s.Key == manager.DebugLogging.Key ? new[] { s, OpenLogsLink } : new[] { s })
       .ToArray());
   }
+
+  private static readonly SettingDto OpenLogsLink = new(SettingKeys.OpenLogs, SettingKinds.Link, "Logs", "Opens the log folder", null, null);
+
+  private string? PlaceholderFor(BitwardenSettingsManager manager, string key) =>
+    key == manager.CliDirectoryOverride.Key ? _service.CliExecutable
+    : key == manager.CliDataDirectoryOverride.Key ? _service.DataFileFolder
+    : null;
 
   internal SetSettingResponse SetSetting(SetSettingRequest request)
   {
@@ -59,7 +68,7 @@ internal sealed partial class CompanionOps
   {
     SectionHeaderSetting section => new SettingDto(section.Key, SettingKinds.Section, section.Label ?? string.Empty, null, null, null),
     ToggleSetting toggle => new SettingDto(toggle.Key, SettingKinds.Toggle, toggle.Label ?? string.Empty, toggle.Description, toggle.Value ? "true" : "false", null),
-    ChoiceSetSetting choice => new SettingDto(choice.Key, SettingKinds.Choice, choice.Label ?? string.Empty, choice.Description, choice.Value, choice.Choices.Select(c => new ChoiceDto(c.Title, c.Value)).ToArray()),
+    ChoiceSetSetting choice => new SettingDto(choice.Key, SettingKinds.Choice, choice.Label ?? string.Empty, choice.Description, choice.Value, choice.Choices.Select(c => new ChoiceDto(c.Title, c.Value, BitwardenSettingsManager.ChoiceDescription(choice.Key, c.Value))).ToArray()),
     TextSetting text => new SettingDto(text.Key, SettingKinds.Text, text.Label ?? string.Empty, text.Description, text.Value ?? string.Empty, null),
     _ => null,
   };

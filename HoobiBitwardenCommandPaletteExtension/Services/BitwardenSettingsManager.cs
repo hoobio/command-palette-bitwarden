@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using HoobiBitwarden.Ipc;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
@@ -92,8 +93,8 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Tags items that have an authenticator key",
         [
             new("Off", "off"),
-            new("Static (show 2FA badge only)", "static"),
-            new("Live (show live code + countdown)", "live"),
+            new("Static", "static"),
+            new("Live", "live"),
         ]);
 
     public ChoiceSetSetting OrganizationTagStyle { get; } = new(
@@ -101,10 +102,21 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Organization Tag Style",
         "Tags items owned by an organisation",
         [
-            new("Initials (compact 1-3 char badge)", "initials"),
-            new("Name (full organization name)", "name"),
+            new("Initials", "initials"),
+            new("Name", "name"),
             new("Off", "off"),
         ]);
+
+    private static readonly Dictionary<(string Setting, string Value), string> ChoiceDescriptions = new()
+    {
+        [("totpTagStyle", "static")] = "Shows a 2FA badge",
+        [("totpTagStyle", "live")] = "Shows the live code and countdown",
+        [("organizationTagStyle", "initials")] = "Shows 1-3 letter initials",
+        [("organizationTagStyle", "name")] = "Shows the full organisation name",
+    };
+
+    internal static string? ChoiceDescription(string settingKey, string value) =>
+        ChoiceDescriptions.GetValueOrDefault((settingKey, value));
 
     public ChoiceSetSetting AutoLockTimeout { get; } = new(
         "autoLockTimeout",
@@ -175,7 +187,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     public ToggleSetting UsePortableDataDirectory { get; } = new(
         "usePortableDataDirectory",
         "Use CLI Path as Data Directory",
-        "Keeps CLI data next to the CLI. Needs CLI Path Override",
+        "Keeps CLI data next to the CLI",
         false);
 
     public TextSetting CliDataDirectoryOverride { get; } = new(
@@ -224,6 +236,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             _parents[setting.Key] = (parent.Key, "true");
     }
 
+    private void AddSetting<T>(Setting<T> setting, Setting<string> nonEmptyParent)
+    {
+        AddSetting(setting);
+        _parents[setting.Key] = (nonEmptyParent.Key, ParentValues.NonEmpty);
+    }
+
     public BitwardenSettingsManager(string? settingsFilePath = null)
     {
         Directory.CreateDirectory(SettingsDir);
@@ -262,10 +280,10 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
 
         AddSetting(new SectionHeaderSetting("_section_cli", "Bitwarden CLI"));
         AddSetting(CliDirectoryOverride);
-        AddSetting(UsePortableDataDirectory);
+        AddSetting(UsePortableDataDirectory, CliDirectoryOverride);
         AddSetting(CliDataDirectoryOverride);
 
-        AddSetting(new SectionHeaderSetting("_section_advanced", "Advanced"));
+        AddSetting(new SectionHeaderSetting("_section_advanced", "Diagnostics"));
         AddSetting(DebugLogging);
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;

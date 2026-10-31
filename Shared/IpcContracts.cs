@@ -54,6 +54,9 @@ internal static class Ops
   public const string GetSettings = "getSettings";
   public const string SetSetting = "setSetting";
   public const string SettingsChanged = "settingsChanged";
+  public const string GetAbout = "getAbout";
+  public const string CheckUpdates = "checkUpdates";
+  public const string InstallUpdate = "installUpdate";
 }
 
 internal static class SettingKinds
@@ -62,6 +65,32 @@ internal static class SettingKinds
   public const string Toggle = "toggle";
   public const string Choice = "choice";
   public const string Text = "text";
+  public const string Link = "link";
+}
+
+internal static class SettingKeys
+{
+  public const string OpenLogs = "openLogs";
+}
+
+internal static class ParentValues
+{
+  public const string NonEmpty = "*";
+}
+
+internal static class AppChannels
+{
+  public const string Dev = "Dev";
+  public const string Prerelease = "Prerelease";
+  public const string Release = "Release";
+}
+
+internal static class UpdateStates
+{
+  public const string Off = "off";
+  public const string UpToDate = "upToDate";
+  public const string Available = "available";
+  public const string Failed = "failed";
 }
 
 internal static class ServerRegions
@@ -325,11 +354,15 @@ internal sealed record SavedResponse(string Id, DateTime RevisionDate);
 
 internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed);
 
-internal sealed record ChoiceDto(string Title, string Value);
+internal sealed record ChoiceDto(string Title, string Value, string? Description = null);
 
-internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null);
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null);
 
 internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
+
+internal sealed record AboutResponse(string Version, string? Commit, string Channel, bool IsStore);
+
+internal sealed record UpdateResponse(string State, string? LatestVersion, string? ReleaseUrl, bool IsStore);
 
 internal sealed record SetSettingRequest(string Key, string Value);
 
@@ -376,6 +409,8 @@ internal sealed record SetSettingResponse(bool Success, string? Error);
 [JsonSerializable(typeof(SettingsResponse))]
 [JsonSerializable(typeof(SetSettingRequest))]
 [JsonSerializable(typeof(SetSettingResponse))]
+[JsonSerializable(typeof(AboutResponse))]
+[JsonSerializable(typeof(UpdateResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);

@@ -40,9 +40,9 @@ public class CompanionSettingsOpsTests : IDisposable
   {
     var settings = await GetAsync();
 
-    Assert.Equal(_settings.OrderedSettings.Count, settings.Count);
-    Assert.Equal(29, settings.Count);
+    Assert.Equal(_settings.OrderedSettings.Count + 1, settings.Count);
     Assert.Equal(6, settings.Count(s => s.Kind == SettingKinds.Section));
+    Assert.Equal(1, settings.Count(s => s.Kind == SettingKinds.Link));
     Assert.Equal(14, settings.Count(s => s.Kind == SettingKinds.Toggle));
     Assert.Equal(7, settings.Count(s => s.Kind == SettingKinds.Choice));
     Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Text));
@@ -84,8 +84,77 @@ public class CompanionSettingsOpsTests : IDisposable
       Assert.All(settings.Skip(parentIndex + 1).Take(childIndex - parentIndex - 1), s => Assert.Equal(parent, s.Parent));
     }
 
-    Assert.Equal(dependencies.Length, settings.Count(s => s.Parent is not null));
+    Assert.Equal(dependencies.Length + 1, settings.Count(s => s.Parent is not null));
   }
+
+  [Fact]
+  public async Task GetSettings_ShowsThePortableDataDirectoryOnlyWhileTheCliPathIsSet()
+  {
+    var settings = await GetAsync();
+
+    var child = settings.Single(s => s.Key == "usePortableDataDirectory");
+    Assert.Equal(("cliDirectoryOverride", ParentValues.NonEmpty), (child.Parent, child.ParentValue));
+    Assert.Equal("Keeps CLI data next to the CLI", child.Description);
+    Assert.Equal(settings.ToList().FindIndex(s => s.Key == "cliDirectoryOverride") + 1, settings.ToList().FindIndex(s => s.Key == "usePortableDataDirectory"));
+  }
+
+  [Fact]
+  public async Task GetSettings_PutsTheLogsLinkRightAfterDebugLogging_UnderDiagnostics()
+  {
+    var settings = await GetAsync();
+    var index = settings.ToList().FindIndex(s => s.Key == "debugLogging");
+
+    Assert.Equal(new SettingDto(SettingKeys.OpenLogs, SettingKinds.Link, "Logs", "Opens the log folder", null, null), settings[index + 1]);
+    Assert.Equal("Diagnostics", settings.Single(s => s.Key == "_section_advanced").Label);
+  }
+
+  [Fact]
+  public async Task SetSetting_RejectsTheLogsLink()
+  {
+    var reply = await SetAsync(SettingKeys.OpenLogs, "x");
+
+    Assert.Equal(new SetSettingResponse(false, "Unknown setting"), reply);
+  }
+
+  [Fact]
+  public async Task GetSettings_CarriesThePathsInUseAsPlaceholders_AndFollowsTheOverrides()
+  {
+    var before = await GetAsync();
+    Assert.Equal("bw", before.Single(s => s.Key == "cliDirectoryOverride").Placeholder);
+    Assert.Equal(_dir, before.Single(s => s.Key == "cliDataDirectoryOverride").Placeholder);
+
+    var cli = Path.Combine(_dir, "bw.exe");
+    await File.WriteAllTextAsync(cli, string.Empty, TestContext.Current.CancellationToken);
+    await SetAsync("cliDirectoryOverride", cli);
+    var after = await GetAsync();
+
+    Assert.Equal(cli, after.Single(s => s.Key == "cliDirectoryOverride").Placeholder);
+    Assert.All(after.Where(s => s.Kind != SettingKinds.Text), s => Assert.Null(s.Placeholder));
+  }
+
+  [Fact]
+  public async Task GetSettings_ExplainsTheTagStyleOptionsWithTooltips_AndNothingElse()
+  {
+    var settings = await GetAsync();
+
+    var totp = settings.Single(s => s.Key == "totpTagStyle").Choices!;
+    Assert.Equal([("Off", null), ("Static", "Shows a 2FA badge"), ("Live", "Shows the live code and countdown")], totp.Select(c => (c.Title, c.Description)));
+    var organization = settings.Single(s => s.Key == "organizationTagStyle").Choices!;
+    Assert.Equal([("Initials", "Shows 1-3 letter initials"), ("Name", "Shows the full organisation name"), ("Off", null)], organization.Select(c => (c.Title, c.Description)));
+    Assert.Equal(["off", "static", "live"], totp.Select(c => c.Value));
+    Assert.Equal(["initials", "name", "off"], organization.Select(c => c.Value));
+    Assert.All(settings.Where(s => s.Kind == SettingKinds.Choice && s.Key is not ("totpTagStyle" or "organizationTagStyle")).SelectMany(s => s.Choices!), c => Assert.Null(c.Description));
+  }
+
+  [Theory]
+  [InlineData("totpTagStyle", "static", "Shows a 2FA badge")]
+  [InlineData("totpTagStyle", "live", "Shows the live code and countdown")]
+  [InlineData("organizationTagStyle", "initials", "Shows 1-3 letter initials")]
+  [InlineData("organizationTagStyle", "name", "Shows the full organisation name")]
+  [InlineData("organizationTagStyle", "off", null)]
+  [InlineData("autoLockTimeout", "0", null)]
+  public void ChoiceDescription_LooksUpTheTooltipByTheSettingKeyAndValue(string key, string value, string? expected) =>
+    Assert.Equal(expected, BitwardenSettingsManager.ChoiceDescription(key, value));
 
   [Fact]
   public async Task SetSetting_Toggle_ChangesTheValue_RaisesSettingsChanged_AndSaves()

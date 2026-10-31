@@ -99,7 +99,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Choice (dropdown) |
 | **Default** | Static |
-| **Options** | Off, Static (show 2FA badge only), Live (show live code + countdown) |
+| **Options** | Off, Static, Live |
 | **Description** | Controls how TOTP-enabled vault items are tagged. **Off** hides the tag entirely, **Static** shows a "2FA" badge, and **Live** displays the current code with a countdown timer that updates every second. |
 
 ### Organization Tag Style
@@ -108,7 +108,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Choice (dropdown) |
 | **Default** | Name |
-| **Options** | Initials (compact 1-3 char badge), Name (full organization name), Off |
+| **Options** | Initials, Name, Off |
 | **Description** | Controls how items belonging to a Bitwarden organization are tagged. **Initials** shows a compact avatar-style badge (single-word orgs get one letter, e.g. `Nintex` → `N`; multi-word orgs get up to three initials, e.g. `Test Organization` → `TO`). **Name** shows the organization name on the tag (truncated to 20 characters). **Off** hides the tag entirely. Each organization gets a stable, deterministic colour from a pastel palette, so two items from the same organization always render in the same colour. |
 
 ### Context Items Limit
@@ -160,7 +160,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Text |
 | **Default** | *(empty)* |
-| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. When set, this always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. |
+| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. When set, this always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. While the box is empty, the companion window shows the `bw` path in use as the placeholder text. |
 
 ### Use CLI Path as Data Directory
 
@@ -168,7 +168,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Requires **CLI Path Override** to be set. Useful for fully portable Bitwarden setups. |
+| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Useful for fully portable Bitwarden setups. The companion window shows this setting under **CLI Path Override**, and only while that box is not empty. |
 
 ### CLI Data Directory Override
 
@@ -176,7 +176,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Text |
 | **Default** | *(empty)* |
-| **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. |
+| **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. While the box is empty, the companion window shows the folder that holds `data.json` now as the placeholder text. |
 
 ### Debug Logging
 
@@ -184,7 +184,14 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. Logs are kept in memory only and cleared when the extension process restarts. No sensitive data (passwords, session keys, search text) is logged. |
+| **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries) and write them to files in the log folder (see **Logs** below). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. No sensitive data (passwords, session keys, search text) is logged. The section that holds this setting is named **Diagnostics**. |
+
+### Logs
+
+| | |
+|---|---|
+| **Type** | Link (companion window only) |
+| **Description** | Appears under **Debug Logging** in the companion window. It opens the folder `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\logs` in File Explorer, and creates the folder if it does not exist. The Command Palette settings page does not show it. |
 
 ### Re-prompt Grace Period
 

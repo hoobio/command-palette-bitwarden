@@ -138,7 +138,7 @@ internal sealed partial class BitwardenCliService
     return null;
   }
 
-  private string CliExecutable => ResolveCliExecutable(
+  internal string CliExecutable => ResolveCliExecutable(
     _settings?.CliDirectoryOverride.Value,
     _settings?.AutoInstalledCliPath);
 
@@ -150,6 +150,8 @@ internal sealed partial class BitwardenCliService
   internal string? DataFileOverride { get; set; }
 
   private string DataFile => DataFileOverride ?? HubProtocol.CliDataFile(DataDirectory);
+
+  internal string? DataFileFolder => Path.GetDirectoryName(DataFile);
 
   private sealed record DataFileStamp(DateTime WriteTimeUtc, long Length);
 

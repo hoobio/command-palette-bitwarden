@@ -1,14 +1,74 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCompanion.ViewModels;
 
-internal sealed partial class SettingsViewModel(PipeChannel channel) : ObservableObject
+internal sealed partial class SettingsViewModel(PipeChannel channel, Action<string>? open = null) : ObservableObject
 {
+  private const string RepoUrl = "https://github.com/hoobio/command-palette-bitwarden";
+  private const string DonateUrl = "https://www.paypal.com/donate/?hosted_button_id=E2UBLTYAT4K8Y";
+
   private string _signature = string.Empty;
+  private bool _aboutLoaded;
+  private IReadOnlyList<InfoSectionViewModel>? _infoSections;
 
   public ObservableCollection<SettingsSectionViewModel> Sections { get; } = [];
+
+  public IReadOnlyList<InfoSectionViewModel> InfoSections => _infoSections ??= CreateInfoSections();
+
+  private List<InfoSectionViewModel> CreateInfoSections()
+  {
+    var sections = BuildInfoSections(channel, OpenGuarded);
+    foreach (var row in sections.SelectMany(s => s.Rows))
+      row.PropertyChanged += (_, e) =>
+      {
+        if (e.PropertyName == nameof(InfoRowViewModel.Description))
+          RefreshVisibility();
+      };
+    return sections;
+  }
+
+  internal static string LogsDirectory { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HoobiBitwardenCommandPalette", "logs");
+
+  private static void OpenTarget(string target) => Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })?.Dispose();
+
+  private static List<InfoSectionViewModel> BuildInfoSections(PipeChannel channel, Action<string> open) =>
+  [
+    new("Help and feedback",
+    [
+      new LinkRowViewModel("Report a bug", "Opens a pre-filled bug report on GitHub", () => open($"{RepoUrl}/issues/new?template=bug_report.yml")),
+      new LinkRowViewModel("Request a feature", "Suggests an improvement", () => open($"{RepoUrl}/issues/new?template=feature_request.yml")),
+      new LinkRowViewModel("Project on GitHub", "Source, releases and existing issues", () => open(RepoUrl)),
+    ]),
+    new("About",
+    [
+      new AboutRowViewModel(),
+      new LinkRowViewModel("Support", "The extension is free and open source. A donation helps keep it maintained", () => open(DonateUrl)),
+      new UpdateRowViewModel(channel, open),
+    ]),
+  ];
+
+  private void OpenGuarded(string target)
+  {
+    try
+    {
+      (open ?? OpenTarget)(target);
+    }
+    catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException)
+    {
+      ErrorMessage = $"Could not open {target}: {ex.Message}";
+    }
+  }
+
+  private void OpenLogs()
+  {
+    Directory.CreateDirectory(LogsDirectory);
+    OpenGuarded(LogsDirectory);
+  }
 
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
@@ -23,10 +83,9 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
     var query = SearchText.Trim();
     var rows = Sections.SelectMany(s => s.Rows).ToList();
     var byKey = rows.ToDictionary(r => r.Key);
-    bool ParentOn(SettingRowViewModel row) => row.Parent is null || !byKey.TryGetValue(row.Parent, out var owner) || owner.CurrentValue == row.ParentValue;
-    bool Matches(SettingRowViewModel row) => query.Length == 0
-      || row.Label.Contains(query, StringComparison.OrdinalIgnoreCase)
-      || (row.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
+    bool ParentOn(SettingRowViewModel row) => row.Parent is null || !byKey.TryGetValue(row.Parent, out var owner)
+      || (row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue);
+    bool Matches(SettingRowViewModel row) => TextMatches(query, row.Label, row.Description);
 
     foreach (var row in rows)
       row.IsShown = ParentOn(row) && Matches(row);
@@ -38,7 +97,18 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
 
     foreach (var section in Sections)
       section.IsShown = section.Rows.Any(r => r.IsShown);
+
+    foreach (var section in InfoSections)
+    {
+      foreach (var row in section.Rows)
+        row.IsShown = TextMatches(query, row.Label, row.Description);
+      section.IsShown = section.Rows.Any(r => r.IsShown);
+    }
   }
+
+  private static bool TextMatches(string query, string label, string? description) => query.Length == 0
+    || label.Contains(query, StringComparison.OrdinalIgnoreCase)
+    || (description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
 
   internal async Task LoadAsync()
   {
@@ -54,7 +124,8 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
     }
 
     ErrorMessage = null;
-    var signature = string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}:{s.Parent}:{s.ParentValue}"));
+    await LoadAboutAsync();
+    var signature =string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}:{s.Parent}:{s.ParentValue}"));
     if (signature != _signature)
     {
       _signature = signature;
@@ -65,6 +136,28 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
     var rows = Sections.SelectMany(s => s.Rows).ToDictionary(r => r.Key);
     foreach (var setting in settings.Where(s => s.Kind != SettingKinds.Section))
       rows[setting.Key].Apply(setting);
+  }
+
+  private async Task LoadAboutAsync()
+  {
+    if (_aboutLoaded)
+      return;
+    AboutResponse about;
+    try
+    {
+      about = IpcJson.Read(await channel.RequestAsync(Ops.GetAbout, null), IpcJson.Default.AboutResponse);
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
+    {
+      return;
+    }
+
+    _aboutLoaded = true;
+    foreach (var row in InfoSections.SelectMany(s => s.Rows))
+    {
+      (row as AboutRowViewModel)?.Load(about);
+      (row as UpdateRowViewModel)?.Load(about);
+    }
   }
 
   private void Rebuild(IReadOnlyList<SettingDto> settings)
@@ -81,7 +174,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel) : Observabl
 
       if (current is null)
         Sections.Add(current = new SettingsSectionViewModel(string.Empty));
-      var row = new SettingRowViewModel(channel, setting);
+      var row = new SettingRowViewModel(channel, setting, setting.Key == SettingKeys.OpenLogs ? OpenLogs : null);
       row.ValueChanged += RefreshVisibility;
       current.Rows.Add(row);
     }
@@ -105,6 +198,7 @@ internal sealed partial class SettingsSectionViewModel(string title) : Observabl
 internal sealed partial class SettingRowViewModel : ObservableObject
 {
   private readonly PipeChannel _channel;
+  private readonly Action? _activate;
   private string _committed = string.Empty;
   private int _pending;
   private bool _applying;
@@ -114,9 +208,10 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   private ChoiceDto? _selectedChoice;
   private string _textValue = string.Empty;
 
-  public SettingRowViewModel(PipeChannel channel, SettingDto setting)
+  public SettingRowViewModel(PipeChannel channel, SettingDto setting, Action? activate = null)
   {
     _channel = channel;
+    _activate = activate;
     Key = setting.Key;
     Kind = setting.Kind;
     Label = setting.Label;
@@ -163,6 +258,14 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 
   public bool IsText => Kind == SettingKinds.Text;
 
+  public bool IsLink => Kind == SettingKinds.Link;
+
+  [ObservableProperty]
+  public partial string? Placeholder { get; private set; }
+
+  [RelayCommand]
+  private void Open() => _activate?.Invoke();
+
   internal bool IsEditing { get; set; }
 
   [ObservableProperty]
@@ -204,8 +307,13 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   {
     if (_pending > 0)
       return;
-    _committed = setting.Value ?? string.Empty;
+    Placeholder = setting.Placeholder;
+    var value = setting.Value ?? string.Empty;
+    var changed = value != _committed;
+    _committed = value;
     Show(force: false);
+    if (changed && IsText)
+      ValueChanged?.Invoke();
   }
 
   internal Task CommitTextAsync(string text) => text == _committed ? Task.CompletedTask : SubmitAsync(text);
@@ -261,7 +369,11 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     {
       _committed = value;
       if (IsText)
+      {
         TextValue = value;
+        ValueChanged?.Invoke();
+      }
+
       return;
     }
 

@@ -213,6 +213,21 @@
             </Setter>
         </ControlTheme>
 
+        <ControlTheme x:Key="RowOverlayButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Background" Value="#00FFFFFF" />
+            <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#14FFFFFF" />
+            </Style>
+            <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#1FFFFFFF" />
+            </Style>
+        </ControlTheme>
+
         <ControlTheme x:Key="{x:Type ContextMenu}" TargetType="ContextMenu">
             <Setter Property="Background" Value="{DynamicResource MenuFlyoutPresenterBackground}" />
             <Setter Property="Foreground" Value="{DynamicResource DefaultTextForegroundThemeBrush}" />

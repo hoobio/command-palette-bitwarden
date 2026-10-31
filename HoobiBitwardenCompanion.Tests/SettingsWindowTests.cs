@@ -29,6 +29,12 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     public bool FailLoad { get; set; }
 
+    public AboutResponse About { get; set; } = new("1.13.0", "626a78a", AppChannels.Release, false);
+
+    public UpdateResponse? Update { get; set; }
+
+    public int Installs { get; private set; }
+
     public void Change(string key, string value)
     {
       lock (Schema)
@@ -55,11 +61,33 @@ public class SettingsWindowTests(AvaloniaSession session)
             return Task.FromResult<JsonElement?>(IpcJson.ToElement(new SetSettingResponse(false, Reject), IpcJson.Default.SetSettingResponse));
           Change(request.Key, request.Value);
           return Task.FromResult<JsonElement?>(IpcJson.ToElement(new SetSettingResponse(true, null), IpcJson.Default.SetSettingResponse));
+        case Ops.GetAbout:
+          return Task.FromResult<JsonElement?>(IpcJson.ToElement(About, IpcJson.Default.AboutResponse));
+        case Ops.CheckUpdates:
+          return Update is { } update
+            ? Task.FromResult<JsonElement?>(IpcJson.ToElement(update, IpcJson.Default.UpdateResponse))
+            : throw new IpcException(IpcErrors.Failed);
+        case Ops.InstallUpdate:
+          Installs++;
+          return Task.FromResult<JsonElement?>(null);
         default:
           throw new IpcException(IpcErrors.Invalid);
       }
     }
   }
+
+  private static async Task<(SettingsViewModel Vm, List<string> Opened, ChannelPair Pair)> LoadedAsync(FakeExtension extension)
+  {
+    var pair = new ChannelPair(extension.HandleAsync, (_, _, _) => Task.FromResult<JsonElement?>(null));
+    var opened = new List<string>();
+    var vm = new SettingsViewModel(pair.Companion!, opened.Add);
+    await vm.LoadAsync();
+    return (vm, opened, pair);
+  }
+
+  private static T InfoRow<T>(SettingsViewModel vm) where T : InfoRowViewModel => vm.InfoSections.SelectMany(s => s.Rows).OfType<T>().Single();
+
+  private static LinkRowViewModel Link(SettingsViewModel vm, string label) => vm.InfoSections.SelectMany(s => s.Rows).OfType<LinkRowViewModel>().Single(r => r.Label == label);
 
   private static T Find<T>(SettingsWindow window, string key) where T : Control
   {
@@ -373,6 +401,253 @@ public class SettingsWindowTests(AvaloniaSession session)
     Find<TextBox>(window, "cliPath").Focus();
     window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F, KeyModifiers = KeyModifiers.Control, Source = window });
     AvaloniaSession.WaitFor(() => box.IsFocused);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public async Task HelpAndAbout_ListTheStaticRows_ShowTheBuildInfo_AndTakePartInTheSearch()
+  {
+    var extension = new FakeExtension { About = new("1.13.0", "626a78a", AppChannels.Prerelease, false) };
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+
+    Assert.Equal(["Help and feedback", "About"], vm.InfoSections.Select(s => s.Title));
+    Assert.Equal(["Report a bug", "Request a feature", "Project on GitHub"], vm.InfoSections[0].Rows.Select(r => r.Label));
+    Assert.Equal(["Command Palette Extension for Bitwarden", "Support", "Check for updates"], vm.InfoSections[1].Rows.Select(r => r.Label));
+    Assert.Equal("Version 1.13.0 (Pre-release) - 626a78a\nCopyright (c) Hoobi", InfoRow<AboutRowViewModel>(vm).Description);
+
+    vm.SearchText = "BUG";
+    Assert.Equal([true, false], vm.InfoSections.Select(s => s.IsShown));
+    Assert.Equal(["Report a bug"], vm.InfoSections.SelectMany(s => s.Rows).Where(r => r.IsShown).Select(r => r.Label));
+
+    vm.SearchText = "donation";
+    Assert.Equal(["Support"], vm.InfoSections.SelectMany(s => s.Rows).Where(r => r.IsShown).Select(r => r.Label));
+
+    vm.SearchText = "nothing matches this";
+    Assert.All(vm.InfoSections, s => Assert.False(s.IsShown));
+
+    vm.SearchText = string.Empty;
+    Assert.All(vm.InfoSections, s => Assert.True(s.IsShown));
+  }
+
+  [Fact]
+  public async Task AboutWithoutACommit_OmitsIt_AndAFailedAboutLeavesTheRowsBlank()
+  {
+    Assert.Equal("Version 1.13.0 (Dev)\nCopyright (c) Hoobi", AboutRowViewModel.Describe(new("1.13.0", null, AppChannels.Dev, false)));
+
+    var extension = new FakeExtension();
+    var pair = new ChannelPair((op, payload, token) => op == Ops.GetAbout ? throw new IpcException(IpcErrors.Failed) : extension.HandleAsync(op, payload, token), (_, _, _) => Task.FromResult<JsonElement?>(null));
+    using var channelPair = pair;
+    var vm = new SettingsViewModel(pair.Companion!, _ => { });
+    await vm.LoadAsync();
+
+    Assert.Null(InfoRow<AboutRowViewModel>(vm).Description);
+    Assert.NotEmpty(vm.Sections);
+  }
+
+  [Fact]
+  public async Task LinkRows_OpenTheirTargets()
+  {
+    var (vm, opened, pair) = await LoadedAsync(new FakeExtension());
+    using var channelPair = pair;
+
+    Link(vm, "Report a bug").OpenCommand.Execute(null);
+    Link(vm, "Request a feature").OpenCommand.Execute(null);
+    Link(vm, "Project on GitHub").OpenCommand.Execute(null);
+    Link(vm, "Support").OpenCommand.Execute(null);
+
+    Assert.Equal(
+    [
+      "https://github.com/hoobio/command-palette-bitwarden/issues/new?template=bug_report.yml",
+      "https://github.com/hoobio/command-palette-bitwarden/issues/new?template=feature_request.yml",
+      "https://github.com/hoobio/command-palette-bitwarden",
+      "https://www.paypal.com/donate/?hosted_button_id=E2UBLTYAT4K8Y",
+    ], opened);
+  }
+
+  [Fact]
+  public async Task LogsLink_ComesFromTheExtension_OpensTheLogFolder_AndFollowsTheSearch()
+  {
+    var extension = new FakeExtension();
+    extension.Schema.AddRange(
+    [
+      new("_section_c", SettingKinds.Section, "Diagnostics", null, null, null),
+      new("debugLogging", SettingKinds.Toggle, "Debug Logging", "Writes debug logs", "false", null),
+      new(SettingKeys.OpenLogs, SettingKinds.Link, "Logs", "Opens the log folder", null, null),
+    ]);
+    var (vm, opened, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+    var row = vm.Sections[^1].Rows[^1];
+
+    Assert.Equal(SettingKinds.Link, row.Kind);
+    Assert.True(row.IsLink);
+    row.OpenCommand.Execute(null);
+
+    Assert.Equal([SettingsViewModel.LogsDirectory], opened);
+    Assert.True(Directory.Exists(SettingsViewModel.LogsDirectory));
+    vm.SearchText = "log folder";
+    Assert.Equal([SettingKeys.OpenLogs], ShownKeys(vm));
+  }
+
+  [Fact]
+  public async Task OpeningATargetThatFails_ShowsTheError()
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync, (_, _, _) => Task.FromResult<JsonElement?>(null));
+    var vm = new SettingsViewModel(pair.Companion!, _ => throw new InvalidOperationException("no browser"));
+    await vm.LoadAsync();
+
+    Link(vm, "Support").OpenCommand.Execute(null);
+
+    Assert.Contains("no browser", vm.ErrorMessage);
+  }
+
+  [Fact]
+  public async Task UpdateRow_IsOff_ForDevBuilds()
+  {
+    var (vm, _, pair) = await LoadedAsync(new FakeExtension { About = new("1.13.0", null, AppChannels.Dev, false) });
+    using var channelPair = pair;
+    var row = InfoRow<UpdateRowViewModel>(vm);
+
+    Assert.False(row.CanCheck);
+    Assert.Equal(UpdateRowViewModel.DevText, row.Description);
+    await row.CheckCommand.ExecuteAsync(null);
+    Assert.Equal(UpdateRowViewModel.DevText, row.Description);
+  }
+
+  [Theory]
+  [InlineData(UpdateStates.UpToDate, false, "You are on the latest version.", false)]
+  [InlineData(UpdateStates.Available, false, "Update available: v1.14.0", true)]
+  [InlineData(UpdateStates.Available, true, "An update is available in the Microsoft Store.", true)]
+  [InlineData(UpdateStates.Failed, false, "Could not check for updates. Try again later.", false)]
+  public async Task UpdateRow_ShowsTheOutcomeOfACheck(string state, bool store, string text, bool actionShown)
+  {
+    var extension = new FakeExtension { Update = new(state, "v1.14.0", "https://github.com/hoobio/command-palette-bitwarden/releases/tag/v1.14.0", store) };
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+    var row = InfoRow<UpdateRowViewModel>(vm);
+
+    Assert.True(row.CanCheck);
+    Assert.Null(row.Description);
+    await row.CheckCommand.ExecuteAsync(null);
+
+    Assert.Equal((text, actionShown, true), (row.Description, row.UpdateAvailable, row.CanCheck));
+    Assert.Equal(store ? "Install update" : "View release", row.ActionText);
+  }
+
+  [Fact]
+  public async Task UpdateRow_ReportsAFailedRequest_AndTheActionOpensTheReleaseOrInstalls()
+  {
+    var extension = new FakeExtension();
+    var (vm, opened, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+    var row = InfoRow<UpdateRowViewModel>(vm);
+
+    await row.CheckCommand.ExecuteAsync(null);
+    Assert.Equal(UpdateRowViewModel.FailedText, row.Description);
+    Assert.False(row.UpdateAvailable);
+
+    extension.Update = new(UpdateStates.Available, "v1.14.0", "https://github.com/hoobio/command-palette-bitwarden/releases/tag/v1.14.0", false);
+    await row.CheckCommand.ExecuteAsync(null);
+    await row.ActionCommand.ExecuteAsync(null);
+    Assert.Equal(["https://github.com/hoobio/command-palette-bitwarden/releases/tag/v1.14.0"], opened);
+    Assert.Equal(0, extension.Installs);
+
+    extension.Update = new(UpdateStates.Available, null, null, true);
+    await row.CheckCommand.ExecuteAsync(null);
+    await row.ActionCommand.ExecuteAsync(null);
+    Assert.Equal(1, extension.Installs);
+    Assert.Single(opened);
+  }
+
+  [Fact]
+  public async Task NonEmptyParent_ShowsTheChildOnlyWhileTheParentHasText()
+  {
+    var extension = new FakeExtension();
+    extension.Schema.Clear();
+    extension.Schema.AddRange(
+    [
+      new("_section_a", SettingKinds.Section, "CLI", null, null, null),
+      new("cliPath", SettingKinds.Text, "CLI path", "Path to bw", string.Empty, null, Placeholder: "bw"),
+      new("portable", SettingKinds.Toggle, "Use CLI path as data directory", "Keeps CLI data next to the CLI", "false", null, "cliPath", ParentValues.NonEmpty),
+    ]);
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+    var path = vm.Sections[0].Rows[0];
+
+    Assert.Equal(["cliPath"], ShownKeys(vm));
+    Assert.Equal("bw", path.Placeholder);
+
+    await path.CommitTextAsync(@"C:\tools\bw.exe");
+    Assert.Equal(["cliPath", "portable"], ShownKeys(vm));
+
+    extension.Change("cliPath", string.Empty);
+    extension.Schema[1] = extension.Schema[1] with { Placeholder = @"C:\Users\x\AppData\Roaming\Bitwarden CLI" };
+    await vm.LoadAsync();
+    Assert.Equal(["cliPath"], ShownKeys(vm));
+    Assert.Equal(@"C:\Users\x\AppData\Roaming\Bitwarden CLI", path.Placeholder);
+  }
+
+  [Fact]
+  public async Task Choices_CarryTheirTooltipText()
+  {
+    var extension = new FakeExtension();
+    extension.Schema.Clear();
+    extension.Schema.Add(new("style", SettingKinds.Choice, "Style", null, "static", [new("Off", "off"), new("Static", "static", "Shows a 2FA badge")]));
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+
+    var choices = vm.Sections[0].Rows[0].Choices;
+    Assert.Equal([null, "Shows a 2FA badge"], choices.Select(c => c.Description));
+  }
+
+  [Fact]
+  public Task Dropdown_SizesToItsWidestOption() => session.RunAsync(async () =>
+  {
+    async Task<double> MeasureAsync(params ChoiceDto[] choices)
+    {
+      var extension = new FakeExtension();
+      extension.Schema.Clear();
+      extension.Schema.Add(new("style", SettingKinds.Choice, "Style", null, choices[0].Value, choices));
+      using var pair = new ChannelPair(extension.HandleAsync);
+      using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+      _ = coordinator.RunAsync(() => { });
+      var window = coordinator.ShowSettings();
+      AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.Count == 1);
+      window.UpdateLayout();
+      var combo = Find<ComboBox>(window, "style");
+      var result = combo.Bounds.Width;
+      window.Close();
+      await Task.CompletedTask;
+      return result;
+    }
+
+    var narrow = await MeasureAsync(new ChoiceDto("Never", "0"));
+    var wide = await MeasureAsync(new ChoiceDto("Never", "0"), new ChoiceDto("A much longer option title", "1"));
+    var wideOtherWayRound = await MeasureAsync(new ChoiceDto("A much longer option title", "1"), new ChoiceDto("Never", "0"));
+
+    Assert.True(wide > narrow + 40, $"narrow {narrow}, wide {wide}");
+    Assert.Equal(wide, wideOtherWayRound);
+    Assert.True(wide < 300);
+  });
+
+  [Fact]
+  public Task PlaceholderAndLinkRow_RenderInTheWindow() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    extension.Schema.Add(new("openLogs", SettingKinds.Link, "Logs", "Opens the log folder", null, null));
+    extension.Schema[4] = extension.Schema[4] with { Placeholder = "bw" };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    WaitForRows(window);
+
+    Assert.Equal("bw", Find<TextBox>(window, "cliPath").PlaceholderText);
+    Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.DataContext is SettingRowViewModel { Key: "openLogs" });
+    Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible && t.Text == "Help and feedback");
+    Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.Content is "Check now");
     window.Close();
     await Task.CompletedTask;
   });
