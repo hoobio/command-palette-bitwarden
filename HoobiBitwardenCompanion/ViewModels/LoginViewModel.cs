@@ -14,8 +14,9 @@ internal sealed partial class LoginViewModel : DialogViewModel
 
   private bool _deviceVerificationPending;
 
-  public LoginViewModel(PipeChannel channel, bool rememberSession, string? customDataDir) : base(channel)
+  public LoginViewModel(PipeChannel channel, bool rememberSession, string? customDataDir, SetServerRequest? server = null) : base(channel)
   {
+    Server = new ServerPickerViewModel(channel, server);
     RememberSession = rememberSession;
     CustomDataDirWarning = customDataDir is null
       ? null
@@ -32,6 +33,8 @@ internal sealed partial class LoginViewModel : DialogViewModel
   }
 
   public static IReadOnlyList<string> MethodChoices { get; } = ["Authenticator app", "Email", "YubiKey OTP", "Auto-detect"];
+
+  public ServerPickerViewModel Server { get; }
 
   public string? CustomDataDirWarning { get; }
 

@@ -71,7 +71,7 @@ internal sealed partial class CompanionHost : IDisposable
   {
     var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
     _ = CommandPaletteModalScope.Enter();
-    _ = SendAsync(Ops.ShowApiKeyLogin, IpcJson.ToElement(new DialogRequest(returnWindow), IpcJson.Default.DialogRequest));
+    _ = SendAsync(Ops.ShowApiKeyLogin, IpcJson.ToElement(new DialogRequest(returnWindow, Server: _ops.CurrentServer()), IpcJson.Default.DialogRequest));
   }
 
   public void ShowLogin()

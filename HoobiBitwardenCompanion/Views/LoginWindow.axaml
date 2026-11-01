@@ -61,6 +61,9 @@
                     <ProgressBar IsIndeterminate="True" />
                     <TextBlock x:Name="BusyText" Classes="Caption" TextWrapping="Wrap" Text="{Binding BusyText}" />
                 </StackPanel>
+                <StackPanel Margin="0,8,0,0" IsVisible="{Binding IsCredentialsStep}" IsEnabled="{Binding !IsBusy}">
+                    <views:ServerPickerView x:Name="ServerPicker" DataContext="{Binding Server}" />
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 

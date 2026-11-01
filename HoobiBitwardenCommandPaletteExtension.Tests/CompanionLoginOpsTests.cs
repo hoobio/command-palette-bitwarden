@@ -307,7 +307,8 @@ public class CompanionLoginOpsTests
 
       var dialog = ops.BuildLoginDialog(77);
 
-      Assert.Equal(new LoginDialogRequest(77, true, null), dialog);
+      Assert.Equal((77, true, null), (dialog.ReturnWindow, dialog.RememberSession, dialog.CustomDataDir));
+      Assert.NotNull(dialog.Server);
     }
     finally
     {

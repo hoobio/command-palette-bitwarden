@@ -75,6 +75,16 @@ internal sealed partial class CompanionOps
     _ => ServerRegions.SelfHosted,
   };
 
+  internal SetServerRequest CurrentServer()
+  {
+    var url = BitwardenCliService.ServerUrl;
+    var region = RegionOf(url);
+    if (region != ServerRegions.SelfHosted)
+      return new SetServerRequest(region, null);
+    var urls = _service.ReadServerUrls();
+    return new SetServerRequest(region, url, urls?.WebVaultUrl, urls?.ApiUrl, urls?.IdentityUrl, urls?.IconsUrl, urls?.NotificationsUrl, urls?.EventsUrl, urls?.KeyConnectorUrl);
+  }
+
   private SettingDto[] ServerRows()
   {
     var url = BitwardenCliService.ServerUrl;

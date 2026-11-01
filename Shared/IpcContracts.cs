@@ -228,7 +228,7 @@ internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
-internal sealed record DialogRequest(long ReturnWindow, string? Focus = null, bool Force = false);
+internal sealed record DialogRequest(long ReturnWindow, string? Focus = null, bool Force = false, SetServerRequest? Server = null);
 
 internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
 
@@ -253,7 +253,7 @@ internal sealed record SetServerRequest(
 
 internal sealed record SetServerResponse(bool Success, string? Error);
 
-internal sealed record LoginDialogRequest(long ReturnWindow, bool RememberSession, string? CustomDataDir);
+internal sealed record LoginDialogRequest(long ReturnWindow, bool RememberSession, string? CustomDataDir, SetServerRequest? Server = null);
 
 internal sealed record LoginRequest(string Email, string Password, int? Method, string? Code, bool RememberSession);
 

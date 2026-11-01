@@ -104,7 +104,7 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowApiKeyLogin:
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowApiKeyLogin((nint)(dialog?.ReturnWindow ?? 0)));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowApiKeyLogin((nint)(dialog?.ReturnWindow ?? 0), dialog?.Server));
         return null;
       case Ops.ShowUnlock:
         var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockDialogRequest);
@@ -112,7 +112,7 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowLogin:
         var login = IpcJson.Read(payload, IpcJson.Default.LoginDialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowLogin((nint)login.ReturnWindow, login.RememberSession, login.CustomDataDir));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowLogin((nint)login.ReturnWindow, login.RememberSession, login.CustomDataDir, login.Server));
         return null;
       case Ops.ShowReprompt:
         var reprompt = IpcJson.Read(payload, IpcJson.Default.RepromptDialogRequest);
@@ -208,14 +208,14 @@ internal sealed class WindowCoordinator : IDisposable
     return _hotkeysWindow;
   }
 
-  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0) =>
-    ShowDialog(() => new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel)), returnWindow);
+  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0, SetServerRequest? server = null) =>
+    ShowDialog(() => new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel, server)), returnWindow);
 
   public UnlockWindow ShowUnlock(nint returnWindow = 0, bool rememberSession = false, bool windowsHello = false) =>
     ShowDialog(() => new UnlockWindow(new UnlockViewModel(Channel, rememberSession, windowsHello)), returnWindow);
 
-  public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null) =>
-    ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir)), returnWindow);
+  public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null, SetServerRequest? server = null) =>
+    ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir, server)), returnWindow);
 
   public RepromptWindow ShowReprompt(nint returnWindow, string token, string itemName, bool windowsHello)
   {

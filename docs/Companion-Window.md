@@ -152,6 +152,7 @@ When **Use API Key Authentication** is off, **Login to Bitwarden** opens the **L
 - **Remember session** starts with the value of the setting. **Log in** saves the box value to the setting.
 - A note for Duo Push and WebAuthn, which the CLI cannot complete. Use an API key for these accounts.
 - A warning when a custom CLI data directory is set. A `bw login` that you run in a terminal must use the same `BITWARDENCLI_APPDATA_DIR`.
+- A server picker at the bottom, on the email and password step (see [Server picker](#server-picker)).
 
 **Log in** sends the email and password to the extension. The window then changes in place:
 
@@ -165,9 +166,18 @@ If the companion is not available, **Login to Bitwarden** opens the form in Comm
 
 ## API key login
 
-When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bitwarden** opens the **Log in with your API key** window. Command Palette stays open behind it. The window has a **Client ID** box and a masked **Client secret** box, with an eye button to show the secret. `Enter` in either box logs in. `Esc` and **Cancel** close the window.
+When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bitwarden** opens the **Log in with your API key** window. Command Palette stays open behind it. The window has a **Client ID** box and a masked **Client secret** box, with an eye button to show the secret. `Enter` in either box logs in. `Esc` and **Cancel** close the window. A server picker at the bottom shows the current server (see [Server picker](#server-picker)).
 
 The window stays open when you switch to another app, for example to copy the values from the web vault. While the extension logs in, the boxes and buttons are disabled. A failed login shows the error from the CLI and keeps the values. A successful login clears the values, closes the window and returns focus to Command Palette. Command Palette then shows **Unlock**. The window does not close when the vault is locked, because you are logged out, not locked.
+
+## Server picker
+
+Both login windows end with the line **Accessing:** and the current server as a link, with a chevron. The link shows `bitwarden.com`, `bitwarden.eu`, or the host name of a self-hosted server, for example `vault.example.com`. The extension sends the current server when it opens the window. Select the link to open a menu with **bitwarden.com**, **bitwarden.eu** and **self-hosted**. A check mark shows the current server.
+
+- **bitwarden.com** and **bitwarden.eu** save the server at once, with the same code as the **Server** section of the [Settings window](#server-url). There is no confirmation, because you are logged out. A failed change shows a short error under the link, and the link keeps the previous server.
+- **self-hosted** opens the **Self-hosted environment** dialog. **Server URL** has the URL of the current self-hosted server, and is empty for the Bitwarden cloud servers. It must start with `http://` or `https://`. **Custom environment** is collapsed unless a per-service URL is set. It shows the seven optional URL boxes of **Advanced** in the **Server** section, with the same placeholders. **Save** sends the URL and the optional URLs in one request. An invalid URL, or an error from the CLI, shows in the dialog and the dialog stays open. **Cancel** leaves the server as it was.
+
+The picker does not show on the two-factor and device verification steps, and it is disabled while a login runs.
 
 ## Unlock
 

@@ -1,0 +1,39 @@
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Views.ServerPickerView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ipc="using:HoobiBitwarden.Ipc"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:ServerPickerViewModel">
+    <StackPanel Spacing="4" HorizontalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+            <TextBlock Classes="Caption" VerticalAlignment="Center" Text="Accessing:" />
+            <Button x:Name="ServerButton" Theme="{StaticResource CaptionLinkButtonStyle}" AutomationProperties.Name="Server">
+                <Button.Flyout>
+                    <MenuFlyout Placement="TopEdgeAlignedLeft">
+                        <MenuItem x:Name="CloudItem" Header="bitwarden.com" Command="{Binding SelectCommand}" CommandParameter="{x:Static ipc:ServerRegions.Cloud}">
+                            <MenuItem.Icon>
+                                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Checkmark}" IsVisible="{Binding IsCloud}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem x:Name="EuItem" Header="bitwarden.eu" Command="{Binding SelectCommand}" CommandParameter="{x:Static ipc:ServerRegions.Eu}">
+                            <MenuItem.Icon>
+                                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Checkmark}" IsVisible="{Binding IsEu}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem x:Name="SelfHostedItem" Header="self-hosted" Command="{Binding SelectCommand}" CommandParameter="{x:Static ipc:ServerRegions.SelfHosted}">
+                            <MenuItem.Icon>
+                                <TextBlock Classes="Icon" Text="{StaticResource Glyph.Checkmark}" IsVisible="{Binding IsSelfHosted}" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                    </MenuFlyout>
+                </Button.Flyout>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock x:Name="ServerText" Text="{Binding Host}" />
+                    <TextBlock Classes="Icon Accent" FontSize="12" Text="{StaticResource Glyph.ChevronDown}" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+        <TextBlock x:Name="ServerError" Classes="Warn" TextWrapping="Wrap" HorizontalAlignment="Center" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </StackPanel>
+</UserControl>
