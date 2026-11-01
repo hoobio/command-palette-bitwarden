@@ -26,7 +26,7 @@ internal sealed partial class GeneratorWindow : Window
     {
       if (Screens.ScreenFromWindow(this) is { } screen)
         MaxHeight = screen.WorkingArea.Height / screen.Scaling;
-      FitToContent();
+      Dispatcher.UIThread.Post(FitToContent, DispatcherPriority.Loaded);
     };
     Resized += (_, e) => _resizedByUser |= e.Reason == WindowResizeReason.User;
     Closed += (_, _) =>
@@ -44,7 +44,7 @@ internal sealed partial class GeneratorWindow : Window
 
   private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
   {
-    if (e.PropertyName == nameof(GeneratorViewModel.OptionsExpanded) && !_resizedByUser)
+    if (e.PropertyName is nameof(GeneratorViewModel.OptionsExpanded) or nameof(GeneratorViewModel.SelectedTab) or nameof(GeneratorViewModel.Value) && !_resizedByUser)
       Dispatcher.UIThread.Post(FitToContent, DispatcherPriority.Loaded);
   }
 
