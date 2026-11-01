@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using HoobiBitwarden.Ipc;
+using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
@@ -67,18 +68,32 @@ internal sealed partial class CompanionOps
     _ => ServerRegions.SelfHosted,
   };
 
-  private SettingDto[] ServerRows() => ServerRows(BitwardenCliService.ServerUrl, _service.LastStatus is VaultStatus.Locked or VaultStatus.Unlocked);
+  private SettingDto[] ServerRows()
+  {
+    var url = BitwardenCliService.ServerUrl;
+    return ServerRows(url, _service.LastStatus is VaultStatus.Locked or VaultStatus.Unlocked, RegionOf(url) == ServerRegions.SelfHosted ? _service.ReadServerUrls() : null);
+  }
 
-  internal static SettingDto[] ServerRows(string? url, bool loggedIn)
+  internal static SettingDto[] ServerRows(string? url, bool loggedIn, ServerConfig? urls = null)
   {
     var region = RegionOf(url);
     var warning = "Changing the server logs you out";
     var confirm = loggedIn ? $"{warning} of Bitwarden. Continue?" : null;
+    SettingDto Advanced(string key, string label, string? value, string path) =>
+      new(key, SettingKinds.Text, label, null, value ?? string.Empty, null, SettingKeys.ServerAdvanced, "true", Placeholder: "{base URL}" + path, Confirm: confirm);
     return
     [
       new("_section_server", SettingKinds.Section, "Server", null, null, null),
       new(SettingKeys.ServerRegion, SettingKinds.Choice, "Region", loggedIn ? warning : "Where your vault is hosted", region, ServerChoices, Confirm: confirm),
       new(SettingKeys.ServerUrl, SettingKinds.Text, "Server URL", "Address of your self-hosted server", region == ServerRegions.SelfHosted ? url : string.Empty, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted, Placeholder: "https://vault.example.com", Confirm: confirm),
+      new(SettingKeys.ServerAdvanced, SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted),
+      Advanced(SettingKeys.ServerWebVaultUrl, "Web Vault URL", urls?.WebVaultUrl, "/"),
+      Advanced(SettingKeys.ServerApiUrl, "API URL", urls?.ApiUrl, "/api"),
+      Advanced(SettingKeys.ServerIdentityUrl, "Identity URL", urls?.IdentityUrl, "/identity"),
+      Advanced(SettingKeys.ServerIconsUrl, "Icons URL", urls?.IconsUrl, "/icons"),
+      Advanced(SettingKeys.ServerNotificationsUrl, "Notifications URL", urls?.NotificationsUrl, "/notifications"),
+      Advanced(SettingKeys.ServerEventsUrl, "Events URL", urls?.EventsUrl, "/events"),
+      Advanced(SettingKeys.ServerKeyConnectorUrl, "Key Connector URL", urls?.KeyConnectorUrl, "/key-connector"),
     ];
   }
 

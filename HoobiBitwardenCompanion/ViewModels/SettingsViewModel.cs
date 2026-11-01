@@ -45,12 +45,15 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
   {
     var isRegion = row.Key == SettingKeys.ServerRegion;
     var region = isRegion ? value : ServerRow(SettingKeys.ServerRegion).CurrentValue;
-    var url = isRegion ? string.Empty : value;
     if (region == ServerRegions.SelfHosted && isRegion)
       return null;
     if (row.Confirm is { } message && !await AskAsync("Change server?", message, "Change server", "Cancel"))
       return "The server was not changed.";
-    var request = new SetServerRequest(region, region == ServerRegions.SelfHosted ? url : null);
+    string? Field(string key) => key == row.Key ? value : ServerRow(key).CurrentValue;
+    string? Override(string key) => string.IsNullOrWhiteSpace(Field(key)) ? null : Field(key);
+    var request = region == ServerRegions.SelfHosted
+      ? new SetServerRequest(region, Field(SettingKeys.ServerUrl), Override(SettingKeys.ServerWebVaultUrl), Override(SettingKeys.ServerApiUrl), Override(SettingKeys.ServerIdentityUrl), Override(SettingKeys.ServerIconsUrl), Override(SettingKeys.ServerNotificationsUrl), Override(SettingKeys.ServerEventsUrl), Override(SettingKeys.ServerKeyConnectorUrl))
+      : new SetServerRequest(region, null);
     var reply = IpcJson.Read(await channel.RequestAsync(Ops.SetServer, IpcJson.ToElement(request, IpcJson.Default.SetServerRequest), Timeout.InfiniteTimeSpan), IpcJson.Default.SetServerResponse);
     if (!reply.Success)
       return reply.Error ?? "Failed to set server URL";
@@ -140,7 +143,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     var rows = Sections.SelectMany(s => s.Rows).ToList();
     var byKey = rows.ToDictionary(r => r.Key);
     bool ParentOn(SettingRowViewModel row) => row.Parent is null || !byKey.TryGetValue(row.Parent, out var owner)
-      || (row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue);
+      || ((row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue) && (!owner.IsExpander || ParentOn(owner)));
     bool Matches(SettingRowViewModel row) => TextMatches(query, row.Label, row.Description);
 
     foreach (var row in rows)
@@ -218,6 +221,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private void Rebuild(IReadOnlyList<SettingDto> settings)
   {
+    var advancedExpanded = Sections.SelectMany(s => s.Rows).Any(r => r.IsExpander && r.Expanded);
     Sections.Clear();
     SettingsSectionViewModel? current = null;
     foreach (var setting in settings)
@@ -235,7 +239,8 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
         SettingKeys.OpenLogs => OpenLogs,
         SettingKeys.Hotkeys => showHotkeys,
         _ => null,
-      }, setting.Key is SettingKeys.ServerRegion or SettingKeys.ServerUrl ? CommitServerAsync : null);
+      }, setting.Key.StartsWith("server", StringComparison.Ordinal) ? CommitServerAsync : null);
+      row.Expanded = row.IsExpander && advancedExpanded;
       row.ValueChanged += RefreshVisibility;
       current.Rows.Add(row);
     }
@@ -315,8 +320,25 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   {
     SettingKinds.Toggle => _boolValue ? "true" : "false",
     SettingKinds.Choice => _selectedChoice?.Value ?? _committed,
+    SettingKinds.Expander => _expanded ? "true" : "false",
     _ => _committed,
   };
+
+  private bool _expanded;
+
+  public bool Expanded
+  {
+    get => _expanded;
+    set
+    {
+      if (SetProperty(ref _expanded, value))
+        ValueChanged?.Invoke();
+    }
+  }
+
+  public bool IsExpander => Kind == SettingKinds.Expander;
+
+  public bool IsPlain => !IsText && !IsExpander;
 
   public string Kind { get; }
 

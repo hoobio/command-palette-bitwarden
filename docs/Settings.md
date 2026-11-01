@@ -4,7 +4,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 
 ## Server
 
-The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**) and, for **Self-hosted**, **Server URL**. It is not part of the Command Palette settings page. A change logs you out. See [Server URL](Companion-Window#server-url).
+The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**) and, for **Self-hosted**, **Server URL** and a collapsed **Advanced** row with optional Web Vault, API, Identity, Icons, Notifications, Events and Key Connector URLs. It is not part of the Command Palette settings page. A change logs you out. See [Server URL](Companion-Window#server-url).
 
 ## Available Settings
 

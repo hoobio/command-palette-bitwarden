@@ -126,14 +126,22 @@ public class SettingsWindowTests(AvaloniaSession session)
     ]);
   }
 
-  private static void UseServerSchema(FakeExtension extension, string? confirm)
+  private static void UseServerSchema(FakeExtension extension, string? confirm, string region = "cloud", string? apiUrl = null)
   {
     extension.Schema.Clear();
     extension.Schema.AddRange(
     [
       new("_section_server", SettingKinds.Section, "Server", null, null, null),
-      new("serverRegion", SettingKinds.Choice, "Region", "Where your vault is hosted", "cloud", [new("Bitwarden.com", "cloud"), new("Bitwarden.eu", "eu"), new("Self-hosted", "selfHosted")], Confirm: confirm),
-      new("serverUrl", SettingKinds.Text, "Server URL", null, string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm),
+      new("serverRegion", SettingKinds.Choice, "Region", "Where your vault is hosted", region, [new("Bitwarden.com", "cloud"), new("Bitwarden.eu", "eu"), new("Self-hosted", "selfHosted")], Confirm: confirm),
+      new("serverUrl", SettingKinds.Text, "Server URL", null, region == "selfHosted" ? "https://vault.example.com" : string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm),
+      new("serverAdvanced", SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, "serverRegion", "selfHosted"),
+      new("serverWebVaultUrl", SettingKinds.Text, "Web Vault URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/", Confirm: confirm),
+      new("serverApiUrl", SettingKinds.Text, "API URL", null, apiUrl ?? string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/api", Confirm: confirm),
+      new("serverIdentityUrl", SettingKinds.Text, "Identity URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/identity", Confirm: confirm),
+      new("serverIconsUrl", SettingKinds.Text, "Icons URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/icons", Confirm: confirm),
+      new("serverNotificationsUrl", SettingKinds.Text, "Notifications URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/notifications", Confirm: confirm),
+      new("serverEventsUrl", SettingKinds.Text, "Events URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/events", Confirm: confirm),
+      new("serverKeyConnectorUrl", SettingKinds.Text, "Key Connector URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/key-connector", Confirm: confirm),
       new("_section_a", SettingKinds.Section, "General", null, null, null),
       new("showIcons", SettingKinds.Toggle, "Show icons", null, "true", null),
     ]);
@@ -229,6 +237,86 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     Assert.Equal(new SetServerRequest(ServerRegions.SelfHosted, "https://vault.example.com"), extension.Servers[^1]);
     Assert.Null(url.ErrorMessage);
+  });
+
+  private static readonly string[] AdvancedKeys = ["serverWebVaultUrl", "serverApiUrl", "serverIdentityUrl", "serverIconsUrl", "serverNotificationsUrl", "serverEventsUrl", "serverKeyConnectorUrl"];
+
+  [Fact]
+  public Task ServerAdvanced_IsHiddenUnlessSelfHosted_AndCollapsedByDefault() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var advanced = ServerRow(vm, "serverAdvanced");
+
+    Assert.False(advanced.IsShown);
+    Assert.All(AdvancedKeys, key => Assert.False(ServerRow(vm, key).IsShown));
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "selfHosted");
+
+    Assert.True(advanced.IsShown);
+    Assert.False(advanced.Expanded);
+    Assert.All(AdvancedKeys, key => Assert.False(ServerRow(vm, key).IsShown));
+
+    advanced.Expanded = true;
+    Assert.All(AdvancedKeys, key => Assert.True(ServerRow(vm, key).IsShown));
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "eu");
+    Assert.False(advanced.IsShown);
+    Assert.All(AdvancedKeys, key => Assert.False(ServerRow(vm, key).IsShown));
+  });
+
+  [Fact]
+  public Task ServerAdvanced_LoadsTheCurrentValues_AndKeepsTheExpandedStateOnReload() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null, region: "selfHosted", apiUrl: "https://api.example.com");
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+
+    Assert.Equal("https://api.example.com", ServerRow(vm, "serverApiUrl").CurrentValue);
+    Assert.Equal("{base URL}/api", ServerRow(vm, "serverApiUrl").Placeholder);
+
+    ServerRow(vm, "serverAdvanced").Expanded = true;
+    extension.Schema[1] = extension.Schema[1] with { Description = "changed" };
+    await vm.LoadAsync();
+
+    Assert.True(ServerRow(vm, "serverAdvanced").Expanded);
+    Assert.True(ServerRow(vm, "serverApiUrl").IsShown);
+  });
+
+  [Fact]
+  public Task ServerAdvanced_Save_SendsTheOverridesWithTheServerUrl_AndBlankMeansNone() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null, region: "selfHosted", apiUrl: "https://api.example.com");
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+
+    await ServerRow(vm, "serverIdentityUrl").CommitTextAsync("https://id.example.com");
+
+    Assert.Equal(new SetServerRequest(ServerRegions.SelfHosted, "https://vault.example.com", ApiUrl: "https://api.example.com", IdentityUrl: "https://id.example.com"), extension.Servers.Single());
+    Assert.Null(ServerRow(vm, "serverIdentityUrl").ErrorMessage);
+
+    await ServerRow(vm, "serverApiUrl").CommitTextAsync(string.Empty);
+
+    Assert.Equal(new SetServerRequest(ServerRegions.SelfHosted, "https://vault.example.com", IdentityUrl: "https://id.example.com"), extension.Servers[^1]);
+  });
+
+  [Fact]
+  public Task ServerAdvanced_InvalidOverride_ShowsTheExtensionsError() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { ServerReply = new SetServerResponse(false, "Invalid IdentityUrl: must start with https://") };
+    UseServerSchema(extension, confirm: null, region: "selfHosted");
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var identity = ServerRow(vm, "serverIdentityUrl");
+
+    await identity.CommitTextAsync("http://id.example.com");
+
+    Assert.Equal("http://id.example.com", extension.Servers.Single().IdentityUrl);
+    Assert.Equal("Invalid IdentityUrl: must start with https://", identity.ErrorMessage);
   });
 
   [Fact]

@@ -57,6 +57,27 @@ internal static class HubProtocol
         return (loggedIn, ResolveServerUrl(ActiveEnvironment(root, userId)));
     }
 
+    public static Models.ServerConfig? ReadServerUrls(string dataFile)
+    {
+        using var stream = new FileStream(dataFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var document = JsonDocument.Parse(stream);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+            return null;
+        var environment = ActiveEnvironment(root, StringProperty(root, "global_account_activeAccountId"));
+        if (environment.ValueKind != JsonValueKind.Object || !environment.TryGetProperty("urls", out var urls))
+            return null;
+        return new Models.ServerConfig(
+            StringProperty(urls, "base") ?? string.Empty,
+            StringProperty(urls, "webVault"),
+            StringProperty(urls, "api"),
+            StringProperty(urls, "identity"),
+            StringProperty(urls, "icons"),
+            StringProperty(urls, "notifications"),
+            StringProperty(urls, "events"),
+            StringProperty(urls, "keyConnector"));
+    }
+
     private static JsonElement ActiveEnvironment(JsonElement root, string? userId) =>
         userId != null && root.TryGetProperty($"user_{userId}_environment_environment", out var userEnvironment) && userEnvironment.ValueKind == JsonValueKind.Object
             ? userEnvironment

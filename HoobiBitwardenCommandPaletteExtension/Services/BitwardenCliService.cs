@@ -153,6 +153,19 @@ internal sealed partial class BitwardenCliService
 
   internal string? DataFileFolder => Path.GetDirectoryName(DataFile);
 
+  internal ServerConfig? ReadServerUrls()
+  {
+    try
+    {
+      return HubProtocol.ReadServerUrls(DataFile);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Text.Json.JsonException)
+    {
+      DebugLogService.Log("Status", $"CLI data file unreadable: {ex.GetType().Name}");
+      return null;
+    }
+  }
+
   private sealed record DataFileStamp(DateTime WriteTimeUtc, long Length);
 
   // FAT32 keeps write times to 2 seconds, so an unchanged stamp is trusted only for a bounded time.

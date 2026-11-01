@@ -42,17 +42,17 @@ public class CompanionSettingsOpsTests : IDisposable
   {
     var settings = await GetAsync();
 
-    Assert.Equal(_settings.OrderedSettings.Count + 6, settings.Count);
+    Assert.Equal(_settings.OrderedSettings.Count + 14, settings.Count);
     Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Section));
     Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Link));
     Assert.Equal(15, settings.Count(s => s.Kind == SettingKinds.Toggle));
     Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Choice));
-    Assert.Equal(3, settings.Count(s => s.Kind == SettingKinds.Text));
-    Assert.Equal(["_section_server", "serverRegion", "serverUrl"], settings.Take(3).Select(s => s.Key));
-    Assert.Equal(["_section_shortcuts", "hotkeys"], settings.Skip(3).Take(2).Select(s => s.Key));
-    Assert.Equal((SettingKinds.Link, "Keyboard shortcuts", "Change item shortcuts and the Enter action"), (settings[4].Kind, settings[4].Label, settings[4].Description));
-    Assert.Equal(["_section_auth", "rememberSession", "useApiKeyAuthentication"], settings.Skip(5).Take(3).Select(s => s.Key));
-    Assert.Equal(new SettingDto("_section_auth", SettingKinds.Section, "Authentication", null, null, null), settings[5]);
+    Assert.Equal(10, settings.Count(s => s.Kind == SettingKinds.Text));
+    Assert.Equal(["_section_server", "serverRegion", "serverUrl", "serverAdvanced"], settings.Take(4).Select(s => s.Key));
+    Assert.Equal(["_section_shortcuts", "hotkeys"], settings.Skip(11).Take(2).Select(s => s.Key));
+    Assert.Equal((SettingKinds.Link, "Keyboard shortcuts", "Change item shortcuts and the Enter action"), (settings[12].Kind, settings[12].Label, settings[12].Description));
+    Assert.Equal(["_section_auth", "rememberSession", "useApiKeyAuthentication"], settings.Skip(13).Take(3).Select(s => s.Key));
+    Assert.Equal(new SettingDto("_section_auth", SettingKinds.Section, "Authentication", null, null, null), settings[13]);
 
     var liveSync = settings.Single(s => s.Key == "liveSync");
     Assert.Equal((SettingKinds.Toggle, "Live Sync", "true"), (liveSync.Kind, liveSync.Label, liveSync.Value));
@@ -94,7 +94,7 @@ public class CompanionSettingsOpsTests : IDisposable
       Assert.All(settings.Skip(parentIndex + 1).Take(childIndex - parentIndex - 1), s => Assert.Equal(parent, s.Parent));
     }
 
-    Assert.Equal(dependencies.Length + 2, settings.Count(s => s.Parent is not null));
+    Assert.Equal(dependencies.Length + 10, settings.Count(s => s.Parent is not null));
   }
 
   [Fact]
@@ -102,12 +102,33 @@ public class CompanionSettingsOpsTests : IDisposable
   {
     var rows = CompanionOps.ServerRows("https://vault.example.com", loggedIn: false);
 
-    Assert.Equal(["_section_server", "serverRegion", "serverUrl"], rows.Select(r => r.Key));
+    Assert.Equal(["_section_server", "serverRegion", "serverUrl", "serverAdvanced", "serverWebVaultUrl", "serverApiUrl", "serverIdentityUrl", "serverIconsUrl", "serverNotificationsUrl", "serverEventsUrl", "serverKeyConnectorUrl"], rows.Select(r => r.Key));
     Assert.Equal(("Server", SettingKinds.Section), (rows[0].Label, rows[0].Kind));
     Assert.Equal(ServerRegions.SelfHosted, rows[1].Value);
     Assert.Equal(["cloud", "eu", "selfHosted"], rows[1].Choices!.Select(c => c.Value));
     Assert.Equal(("https://vault.example.com", "serverRegion", ServerRegions.SelfHosted), (rows[2].Value, rows[2].Parent, rows[2].ParentValue));
     Assert.All(rows, r => Assert.Null(r.Confirm));
+  }
+
+  [Fact]
+  public void ServerRows_AdvancedRows_AreCollapsedBehindSelfHosted_WithPlaceholdersAndCurrentValues()
+  {
+    var rows = CompanionOps.ServerRows("https://vault.example.com", loggedIn: false, new Models.ServerConfig("https://vault.example.com", ApiUrl: "https://api.example.com"));
+
+    var advanced = rows.Single(r => r.Key == "serverAdvanced");
+    Assert.Equal((SettingKinds.Expander, "serverRegion", ServerRegions.SelfHosted, "Leave blank to derive from the server URL."), (advanced.Kind, advanced.Parent, advanced.ParentValue, advanced.Description));
+    var overrides = rows.SkipWhile(r => r.Key != "serverAdvanced").Skip(1).ToList();
+    Assert.All(overrides, r => Assert.Equal((SettingKinds.Text, "serverAdvanced", "true"), (r.Kind, r.Parent, r.ParentValue)));
+    Assert.Equal(["{base URL}/", "{base URL}/api", "{base URL}/identity", "{base URL}/icons", "{base URL}/notifications", "{base URL}/events", "{base URL}/key-connector"], overrides.Select(r => r.Placeholder));
+    Assert.Equal(["", "https://api.example.com", "", "", "", "", ""], overrides.Select(r => r.Value));
+  }
+
+  [Fact]
+  public void ServerRows_WhileLoggedIn_AdvancedRowsAskForConfirmation()
+  {
+    var rows = CompanionOps.ServerRows("https://vault.example.com", loggedIn: true);
+
+    Assert.All(rows.Where(r => r.Parent == "serverAdvanced"), r => Assert.Equal(rows[1].Confirm, r.Confirm));
   }
 
   [Theory]

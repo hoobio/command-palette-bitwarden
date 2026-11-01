@@ -69,6 +69,7 @@ internal static class SettingKinds
   public const string Choice = "choice";
   public const string Text = "text";
   public const string Link = "link";
+  public const string Expander = "expander";
 }
 
 internal static class SettingStatuses
@@ -83,6 +84,14 @@ internal static class SettingKeys
   public const string Hotkeys = "hotkeys";
   public const string ServerRegion = "serverRegion";
   public const string ServerUrl = "serverUrl";
+  public const string ServerAdvanced = "serverAdvanced";
+  public const string ServerWebVaultUrl = "serverWebVaultUrl";
+  public const string ServerApiUrl = "serverApiUrl";
+  public const string ServerIdentityUrl = "serverIdentityUrl";
+  public const string ServerIconsUrl = "serverIconsUrl";
+  public const string ServerNotificationsUrl = "serverNotificationsUrl";
+  public const string ServerEventsUrl = "serverEventsUrl";
+  public const string ServerKeyConnectorUrl = "serverKeyConnectorUrl";
 }
 
 internal static class SettingsFocus

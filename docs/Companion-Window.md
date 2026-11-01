@@ -107,6 +107,8 @@ The generate button in the edit form opens the generator in a dialog. **Generate
 | Password | Length (5 to 128), uppercase, lowercase, numbers, special characters (`!@#$%^&*`), minimum numbers and minimum special characters (0 to 9), avoid ambiguous characters | 20 characters, uppercase, lowercase, numbers and special characters, at least 1 number and 1 special character, ambiguous characters avoided |
 | Passphrase | Number of words (3 to 20), word separator (one character), capitalise, include number | 4 words, separated by `-` |
 
+The generator options (Length, character types, minimums, avoid ambiguous, and the passphrase options) are collapsed behind an **Options** row by default. Select the row, or press Enter or Space on it, to expand it. The state is shared by the generator window and the **Rotate password** dialog until the companion closes. The generator window is sized to fit the collapsed options, grows when they expand, and shrinks back on collapse unless you have resized it.
+
 The extension makes the values in its own process with the Windows cryptographic random number generator, with the same rules as Bitwarden. A passphrase uses words from the [EFF large word list](https://www.eff.org/dice). **Regenerate** makes a new value, the copy button copies it through the extension with the clipboard clear timer and shows **Copied** in the toast, and **Use password** puts it in the password field.
 
 The generator window has **Save as new item** at the bottom. It opens a [new item](#new-item) window as a login, with the generated value in the password field. The edit form and the **Rotate password** dialog do not show this button.
@@ -188,10 +190,11 @@ The **Server** section is the first section of the Settings window. It has these
 
 - **Region** is **Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**. The box starts with the region of the current server.
 - **Server URL** shows for **Self-hosted**. It must start with `http://` or `https://`. A change saves when you press `Enter` or move to another control. Choosing **Self-hosted** alone changes nothing until the URL is saved.
+- **Advanced** shows for **Self-hosted**, under **Server URL**. It is collapsed by default. Select the row to show seven optional URL boxes: **Web Vault URL**, **API URL**, **Identity URL**, **Icons URL**, **Notifications URL**, **Events URL** and **Key Connector URL**. Each box shows its default, for example `{base URL}/api`, as a placeholder. Leave a box blank to derive the address from **Server URL**. A URL in a box must start with `https://`. A change saves with **Server URL** in the same way, and the boxes show the overrides that the Bitwarden CLI has stored.
 
 Choosing **Bitwarden.com** or **Bitwarden.eu** saves the server at once. The Bitwarden CLI changes the server only while you are logged out, so a change logs out of a locked or unlocked vault first. While you are logged in, the description of **Region** reads "Changing the server logs you out", and each change asks for confirmation in a **Change server?** dialog. **Cancel** keeps the server and shows "The server was not changed." under the control. A URL that is not valid, or an error from the CLI, shows under the control. A saved server leaves you logged out, and Command Palette then shows **Login to Bitwarden**.
 
-If the companion is not available, **Set Bitwarden Server** opens a list in Command Palette. That list sets the web vault, API, identity, icons, notifications, events and key connector URLs as well.
+If the companion is not available, **Set Bitwarden Server** opens a list in Command Palette. That list sets the same optional URLs as **Advanced**.
 
 ## Settings window
 

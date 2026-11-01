@@ -38,7 +38,7 @@
                                             <DataTemplate x:DataType="vm:SettingRowViewModel">
                                                 <Border Classes="Row Switch" Classes.Child="{Binding IsChild}" IsVisible="{Binding IsShown}">
                                                     <StackPanel>
-                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding !IsText}">
+                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding IsPlain}">
                                                             <StackPanel VerticalAlignment="Center" Spacing="2">
                                                                 <WrapPanel>
                                                                     <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
@@ -67,6 +67,16 @@
                                                             <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.Open}" IsVisible="{Binding IsLink}" />
                                                             <Button Grid.ColumnSpan="2" Margin="-16,-8" Theme="{StaticResource RowOverlayButtonStyle}" IsVisible="{Binding IsLink}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
                                                         </Grid>
+                                                        <ToggleButton Margin="-16,-8" Padding="16,8" Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsVisible="{Binding IsExpander}" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
+                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                                    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                                    <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
+                                                                </StackPanel>
+                                                                <TextBlock Grid.Column="1" Classes="Icon" VerticalAlignment="Center" Text="{StaticResource Glyph.ChevronDown}" IsVisible="{Binding !Expanded}" />
+                                                                <TextBlock Grid.Column="1" Classes="Icon" VerticalAlignment="Center" Text="{StaticResource Glyph.ChevronUp}" IsVisible="{Binding Expanded}" />
+                                                            </Grid>
+                                                        </ToggleButton>
                                                         <StackPanel Spacing="6" IsVisible="{Binding IsText}">
                                                             <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
                                                             <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
