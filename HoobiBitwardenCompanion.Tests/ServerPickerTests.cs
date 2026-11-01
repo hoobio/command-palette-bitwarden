@@ -37,12 +37,12 @@ public class ServerPickerTests(AvaloniaSession session)
     return coordinator;
   }
 
-  private static readonly SetServerRequest SelfHosted = new(ServerRegions.SelfHosted, "https://vault.hoobi.io", ApiUrl: "https://api.hoobi.io");
+  private static readonly SetServerRequest SelfHosted = new(ServerRegions.SelfHosted, "https://vault.example.com", ApiUrl: "https://api.example.com");
 
   [Theory]
   [InlineData(ServerRegions.Cloud, null, "bitwarden.com")]
   [InlineData(ServerRegions.Eu, null, "bitwarden.eu")]
-  [InlineData(ServerRegions.SelfHosted, "https://vault.hoobi.io", "vault.hoobi.io")]
+  [InlineData(ServerRegions.SelfHosted, "https://vault.example.com", "vault.example.com")]
   [InlineData(ServerRegions.SelfHosted, "https://vault.example.com:8443/", "vault.example.com:8443")]
   public Task Picker_ShowsTheCurrentServer_OnBothLoginWindows(string region, string? baseUrl, string expected) => session.RunAsync(async () =>
   {
@@ -86,7 +86,7 @@ public class ServerPickerTests(AvaloniaSession session)
     apiKey.UpdateLayout();
 
     foreach (var window in (Window[])[login, apiKey])
-      Assert.Equal("vault.hoobi.io", window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "ServerText").Text);
+      Assert.Equal("vault.example.com", window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "ServerText").Text);
     login.Close();
     apiKey.Close();
     await Task.CompletedTask;
@@ -123,7 +123,7 @@ public class ServerPickerTests(AvaloniaSession session)
     await picker.SelectAsync(ServerRegions.Eu);
 
     Assert.Equal("Could not set the server", picker.ErrorMessage);
-    Assert.Equal("vault.hoobi.io", picker.Host);
+    Assert.Equal("vault.example.com", picker.Host);
     Assert.True(picker.IsSelfHosted);
     window.Close();
   });
@@ -176,7 +176,7 @@ public class ServerPickerTests(AvaloniaSession session)
     extension.Gate.Release();
     await selecting;
 
-    Assert.Equal("vault.hoobi.io", api.Server.Host);
+    Assert.Equal("vault.example.com", api.Server.Host);
     Assert.True(api.Server.IsSelfHosted);
     Assert.Equal("Could not set the server", api.Server.ErrorMessage);
     Assert.False(api.IsBusy);
@@ -239,9 +239,9 @@ public class ServerPickerTests(AvaloniaSession session)
 
     await picker.SelectAsync(ServerRegions.SelfHosted);
 
-    Assert.Equal("https://vault.hoobi.io", dialog!.BaseUrl);
+    Assert.Equal("https://vault.example.com", dialog!.BaseUrl);
     Assert.Equal(7, dialog.Fields.Count);
-    Assert.Equal("https://api.hoobi.io", dialog.Fields.Single(f => f.Label == "API URL").Value);
+    Assert.Equal("https://api.example.com", dialog.Fields.Single(f => f.Label == "API URL").Value);
     Assert.Equal("{base URL}/api", dialog.Fields.Single(f => f.Label == "API URL").Placeholder);
     Assert.True(dialog.Expanded);
     Assert.Empty(extension.Servers);

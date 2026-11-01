@@ -728,7 +728,7 @@ public class VaultItemHelperTests
   }
 
   [Theory]
-  [InlineData("Nintex", "N")]
+  [InlineData("Contoso", "C")]
   [InlineData("Acme", "A")]
   [InlineData("test", "T")]
   [InlineData("Test Organization", "TO")]
@@ -744,10 +744,10 @@ public class VaultItemHelperTests
   public void BuildOrganizationTag_InitialsMode_SingleWord_FirstLetter()
   {
     var item = new BitwardenItem { Id = "i", Type = BitwardenItemType.Login, OrganizationId = "org-1" };
-    var tag = VaultItemHelper.BuildOrganizationTag(item, "Nintex", "initials");
+    var tag = VaultItemHelper.BuildOrganizationTag(item, "Contoso", "initials");
     Assert.NotNull(tag);
-    Assert.Equal("N", tag!.Text);
-    Assert.Equal("Nintex", tag.ToolTip);
+    Assert.Equal("C", tag!.Text);
+    Assert.Equal("Contoso", tag.ToolTip);
   }
 
   [Fact]
