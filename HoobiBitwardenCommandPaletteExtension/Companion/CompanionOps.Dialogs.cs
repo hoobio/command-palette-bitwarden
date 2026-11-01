@@ -76,8 +76,7 @@ internal sealed partial class CompanionOps
     }
 
     var baseUrl = request.BaseUrl?.Trim() ?? string.Empty;
-    var hasScheme = baseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-    if (!hasScheme || !Uri.TryCreate(baseUrl, UriKind.Absolute, out _))
+    if (!ServerUrlRules.IsValidBaseUrl(baseUrl))
     {
       error = "Enter a valid server URL starting with http:// or https://";
       return false;

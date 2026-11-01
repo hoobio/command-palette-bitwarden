@@ -243,11 +243,24 @@ public class ServerPickerTests(AvaloniaSession session)
     Assert.Equal("https://vault.hoobi.io", dialog!.BaseUrl);
     Assert.Equal(7, dialog.Fields.Count);
     Assert.Equal("https://api.hoobi.io", dialog.Fields.Single(f => f.Label == "API URL").Value);
-    Assert.Equal("{base URL}/api", dialog.Fields.Single(f => f.Label == "API URL").Placeholder);
+    Assert.Equal("https://vault.hoobi.io/api", dialog.Fields.Single(f => f.Label == "API URL").Placeholder);
     Assert.True(dialog.Expanded);
     Assert.Empty(extension.Servers);
     window.Close();
   });
+
+  [Fact]
+  public void SelfHostedDialog_PlaceholdersFollowTheServerUrl_AndFallBackToTheExample()
+  {
+    var dialog = new SelfHostedServerViewModel(new SetServerRequest(ServerRegions.Cloud, null));
+    Assert.Equal(["https://vault.example.com/", "https://vault.example.com/api"], dialog.Fields.Take(2).Select(f => f.Placeholder));
+
+    dialog.BaseUrl = "https://vault.hoobi.io";
+    Assert.Equal(["https://vault.hoobi.io/", "https://vault.hoobi.io/api", "https://vault.hoobi.io/identity", "https://vault.hoobi.io/icons", "https://vault.hoobi.io/notifications", "https://vault.hoobi.io/events", "https://vault.hoobi.io/key-connector"], dialog.Fields.Select(f => f.Placeholder));
+
+    dialog.BaseUrl = string.Empty;
+    Assert.Equal("https://vault.example.com/key-connector", dialog.Fields[^1].Placeholder);
+  }
 
   [Fact]
   public Task SelfHostedDialog_WithoutOverrides_StartsCollapsed_AndEmptyForCloud() => session.RunAsync(async () =>

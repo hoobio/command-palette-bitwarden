@@ -129,8 +129,19 @@ public class CompanionSettingsOpsTests : IDisposable
     Assert.Equal((SettingKinds.Expander, "serverRegion", ServerRegions.SelfHosted, "Leave blank to derive from the server URL."), (advanced.Kind, advanced.Parent, advanced.ParentValue, advanced.Description));
     var overrides = rows.SkipWhile(r => r.Key != "serverAdvanced").Skip(1).ToList();
     Assert.All(overrides, r => Assert.Equal((SettingKinds.Text, "serverAdvanced", "true"), (r.Kind, r.Parent, r.ParentValue)));
-    Assert.Equal(["{base URL}/", "{base URL}/api", "{base URL}/identity", "{base URL}/icons", "{base URL}/notifications", "{base URL}/events", "{base URL}/key-connector"], overrides.Select(r => r.Placeholder));
+    Assert.Equal(["https://vault.example.com/", "https://vault.example.com/api", "https://vault.example.com/identity", "https://vault.example.com/icons", "https://vault.example.com/notifications", "https://vault.example.com/events", "https://vault.example.com/key-connector"], overrides.Select(r => r.Placeholder));
     Assert.Equal(["", "https://api.example.com", "", "", "", "", ""], overrides.Select(r => r.Value));
+  }
+
+  [Theory]
+  [InlineData("https://vault.hoobi.io/", "https://vault.hoobi.io/api")]
+  [InlineData(null, "https://vault.example.com/api")]
+  [InlineData("vault.hoobi.io", "https://vault.example.com/api")]
+  public void ServerRows_AdvancedPlaceholders_DeriveFromTheServerUrl_OrShowTheExample(string? url, string api)
+  {
+    var rows = CompanionOps.ServerRows(url, loggedIn: false);
+
+    Assert.Equal(api, rows.Single(r => r.Key == "serverApiUrl").Placeholder);
   }
 
   [Fact]

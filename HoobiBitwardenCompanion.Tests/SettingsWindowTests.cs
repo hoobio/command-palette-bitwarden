@@ -137,13 +137,13 @@ public class SettingsWindowTests(AvaloniaSession session)
       new("serverRegion", SettingKinds.Choice, "Region", "Where your vault is hosted", region, [new("Bitwarden.com", "cloud"), new("Bitwarden.eu", "eu"), new("Self-hosted", "selfHosted")], Confirm: confirm),
       new("serverUrl", SettingKinds.Text, "Server URL", null, region == "selfHosted" ? "https://vault.example.com" : string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm, ReadOnlyValues: new Dictionary<string, string> { ["cloud"] = "https://vault.bitwarden.com", ["eu"] = "https://vault.bitwarden.eu" }),
       new("serverAdvanced", SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, "serverRegion", "selfHosted"),
-      new("serverWebVaultUrl", SettingKinds.Text, "Web Vault URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/", Confirm: confirm),
-      new("serverApiUrl", SettingKinds.Text, "API URL", null, apiUrl ?? string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/api", Confirm: confirm),
-      new("serverIdentityUrl", SettingKinds.Text, "Identity URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/identity", Confirm: confirm),
-      new("serverIconsUrl", SettingKinds.Text, "Icons URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/icons", Confirm: confirm),
-      new("serverNotificationsUrl", SettingKinds.Text, "Notifications URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/notifications", Confirm: confirm),
-      new("serverEventsUrl", SettingKinds.Text, "Events URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/events", Confirm: confirm),
-      new("serverKeyConnectorUrl", SettingKinds.Text, "Key Connector URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/key-connector", Confirm: confirm),
+      new("serverWebVaultUrl", SettingKinds.Text, "Web Vault URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/", Confirm: confirm),
+      new("serverApiUrl", SettingKinds.Text, "API URL", null, apiUrl ?? string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/api", Confirm: confirm),
+      new("serverIdentityUrl", SettingKinds.Text, "Identity URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/identity", Confirm: confirm),
+      new("serverIconsUrl", SettingKinds.Text, "Icons URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/icons", Confirm: confirm),
+      new("serverNotificationsUrl", SettingKinds.Text, "Notifications URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/notifications", Confirm: confirm),
+      new("serverEventsUrl", SettingKinds.Text, "Events URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/events", Confirm: confirm),
+      new("serverKeyConnectorUrl", SettingKinds.Text, "Key Connector URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/key-connector", Confirm: confirm),
       new("_section_a", SettingKinds.Section, "General", null, null, null),
       new("showIcons", SettingKinds.Toggle, "Show icons", null, "true", null),
     ]);
@@ -302,7 +302,7 @@ public class SettingsWindowTests(AvaloniaSession session)
     using var ownedPair = pair;
 
     Assert.Equal("https://api.example.com", ServerRow(vm, "serverApiUrl").CurrentValue);
-    Assert.Equal("{base URL}/api", ServerRow(vm, "serverApiUrl").Placeholder);
+    Assert.Equal("https://vault.example.com/api", ServerRow(vm, "serverApiUrl").Placeholder);
 
     ServerRow(vm, "serverAdvanced").Expanded = true;
     extension.Schema[1] = extension.Schema[1] with { Description = "changed" };
@@ -433,6 +433,32 @@ public class SettingsWindowTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() => extension.Sets.Count == 2);
     Assert.Equal(("limit", "5"), extension.Sets[1]);
     Assert.All(window.ViewModel!.Sections.SelectMany(s => s.Rows), r => Assert.Null(r.ErrorMessage));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task ServerAdvanced_PlaceholdersFollowTheTypedServerUrl_AndFallBackToTheExample() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null, region: "selfHosted");
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    var vm = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.Sections.SelectMany(s => s.Rows).Any(r => r.Key == "serverRegion"));
+    ServerRow(vm, "serverRegion").Expanded = true;
+    WaitForRows(window);
+    var box = Find<TextBox>(window, "serverUrl");
+
+    box.Text = "https://vault.hoobi.io";
+    AvaloniaSession.WaitFor(() => ServerRow(vm, "serverApiUrl").Placeholder == "https://vault.hoobi.io/api");
+    Assert.Equal(["https://vault.hoobi.io/", "https://vault.hoobi.io/api", "https://vault.hoobi.io/identity", "https://vault.hoobi.io/icons", "https://vault.hoobi.io/notifications", "https://vault.hoobi.io/events", "https://vault.hoobi.io/key-connector"], AdvancedKeys.Select(k => ServerRow(vm, k).Placeholder));
+    Assert.Empty(extension.Servers);
+
+    box.Text = string.Empty;
+    AvaloniaSession.WaitFor(() => ServerRow(vm, "serverApiUrl").Placeholder == "https://vault.example.com/api");
     window.Close();
     await Task.CompletedTask;
   });

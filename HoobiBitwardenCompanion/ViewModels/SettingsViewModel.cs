@@ -54,6 +54,12 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private SettingRowViewModel ServerRow(string key) => Sections.SelectMany(s => s.Rows).First(r => r.Key == key);
 
+  internal void ServerUrlTyped(string? text)
+  {
+    foreach (var row in Sections.SelectMany(s => s.Rows))
+      row.FollowServerUrl(text);
+  }
+
   private Task<bool> AskAsync(string title, string message, string primary, string close) =>
     Confirm?.Invoke(title, message, primary, close) ?? Task.FromResult(false);
 
@@ -372,6 +378,12 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 
   [ObservableProperty]
   public partial string? Placeholder { get; private set; }
+
+  internal void FollowServerUrl(string? baseUrl)
+  {
+    if (ServerUrlRules.AdvancedPaths.TryGetValue(Key, out var path))
+      Placeholder = ServerUrlRules.Placeholder(baseUrl, path);
+  }
 
   [ObservableProperty]
   public partial string? Tooltip { get; private set; }

@@ -95,21 +95,21 @@ internal sealed partial class CompanionOps
     var region = RegionOf(url);
     var warning = "Changing the server logs you out";
     var confirm = loggedIn ? $"{warning} of Bitwarden. Continue?" : null;
-    SettingDto Advanced(string key, string label, string? value, string path) =>
-      new(key, SettingKinds.Text, label, null, value ?? string.Empty, null, SettingKeys.ServerAdvanced, "true", Placeholder: "{base URL}" + path, Confirm: confirm);
+    SettingDto Advanced(string key, string label, string? value) =>
+      new(key, SettingKinds.Text, label, null, value ?? string.Empty, null, SettingKeys.ServerAdvanced, "true", Placeholder: ServerUrlRules.Placeholder(region == ServerRegions.SelfHosted ? url : null, ServerUrlRules.AdvancedPaths[key]), Confirm: confirm);
     return
     [
       new("_section_server", SettingKinds.Section, "Server", null, null, null),
       new(SettingKeys.ServerRegion, SettingKinds.Choice, "Region", loggedIn ? warning : "Where your vault is hosted", region, ServerChoices, Confirm: confirm),
       new(SettingKeys.ServerUrl, SettingKinds.Text, "Server URL", "Address of your Bitwarden server", region == ServerRegions.SelfHosted ? url : string.Empty, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted, Placeholder: "https://vault.example.com", Confirm: confirm, ReadOnlyValues: PresetUrls),
       new(SettingKeys.ServerAdvanced, SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted),
-      Advanced(SettingKeys.ServerWebVaultUrl, "Web Vault URL", urls?.WebVaultUrl, "/"),
-      Advanced(SettingKeys.ServerApiUrl, "API URL", urls?.ApiUrl, "/api"),
-      Advanced(SettingKeys.ServerIdentityUrl, "Identity URL", urls?.IdentityUrl, "/identity"),
-      Advanced(SettingKeys.ServerIconsUrl, "Icons URL", urls?.IconsUrl, "/icons"),
-      Advanced(SettingKeys.ServerNotificationsUrl, "Notifications URL", urls?.NotificationsUrl, "/notifications"),
-      Advanced(SettingKeys.ServerEventsUrl, "Events URL", urls?.EventsUrl, "/events"),
-      Advanced(SettingKeys.ServerKeyConnectorUrl, "Key Connector URL", urls?.KeyConnectorUrl, "/key-connector"),
+      Advanced(SettingKeys.ServerWebVaultUrl, "Web Vault URL", urls?.WebVaultUrl),
+      Advanced(SettingKeys.ServerApiUrl, "API URL", urls?.ApiUrl),
+      Advanced(SettingKeys.ServerIdentityUrl, "Identity URL", urls?.IdentityUrl),
+      Advanced(SettingKeys.ServerIconsUrl, "Icons URL", urls?.IconsUrl),
+      Advanced(SettingKeys.ServerNotificationsUrl, "Notifications URL", urls?.NotificationsUrl),
+      Advanced(SettingKeys.ServerEventsUrl, "Events URL", urls?.EventsUrl),
+      Advanced(SettingKeys.ServerKeyConnectorUrl, "Key Connector URL", urls?.KeyConnectorUrl),
     ];
   }
 

@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using FluentAvalonia.UI.Controls;
 using Hoobi.Design.Avalonia;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -25,6 +26,7 @@ internal sealed partial class SettingsWindow : Window
     AddHandler(GotFocusEvent, OnGotFocus);
     AddHandler(LostFocusEvent, OnLostFocus);
     AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+    AddHandler(TextBox.TextChangedEvent, OnTextChanged);
     SearchBox.TextChanged += OnSearchTextChanged;
     ShortcutsPage.Back.Click += (_, _) => ViewModel?.CloseShortcuts();
     if (viewModel is not null)
@@ -46,6 +48,12 @@ internal sealed partial class SettingsWindow : Window
   {
     if (string.IsNullOrEmpty(SearchBox.Text))
       Scroller.ScrollToHome();
+  }
+
+  private void OnTextChanged(object? sender, TextChangedEventArgs e)
+  {
+    if (e.Source is TextBox { DataContext: SettingRowViewModel { Key: SettingKeys.ServerUrl } } box)
+      ViewModel?.ServerUrlTyped(box.Text);
   }
 
   private static void OnGotFocus(object? sender, RoutedEventArgs e)
