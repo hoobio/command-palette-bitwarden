@@ -10,7 +10,10 @@ internal sealed partial class LoginViewModel : DialogViewModel
   internal const int CodeStep = 1;
   internal const int DeviceStep = 2;
 
-  private static readonly int?[] MethodValues = [TwoFactorRules.Authenticator, TwoFactorRules.Email, TwoFactorRules.YubiKey, null];
+  internal const int DefaultMethodIndex = 1;
+  private const int FirstUnsupportedMethodIndex = 4;
+
+  private static readonly int?[] MethodValues = [null, TwoFactorRules.Authenticator, TwoFactorRules.Email, TwoFactorRules.YubiKey];
 
   private bool _deviceVerificationPending;
 
@@ -21,7 +24,7 @@ internal sealed partial class LoginViewModel : DialogViewModel
     CustomDataDirWarning = customDataDir is null
       ? null
       : $"Custom CLI data directory: {customDataDir}. Set BITWARDENCLI_APPDATA_DIR to this path before you run `bw login` in a terminal.";
-    TwoStepIndex = RememberedTwoStepIndex;
+    MethodIndex = RememberedMethodIndex;
     PropertyChanged += (_, e) =>
     {
       if (e.PropertyName == nameof(IsBusy))
@@ -40,15 +43,13 @@ internal sealed partial class LoginViewModel : DialogViewModel
     };
   }
 
-  internal static int RememberedTwoStepIndex;
+  internal static int RememberedMethodIndex = DefaultMethodIndex;
 
-  public static IReadOnlyList<string> MethodChoices { get; } = ["Authenticator app", "Email", "YubiKey OTP", "Auto-detect"];
-
-  public static IReadOnlyList<string> TwoStepChoices { get; } = ["Authenticator app or email", "Duo", "WebAuthn (FIDO2)"];
+  public static IReadOnlyList<string> MethodChoices { get; } = ["Auto-detect", "Authenticator app", "Email", "YubiKey OTP", "Duo", "WebAuthn (FIDO2)"];
 
   internal Action<SetServerRequest>? ApiKeyLoginRequested { get; set; }
 
-  public bool IsUnsupportedTwoStep => TwoStepIndex > 0;
+  public bool IsUnsupportedTwoStep => MethodIndex >= FirstUnsupportedMethodIndex;
 
   public bool CredentialsEnabled => !IsBusy && !IsUnsupportedTwoStep;
 
@@ -87,17 +88,14 @@ internal sealed partial class LoginViewModel : DialogViewModel
   public partial int MethodIndex { get; set; }
 
   [ObservableProperty]
-  public partial int TwoStepIndex { get; set; }
-
-  [ObservableProperty]
   public partial string? TwoStepError { get; private set; }
 
   [ObservableProperty]
   public partial bool RememberSession { get; set; }
 
-  partial void OnTwoStepIndexChanged(int value)
+  partial void OnMethodIndexChanged(int value)
   {
-    RememberedTwoStepIndex = value;
+    RememberedMethodIndex = value;
     TwoStepError = null;
     OnPropertyChanged(nameof(IsUnsupportedTwoStep));
     OnPropertyChanged(nameof(CredentialsEnabled));
