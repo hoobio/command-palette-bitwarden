@@ -17,7 +17,7 @@
         <SolidColorBrush x:Key="ComboBoxForegroundPressed" Color="#FFCBCCC6" />
         <SolidColorBrush x:Key="ComboBoxForegroundFocused" Color="#FFCBCCC6" />
         <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#FFCBCCC6" />
-        <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF242936" />
+        <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF15181F" />
         <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="Transparent" />
         <Thickness x:Key="ComboBoxBorderThemeThickness">0</Thickness>
         <Thickness x:Key="ComboBoxDropdownBorderThickness">0</Thickness>
