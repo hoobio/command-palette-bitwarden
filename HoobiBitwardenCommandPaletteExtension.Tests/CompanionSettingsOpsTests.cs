@@ -45,7 +45,7 @@ public class CompanionSettingsOpsTests : IDisposable
     Assert.Equal(_settings.OrderedSettings.Count + 1, settings.Count);
     Assert.Equal(6, settings.Count(s => s.Kind == SettingKinds.Section));
     Assert.Equal(1, settings.Count(s => s.Kind == SettingKinds.Link));
-    Assert.Equal(14, settings.Count(s => s.Kind == SettingKinds.Toggle));
+    Assert.Equal(15, settings.Count(s => s.Kind == SettingKinds.Toggle));
     Assert.Equal(7, settings.Count(s => s.Kind == SettingKinds.Choice));
     Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Text));
     Assert.Equal(["_section_auth", "rememberSession", "useApiKeyAuthentication"], settings.Take(3).Select(s => s.Key));
@@ -75,6 +75,11 @@ public class CompanionSettingsOpsTests : IDisposable
       ("showContextTag", "contextAwareness"),
       ("contextItemLimit", "contextAwareness"),
       ("clipboardClearDelay", "autoClearClipboard"),
+      ("showWatchtowerTags", "showTags"),
+      ("showProtectedTag", "showTags"),
+      ("showPasskeyTag", "showTags"),
+      ("totpTagStyle", "showTags"),
+      ("organizationTagStyle", "showTags"),
     };
 
     foreach (var (child, parent) in dependencies)

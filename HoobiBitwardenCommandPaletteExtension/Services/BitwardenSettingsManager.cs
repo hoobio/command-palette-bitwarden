@@ -57,9 +57,15 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Downloads website icons for login items",
         true);
 
+    public ToggleSetting ShowTags { get; } = new(
+        "showTags",
+        "Show Tags",
+        "Shows tags on vault items",
+        true);
+
     public ToggleSetting ShowWatchtowerTags { get; } = new(
         "showWatchtowerTags",
-        "Show Watchtower Tags",
+        "Watchtower",
         "Tags weak, old or insecure passwords",
         true);
 
@@ -77,19 +83,19 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
 
     public ToggleSetting ShowProtectedTag { get; } = new(
         "showProtectedTag",
-        "Show Protected Tag",
+        "Protected",
         "Tags items that need a master password re-prompt",
         true);
 
     public ToggleSetting ShowPasskeyTag { get; } = new(
         "showPasskeyTag",
-        "Show Passkey Tag",
+        "Passkey",
         "Tags items that have a passkey",
         true);
 
     public ChoiceSetSetting TotpTagStyle { get; } = new(
         "totpTagStyle",
-        "TOTP Tag Style",
+        "TOTP",
         "Tags items that have an authenticator key",
         [
             new("Off", "off"),
@@ -99,7 +105,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
 
     public ChoiceSetSetting OrganizationTagStyle { get; } = new(
         "organizationTagStyle",
-        "Organization Tag Style",
+        "Organisation",
         "Tags items owned by an organisation",
         [
             new("Initials", "initials"),
@@ -261,11 +267,12 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
 
         AddSetting(new SectionHeaderSetting("_section_display", "Vault Display"));
         AddSetting(ShowWebsiteIcons);
-        AddSetting(ShowWatchtowerTags);
-        AddSetting(ShowProtectedTag);
-        AddSetting(ShowPasskeyTag);
-        AddSetting(TotpTagStyle);
-        AddSetting(OrganizationTagStyle);
+        AddSetting(ShowTags);
+        AddSetting(ShowWatchtowerTags, ShowTags);
+        AddSetting(ShowProtectedTag, ShowTags);
+        AddSetting(ShowPasskeyTag, ShowTags);
+        AddSetting(TotpTagStyle, ShowTags);
+        AddSetting(OrganizationTagStyle, ShowTags);
         AddSetting(BackgroundRefresh);
         AddSetting(LiveSync);
 
@@ -391,7 +398,8 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (AutoLockTimeout.Key, AutoLockTimeout.Value);
         yield return (RepromptGracePeriod.Key, RepromptGracePeriod.Value);
         yield return (ShowWebsiteIcons.Key, ShowWebsiteIcons.Value);
-        yield return (ShowWatchtowerTags.Key, ShowWatchtowerTags.Value);
+        yield return (ShowTags.Key, (object?)ShowTags.Value);
+        yield return (ShowWatchtowerTags.Key,ShowWatchtowerTags.Value);
         yield return (ShowProtectedTag.Key, (object?)ShowProtectedTag.Value);
         yield return (ShowPasskeyTag.Key, ShowPasskeyTag.Value);
         yield return (TotpTagStyle.Key, TotpTagStyle.Value);

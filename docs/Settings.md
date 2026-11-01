@@ -53,7 +53,15 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Options** | Never, 1 minute, 2 minutes, 5 minutes, 15 minutes, 30 minutes, 1 hour |
 | **Description** | Automatically lock the vault after a period of inactivity. The timer resets whenever you copy a vault item. Selecting **Never** disables the inactivity lock entirely. |
 
-### Show Watchtower Tags
+### Show Tags
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | On |
+| **Description** | Master switch for tags on vault items. When off, no tags are shown (including the Context tag) and the five tag settings below (Watchtower, Protected, Passkey, TOTP, Organisation) are hidden in the companion window. |
+
+### Watchtower
 
 | | |
 |---|---|
@@ -77,7 +85,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | Off |
 | **Description** | Display a "Context" tag on vault items that match the foreground application. Requires Context Awareness to be enabled. |
 
-### Show Protected Tag
+### Protected
 
 | | |
 |---|---|
@@ -85,7 +93,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | On |
 | **Description** | Display a "🔒" tag on vault items that require master password re-prompt before accessing sensitive fields. |
 
-### Show Passkey Tag
+### Passkey
 
 | | |
 |---|---|
@@ -93,7 +101,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | On |
 | **Description** | Display a "Passkey" tag on vault items that have a FIDO2 credential registered for passwordless sign-in. |
 
-### TOTP Tag Style
+### TOTP
 
 | | |
 |---|---|
@@ -102,7 +110,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Options** | Off, Static, Live |
 | **Description** | Controls how TOTP-enabled vault items are tagged. **Off** hides the tag entirely, **Static** shows a "2FA" badge, and **Live** displays the current code with a countdown timer that updates every second. |
 
-### Organization Tag Style
+### Organisation
 
 | | |
 |---|---|

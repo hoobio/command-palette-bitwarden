@@ -656,6 +656,24 @@ public class VaultItemHelperTests
   }
 
   [Fact]
+  public void BuildTags_ShowTagsOff_ReturnsNoTags()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "tags-off",
+      Type = BitwardenItemType.Login,
+      Favorite = true,
+      Reprompt = 1,
+      HasPasskey = true,
+      HasTotp = true,
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
+    };
+    Assert.Empty(VaultItemHelper.BuildTags(item, totpTagStyle: "live", collectionNames: ["Engineering"], showTags: false));
+    Assert.Empty(VaultItemHelper.BuildBaseTags(item, collectionNames: ["Engineering"], showTags: false));
+    Assert.NotEmpty(VaultItemHelper.BuildTags(item, totpTagStyle: "live", showTags: true));
+  }
+
+  [Fact]
   public void BuildTotpTag_EmptyKey_ReturnsErrorTag()
   {
     Assert.Equal("TOTP", VaultItemHelper.BuildTotpTag(ProtectedSecret.From("==")!)!.Text);

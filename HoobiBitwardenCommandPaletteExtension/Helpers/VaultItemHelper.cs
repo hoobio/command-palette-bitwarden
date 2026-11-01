@@ -135,8 +135,11 @@ internal static partial class VaultItemHelper
     return items.ToArray();
   }
 
-  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off", bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off", IReadOnlyList<string>? collectionNames = null)
+  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off", bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off", IReadOnlyList<string>? collectionNames = null, bool showTags = true)
   {
+    if (!showTags)
+      return [];
+
     var baseTags = BuildBaseTags(item, showWatchtowerTags, context, showContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle, collectionNames);
 
     if (totpTagStyle != "off" && item.HasTotp)
@@ -149,8 +152,11 @@ internal static partial class VaultItemHelper
     return baseTags;
   }
 
-  internal static Tag[] BuildBaseTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off", IReadOnlyList<string>? collectionNames = null)
+  internal static Tag[] BuildBaseTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off", IReadOnlyList<string>? collectionNames = null, bool showTags = true)
   {
+    if (!showTags)
+      return [];
+
     var tags = new List<Tag>();
 
     if (AccessTracker.IsLastCopied(item.Id))

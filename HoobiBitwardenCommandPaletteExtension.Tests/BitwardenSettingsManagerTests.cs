@@ -48,6 +48,25 @@ public class BitwardenSettingsManagerTests : IDisposable
     }
 
     [Fact]
+    public void ShowTags_DefaultsOn()
+    {
+        Assert.True(CreateManager().ShowTags.Value);
+    }
+
+    [Fact]
+    public void TagSettings_AreChildrenOfShowTags()
+    {
+        var m = CreateManager();
+        foreach (var child in new[] { m.ShowWatchtowerTags.Key, m.ShowProtectedTag.Key, m.ShowPasskeyTag.Key, m.TotpTagStyle.Key, m.OrganizationTagStyle.Key })
+        {
+            Assert.True(m.TryGetParent(child, out var parent));
+            Assert.Equal((m.ShowTags.Key, "true"), parent);
+        }
+        Assert.False(m.TryGetParent(m.ShowTags.Key, out _));
+        Assert.False(m.TryGetParent(m.ShowContextTag.Key, out var contextParent) && contextParent.Key == m.ShowTags.Key);
+    }
+
+    [Fact]
     public void Constructor_DefaultCliSettings_AreEmpty()
     {
         var m = CreateManager();

@@ -200,7 +200,7 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 - A setting that only matters when another setting is on sits under that setting, indented. The window hides it while the parent is off and shows it when you turn the parent on. A hidden setting keeps its value. **Automatically Prompt for Biometrics** sits under **Unlock with Windows Hello**, **Show Context Tag** and **Context Items Limit** sit under **Context Awareness**, and **Clipboard Clear Delay** sits under **Auto-Clear Clipboard**.
 - **Use CLI Path as Data Directory** sits under **CLI Path Override** and shows only while the **CLI Path Override** box is not empty.
 - An empty **CLI Path Override** box shows the `bw` path in use as placeholder text. An empty **CLI Data Directory Override** box shows the folder that holds `data.json`.
-- An option of **TOTP Tag Style** or **Organization Tag Style** can have a tooltip that explains it.
+- An option of **TOTP** or **Organisation** can have a tooltip that explains it.
 - A drop-down list is as wide as its widest option.
 - **Logs**, under **Debug Logging** in the **Diagnostics** section, opens the log folder in File Explorer.
 - The **Help and feedback** section has **Report a bug**, **Request a feature** and **Project on GitHub**. Each opens a page in the browser.
