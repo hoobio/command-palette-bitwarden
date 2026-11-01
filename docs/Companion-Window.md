@@ -225,10 +225,10 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 - The content stays centred, at most 880 pixels wide.
 - `Ctrl+F` moves the focus to the search box. `Esc` clears the search and the full list returns, scrolled to the top.
 - The window opens with the focus in the search box.
-- A change applies at once and has no **Save** button. It runs the same code as a change on the Command Palette settings page.
+- A change applies at once and has no **Save** button.
 - If the extension refuses a value, the control goes back to its old value and the window shows the reason under the control.
-- A change on the Command Palette settings page while the window is open shows in the window. The window keeps the focus, the scroll position and a text box that you are editing.
-- Turning **Use API Key Authentication** on or off logs you out, as on the settings page.
+- A change made by the extension while the window is open shows in the window. The window keeps the focus, the scroll position and a text box that you are editing.
+- Turning **Use API Key Authentication** on or off logs you out.
 - The window stays open when the vault is locked.
 
 ## Locked vault

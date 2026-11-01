@@ -1,10 +1,10 @@
 # Settings
 
-Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)). The **Open settings window** button at the top of the Bitwarden page in Command Palette Settings opens the same window.
+All settings are in the companion settings window (see [Settings window](Companion-Window#settings-window)). Open it from the gear icon in the vault browser, with the **Bitwarden settings** command, or with the **Open settings window** button on the Bitwarden page in Command Palette Settings. That page shows only the button. All settings take effect immediately.
 
 ## Server
 
-The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**), **Server URL** (read-only for **Bitwarden.com** and **Bitwarden.eu**, editable for **Self-hosted**) and, for **Self-hosted**, a collapsed **Advanced** row with optional Web Vault, API, Identity, Icons, Notifications, Events and Key Connector URLs. It is not part of the Command Palette settings page. A change logs you out. See [Server URL](Companion-Window#server-url).
+The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**), **Server URL** (read-only for **Bitwarden.com** and **Bitwarden.eu**, editable for **Self-hosted**) and, for **Self-hosted**, a collapsed **Advanced** row with optional Web Vault, API, Identity, Icons, Notifications, Events and Key Connector URLs. A change logs you out. See [Server URL](Companion-Window#server-url).
 
 ## Available Settings
 
@@ -202,8 +202,8 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 
 | | |
 |---|---|
-| **Type** | Link (companion window only) |
-| **Description** | Appears under **Debug Logging** in the companion window. It opens the folder `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\logs` in File Explorer, and creates the folder if it does not exist. The Command Palette settings page does not show it. |
+| **Type** | Link |
+| **Description** | Appears under **Debug Logging**. It opens the folder `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\logs` in File Explorer, and creates the folder if it does not exist. |
 
 ### Re-prompt Grace Period
 

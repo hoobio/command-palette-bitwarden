@@ -105,7 +105,7 @@ User selects an action
 | `SessionStore` | Static | Reads/writes session keys to Windows Credential Manager |
 | `ApiKeyStore` | Static | Reads/writes the personal API key (client ID and secret) to Windows Credential Manager for API key login |
 | `AccessTracker` | Static | Tracks item access times (persisted to JSON) and recent-copy state (5-min in-memory timer) |
-| `BitwardenSettingsManager` | Instance | Manages user-configurable settings via Command Palette settings UI |
+| `BitwardenSettingsManager` | Instance | Stores user-configurable settings, which the companion settings window reads and writes |
 | `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; gives Command Palette the absolute path of the cached PNG (one icon per host, in the package `LocalCache\Icons` folder); fires `IconCached` to refresh the list UI |
 | `NotificationsService` | Instance (while unlocked, Live Sync on) | Listens to the server's notifications hub and requests a sync when the vault changes |
 

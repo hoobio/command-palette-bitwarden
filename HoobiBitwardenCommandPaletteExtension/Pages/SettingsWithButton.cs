@@ -16,24 +16,16 @@ internal sealed partial class OpenWindowForm(Action open) : FormContent
   }
 }
 
-internal sealed partial class SettingsWithButtonPage : ContentPage
+internal sealed partial class SettingsWithButtonPage(Action open) : ContentPage
 {
-  private readonly Settings _settings;
-  private readonly OpenWindowForm _button;
+  private readonly OpenWindowForm _button = new(open);
 
-  public SettingsWithButtonPage(Settings settings, Action open)
-  {
-    _settings = settings;
-    _button = new OpenWindowForm(open);
-    _settings.SettingsChanged += (_, _) => RaiseItemsChanged();
-  }
-
-  public override IContent[] GetContent() => [_button, .. _settings.ToContent()];
+  public override IContent[] GetContent() => [_button];
 }
 
-internal sealed partial class SettingsWithButton(Settings settings, Action open) : ICommandSettings
+internal sealed partial class SettingsWithButton(Action open) : ICommandSettings
 {
-  private readonly SettingsWithButtonPage _page = new(settings, open);
+  private readonly SettingsWithButtonPage _page = new(open);
 
   public IContentPage SettingsPage => _page;
 }
