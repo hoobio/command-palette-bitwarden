@@ -39,6 +39,33 @@ public class DesktopIpcServiceTests
   }
 
   [Fact]
+  public void GetProcessImagePath_ReadsAProcessThatDeniesMemoryReads()
+  {
+    var cmd = System.IO.Path.Combine(Environment.SystemDirectory, "cmd.exe");
+    using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(cmd, "/c pause") { RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true })!;
+    try
+    {
+      var user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+      var acl = new System.Security.AccessControl.RawAcl(System.Security.AccessControl.RawAcl.AclRevision, 1);
+      acl.InsertAce(0, new System.Security.AccessControl.CommonAce(System.Security.AccessControl.AceFlags.None, System.Security.AccessControl.AceQualifier.AccessAllowed, 0x101001, user, false, null));
+      var dacl = new byte[acl.BinaryLength];
+      acl.GetBinaryForm(dacl, 0);
+      Assert.Equal(0u, SetSecurityInfo(child.SafeHandle, 6, 4, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero));
+
+      using var reopened = System.Diagnostics.Process.GetProcessById(child.Id);
+      Assert.Throws<System.ComponentModel.Win32Exception>(() => reopened.MainModule);
+      Assert.Equal(cmd, DesktopIpcService.GetProcessImagePath((uint)child.Id), ignoreCase: true);
+    }
+    finally
+    {
+      child.Kill();
+    }
+  }
+
+  [System.Runtime.InteropServices.DllImport("advapi32.dll")]
+  private static extern uint SetSecurityInfo(Microsoft.Win32.SafeHandles.SafeProcessHandle handle, int objectType, uint securityInfo, IntPtr owner, IntPtr group, byte[] dacl, IntPtr sacl);
+
+  [Fact]
   public void IsPipeServerBitwarden_UnconnectedPipe_ReturnsFalse()
   {
     using var client = new System.IO.Pipes.NamedPipeClientStream(".", $"bw-test-{Guid.NewGuid():N}");
