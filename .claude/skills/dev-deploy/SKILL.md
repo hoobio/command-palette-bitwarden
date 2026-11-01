@@ -9,7 +9,8 @@ Read the "Local Build & Deploy" section of `AGENTS.md` at the repo root before t
 
 Rules:
 
-- Never stop only `HoobiBitwardenCommandPaletteExtension`. Command Palette keeps its connection to the dead process and fails every call with `0x800706BA` until PowerToys restarts. Stop PowerToys, `Microsoft.CmdPal.UI` and the extension together, and start PowerToys again in the same command (`Start-Process 'shell:AppsFolder\Microsoft.PowerToysWin32'`).
-- A build or test that fails on a locked `HoobiBitwardenCommandPaletteExtension.exe` means a Dev package runs from this checkout's `bin`. Use the full kill, build, register and restart cycle, or the VS Code task "Build, Kill & Deploy (Debug x64)".
+- When the Dev package is already registered from this checkout's `bin`, redeploy with the VS Code task "Build & Reload (Debug x64)": stop the Dev extension and companion, build, and `Start-Process 'x-cmdpal://reload'` in the same command. PowerToys keeps running.
+- Never stop `HoobiBitwardenCommandPaletteExtension` without a reload or a PowerToys restart in the same command. Command Palette keeps its connection to the dead process and fails every call with `0x800706BA` until it reloads.
+- A first deploy, a deploy from another checkout or worktree, or a manifest change uses the full cycle, or the VS Code task "Build, Kill & Deploy (Debug x64)". Remove-then-register while PowerToys runs leaves a duplicate entry in Command Palette Settings.
 - After a deploy, the output `AppxManifest.xml` identity ends in `.Dev` and `Get-AppxPackage` shows this checkout as `InstallLocation`.
 - Run `git checkout -- HoobiBitwardenCommandPaletteExtension/Package.appxmanifest` after every build. The stamped manifest is never committed.

@@ -62,6 +62,41 @@
       }
     },
     {
+      "label": "Stop Extension",
+      "type": "shell",
+      "command": "Get-Process HoobiBitwardenCommandPaletteExtension, HoobiBitwardenCompanion -ErrorAction SilentlyContinue | Where-Object Path -like '${workspaceFolder}*' | Stop-Process -Force; exit 0",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Reload Command Palette",
+      "type": "shell",
+      "command": "Start-Process 'x-cmdpal://reload'; Write-Host 'Command Palette reloaded.'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build & Reload (Debug x64)",
+      "dependsOn": [
+        "Stop Extension",
+        "Build (Debug x64)",
+        "Reload Command Palette"
+      ],
+      "dependsOrder": "sequence",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "Build, Kill & Deploy (Debug x64)",
       "dependsOn": [
         "Kill PowerToys",
