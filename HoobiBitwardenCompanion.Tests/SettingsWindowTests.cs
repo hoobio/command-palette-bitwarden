@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -283,10 +285,8 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     Assert.True(advanced.IsShown);
     Assert.False(advanced.Expanded);
-    Assert.All(AdvancedKeys, key => Assert.False(ServerRow(vm, key).IsShown));
-
-    advanced.Expanded = true;
-    Assert.All(AdvancedKeys, key => Assert.True(ServerRow(vm, key).IsShown));
+    Assert.True(advanced.IsGroup);
+    Assert.Equal(AdvancedKeys, advanced.ShownChildren.Select(r => r.Key));
 
     ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "eu");
     Assert.False(advanced.IsShown);
@@ -569,6 +569,7 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     Find<ToggleSwitch>(window, "desktop").IsChecked = true;
     AvaloniaSession.WaitFor(() => rows["biometrics"].IsShown);
+    rows["desktop"].Expanded = true;
     Assert.True(Find<ToggleSwitch>(window, "biometrics").IsChecked);
     Assert.Equal(["desktop", "biometrics", "other", "cliPath"], ShownKeys(window.ViewModel!));
 
@@ -578,6 +579,117 @@ public class SettingsWindowTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() => extension.Sets.Count == 2);
     Assert.Equal(("desktop", "true"), extension.Sets[0]);
     Assert.Equal(("desktop", "false"), extension.Sets[1]);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  private static SettingsCard GroupCard(SettingsWindow window, string key)
+  {
+    window.UpdateLayout();
+    return window.GetVisualDescendants().OfType<SettingsCard>().Single(c => c.IsEffectivelyVisible && c.DataContext is SettingRowViewModel row && row.Key == key);
+  }
+
+  private static void Click(SettingsWindow window, Control target)
+  {
+    window.UpdateLayout();
+    var point = target.TranslatePoint(new Avalonia.Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
+    window.MouseDown(point, MouseButton.Left);
+    window.MouseUp(point, MouseButton.Left);
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+  }
+
+  private static SettingsWindow OpenGroupedWindow(WindowCoordinator coordinator, FakeExtension extension)
+  {
+    UseDependentSchema(extension);
+    extension.Change("desktop", "true");
+    var window = coordinator.ShowSettings();
+    window.Show();
+    WaitForRows(window);
+    AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "desktop").IsGroup);
+    return window;
+  }
+
+  [Fact]
+  public Task Group_IsCollapsedByDefault_AndHidesItsChildren() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+
+    var card = GroupCard(window, "desktop");
+    Assert.False(card.IsExpanded);
+    Assert.True(window.ViewModel!.Sections[0].Rows.Single(r => r.Key == "biometrics").IsShown);
+    Assert.DoesNotContain(window.GetVisualDescendants().OfType<ToggleSwitch>(), t => t.IsEffectivelyVisible && t.DataContext is SettingRowViewModel { Key: "biometrics" });
+    Assert.Null(window.GetVisualDescendants().OfType<SettingsCard>().FirstOrDefault(c => c.IsEffectivelyVisible && c.DataContext is SettingRowViewModel { Key: "other" }));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Group_RowClick_ExpandsAndShowsTheChildren_AndCollapsesAgain() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+    var clock = new ManualClock();
+    clock.Attach(window);
+    var card = GroupCard(window, "desktop");
+    var label = card.GetVisualDescendants().OfType<TextBlock>().First(t => t.IsEffectivelyVisible && t.Text == "Desktop app");
+
+    Click(window, label);
+    clock.Settle();
+
+    Assert.True(card.IsExpanded);
+    AvaloniaSession.WaitFor(() => Find<ToggleSwitch>(window, "biometrics").IsChecked == true);
+    var child = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.IsEffectivelyVisible && t.Text == "Prompt for biometrics");
+    Click(window, child);
+    Assert.True(card.IsExpanded);
+    Assert.Empty(extension.Sets);
+
+    Click(window, label);
+    Assert.False(card.IsExpanded);
+    clock.Settle();
+    AvaloniaSession.WaitFor(() => { window.UpdateLayout(); return !window.GetVisualDescendants().OfType<ToggleSwitch>().Any(t => t.IsEffectivelyVisible && t.DataContext is SettingRowViewModel { Key: "biometrics" }); });
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Group_TogglingTheParentSwitch_DoesNotExpand() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+    var card = GroupCard(window, "desktop");
+
+    Click(window, Find<ToggleSwitch>(window, "desktop"));
+
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 1);
+    Assert.Equal(("desktop", "false"), extension.Sets[0]);
+    Assert.False(card.IsExpanded);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Search_HitOnAChild_ExpandsItsGroup() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+
+    window.ViewModel!.SearchText = "windows hello";
+
+    Assert.True(GroupCard(window, "desktop").IsExpanded);
+    Assert.True(Find<ToggleSwitch>(window, "biometrics").IsChecked);
     window.Close();
     await Task.CompletedTask;
   });

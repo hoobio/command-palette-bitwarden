@@ -134,7 +134,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     var rows = Sections.SelectMany(s => s.Rows).ToList();
     var byKey = rows.ToDictionary(r => r.Key);
     bool ParentOn(SettingRowViewModel row) => row.Parent is null || row.ReadOnlyValues is not null || !byKey.TryGetValue(row.Parent, out var owner)
-      || ((row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue) && (!owner.IsExpander || ParentOn(owner)));
+      || (owner.IsExpander ? ParentOn(owner) : row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue);
     bool Matches(SettingRowViewModel row) => TextMatches(query, row.Label, row.Description);
 
     foreach (var row in rows)
@@ -145,9 +145,16 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     }
 
     if (query.Length > 0)
-      foreach (var child in rows.Where(r => r.Parent is not null && !ParentOn(r) && Matches(r)))
+      foreach (var child in Enumerable.Reverse(rows).Where(r => r.Parent is not null && (r.IsShown || Matches(r))))
         if (byKey.TryGetValue(child.Parent!, out var parent))
           parent.IsShown = true;
+
+    foreach (var row in rows)
+    {
+      row.ShownChildren = [.. row.Children.Where(c => c.IsShown)];
+      if (query.Length > 0 && row.ShownChildren.Count > 0)
+        row.Expanded = true;
+    }
 
     foreach (var section in Sections)
       section.IsShown = section.Rows.Any(r => r.IsShown);
@@ -216,7 +223,8 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private void Rebuild(IReadOnlyList<SettingDto> settings)
   {
-    var advancedExpanded = Sections.SelectMany(s => s.Rows).Any(r => r.IsExpander && r.Expanded);
+    var expanded = Sections.SelectMany(s => s.Rows).Where(r => r.Expanded).Select(r => r.Key).ToHashSet();
+    var byKey = new Dictionary<string, SettingRowViewModel>();
     Sections.Clear();
     SettingsSectionViewModel? current = null;
     foreach (var setting in settings)
@@ -235,9 +243,14 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
         SettingKeys.Hotkeys => OpenShortcuts,
         _ => null,
       }, setting.Key.StartsWith("server", StringComparison.Ordinal) ? CommitServerAsync : null);
-      row.Expanded = row.IsExpander && advancedExpanded;
+      row.Expanded = expanded.Contains(row.Key);
       row.ValueChanged += RefreshVisibility;
       current.Rows.Add(row);
+      byKey[row.Key] = row;
+      if (row.Parent is not null && byKey.TryGetValue(row.Parent, out var parent))
+        parent.Children.Add(row);
+      else
+        current.Roots.Add(row);
     }
 
     RefreshVisibility();
@@ -254,6 +267,8 @@ internal sealed partial class SettingsSectionViewModel(string title) : Observabl
   public bool HasTitle => Title.Length > 0;
 
   public List<SettingRowViewModel> Rows { get; } = [];
+
+  public List<SettingRowViewModel> Roots { get; } = [];
 }
 
 internal sealed partial class SettingRowViewModel : ObservableObject
@@ -315,25 +330,23 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   {
     SettingKinds.Toggle => _boolValue ? "true" : "false",
     SettingKinds.Choice => _selectedChoice?.Value ?? _committed,
-    SettingKinds.Expander => _expanded ? "true" : "false",
     _ => _committed,
   };
 
-  private bool _expanded;
+  [ObservableProperty]
+  public partial bool Expanded { get; set; }
 
-  public bool Expanded
-  {
-    get => _expanded;
-    set
-    {
-      if (SetProperty(ref _expanded, value))
-        ValueChanged?.Invoke();
-    }
-  }
+  internal List<SettingRowViewModel> Children { get; } = [];
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsGroup))]
+  public partial IReadOnlyList<SettingRowViewModel> ShownChildren { get; set; } = [];
+
+  public bool IsGroup => ShownChildren.Count > 0;
 
   public bool IsExpander => Kind == SettingKinds.Expander;
 
-  public bool IsPlain => !IsText && !IsExpander;
+  public bool IsPlain => !IsText;
 
   public string Kind { get; }
 

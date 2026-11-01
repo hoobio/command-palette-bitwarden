@@ -278,6 +278,8 @@ public class VaultToolsTests(AvaloniaSession session)
     Assert.False(new GeneratorViewModel(h.Channel).OptionsExpanded);
 
     var window = new Window { Width = 460, Height = 900, Content = new GeneratorView { DataContext = first, Margin = new Avalonia.Thickness(24) } };
+    var clock = new ManualClock();
+    clock.Attach(window);
     window.Show();
     window.UpdateLayout();
     var view = window.GetVisualDescendants().OfType<GeneratorView>().Single();
@@ -293,10 +295,10 @@ public class VaultToolsTests(AvaloniaSession session)
     Assert.True(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
 
     var slide = view.GetVisualDescendants().OfType<Hoobi.Design.Avalonia.SlideExpander>().Single();
-    SettleSlide(slide);
+    SettleSlide(clock, slide);
 
     toggle.IsChecked = false;
-    SettleSlide(slide);
+    SettleSlide(clock, slide);
     Assert.False(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
     Assert.True(first.Special);
     Assert.True(first.ToOptions().Special);
@@ -304,12 +306,11 @@ public class VaultToolsTests(AvaloniaSession session)
     File.Delete(CompanionSettings.FilePath);
   });
 
-  private static void SettleSlide(Hoobi.Design.Avalonia.SlideExpander slide) =>
-    AvaloniaSession.WaitFor(() =>
-    {
-      AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-      return double.IsNaN(slide.Height);
-    });
+  private static void SettleSlide(ManualClock clock, Hoobi.Design.Avalonia.SlideExpander slide)
+  {
+    clock.Settle();
+    Assert.True(double.IsNaN(slide.Height), $"slide height {slide.Height}");
+  }
 
   [Fact]
   public Task GeneratorWindow_CollapsedDefaultSize_ShowsNoScrollBar_OnEachTab() => session.RunAsync(async () =>
@@ -320,6 +321,8 @@ public class VaultToolsTests(AvaloniaSession session)
       var vm = new GeneratorViewModel(h.Channel) { SelectedTab = tab };
       await vm.InitializeAsync();
       var window = new GeneratorWindow(vm);
+      var clock = new ManualClock();
+      clock.Attach(window);
       window.Show();
       Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       window.UpdateLayout();
@@ -332,14 +335,14 @@ public class VaultToolsTests(AvaloniaSession session)
       {
         var slide = window.GetVisualDescendants().OfType<Hoobi.Design.Avalonia.SlideExpander>().Single();
         vm.OptionsExpanded = true;
-        SettleSlide(slide);
+        SettleSlide(clock, slide);
         AvaloniaSession.WaitFor(() =>
         {
           window.UpdateLayout();
           return window.Bounds.Height > collapsed;
         });
         vm.OptionsExpanded = false;
-        SettleSlide(slide);
+        SettleSlide(clock, slide);
         AvaloniaSession.WaitFor(() =>
         {
           window.UpdateLayout();

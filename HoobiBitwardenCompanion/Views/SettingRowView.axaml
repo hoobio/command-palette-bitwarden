@@ -1,0 +1,28 @@
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Views.SettingRowView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hoobi="using:Hoobi.Design.Avalonia"
+    xmlns:local="using:HoobiBitwardenCompanion.Views"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:SettingRowViewModel">
+    <Panel>
+        <Border Classes="Row Switch" Classes.Child="{Binding IsChild}" IsVisible="{Binding !IsGroup}">
+            <local:SettingRowBody />
+        </Border>
+        <hoobi:SettingsCard x:Name="GroupCard" Classes="Item" BorderThickness="0" IsClickEnabled="True" IsVisible="{Binding IsGroup}" IsExpanded="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
+            <hoobi:SettingsCard.Header>
+                <local:SettingRowBody x:Name="GroupHeader" />
+            </hoobi:SettingsCard.Header>
+            <hoobi:SettingsCard.ExpandedContent>
+                <ItemsControl x:Name="GroupRows" Classes="Rows" Margin="0,1,0,0" ItemsSource="{Binding ShownChildren}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SettingRowViewModel">
+                            <local:SettingRowView />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </hoobi:SettingsCard.ExpandedContent>
+        </hoobi:SettingsCard>
+    </Panel>
+</UserControl>

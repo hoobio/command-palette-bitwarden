@@ -25,9 +25,9 @@ internal sealed partial class GeneratorWindow : Window
     if (viewModel is not null)
       viewModel.PropertyChanged += OnViewModelPropertyChanged;
     foreach (var slide in this.GetLogicalDescendants().OfType<SlideExpander>())
-      slide.PropertyChanged += (_, e) =>
+      slide.Child?.PropertyChanged += (_, e) =>
       {
-        if (e.Property == HeightProperty && !_resizedByUser)
+        if (e.Property == IsVisibleProperty && !_resizedByUser)
           Dispatcher.UIThread.Post(FitToContent, DispatcherPriority.Loaded);
       };
     Opened += (_, _) =>
