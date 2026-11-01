@@ -134,6 +134,12 @@ The Bitwarden apps get vault changes from the server's notifications hub, a Sign
 
 Passwords, old passwords from the password history, TOTP secrets, notes, card numbers, card security codes, SSH private keys, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
 
+## Design system
+
+The companion's theme, controls, dialogs, window chrome, memory trim and popup acrylic come from the `Hoobi.Design.Avalonia` NuGet package. App views compose it and define no styles of their own. A change to the look goes to the package, not to the app. The build checks `HOOBI001`, `HOOBI002` and `HOOBI003` come from the package. The tests use `Hoobi.Design.Avalonia.Testing` (`HoverFlashProbe`, `PopupSurfaceProbe`).
+
+The packages come from a private feed built from the private hoobi-design repository, so restoring them needs access to that feed. CI on a fork pull request cannot restore them, and an outside contributor cannot build the companion locally without feed access.
+
 ## Extension Registration
 
 The extension is a COM out-of-process server. `Program.cs` registers it with the PowerToys host. The host calls `IExtension.GetProvider()` to get the `CommandsProvider`, which supplies the main vault page and the fallback search item.

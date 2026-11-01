@@ -73,7 +73,8 @@ The companion (`HoobiBitwardenCompanion`) takes its theme, fonts, glyphs, dialog
 - The app defines no app-wide styles or control themes. A style that the package does not have is added to hoobi-design.
 - Show every dialog with `AppDialogs.ShowAsync`. A dialog button counts only a real press, so a test clicks it with the pointer, not with a raised `Click` event.
 - A window calls `HoobiChrome.Attach(this)` after `InitializeComponent`.
-- CI authenticates to the Hoobi feed with OIDC (`azure/login` and an Azure DevOps token) before each restore.
+- CI authenticates to the Hoobi feed with OIDC (`azure/login` and an Azure DevOps token) before each restore, using the repository variables `ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID` and `ADO_HOOBI_TENANT_ID`. The federated credential covers `hoobio` repositories only, so fork PR CI cannot restore the packages.
+- Both package versions are pinned in `Directory.Packages.props` and move together. `HOOBI003` also comes from the package.
 
 ### Memory
 
