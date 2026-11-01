@@ -45,7 +45,7 @@
                             <Button x:Name="UseApiKeyButton" Content="Use API key login" Command="{Binding UseApiKeyLoginCommand}" IsEnabled="{Binding !IsBusy}" />
                         </StackPanel>
                     </Border>
-                    <CheckBox x:Name="RememberBox" Content="Remember session (stay unlocked between launches)" IsChecked="{Binding RememberSession, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <CheckBox x:Name="RememberBox" Content="Remember session" ToolTip.Tip="Stay unlocked between launches" IsChecked="{Binding RememberSession, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
                 </StackPanel>
 
                 <StackPanel x:Name="CodePanel" Spacing="8" IsVisible="{Binding IsCodeStep}">
