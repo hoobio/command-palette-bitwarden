@@ -1325,7 +1325,7 @@ public class BitwardenCliServiceMockedTests
       var settings = new BitwardenSettingsManager(tempPath);
       settings.RememberSession.Value = true;
       var factory = new FakeProcessFactory();
-      var svc = new BitwardenCliService(settings, factory.Create);
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
       svc.SetSession("some-session-key");
       SessionStore.Save("some-session-key");
       ApiKeyStore.Save("user.abc", "s3cret");

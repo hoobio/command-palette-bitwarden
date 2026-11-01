@@ -45,7 +45,8 @@ public class DesktopIpcServiceTests
     using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(cmd, "/c pause") { RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true })!;
     try
     {
-      var user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+      using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+      var user = identity.User!;
       var acl = new System.Security.AccessControl.RawAcl(System.Security.AccessControl.RawAcl.AclRevision, 1);
       acl.InsertAce(0, new System.Security.AccessControl.CommonAce(System.Security.AccessControl.AceFlags.None, System.Security.AccessControl.AceQualifier.AccessAllowed, 0x101001, user, false, null));
       var dacl = new byte[acl.BinaryLength];
@@ -53,7 +54,8 @@ public class DesktopIpcServiceTests
       Assert.Equal(0u, SetSecurityInfo(child.SafeHandle, 6, 4, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero));
 
       using var reopened = System.Diagnostics.Process.GetProcessById(child.Id);
-      Assert.Throws<System.ComponentModel.Win32Exception>(() => reopened.MainModule);
+      if (!new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator))
+        Assert.Throws<System.ComponentModel.Win32Exception>(() => reopened.MainModule);
       Assert.Equal(cmd, DesktopIpcService.GetProcessImagePath((uint)child.Id), ignoreCase: true);
     }
     finally

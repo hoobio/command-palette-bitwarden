@@ -197,7 +197,7 @@ public class HotkeysPageTests(AvaloniaSession session)
     Assert.False(login.IsEnterModified);
 
     login.SelectedEnter = login.EnterChoices[0];
-    AvaloniaSession.WaitFor(() => login.IsEnterModified);
+    AvaloniaSession.WaitFor(() => extension.LoginEnter == "login.openBrowser" && login.IsEnterModified);
 
     await login.ResetEnterCommand.ExecuteAsync(null);
 

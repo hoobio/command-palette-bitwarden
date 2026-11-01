@@ -665,7 +665,7 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  private async Task<VaultStatus> FetchStatusAsync()
+  private async Task<VaultStatus> FetchStatusAsync(VaultStatus onError = VaultStatus.Locked)
   {
     if (ReadDataFileLoginState() is { } state)
     {
@@ -694,7 +694,7 @@ internal sealed partial class BitwardenCliService
     catch (Exception ex)
     {
       DebugLogService.Log("Status", $"FetchStatusAsync exception: {ex.GetType().Name}: {ex.Message}");
-      return VaultStatus.Locked;
+      return onError;
     }
   }
 
@@ -1155,10 +1155,11 @@ internal sealed partial class BitwardenCliService
     ApiKeyStore.Clear();
 
     // A short timeout killed bw logout mid-write and left the account in data.json while the app showed signed out.
-    try { await RunCliAsync("logout", CliTimeoutMs, "You have logged out."); }
+    var loggedOut = false;
+    try { loggedOut = (await RunCliAsync("logout", CliTimeoutMs, "You have logged out.")).Contains("You have logged out.", StringComparison.OrdinalIgnoreCase); }
     catch (Exception ex) { DebugLogService.Log("Auth", $"ERROR: bw logout failed: {ex.GetType().Name}: {ex.Message}"); }
 
-    var status = await FetchStatusAsync();
+    var status = await FetchStatusAsync(loggedOut ? VaultStatus.Unauthenticated : VaultStatus.Locked);
     if (status != VaultStatus.Unauthenticated)
       DebugLogService.Log("Auth", $"ERROR: the CLI still holds the account after bw logout, status {status}");
     SetStatus(status);
