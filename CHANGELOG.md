@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.14.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.13.1...v1.14.0) (2026-11-01)
+
+
+### Features
+
+* add a Server section to the top of the settings window ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* add an Open settings window button to the Command Palette settings page ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* add help, about and a manual update check to the settings window ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* collapse the password generator options by default ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* group tag settings under a Show Tags toggle ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* let users rebind item shortcuts and choose the Enter action ([#235](https://github.com/hoobio/command-palette-bitwarden/issues/235)) ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* pick the Bitwarden server on the login windows ([#236](https://github.com/hoobio/command-palette-bitwarden/issues/236)) ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* replace the login two-step caption with a method picker and warning ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* show and filter collections in the palette ([#234](https://github.com/hoobio/command-palette-bitwarden/issues/234)) ([696865e](https://github.com/hoobio/command-palette-bitwarden/commit/696865eecff23bf99f5157233d6290d2caa81030))
+* show Bitwarden Desktop connection status in settings ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* show the CLI and data paths in use with their source ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* show the preset server URL read-only for Bitwarden.com and Bitwarden.eu ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* use the Hoobi.Design.Avalonia package for the companion's design ([#238](https://github.com/hoobio/command-palette-bitwarden/issues/238)) ([8bd8276](https://github.com/hoobio/command-palette-bitwarden/commit/8bd82764948a31ac01edc71cdc40ca38e6c58e03))
+
+
+### Bug Fixes
+
+* always show settings and generator, and Set server only when logged out ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* darken dropdown and menu popups to the chip colour ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* fit the generator window to its content on open and tab change ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* focus the settings window when opened from Command Palette Settings ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* give pills a visible fill and align the Custom environment toggle ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* keep the Options and Advanced toggles transparent when expanded ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* let Windows close the extension to apply Store updates ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* round the bottom of settings groups that end in hidden rows ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* scroll the self-hosted environment dialog ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+* shorten the settings descriptions and cap the settings width ([e92eafd](https://github.com/hoobio/command-palette-bitwarden/commit/e92eafd2887f554dc9f90cc4ef92ae3d065f5af6))
+* show progress and lock the login window while the server switches ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+
+
+### Documentation
+
+* remove CLAUDE.md, Claude Code reads AGENTS.md directly ([#240](https://github.com/hoobio/command-palette-bitwarden/issues/240)) ([83bb6da](https://github.com/hoobio/command-palette-bitwarden/commit/83bb6da025836d300f4578676dd5fc9830e6e3e7))
+
+
+### Miscellaneous Chores
+
+* **deps:** update azure/login action to v3 ([#242](https://github.com/hoobio/command-palette-bitwarden/issues/242)) ([44a0470](https://github.com/hoobio/command-palette-bitwarden/commit/44a0470ee7ffb6a32ca4b7fc348495241b6f9c17))
+* **deps:** update danielpalme/reportgenerator-github-action digest to 8616742 ([#232](https://github.com/hoobio/command-palette-bitwarden/issues/232)) ([9180d43](https://github.com/hoobio/command-palette-bitwarden/commit/9180d43977d10c0ca3d74442033d547e21adc0d9))
+* **deps:** update dependency meziantou.analyzer to 3.0.317 ([#229](https://github.com/hoobio/command-palette-bitwarden/issues/229)) ([8977b11](https://github.com/hoobio/command-palette-bitwarden/commit/8977b11b3db22412928896c52a4d3faa0605b948))
+* **deps:** update dependency meziantou.analyzer to 3.0.318 ([#233](https://github.com/hoobio/command-palette-bitwarden/issues/233)) ([21d80c5](https://github.com/hoobio/command-palette-bitwarden/commit/21d80c54d0373c9f05e00029a44d8b7cf903caa5))
+
+
+### Code Refactoring
+
+* remove the Set Bitwarden Server palette item ([215f697](https://github.com/hoobio/command-palette-bitwarden/commit/215f697522f2b9e8059c9c73e840ef3ed3caa4ee))
+
 ## [1.13.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.13.0...v1.13.1) (2026-10-26)
 
 
