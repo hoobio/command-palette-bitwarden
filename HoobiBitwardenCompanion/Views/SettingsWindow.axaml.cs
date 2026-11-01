@@ -63,6 +63,9 @@ internal sealed partial class SettingsWindow : Window
 
   private void OnKeyDown(object? sender, KeyEventArgs e)
   {
+    if (DialogWindow.HasOpenDialog(this))
+      return;
+
     if (e.Key == Key.Escape && !string.IsNullOrEmpty(SearchBox.Text))
     {
       SearchBox.Clear();

@@ -1,8 +1,11 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using FluentAvalonia.UI.Controls;
 using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
 
@@ -45,8 +48,14 @@ internal abstract class DialogWindow : Window
 
   protected void OnCancelClick(object? sender, RoutedEventArgs e) => Close();
 
+  internal static bool HasOpenDialog(Visual window) =>
+    OverlayLayer.GetOverlayLayer(window)?.GetVisualDescendants().OfType<FAContentDialog>().Any() == true;
+
   private void OnWindowKeyDown(object? sender, KeyEventArgs e)
   {
+    if (HasOpenDialog(this))
+      return;
+
     if (e.Key == Key.Enter && e.Source is TextBox)
     {
       e.Handled = true;
