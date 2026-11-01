@@ -8,8 +8,9 @@ The companion window shows a vault item in its own window next to Command Palett
 - The Enter action of a note, card, identity, login without a URL or SSH key without a host opens the item window. Logins with a URL still open the website, and SSH keys with a host still open the SSH session. If the companion is not available, Enter opens the web vault.
 - **Rotate password** is in the more-commands menu of each login that has a password, after the commands for the item type. It opens the item window and then the **Rotate password** dialog (see [Quick Rotate](#quick-rotate)). It never rotates until you select **Save**.
 - **New Bitwarden item** is a top-level command in Command Palette. It opens an empty item window in create mode (see [New item](#new-item)). Search for it with words such as "new login", "new password", "note", "card" or "identity". You can also set an alias for it in Command Palette.
-- **Generate password** is a top-level command in Command Palette. It opens the [password generator](#password-generator) in its own window.
-- When the vault is locked, **New Bitwarden item** and **Generate password** show a message in Command Palette and open no window.
+- **Generate password** is a top-level command in Command Palette. It opens the [password generator](#password-generator) in its own window. It needs no vault, so it works when you are logged out, locked or unlocked.
+- **Generate password** and **Bitwarden settings** are in the Bitwarden page list in every state: logged out, locked, unlocked, while loading and when the Bitwarden CLI is missing.
+- When the vault is locked, **New Bitwarden item** shows a message in Command Palette and opens no window.
 
 The window opens in front with keyboard focus. Command Palette gives the extension the right to set the foreground window for each command, and the extension passes that right to the companion. If the window for an item is already open, the command brings that window to the front and loads the item again. You can open windows for more than one item at the same time.
 
@@ -181,13 +182,16 @@ When the vault is locked, **Unlock Vault** opens the **Unlock your vault** windo
 
 ## Server URL
 
-**Set Bitwarden Server** opens the **Set Bitwarden server** window. Command Palette stays open behind it. The window has these parts:
+**Set Bitwarden Server** shows in the Bitwarden page list only while you are logged out. It opens the [Settings window](#settings-window), scrolled to the **Server** section. The section pulses with the accent colour for about 1.5 seconds and the **Region** box takes the focus. The Command Palette settings button and the **Bitwarden settings** command open the same window without the pulse.
 
-- **Region** is **Bitwarden Cloud (bitwarden.com)**, **Bitwarden EU (vault.bitwarden.eu)** or **Self-hosted**. The box starts with the region of the current server.
-- **Server URL** shows for **Self-hosted**. It must start with `http://` or `https://`.
-- **Advanced URL overrides** shows for **Self-hosted**. It has **Web Vault URL**, **API URL**, **Identity URL**, **Icons URL**, **Notifications URL**, **Events URL** and **Key Connector URL**. A blank box derives the URL from the server URL. A filled box must start with `https://`.
+The **Server** section is the first section of the Settings window. It has these parts:
 
-**Save** logs out of a locked or unlocked vault first, as the Command Palette list does, and then saves the server. A URL that is not valid, or an error from the CLI, shows in the window and keeps the values. A saved server closes the window and returns focus to Command Palette, which then shows **Login to Bitwarden**. `Esc` and **Cancel** close the window.
+- **Region** is **Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**. The box starts with the region of the current server.
+- **Server URL** shows for **Self-hosted**. It must start with `http://` or `https://`. A change saves when you press `Enter` or move to another control. Choosing **Self-hosted** alone changes nothing until the URL is saved.
+
+Choosing **Bitwarden.com** or **Bitwarden.eu** saves the server at once. The Bitwarden CLI changes the server only while you are logged out, so a change logs out of a locked or unlocked vault first. While you are logged in, the description of **Region** reads "Changing the server logs you out", and each change asks for confirmation in a **Change server?** dialog. **Cancel** keeps the server and shows "The server was not changed." under the control. A URL that is not valid, or an error from the CLI, shows under the control. A saved server leaves you logged out, and Command Palette then shows **Login to Bitwarden**.
+
+If the companion is not available, **Set Bitwarden Server** opens a list in Command Palette. That list sets the web vault, API, identity, icons, notifications, events and key connector URLs as well.
 
 ## Settings window
 
@@ -202,7 +206,8 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 - An empty **CLI Path Override** box shows the `bw` path in use as placeholder text. An empty **CLI Data Directory Override** box shows the folder that holds `data.json`.
 - An option of **TOTP** or **Organisation** can have a tooltip that explains it.
 - A drop-down list is as wide as its widest option.
-- **Keyboard shortcuts**, in the **Shortcuts** section at the top, opens the window that changes item shortcuts and the Enter action (see [Keyboard Shortcuts](Keyboard-Shortcuts)).
+- The **Server** section is above all other sections (see [Server URL](#server-url)).
+- **Keyboard shortcuts**, in the **Shortcuts** section below it, opens the window that changes item shortcuts and the Enter action (see [Keyboard Shortcuts](Keyboard-Shortcuts)).
 - **Logs**, under **Debug Logging** in the **Diagnostics** section, opens the log folder in File Explorer.
 - The **Help and feedback** section has **Report a bug**, **Request a feature** and **Project on GitHub**. Each opens a page in the browser.
 - The **About** section shows the app name, the version with the short commit and the copyright line. **Support** opens the donation page. **Check for updates** has a **Check now** button and a status line. The check runs only when you select **Check now**. A Dev build does not check. For a Microsoft Store install the **Install update** button installs the update or opens the Store update list, and the status line reports if the install did not complete. For a sideloaded install the **View release** button opens the GitHub release. See [Update check](Architecture#update-check).

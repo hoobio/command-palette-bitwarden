@@ -41,7 +41,6 @@ internal static class Ops
   public const string ApiKeyLogin = "apiKeyLogin";
   public const string ShowUnlock = "showUnlock";
   public const string Unlock = "unlock";
-  public const string ShowSetServer = "showSetServer";
   public const string SetServer = "setServer";
   public const string ShowLogin = "showLogin";
   public const string Login = "login";
@@ -82,6 +81,13 @@ internal static class SettingKeys
 {
   public const string OpenLogs = "openLogs";
   public const string Hotkeys = "hotkeys";
+  public const string ServerRegion = "serverRegion";
+  public const string ServerUrl = "serverUrl";
+}
+
+internal static class SettingsFocus
+{
+  public const string Server = "server";
 }
 
 internal static class ParentValues
@@ -213,7 +219,7 @@ internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
-internal sealed record DialogRequest(long ReturnWindow);
+internal sealed record DialogRequest(long ReturnWindow, string? Focus = null);
 
 internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
 
@@ -224,8 +230,6 @@ internal sealed record UnlockDialogRequest(long ReturnWindow, bool RememberSessi
 internal sealed record UnlockRequest(string Password, bool RememberSession, bool Biometric = false);
 
 internal sealed record UnlockResponse(bool Success, string? Error, bool LoggedOut = false);
-
-internal sealed record SetServerDialogRequest(long ReturnWindow, string Region, string? Url);
 
 internal sealed record SetServerRequest(
   string Region,
@@ -374,7 +378,7 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 
 internal sealed record ChoiceDto(string Title, string Value, string? Description = null);
 
-internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null);
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null, string? Confirm = null);
 
 internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
 
@@ -413,7 +417,6 @@ internal sealed record HotkeyResponse(bool Success, string? Error);
 [JsonSerializable(typeof(UnlockDialogRequest))]
 [JsonSerializable(typeof(UnlockRequest))]
 [JsonSerializable(typeof(UnlockResponse))]
-[JsonSerializable(typeof(SetServerDialogRequest))]
 [JsonSerializable(typeof(SetServerRequest))]
 [JsonSerializable(typeof(SetServerResponse))]
 [JsonSerializable(typeof(LoginDialogRequest))]

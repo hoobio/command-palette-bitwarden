@@ -414,6 +414,15 @@
         <Setter Property="Background" Value="{DynamicResource WindowGroundBrush}" />
         <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
         <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.5" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Border.Group.Highlighted">
+        <Setter Property="Background" Value="#4D409FFF" />
     </Style>
 
     <Style Selector="StackPanel.Rows">

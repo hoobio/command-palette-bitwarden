@@ -14,7 +14,54 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private string _signature = string.Empty;
   private bool _aboutLoaded;
+  private string? _pendingFocus;
   private IReadOnlyList<InfoSectionViewModel>? _infoSections;
+
+  internal Func<string, string, string, string, Task<bool>>? Confirm { get; set; }
+
+  internal event Action<SettingRowViewModel>? FocusRequested;
+
+  internal void Focus(string? focus)
+  {
+    if (focus is null)
+      return;
+    _pendingFocus = focus;
+    ApplyFocus();
+  }
+
+  private void ApplyFocus()
+  {
+    if (_pendingFocus != SettingsFocus.Server)
+      return;
+    var section = Sections.FirstOrDefault(s => s.Rows.Any(r => r.Key == SettingKeys.ServerRegion));
+    if (section is null)
+      return;
+    _pendingFocus = null;
+    _ = section.HighlightAsync();
+    FocusRequested?.Invoke(section.Rows.First(r => r.Key == SettingKeys.ServerRegion));
+  }
+
+  private async Task<string?> CommitServerAsync(SettingRowViewModel row, string value)
+  {
+    var isRegion = row.Key == SettingKeys.ServerRegion;
+    var region = isRegion ? value : ServerRow(SettingKeys.ServerRegion).CurrentValue;
+    var url = isRegion ? string.Empty : value;
+    if (region == ServerRegions.SelfHosted && isRegion)
+      return null;
+    if (row.Confirm is { } message && !await AskAsync("Change server?", message, "Change server", "Cancel"))
+      return "The server was not changed.";
+    var request = new SetServerRequest(region, region == ServerRegions.SelfHosted ? url : null);
+    var reply = IpcJson.Read(await channel.RequestAsync(Ops.SetServer, IpcJson.ToElement(request, IpcJson.Default.SetServerRequest), Timeout.InfiniteTimeSpan), IpcJson.Default.SetServerResponse);
+    if (!reply.Success)
+      return reply.Error ?? "Failed to set server URL";
+    await LoadAsync();
+    return null;
+  }
+
+  private SettingRowViewModel ServerRow(string key) => Sections.SelectMany(s => s.Rows).First(r => r.Key == key);
+
+  private Task<bool> AskAsync(string title, string message, string primary, string close) =>
+    Confirm?.Invoke(title, message, primary, close) ?? Task.FromResult(false);
 
   public ObservableCollection<SettingsSectionViewModel> Sections { get; } = [];
 
@@ -134,7 +181,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
     ErrorMessage = null;
     await LoadAboutAsync();
-    var signature = string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}:{s.Parent}:{s.ParentValue}"));
+    var signature = string.Join('|', settings.Select(s => $"{s.Key}:{s.Kind}:{s.Parent}:{s.ParentValue}:{s.Description}"));
     if (signature != _signature)
     {
       _signature = signature;
@@ -188,12 +235,13 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
         SettingKeys.OpenLogs => OpenLogs,
         SettingKeys.Hotkeys => showHotkeys,
         _ => null,
-      });
+      }, setting.Key is SettingKeys.ServerRegion or SettingKeys.ServerUrl ? CommitServerAsync : null);
       row.ValueChanged += RefreshVisibility;
       current.Rows.Add(row);
     }
 
     RefreshVisibility();
+    ApplyFocus();
   }
 }
 
@@ -204,6 +252,18 @@ internal sealed partial class SettingsSectionViewModel(string title) : Observabl
   [ObservableProperty]
   public partial bool IsShown { get; set; } = true;
 
+  [ObservableProperty]
+  public partial bool IsHighlighted { get; private set; }
+
+  internal static TimeSpan HighlightDuration { get; set; } = TimeSpan.FromMilliseconds(1500);
+
+  internal async Task HighlightAsync()
+  {
+    IsHighlighted = true;
+    await Task.Delay(HighlightDuration);
+    IsHighlighted = false;
+  }
+
   public bool HasTitle => Title.Length > 0;
 
   public List<SettingRowViewModel> Rows { get; } = [];
@@ -213,6 +273,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 {
   private readonly PipeChannel _channel;
   private readonly Action? _activate;
+  private readonly Func<SettingRowViewModel, string, Task<string?>>? _commit;
   private string _committed = string.Empty;
   private int _pending;
   private bool _applying;
@@ -222,10 +283,11 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   private ChoiceDto? _selectedChoice;
   private string _textValue = string.Empty;
 
-  public SettingRowViewModel(PipeChannel channel, SettingDto setting, Action? activate = null)
+  public SettingRowViewModel(PipeChannel channel, SettingDto setting, Action? activate = null, Func<SettingRowViewModel, string, Task<string?>>? commit = null)
   {
     _channel = channel;
     _activate = activate;
+    _commit = commit;
     Key = setting.Key;
     Kind = setting.Kind;
     Label = setting.Label;
@@ -291,6 +353,8 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 
   internal bool IsEditing { get; set; }
 
+  internal string? Confirm { get; private set; }
+
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
 
@@ -332,6 +396,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
       return;
     Placeholder = setting.Placeholder;
     Tooltip = setting.Tooltip;
+    Confirm = setting.Confirm;
     IsStatusOk = setting.Status == SettingStatuses.Ok;
     IsStatusError = setting.Status == SettingStatuses.Error;
     var value = setting.Value ?? string.Empty;
@@ -349,7 +414,8 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   {
     if (_sending)
     {
-      _queued = value;
+      if (_commit is null)
+        _queued = value;
       return;
     }
 
@@ -379,8 +445,15 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     string? error;
     try
     {
-      var reply = IpcJson.Read(await _channel.RequestAsync(Ops.SetSetting, IpcJson.ToElement(new SetSettingRequest(Key, value), IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
-      error = reply.Success ? null : reply.Error ?? "The setting was not changed.";
+      if (_commit is null)
+      {
+        var reply = IpcJson.Read(await _channel.RequestAsync(Ops.SetSetting, IpcJson.ToElement(new SetSettingRequest(Key, value), IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
+        error = reply.Success ? null : reply.Error ?? "The setting was not changed.";
+      }
+      else
+      {
+        error = await _commit(this, value);
+      }
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {

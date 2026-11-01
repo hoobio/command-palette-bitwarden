@@ -25,6 +25,10 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     public List<(string Key, string Value)> Sets { get; } = [];
 
+    public List<SetServerRequest> Servers { get; } = [];
+
+    public SetServerResponse ServerReply { get; set; } = new(true, null);
+
     public string? Reject { get; set; }
 
     public bool FailLoad { get; set; }
@@ -63,6 +67,10 @@ public class SettingsWindowTests(AvaloniaSession session)
             return Task.FromResult<JsonElement?>(IpcJson.ToElement(new SetSettingResponse(false, Reject), IpcJson.Default.SetSettingResponse));
           Change(request.Key, request.Value);
           return Task.FromResult<JsonElement?>(IpcJson.ToElement(new SetSettingResponse(true, null), IpcJson.Default.SetSettingResponse));
+        case Ops.SetServer:
+          lock (Servers)
+            Servers.Add(IpcJson.Read(payload, IpcJson.Default.SetServerRequest));
+          return Task.FromResult<JsonElement?>(IpcJson.ToElement(ServerReply, IpcJson.Default.SetServerResponse));
         case Ops.GetAbout:
           return Task.FromResult<JsonElement?>(IpcJson.ToElement(About, IpcJson.Default.AboutResponse));
         case Ops.CheckUpdates:
@@ -117,6 +125,166 @@ public class SettingsWindowTests(AvaloniaSession session)
       new("cliPath", SettingKinds.Text, "CLI path", "Path to bw", string.Empty, null),
     ]);
   }
+
+  private static void UseServerSchema(FakeExtension extension, string? confirm)
+  {
+    extension.Schema.Clear();
+    extension.Schema.AddRange(
+    [
+      new("_section_server", SettingKinds.Section, "Server", null, null, null),
+      new("serverRegion", SettingKinds.Choice, "Region", "Where your vault is hosted", "cloud", [new("Bitwarden.com", "cloud"), new("Bitwarden.eu", "eu"), new("Self-hosted", "selfHosted")], Confirm: confirm),
+      new("serverUrl", SettingKinds.Text, "Server URL", null, string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm),
+      new("_section_a", SettingKinds.Section, "General", null, null, null),
+      new("showIcons", SettingKinds.Toggle, "Show icons", null, "true", null),
+    ]);
+  }
+
+  private static ChoiceDto Region(SettingsViewModel vm, string value) => vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "serverRegion").Choices.Single(c => c.Value == value);
+
+  private static SettingRowViewModel ServerRow(SettingsViewModel vm, string key) => vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == key);
+
+  [Fact]
+  public Task ServerRegion_LoggedOut_SendsTheRegionAtOnce_WithoutAsking() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var asked = 0;
+    vm.Confirm = (_, _, _, _) =>
+    {
+      asked++;
+      return Task.FromResult(true);
+    };
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "eu");
+    AvaloniaSession.WaitFor(() => extension.Servers.Count == 1);
+
+    Assert.Equal(new SetServerRequest(ServerRegions.Eu, null), extension.Servers.Single());
+    Assert.Equal(0, asked);
+    Assert.Empty(extension.Sets);
+  });
+
+  [Fact]
+  public Task ServerRegion_LoggedIn_AsksFirst_AndKeepsTheServerWhenDeclined() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: "Changing the server logs you out of Bitwarden. Continue?");
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var messages = new List<string>();
+    vm.Confirm = (_, message, _, _) =>
+    {
+      messages.Add(message);
+      return Task.FromResult(false);
+    };
+    var row = ServerRow(vm, "serverRegion");
+
+    row.SelectedChoice = Region(vm, "eu");
+    AvaloniaSession.WaitFor(() => row.ErrorMessage is not null);
+
+    Assert.Equal(["Changing the server logs you out of Bitwarden. Continue?"], messages);
+    Assert.Equal("The server was not changed.", row.ErrorMessage);
+    Assert.Equal("cloud", row.SelectedChoice!.Value);
+    Assert.Empty(extension.Servers);
+  });
+
+  [Fact]
+  public Task ServerRegion_LoggedIn_ChangesTheServerWhenConfirmed() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: "Changing the server logs you out of Bitwarden. Continue?");
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    vm.Confirm = (_, _, _, _) => Task.FromResult(true);
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "eu");
+    AvaloniaSession.WaitFor(() => extension.Servers.Count == 1);
+
+    Assert.Equal(new SetServerRequest(ServerRegions.Eu, null), extension.Servers.Single());
+    Assert.Null(ServerRow(vm, "serverRegion").ErrorMessage);
+  });
+
+  [Fact]
+  public Task ServerUrl_SelfHosted_SendsNothingUntilTheUrlIsCommitted_AndShowsTheExtensionsError() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { ServerReply = new SetServerResponse(false, "Enter a valid server URL starting with http:// or https://") };
+    UseServerSchema(extension, confirm: null);
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var url = ServerRow(vm, "serverUrl");
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "selfHosted");
+    await Task.Delay(100, TestContext.Current.CancellationToken);
+    Assert.Empty(extension.Servers);
+    Assert.True(url.IsShown);
+
+    await url.CommitTextAsync("vault.example.com");
+
+    Assert.Equal(new SetServerRequest(ServerRegions.SelfHosted, "vault.example.com"), extension.Servers.Single());
+    Assert.Equal("Enter a valid server URL starting with http:// or https://", url.ErrorMessage);
+
+    extension.ServerReply = new SetServerResponse(true, null);
+    await url.CommitTextAsync("https://vault.example.com");
+
+    Assert.Equal(new SetServerRequest(ServerRegions.SelfHosted, "https://vault.example.com"), extension.Servers[^1]);
+    Assert.Null(url.ErrorMessage);
+  });
+
+  [Fact]
+  public Task Focus_Server_HighlightsTheServerSection_AndFocusesTheRegion() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var previous = SettingsSectionViewModel.HighlightDuration;
+    SettingsSectionViewModel.HighlightDuration = TimeSpan.FromMilliseconds(150);
+    try
+    {
+      SettingRowViewModel? focused = null;
+      vm.FocusRequested += row => focused = row;
+
+      vm.Focus(SettingsFocus.Server);
+
+      Assert.True(vm.Sections[0].IsHighlighted);
+      Assert.False(vm.Sections[1].IsHighlighted);
+      Assert.Equal("serverRegion", focused!.Key);
+      AvaloniaSession.WaitFor(() => !vm.Sections[0].IsHighlighted);
+    }
+    finally
+    {
+      SettingsSectionViewModel.HighlightDuration = previous;
+    }
+
+    vm.Focus(null);
+    Assert.False(vm.Sections[0].IsHighlighted);
+  });
+
+  [Fact]
+  public Task ShowSettings_WithAServerFocus_HighlightsOnceTheRowsLoad_AndOldRequestsDoNot() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+
+    var reply = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0, SettingsFocus.Server), IpcJson.Default.DialogRequest));
+    AvaloniaSession.WaitFor(() => reply.IsCompleted);
+    var window = coordinator.ShowSettings();
+    var vm = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.Sections.Count == 2 && vm.Sections[0].IsHighlighted);
+    window.Close();
+
+    var plain = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0), IpcJson.Default.DialogRequest));
+    AvaloniaSession.WaitFor(() => plain.IsCompleted);
+    var again = coordinator.ShowSettings().ViewModel!;
+    AvaloniaSession.WaitFor(() => again.Sections.Count == 2);
+    Assert.False(again.Sections[0].IsHighlighted);
+    coordinator.ShowSettings().Close();
+    await Task.CompletedTask;
+  });
 
   private static TextBox SearchBox(SettingsWindow window) =>
     window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");

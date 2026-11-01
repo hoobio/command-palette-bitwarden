@@ -42,16 +42,17 @@ public class CompanionSettingsOpsTests : IDisposable
   {
     var settings = await GetAsync();
 
-    Assert.Equal(_settings.OrderedSettings.Count + 3, settings.Count);
-    Assert.Equal(7, settings.Count(s => s.Kind == SettingKinds.Section));
+    Assert.Equal(_settings.OrderedSettings.Count + 6, settings.Count);
+    Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Section));
     Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Link));
     Assert.Equal(15, settings.Count(s => s.Kind == SettingKinds.Toggle));
-    Assert.Equal(7, settings.Count(s => s.Kind == SettingKinds.Choice));
-    Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Text));
-    Assert.Equal(["_section_shortcuts", "hotkeys"], settings.Take(2).Select(s => s.Key));
-    Assert.Equal((SettingKinds.Link, "Keyboard shortcuts", "Change item shortcuts and the Enter action"), (settings[1].Kind, settings[1].Label, settings[1].Description));
-    Assert.Equal(["_section_auth", "rememberSession", "useApiKeyAuthentication"], settings.Skip(2).Take(3).Select(s => s.Key));
-    Assert.Equal(new SettingDto("_section_auth", SettingKinds.Section, "Authentication", null, null, null), settings[2]);
+    Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Choice));
+    Assert.Equal(3, settings.Count(s => s.Kind == SettingKinds.Text));
+    Assert.Equal(["_section_server", "serverRegion", "serverUrl"], settings.Take(3).Select(s => s.Key));
+    Assert.Equal(["_section_shortcuts", "hotkeys"], settings.Skip(3).Take(2).Select(s => s.Key));
+    Assert.Equal((SettingKinds.Link, "Keyboard shortcuts", "Change item shortcuts and the Enter action"), (settings[4].Kind, settings[4].Label, settings[4].Description));
+    Assert.Equal(["_section_auth", "rememberSession", "useApiKeyAuthentication"], settings.Skip(5).Take(3).Select(s => s.Key));
+    Assert.Equal(new SettingDto("_section_auth", SettingKinds.Section, "Authentication", null, null, null), settings[5]);
 
     var liveSync = settings.Single(s => s.Key == "liveSync");
     Assert.Equal((SettingKinds.Toggle, "Live Sync", "true"), (liveSync.Kind, liveSync.Label, liveSync.Value));
@@ -93,7 +94,49 @@ public class CompanionSettingsOpsTests : IDisposable
       Assert.All(settings.Skip(parentIndex + 1).Take(childIndex - parentIndex - 1), s => Assert.Equal(parent, s.Parent));
     }
 
-    Assert.Equal(dependencies.Length + 1, settings.Count(s => s.Parent is not null));
+    Assert.Equal(dependencies.Length + 2, settings.Count(s => s.Parent is not null));
+  }
+
+  [Fact]
+  public void ServerRows_LeadTheWindow_WithTheRegionAndTheSelfHostedUrl()
+  {
+    var rows = CompanionOps.ServerRows("https://vault.example.com", loggedIn: false);
+
+    Assert.Equal(["_section_server", "serverRegion", "serverUrl"], rows.Select(r => r.Key));
+    Assert.Equal(("Server", SettingKinds.Section), (rows[0].Label, rows[0].Kind));
+    Assert.Equal(ServerRegions.SelfHosted, rows[1].Value);
+    Assert.Equal(["cloud", "eu", "selfHosted"], rows[1].Choices!.Select(c => c.Value));
+    Assert.Equal(("https://vault.example.com", "serverRegion", ServerRegions.SelfHosted), (rows[2].Value, rows[2].Parent, rows[2].ParentValue));
+    Assert.All(rows, r => Assert.Null(r.Confirm));
+  }
+
+  [Theory]
+  [InlineData(null, ServerRegions.Cloud)]
+  [InlineData("https://vault.bitwarden.com", ServerRegions.Cloud)]
+  [InlineData("https://vault.bitwarden.eu", ServerRegions.Eu)]
+  [InlineData("https://vault.example.com", ServerRegions.SelfHosted)]
+  public void ServerRows_PickTheRegionFromTheCurrentServer_AndKeepTheUrlOnlyWhenSelfHosted(string? url, string region)
+  {
+    var rows = CompanionOps.ServerRows(url, loggedIn: false);
+
+    Assert.Equal(region, rows[1].Value);
+    Assert.Equal(region == ServerRegions.SelfHosted ? url : string.Empty, rows[2].Value);
+  }
+
+  [Fact]
+  public void ServerRows_WhileLoggedIn_WarnAndAskForConfirmation()
+  {
+    var rows = CompanionOps.ServerRows(null, loggedIn: true);
+
+    Assert.Equal("Changing the server logs you out", rows[1].Description);
+    Assert.Equal("Changing the server logs you out of Bitwarden. Continue?", rows[1].Confirm);
+    Assert.Equal(rows[1].Confirm, rows[2].Confirm);
+  }
+
+  [Fact]
+  public async Task SetSetting_RejectsTheServerRows()
+  {
+    Assert.Equal(new SetSettingResponse(false, "Unknown setting"), await SetAsync(SettingKeys.ServerRegion, ServerRegions.Eu));
   }
 
   [Fact]

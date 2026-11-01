@@ -18,14 +18,42 @@ internal sealed partial class CompanionOps
   internal SettingsResponse GetSettings()
   {
     var manager = Manager();
-    return new(manager.OrderedSettings.Select(DescribeSetting).OfType<SettingDto>()
+    return new((SettingDto[])[.. ServerRows(), .. manager.OrderedSettings.Select(DescribeSetting).OfType<SettingDto>()
       .Select(s => manager.TryGetParent(s.Key, out var parent) ? s with { Parent = parent.Key, ParentValue = parent.Value } : s)
       .Select(s => s with { Placeholder = PlaceholderFor(manager, s.Key), Tooltip = TooltipFor(manager, s.Key) })
       .Select(s => s.Key == manager.UseDesktopIntegration.Key ? WithDesktopStatus(s, manager.UseDesktopIntegration.Value, _desktopReachable) : s)
       .SelectMany(s => s.Key == manager.DebugLogging.Key ? new[] { s, OpenLogsLink } : new[] { s })
       .Prepend(HotkeysLink)
-      .Prepend(ShortcutsSection)
-      .ToArray());
+      .Prepend(ShortcutsSection)]);
+  }
+
+  private static readonly ChoiceDto[] ServerChoices =
+  [
+    new("Bitwarden.com", ServerRegions.Cloud),
+    new("Bitwarden.eu", ServerRegions.Eu),
+    new("Self-hosted", ServerRegions.SelfHosted),
+  ];
+
+  internal static string RegionOf(string? serverUrl) => Pages.SetServerPage.DetectPreset(serverUrl) switch
+  {
+    "bitwarden.com" => ServerRegions.Cloud,
+    "bitwarden.eu" => ServerRegions.Eu,
+    _ => ServerRegions.SelfHosted,
+  };
+
+  private SettingDto[] ServerRows() => ServerRows(BitwardenCliService.ServerUrl, _service.LastStatus is VaultStatus.Locked or VaultStatus.Unlocked);
+
+  internal static SettingDto[] ServerRows(string? url, bool loggedIn)
+  {
+    var region = RegionOf(url);
+    var warning = "Changing the server logs you out";
+    var confirm = loggedIn ? $"{warning} of Bitwarden. Continue?" : null;
+    return
+    [
+      new("_section_server", SettingKinds.Section, "Server", null, null, null),
+      new(SettingKeys.ServerRegion, SettingKinds.Choice, "Region", loggedIn ? warning : "Where your vault is hosted", region, ServerChoices, Confirm: confirm),
+      new(SettingKeys.ServerUrl, SettingKinds.Text, "Server URL", "Address of your self-hosted server", region == ServerRegions.SelfHosted ? url : string.Empty, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted, Placeholder: "https://vault.example.com", Confirm: confirm),
+    ];
   }
 
   private static readonly SettingDto OpenLogsLink = new(SettingKeys.OpenLogs, SettingKinds.Link, "Logs", "Opens the log folder", null, null);

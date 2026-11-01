@@ -2,6 +2,10 @@
 
 Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)). The **Open settings window** button at the top of the Bitwarden page in Command Palette Settings opens the same window.
 
+## Server
+
+The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**) and, for **Self-hosted**, **Server URL**. It is not part of the Command Palette settings page. A change logs you out. See [Server URL](Companion-Window#server-url).
+
 ## Available Settings
 
 ### Remember Session

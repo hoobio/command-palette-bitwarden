@@ -58,8 +58,12 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void ShowGenerator() => _ = SendAsync(Ops.ShowGenerator, null);
 
-  public void ShowSettings() =>
-    _ = SendAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(CommandPaletteModalScope.ForegroundCommandPalette()), IpcJson.Default.DialogRequest));
+  public void ShowSettings() => RequestSettings(null);
+
+  public void ShowServerSettings() => RequestSettings(SettingsFocus.Server);
+
+  private void RequestSettings(string? focus) =>
+    _ = SendAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(CommandPaletteModalScope.ForegroundCommandPalette(), focus), IpcJson.Default.DialogRequest));
 
   public void ShowApiKeyLogin()
   {
@@ -87,20 +91,6 @@ internal sealed partial class CompanionHost : IDisposable
     var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
     _ = CommandPaletteModalScope.Enter();
     _ = SendAsync(Ops.ShowUnlock, IpcJson.ToElement(new UnlockDialogRequest(returnWindow, rememberSession, windowsHello), IpcJson.Default.UnlockDialogRequest));
-  }
-
-  public void ShowSetServer()
-  {
-    var url = BitwardenCliService.ServerUrl;
-    var region = Pages.SetServerPage.DetectPreset(url) switch
-    {
-      "bitwarden.com" => ServerRegions.Cloud,
-      "bitwarden.eu" => ServerRegions.Eu,
-      _ => ServerRegions.SelfHosted,
-    };
-    var returnWindow = CommandPaletteModalScope.ForegroundCommandPalette();
-    _ = CommandPaletteModalScope.Enter();
-    _ = SendAsync(Ops.ShowSetServer, IpcJson.ToElement(new SetServerDialogRequest(returnWindow, region, url), IpcJson.Default.SetServerDialogRequest));
   }
 
   public void RotateItem(string id) =>

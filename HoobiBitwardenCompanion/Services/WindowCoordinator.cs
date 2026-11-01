@@ -97,7 +97,8 @@ internal sealed class WindowCoordinator : IDisposable
         await Dispatcher.UIThread.InvokeAsync(ShowGenerator);
         return null;
       case Ops.ShowSettings:
-        await Dispatcher.UIThread.InvokeAsync(ShowSettings);
+        var settings = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Focus));
         return null;
       case Ops.ShowApiKeyLogin:
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
@@ -106,10 +107,6 @@ internal sealed class WindowCoordinator : IDisposable
       case Ops.ShowUnlock:
         var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockDialogRequest);
         await Dispatcher.UIThread.InvokeAsync(() => ShowUnlock((nint)unlock.ReturnWindow, unlock.RememberSession, unlock.WindowsHello));
-        return null;
-      case Ops.ShowSetServer:
-        var server = IpcJson.Read(payload, IpcJson.Default.SetServerDialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowSetServer((nint)server.ReturnWindow, server.Region, server.Url));
         return null;
       case Ops.ShowLogin:
         var login = IpcJson.Read(payload, IpcJson.Default.LoginDialogRequest);
@@ -178,7 +175,7 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
-  public SettingsWindow ShowSettings()
+  public SettingsWindow ShowSettings(string? focus = null)
   {
     if (_settingsWindow is null)
     {
@@ -190,6 +187,7 @@ internal sealed class WindowCoordinator : IDisposable
     }
 
     BringToFront(_settingsWindow);
+    _settingsWindow.ViewModel?.Focus(focus);
     return _settingsWindow;
   }
 
@@ -213,9 +211,6 @@ internal sealed class WindowCoordinator : IDisposable
 
   public UnlockWindow ShowUnlock(nint returnWindow = 0, bool rememberSession = false, bool windowsHello = false) =>
     ShowDialog(() => new UnlockWindow(new UnlockViewModel(Channel, rememberSession, windowsHello)), returnWindow);
-
-  public SetServerWindow ShowSetServer(nint returnWindow = 0, string region = ServerRegions.Cloud, string? url = null) =>
-    ShowDialog(() => new SetServerWindow(new SetServerViewModel(Channel, region, url)), returnWindow);
 
   public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null) =>
     ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir)), returnWindow);

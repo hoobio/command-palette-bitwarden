@@ -32,7 +32,7 @@
                         <DataTemplate x:DataType="vm:SettingsSectionViewModel">
                             <StackPanel IsVisible="{Binding IsShown}">
                                 <TextBlock Classes="GroupHeader" Text="{Binding Title}" IsVisible="{Binding HasTitle}" />
-                                <Border Classes="Group">
+                                <Border Classes="Group" Classes.Highlighted="{Binding IsHighlighted}">
                                     <ItemsControl Classes="Rows" ItemsSource="{Binding Rows}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:SettingRowViewModel">
