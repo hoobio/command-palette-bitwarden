@@ -10,7 +10,9 @@ internal sealed partial class ServerPickerViewModel(PipeChannel channel, SetServ
 
   internal event Action<SelfHostedServerViewModel>? SelfHostedRequested;
 
-  public string Host => _server.Region switch
+  internal SetServerRequest Current => _server;
+
+  public string Host =>_server.Region switch
   {
     ServerRegions.Cloud => "bitwarden.com",
     ServerRegions.Eu => "bitwarden.eu",

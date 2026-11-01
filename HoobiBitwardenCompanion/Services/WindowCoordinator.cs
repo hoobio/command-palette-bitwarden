@@ -214,7 +214,16 @@ internal sealed class WindowCoordinator : IDisposable
     ShowDialog(() => new UnlockWindow(new UnlockViewModel(Channel, rememberSession, windowsHello)), returnWindow);
 
   public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null, SetServerRequest? server = null) =>
-    ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir, server)), returnWindow);
+    ShowDialog(() =>
+    {
+      var window = new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir, server));
+      window.ViewModel!.ApiKeyLoginRequested = current =>
+      {
+        window.Close();
+        ShowApiKeyLogin(window.ReturnWindow, current);
+      };
+      return window;
+    }, returnWindow);
 
   public RepromptWindow ShowReprompt(nint returnWindow, string token, string itemName, bool windowsHello)
   {

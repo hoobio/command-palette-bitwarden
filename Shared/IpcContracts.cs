@@ -82,6 +82,7 @@ internal static class SettingKeys
 {
   public const string OpenLogs = "openLogs";
   public const string Hotkeys = "hotkeys";
+  public const string UseApiKeyAuthentication = "useApiKeyAuthentication";
   public const string ServerRegion = "serverRegion";
   public const string ServerUrl = "serverUrl";
   public const string ServerAdvanced = "serverAdvanced";

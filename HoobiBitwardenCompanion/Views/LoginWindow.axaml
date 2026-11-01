@@ -33,12 +33,20 @@
                         <TextBlock x:Name="DataDirText" TextWrapping="Wrap" Text="{Binding CustomDataDirWarning}" />
                     </Border>
                     <TextBlock Text="Email" Margin="0,8,0,0" />
-                    <TextBox x:Name="EmailBox" PlaceholderText="your@email.com" Text="{Binding Email, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <TextBox x:Name="EmailBox" PlaceholderText="your@email.com" Text="{Binding Email, Mode=TwoWay}" IsEnabled="{Binding CredentialsEnabled}" />
                     <TextBlock Text="Master password" />
-                    <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Enter your master password" Text="{Binding MasterPassword, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" PasswordChar="•" PlaceholderText="Enter your master password" Text="{Binding MasterPassword, Mode=TwoWay}" IsEnabled="{Binding CredentialsEnabled}" />
                     <TextBlock Text="Two-factor method (if prompted)" />
                     <ComboBox x:Name="MethodBox" HorizontalAlignment="Stretch" ItemsSource="{x:Static vm:LoginViewModel.MethodChoices}" SelectedIndex="{Binding MethodIndex, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
-                    <TextBlock Classes="Caption" TextWrapping="Wrap" Text="For Duo Push or WebAuthn, turn on 'Use API Key Authentication' in settings, or run `bw login` in a terminal first, then unlock here with your master password." />
+                    <TextBlock Text="Two-step login" />
+                    <ComboBox x:Name="TwoStepBox" HorizontalAlignment="Stretch" ItemsSource="{x:Static vm:LoginViewModel.TwoStepChoices}" SelectedIndex="{Binding TwoStepIndex, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
+                    <Border x:Name="TwoStepAlert" Classes="Alert" IsVisible="{Binding IsUnsupportedTwoStep}">
+                        <StackPanel Spacing="8">
+                            <TextBlock TextWrapping="Wrap" Text="The Bitwarden CLI cannot sign in with Duo or WebAuthn. Use API key login, or run `bw login` in a terminal." />
+                            <TextBlock x:Name="TwoStepErrorText" TextWrapping="Wrap" Text="{Binding TwoStepError}" IsVisible="{Binding TwoStepError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <Button x:Name="UseApiKeyButton" Content="Use API key login" Command="{Binding UseApiKeyLoginCommand}" IsEnabled="{Binding !IsBusy}" />
+                        </StackPanel>
+                    </Border>
                     <CheckBox x:Name="RememberBox" Content="Remember session (stay unlocked between launches)" IsChecked="{Binding RememberSession, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}" />
                 </StackPanel>
 
@@ -68,7 +76,7 @@
         </ScrollViewer>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,8,24,24">
-            <Button x:Name="SubmitButton" Theme="{StaticResource AccentButtonStyle}" Content="{Binding SubmitLabel}" Command="{Binding SubmitCommand}" IsEnabled="{Binding !IsBusy}" />
+            <Button x:Name="SubmitButton" Theme="{StaticResource AccentButtonStyle}" Content="{Binding SubmitLabel}" Command="{Binding SubmitCommand}" IsEnabled="{Binding SubmitEnabled}" />
             <Button x:Name="BackButton" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding !IsCredentialsStep}" IsEnabled="{Binding !IsBusy}" />
             <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
         </StackPanel>

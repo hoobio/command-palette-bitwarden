@@ -15,6 +15,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     public Queue<LoginResponse> Logins { get; } = new([new LoginResponse(true, null)]);
     public LoginResponse Device { get; set; } = new(true, null);
     public RepromptConfirmResponse Confirm { get; set; } = new(true, null);
+    public SetSettingResponse Setting { get; set; } = new(true, null);
 
     public List<string> Ops_ => [.. Calls.Select(c => c.Op)];
 
@@ -29,6 +30,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
         Ops.Login => IpcJson.ToElement(Logins.Count > 1 ? Logins.Dequeue() : Logins.Peek(), IpcJson.Default.LoginResponse),
         Ops.SubmitDeviceVerification => IpcJson.ToElement(Device, IpcJson.Default.LoginResponse),
         Ops.ConfirmReprompt => IpcJson.ToElement(Confirm, IpcJson.Default.RepromptConfirmResponse),
+        Ops.SetSetting => IpcJson.ToElement(Setting, IpcJson.Default.SetSettingResponse),
         Ops.CancelLogin or Ops.CancelReprompt => null,
         _ => throw new IpcException(IpcErrors.Invalid),
       });
@@ -65,6 +67,103 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     Assert.Equal([(nint)1234], returned);
     Assert.NotSame(window, coordinator.ShowLogin());
     coordinator.ShowLogin().Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task TwoStepPicker_DuoAndWebAuthnDisableTheCredentials_AndShowTheBanner_ThenTheDefaultRestoresThem() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedTwoStepIndex = 0;
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin();
+    var viewModel = window.ViewModel!;
+    Assert.Equal(0, viewModel.TwoStepIndex);
+    Assert.False(window.FindControl<Control>("TwoStepAlert")!.IsVisible);
+    Assert.True(window.FindControl<Control>("EmailBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("PasswordBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("SubmitButton")!.IsEnabled);
+
+    foreach (var index in Enumerable.Range(1, 2))
+    {
+      viewModel.TwoStepIndex = index;
+      Assert.True(window.FindControl<Control>("TwoStepAlert")!.IsVisible);
+      Assert.False(window.FindControl<Control>("EmailBox")!.IsEnabled);
+      Assert.False(window.FindControl<Control>("PasswordBox")!.IsEnabled);
+      Assert.False(window.FindControl<Control>("SubmitButton")!.IsEnabled);
+    }
+
+    viewModel.TwoStepIndex = 0;
+    Assert.False(window.FindControl<Control>("TwoStepAlert")!.IsVisible);
+    Assert.True(window.FindControl<Control>("EmailBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("PasswordBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("SubmitButton")!.IsEnabled);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task TwoStepPicker_ChoiceIsRememberedForNextWindow() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedTwoStepIndex = 0;
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin();
+    window.ViewModel!.TwoStepIndex = 2;
+    window.Close();
+    var next = coordinator.ShowLogin();
+    Assert.Equal(2, next.ViewModel!.TwoStepIndex);
+    next.Close();
+    LoginViewModel.RememberedTwoStepIndex = 0;
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task UseApiKeyLogin_TurnsOnTheSetting_ThenClosesTheWindowAndOpensApiKeyLogin() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedTwoStepIndex = 0;
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin(777);
+    var viewModel = window.ViewModel!;
+    viewModel.TwoStepIndex = 1;
+    await viewModel.UseApiKeyLoginCommand.ExecuteAsync(null);
+
+    var sent = IpcJson.Read(extension.Calls.Single(c => c.Op == Ops.SetSetting).Payload, IpcJson.Default.SetSettingRequest);
+    Assert.Equal(new SetSettingRequest("useApiKeyAuthentication", "true"), sent);
+    Assert.NotSame(window, coordinator.ShowLogin());
+    var apiKey = coordinator.ShowApiKeyLogin();
+    Assert.Equal(777, apiKey.ReturnWindow);
+    apiKey.Close();
+    coordinator.ShowLogin().Close();
+    LoginViewModel.RememberedTwoStepIndex = 0;
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task UseApiKeyLogin_WhenTheSettingFails_ShowsTheErrorInTheBanner_AndKeepsTheWindow() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedTwoStepIndex = 0;
+    var extension = new FakeExtension { Setting = new SetSettingResponse(false, "Not allowed") };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin();
+    var viewModel = window.ViewModel!;
+    viewModel.TwoStepIndex = 2;
+    await viewModel.UseApiKeyLoginCommand.ExecuteAsync(null);
+
+    Assert.Equal("Not allowed", viewModel.TwoStepError);
+    Assert.True(window.FindControl<Control>("TwoStepErrorText")!.IsVisible);
+    Assert.Same(window, coordinator.ShowLogin());
+    window.Close();
+    LoginViewModel.RememberedTwoStepIndex = 0;
     await Task.CompletedTask;
   });
 

@@ -20,19 +20,39 @@ internal sealed partial class LoginViewModel : DialogViewModel
     RememberSession = rememberSession;
     CustomDataDirWarning = customDataDir is null
       ? null
-      : $"Custom CLI data directory: {customDataDir}\n\nFor an interactive `bw login` (Duo Push, WebAuthn) to share session with this extension, set `BITWARDENCLI_APPDATA_DIR` in your terminal to that path before running `bw login`. Otherwise the CLI will write auth state to a different location and the extension won't see it.";
+      : $"Custom CLI data directory: {customDataDir}. Set BITWARDENCLI_APPDATA_DIR to this path before you run `bw login` in a terminal.";
+    TwoStepIndex = RememberedTwoStepIndex;
     PropertyChanged += (_, e) =>
     {
+      if (e.PropertyName == nameof(IsBusy))
+      {
+        OnPropertyChanged(nameof(CredentialsEnabled));
+        OnPropertyChanged(nameof(SubmitEnabled));
+      }
+
       if (e.PropertyName != nameof(Step))
         return;
       OnPropertyChanged(nameof(IsCredentialsStep));
       OnPropertyChanged(nameof(IsCodeStep));
       OnPropertyChanged(nameof(IsDeviceStep));
       OnPropertyChanged(nameof(SubmitLabel));
+      OnPropertyChanged(nameof(SubmitEnabled));
     };
   }
 
+  internal static int RememberedTwoStepIndex;
+
   public static IReadOnlyList<string> MethodChoices { get; } = ["Authenticator app", "Email", "YubiKey OTP", "Auto-detect"];
+
+  public static IReadOnlyList<string> TwoStepChoices { get; } = ["Authenticator app or email", "Duo", "WebAuthn (FIDO2)"];
+
+  internal Action<SetServerRequest>? ApiKeyLoginRequested { get; set; }
+
+  public bool IsUnsupportedTwoStep => TwoStepIndex > 0;
+
+  public bool CredentialsEnabled => !IsBusy && !IsUnsupportedTwoStep;
+
+  public bool SubmitEnabled => !IsBusy && !(IsCredentialsStep && IsUnsupportedTwoStep);
 
   public ServerPickerViewModel Server { get; }
 
@@ -67,7 +87,44 @@ internal sealed partial class LoginViewModel : DialogViewModel
   public partial int MethodIndex { get; set; }
 
   [ObservableProperty]
+  public partial int TwoStepIndex { get; set; }
+
+  [ObservableProperty]
+  public partial string? TwoStepError { get; private set; }
+
+  [ObservableProperty]
   public partial bool RememberSession { get; set; }
+
+  partial void OnTwoStepIndexChanged(int value)
+  {
+    RememberedTwoStepIndex = value;
+    TwoStepError = null;
+    OnPropertyChanged(nameof(IsUnsupportedTwoStep));
+    OnPropertyChanged(nameof(CredentialsEnabled));
+    OnPropertyChanged(nameof(SubmitEnabled));
+  }
+
+  [RelayCommand]
+  internal async Task UseApiKeyLoginAsync()
+  {
+    TwoStepError = null;
+    try
+    {
+      var reply = IpcJson.Read(await Channel.RequestAsync(Ops.SetSetting, IpcJson.ToElement(new SetSettingRequest(SettingKeys.UseApiKeyAuthentication, "true"), IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
+      if (!reply.Success)
+      {
+        TwoStepError = reply.Error ?? "Could not turn on API key login";
+        return;
+      }
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
+    {
+      TwoStepError = ItemViewModel.Describe(ex);
+      return;
+    }
+
+    ApiKeyLoginRequested?.Invoke(Server.Current);
+  }
 
   [ObservableProperty]
   public partial string? Code { get; set; }

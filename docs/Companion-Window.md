@@ -150,7 +150,7 @@ When **Use API Key Authentication** is off, **Login to Bitwarden** opens the **L
 - **Email** and a masked **Master password** box with an eye button.
 - **Two-factor method (if prompted)**: **Authenticator app** (the default), **Email**, **YubiKey OTP** or **Auto-detect**. **Email** makes Bitwarden send the code at the first attempt.
 - **Remember session** starts with the value of the setting. **Log in** saves the box value to the setting.
-- A note for Duo Push and WebAuthn, which the CLI cannot complete. Use an API key for these accounts.
+- **Two-step login**: **Authenticator app or email** (the default), **Duo** or **WebAuthn (FIDO2)**. The choice is not sent to the CLI and is kept until the companion exits. **Duo** and **WebAuthn (FIDO2)** show a warning, because the CLI cannot complete these logins, and disable **Email**, **Master password** and **Log in**. The warning has a **Use API key login** button. It turns on **Use API Key Authentication** (the setting), closes this window and opens the **Log in with your API key** window. If the setting cannot be turned on, the warning shows the error and the window stays open.
 - A warning when a custom CLI data directory is set. A `bw login` that you run in a terminal must use the same `BITWARDENCLI_APPDATA_DIR`.
 - A server picker at the bottom, on the email and password step (see [Server picker](#server-picker)).
 
