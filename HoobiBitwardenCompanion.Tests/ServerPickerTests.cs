@@ -406,7 +406,14 @@ public class ServerPickerTests(AvaloniaSession session)
     Assert.Empty(extension.Servers);
     Assert.True(window.IsVisible);
     Assert.Null(window.ViewModel!.ErrorMessage);
-    window.Close();
+
+    window.GetVisualDescendants().OfType<TextBox>().First(t => t.IsEffectivelyVisible && t.IsEnabled).Focus();
+    Press(window, Avalonia.Input.Key.Enter, Avalonia.Input.PhysicalKey.Enter);
+    AvaloniaSession.WaitFor(() => window.ViewModel.ErrorMessage is not null);
+    var closed = false;
+    window.Closed += (_, _) => closed = true;
+    window.KeyPress(Avalonia.Input.Key.Escape, Avalonia.Input.RawInputModifiers.None, Avalonia.Input.PhysicalKey.Escape, null);
+    Assert.True(closed);
     await Task.CompletedTask;
   });
 }
