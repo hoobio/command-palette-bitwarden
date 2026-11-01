@@ -100,7 +100,7 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowSettings:
         var settings = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Focus, settings?.Force ?? false));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Force ?? false));
         return null;
       case Ops.ShowApiKeyLogin:
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
@@ -177,7 +177,7 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
-  public SettingsWindow ShowSettings(string? focus = null, bool force = false)
+  public SettingsWindow ShowSettings(bool force = false)
   {
     if (_settingsWindow is null)
     {
@@ -189,7 +189,6 @@ internal sealed class WindowCoordinator : IDisposable
     }
 
     BringToFront(_settingsWindow, force);
-    _settingsWindow.ViewModel?.Focus(focus);
     return _settingsWindow;
   }
 

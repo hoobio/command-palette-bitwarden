@@ -94,11 +94,6 @@ internal static class SettingKeys
   public const string ServerKeyConnectorUrl = "serverKeyConnectorUrl";
 }
 
-internal static class SettingsFocus
-{
-  public const string Server = "server";
-}
-
 internal static class ParentValues
 {
   public const string NonEmpty = "*";
@@ -228,7 +223,7 @@ internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
-internal sealed record DialogRequest(long ReturnWindow, string? Focus = null, bool Force = false, SetServerRequest? Server = null);
+internal sealed record DialogRequest(long ReturnWindow, bool Force = false, SetServerRequest? Server = null);
 
 internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
 

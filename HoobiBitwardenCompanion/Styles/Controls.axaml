@@ -416,23 +416,6 @@
         <Setter Property="ClipToBounds" Value="True" />
     </Style>
 
-    <Style Selector="Border.GroupHighlight">
-        <Setter Property="BorderThickness" Value="2" />
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
-        <Setter Property="IsHitTestVisible" Value="False" />
-        <Setter Property="Opacity" Value="0" />
-        <Setter Property="Transitions">
-            <Transitions>
-                <DoubleTransition Property="Opacity" Duration="0:0:0.4" />
-            </Transitions>
-        </Setter>
-    </Style>
-
-    <Style Selector="Border.GroupHighlight.Highlighted">
-        <Setter Property="Opacity" Value="1" />
-    </Style>
-
     <Style Selector="StackPanel.Rows">
         <Setter Property="Spacing" Value="1" />
     </Style>

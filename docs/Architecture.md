@@ -41,7 +41,6 @@ HoobiBitwardenCommandPaletteExtension/
 ├── Pages/
 │   ├── HoobiBitwardenCommandPaletteExtensionPage.cs  # Main vault list (DynamicListPage)
 │   ├── LoginPage.cs                    # Email/password login form
-│   ├── SetServerPage.cs               # Server URL configuration form
 │   └── UnlockVaultPage.cs             # Master password unlock form
 ├── Services/
 │   ├── AccessTracker.cs               # Access history + recent item tracking

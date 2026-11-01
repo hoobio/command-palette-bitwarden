@@ -58,14 +58,12 @@ internal sealed partial class CompanionHost : IDisposable
 
   public void ShowGenerator() => _ = SendAsync(Ops.ShowGenerator, null);
 
-  public void ShowSettings() => RequestSettings(null, false);
+  public void ShowSettings() => RequestSettings(false);
 
-  public void ShowServerSettings() => RequestSettings(SettingsFocus.Server, false);
+  public void ShowSettingsFromForm() => RequestSettings(true);
 
-  public void ShowSettingsFromForm() => RequestSettings(null, true);
-
-  private void RequestSettings(string? focus, bool force) =>
-    _ = SendAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(CommandPaletteModalScope.ForegroundCommandPalette(), focus, force), IpcJson.Default.DialogRequest));
+  private void RequestSettings(bool force) =>
+    _ = SendAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(CommandPaletteModalScope.ForegroundCommandPalette(), force), IpcJson.Default.DialogRequest));
 
   public void ShowApiKeyLogin()
   {

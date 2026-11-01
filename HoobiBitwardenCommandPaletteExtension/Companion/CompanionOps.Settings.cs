@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using HoobiBitwarden.Ipc;
+using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -68,12 +69,10 @@ internal sealed partial class CompanionOps
     [ServerRegions.Eu] = "https://vault.bitwarden.eu",
   };
 
-  internal static string RegionOf(string? serverUrl) => Pages.SetServerPage.DetectPreset(serverUrl) switch
-  {
-    "bitwarden.com" => ServerRegions.Cloud,
-    "bitwarden.eu" => ServerRegions.Eu,
-    _ => ServerRegions.SelfHosted,
-  };
+  internal static string RegionOf(string? serverUrl) =>
+    string.IsNullOrEmpty(serverUrl) || VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.com") ? ServerRegions.Cloud
+    : VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.eu") ? ServerRegions.Eu
+    : ServerRegions.SelfHosted;
 
   internal SetServerRequest CurrentServer()
   {

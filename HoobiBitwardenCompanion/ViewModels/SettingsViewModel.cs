@@ -14,32 +14,9 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private string _signature = string.Empty;
   private bool _aboutLoaded;
-  private string? _pendingFocus;
   private IReadOnlyList<InfoSectionViewModel>? _infoSections;
 
   internal Func<string, string, string, string, Task<bool>>? Confirm { get; set; }
-
-  internal event Action<SettingRowViewModel>? FocusRequested;
-
-  internal void Focus(string? focus)
-  {
-    if (focus is null)
-      return;
-    _pendingFocus = focus;
-    ApplyFocus();
-  }
-
-  private void ApplyFocus()
-  {
-    if (_pendingFocus != SettingsFocus.Server)
-      return;
-    var section = Sections.FirstOrDefault(s => s.Rows.Any(r => r.Key == SettingKeys.ServerRegion));
-    if (section is null)
-      return;
-    _pendingFocus = null;
-    _ = section.HighlightAsync();
-    FocusRequested?.Invoke(section.Rows.First(r => r.Key == SettingKeys.ServerRegion));
-  }
 
   private async Task<string?> CommitServerAsync(SettingRowViewModel row, string value)
   {
@@ -250,7 +227,6 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     }
 
     RefreshVisibility();
-    ApplyFocus();
   }
 }
 
@@ -260,18 +236,6 @@ internal sealed partial class SettingsSectionViewModel(string title) : Observabl
 
   [ObservableProperty]
   public partial bool IsShown { get; set; } = true;
-
-  [ObservableProperty]
-  public partial bool IsHighlighted { get; private set; }
-
-  internal static TimeSpan HighlightDuration { get; set; } = TimeSpan.FromMilliseconds(1500);
-
-  internal async Task HighlightAsync()
-  {
-    IsHighlighted = true;
-    await Task.Delay(HighlightDuration);
-    IsHighlighted = false;
-  }
 
   public bool HasTitle => Title.Length > 0;
 
