@@ -1419,7 +1419,7 @@ internal sealed partial class BitwardenCliService
         || ((int)i.Type).ToString(System.Globalization.CultureInfo.InvariantCulture) == filter.Value),
     "org" when filter.Value.Equals("none", StringComparison.OrdinalIgnoreCase) => items.Where(i => i.OrganizationId == null),
     "org" => ApplyOrgFilter(items, filter.Value),
-    "collection" => items.Where(i => i.CollectionIds.Any(id => id.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))
+    "collection" => items.Where(i => i.CollectionIds.Contains(filter.Value, StringComparer.OrdinalIgnoreCase)
         || GetCollectionNames(i.CollectionIds).Any(n => n.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))),
     "has" => filter.Value switch
     {
