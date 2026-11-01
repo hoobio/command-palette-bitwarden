@@ -89,6 +89,10 @@ jobs:
     needs: [detect-changes]
     if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -97,6 +101,22 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+
+      - name: Azure login (OIDC)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.4.0
+        with:
+          client-id: ${{ vars.ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID }}
+          tenant-id: ${{ vars.ADO_HOOBI_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Authenticate the Hoobi NuGet feed
+        shell: pwsh
+        run: |
+          $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          if ($LASTEXITCODE -ne 0 -or -not $token) { throw 'Could not get an Azure DevOps token' }
+          Write-Host "::add-mask::$token"
+          dotnet nuget update source Hoobi --username not-used --password $token --store-password-in-clear-text --configfile nuget.config
+          if ($LASTEXITCODE -ne 0) { throw 'Could not set the Hoobi feed credentials' }
 
       - name: Restore
         run: dotnet restore -p:Platform=x64
@@ -255,6 +275,9 @@ jobs:
     # Always runs so the required check posts a status on non-code PRs; the skip path uses Linux, the build path Windows
     if: always() && needs.detect-changes.result != 'cancelled' && needs.detect-changes.result != 'failure'
     runs-on: ${{ (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true') && 'windows-latest' || 'ubuntu-latest' }}
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -281,6 +304,24 @@ jobs:
         if: env.SHOULD_BUILD == 'true'
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+
+      - name: Azure login (OIDC)
+        if: env.SHOULD_BUILD == 'true'
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.4.0
+        with:
+          client-id: ${{ vars.ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID }}
+          tenant-id: ${{ vars.ADO_HOOBI_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Authenticate the Hoobi NuGet feed
+        if: env.SHOULD_BUILD == 'true'
+        shell: pwsh
+        run: |
+          $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          if ($LASTEXITCODE -ne 0 -or -not $token) { throw 'Could not get an Azure DevOps token' }
+          Write-Host "::add-mask::$token"
+          dotnet nuget update source Hoobi --username not-used --password $token --store-password-in-clear-text --configfile nuget.config
+          if ($LASTEXITCODE -ne 0) { throw 'Could not set the Hoobi feed credentials' }
 
       - name: Read version
         id: version
@@ -579,6 +620,9 @@ jobs:
     needs: [detect-changes]
     if: always() && (needs.detect-changes.result == 'skipped' || needs.detect-changes.outputs.code_changed == 'true')
     runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
     env:
       DT_HOST: ${{ secrets.DT_HOST }}
       DT_API_KEY: ${{ secrets.DT_API_KEY }}
@@ -591,6 +635,22 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+
+      - name: Azure login (OIDC)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.4.0
+        with:
+          client-id: ${{ vars.ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID }}
+          tenant-id: ${{ vars.ADO_HOOBI_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Authenticate the Hoobi NuGet feed
+        shell: pwsh
+        run: |
+          $token = az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+          if ($LASTEXITCODE -ne 0 -or -not $token) { throw 'Could not get an Azure DevOps token' }
+          Write-Host "::add-mask::$token"
+          dotnet nuget update source Hoobi --username not-used --password $token --store-password-in-clear-text --configfile nuget.config
+          if ($LASTEXITCODE -ne 0) { throw 'Could not set the Hoobi feed credentials' }
 
       - name: Read version
         id: version
