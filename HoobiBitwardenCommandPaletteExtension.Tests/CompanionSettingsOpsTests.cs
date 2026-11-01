@@ -136,9 +136,9 @@ public class CompanionSettingsOpsTests : IDisposable
   }
 
   [Theory]
-  [InlineData("https://vault.hoobi.io/", "https://vault.hoobi.io/api")]
+  [InlineData("https://bw.contoso.com/", "https://bw.contoso.com/api")]
   [InlineData(null, "https://vault.example.com/api")]
-  [InlineData("vault.hoobi.io", "https://vault.example.com/api")]
+  [InlineData("bw.contoso.com", "https://vault.example.com/api")]
   public void ServerRows_AdvancedPlaceholders_DeriveFromTheServerUrl_OrShowTheExample(string? url, string api)
   {
     var rows = CompanionOps.ServerRows(url, loggedIn: false);

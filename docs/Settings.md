@@ -121,7 +121,7 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 | **Type** | Choice (dropdown) |
 | **Default** | Name |
 | **Options** | Initials, Name, Off |
-| **Description** | Controls how items belonging to a Bitwarden organization are tagged. **Initials** shows a compact avatar-style badge (single-word orgs get one letter, e.g. `Nintex` → `N`; multi-word orgs get up to three initials, e.g. `Test Organization` → `TO`). **Name** shows the organization name on the tag (truncated to 20 characters). **Off** hides the tag entirely. Each organization gets a stable, deterministic colour from a pastel palette, so two items from the same organization always render in the same colour. |
+| **Description** | Controls how items belonging to a Bitwarden organization are tagged. **Initials** shows a compact avatar-style badge (single-word orgs get one letter, e.g. `Acme` → `A`; multi-word orgs get up to three initials, e.g. `Test Organization` → `TO`). **Name** shows the organization name on the tag (truncated to 20 characters). **Off** hides the tag entirely. Each organization gets a stable, deterministic colour from a pastel palette, so two items from the same organization always render in the same colour. |
 
 ### Context Items Limit
 

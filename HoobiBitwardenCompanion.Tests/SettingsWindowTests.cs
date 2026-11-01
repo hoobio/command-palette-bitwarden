@@ -494,9 +494,9 @@ public class SettingsWindowTests(AvaloniaSession session)
     WaitForRows(window);
     var box = Find<TextBox>(window, "serverUrl");
 
-    box.Text = "https://vault.hoobi.io";
-    AvaloniaSession.WaitFor(() => ServerRow(vm, "serverApiUrl").Placeholder == "https://vault.hoobi.io/api");
-    Assert.Equal(["https://vault.hoobi.io/", "https://vault.hoobi.io/api", "https://vault.hoobi.io/identity", "https://vault.hoobi.io/icons", "https://vault.hoobi.io/notifications", "https://vault.hoobi.io/events", "https://vault.hoobi.io/key-connector"], AdvancedKeys.Select(k => ServerRow(vm, k).Placeholder));
+    box.Text = "https://bw.contoso.com";
+    AvaloniaSession.WaitFor(() => ServerRow(vm, "serverApiUrl").Placeholder == "https://bw.contoso.com/api");
+    Assert.Equal(["https://bw.contoso.com/", "https://bw.contoso.com/api", "https://bw.contoso.com/identity", "https://bw.contoso.com/icons", "https://bw.contoso.com/notifications", "https://bw.contoso.com/events", "https://bw.contoso.com/key-connector"], AdvancedKeys.Select(k => ServerRow(vm, k).Placeholder));
     Assert.Empty(extension.Servers);
 
     box.Text = string.Empty;

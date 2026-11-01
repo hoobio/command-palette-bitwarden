@@ -160,7 +160,7 @@ public class BitwardenCliServiceTests
   [InlineData("https://vault.bitwarden.com", "https://vault.bitwarden.com")]
   [InlineData("https://vault.bitwarden.com/", "https://vault.bitwarden.com")]
   [InlineData("https://vault.bitwarden.eu", "https://vault.bitwarden.eu")]
-  [InlineData("https://vault.hoobi.io", "[custom server]")]
+  [InlineData("https://vault.example.com", "[custom server]")]
   [InlineData("https://self-hosted.example.com", "[custom server]")]
   public void SanitizeServerUrl_MasksCustomServers(string? url, string expected)
   {

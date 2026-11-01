@@ -26,6 +26,6 @@ On a single item, tags appear in this order:
 4. **Context** (blue) - matches an open app/browser tab
 5. **2FA / TOTP** (green) - live code or static badge
 6. **Passkey** (blue) - item has a FIDO2 passkey
-7. **Initials / org name** - item belongs to a Bitwarden organization, shown as an avatar-style initials badge (e.g. `N` for Nintex, `TO` for Test Organization) or the full organization name. Colour is stable per organization (deterministic palette). Style configurable via **Settings > Show Tags > Organisation**
+7. **Initials / org name** - item belongs to a Bitwarden organization, shown as an avatar-style initials badge (e.g. `A` for Acme, `TO` for Test Organization) or the full organization name. Colour is stable per organization (deterministic palette). Style configurable via **Settings > Show Tags > Organisation**
 8. **Collection names** (grey) - one tag per collection that holds the item, sorted by name. Names longer than 20 characters are truncated, and the tooltip shows the full name
 9. **Weak**, **Old**, **Insecure URL** (Watchtower)

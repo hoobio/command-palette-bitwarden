@@ -26,7 +26,7 @@ Use prefix syntax to narrow results. Filters can be combined freely.
 | `has:notes` | `has:notes` | Items with notes |
 | `url:<partial>` / `host:<partial>` | `url:github.com` | Login items matching a URL |
 | `type:<type>` | `type:login` | Filter by item type |
-| `org:<name>` | `org:nintex` | Filter by organization name (partial, case-insensitive) or organization ID |
+| `org:<name>` | `org:acme` | Filter by organization name (partial, case-insensitive) or organization ID |
 | `collection:<name>` | `collection:engineering` | Filter by collection name (partial, case-insensitive) or collection ID |
 | `is:weak` | `is:weak` | Logins with a password shorter than 8 characters |
 | `is:old` / `is:stale` | `is:old` | Logins whose password hasn't changed in over a year |
