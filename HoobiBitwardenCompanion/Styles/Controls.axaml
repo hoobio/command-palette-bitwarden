@@ -213,58 +213,6 @@
             </Setter>
         </ControlTheme>
 
-        <ControlTheme x:Key="HoobiCloseMaximiseDecorations" TargetType="chrome:WindowDrawnDecorations" BasedOn="{StaticResource {x:Type chrome:WindowDrawnDecorations}}">
-            <Setter Property="Template">
-                <WindowDrawnDecorationsTemplate>
-                    <chrome:WindowDrawnDecorationsContent>
-                        <chrome:WindowDrawnDecorationsContent.Underlay>
-                            <Panel Name="PART_UnderlayWrapper">
-                                <Border
-                                    Name="PART_WindowBorder"
-                                    Background="Transparent"
-                                    BorderThickness="{TemplateBinding FrameThickness}"
-                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
-                                    IsHitTestVisible="False" />
-                                <Panel
-                                    Name="PART_TitleBar"
-                                    VerticalAlignment="Top"
-                                    Height="{TemplateBinding TitleBarHeight}"
-                                    Background="Transparent"
-                                    IsVisible="{TemplateBinding HasTitleBar}"
-                                    chrome:WindowDecorationProperties.ElementRole="TitleBar" />
-                            </Panel>
-                        </chrome:WindowDrawnDecorationsContent.Underlay>
-                        <chrome:WindowDrawnDecorationsContent.Overlay>
-                            <Panel Name="PART_OverlayWrapper">
-                                <StackPanel
-                                    Name="PART_OverlayPanel"
-                                    Orientation="Horizontal"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Top"
-                                    Height="{TemplateBinding TitleBarHeight}"
-                                    IsVisible="{TemplateBinding HasTitleBar}">
-                                    <Button
-                                        Name="PART_MaximizeButton"
-                                        Classes="CaptionButton"
-                                        Theme="{StaticResource CaptionButtonTheme}"
-                                        FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                        FontSize="10"
-                                        Content="&#xE739;"
-                                        chrome:WindowDecorationProperties.ElementRole="MaximizeButton" />
-                                    <Button
-                                        Name="PART_CloseButton"
-                                        Classes="CaptionButton Close"
-                                        Theme="{StaticResource CaptionButtonTheme}"
-                                        Content="{StaticResource Glyph.Dismiss}"
-                                        chrome:WindowDecorationProperties.ElementRole="CloseButton" />
-                                </StackPanel>
-                            </Panel>
-                        </chrome:WindowDrawnDecorationsContent.Overlay>
-                    </chrome:WindowDrawnDecorationsContent>
-                </WindowDrawnDecorationsTemplate>
-            </Setter>
-        </ControlTheme>
-
         <ControlTheme x:Key="RowOverlayButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="VerticalAlignment" Value="Stretch" />

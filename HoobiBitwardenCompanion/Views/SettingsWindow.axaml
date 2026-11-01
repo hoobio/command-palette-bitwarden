@@ -13,13 +13,13 @@
     MinHeight="320"
     WindowStartupLocation="CenterScreen"
     CanMinimize="False"
-    CanMaximize="True"
+    CanMaximize="False"
     ExtendClientAreaToDecorationsHint="True"
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
-    WindowDecorationsTheme="{StaticResource HoobiCloseMaximiseDecorations}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
     Background="{DynamicResource WindowGroundBrush}">
     <Grid RowDefinitions="48,*" Background="Transparent">
-        <Grid x:Name="AppTitleBar" ColumnDefinitions="Auto,*,92" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+        <Grid x:Name="AppTitleBar" ColumnDefinitions="Auto,*,46" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
             <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
             <TextBox x:Name="SearchBox" Grid.Column="1" MaxWidth="260" Margin="16,0,8,0" VerticalAlignment="Center" PlaceholderText="Search settings" TextAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}" AutomationProperties.Name="Search settings" />
         </Grid>
