@@ -8,7 +8,7 @@
         <TextBlock Text="Server URL" />
         <TextBox x:Name="BaseUrlBox" PlaceholderText="https://bitwarden.company.com" Text="{Binding BaseUrl, Mode=TwoWay}" AutomationProperties.Name="Server URL" />
         <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Base URL of your self-hosted Bitwarden server, for example https://bitwarden.company.com" />
-        <ToggleButton x:Name="CustomToggle" Classes="Disclosure" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="Custom environment">
+        <ToggleButton x:Name="CustomToggle" Classes="Disclosure" Padding="0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="Custom environment">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <TextBlock VerticalAlignment="Center" Text="Custom environment" />
                 <TextBlock Grid.Column="1" Classes="Icon" VerticalAlignment="Center" Text="{StaticResource Glyph.ChevronDown}" IsVisible="{Binding !Expanded}" />

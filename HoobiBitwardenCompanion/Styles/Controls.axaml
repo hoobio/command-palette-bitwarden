@@ -712,7 +712,7 @@
         <Setter Property="Height" Value="20" />
         <Setter Property="Padding" Value="8,0" />
         <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
-        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+        <Setter Property="Background" Value="{DynamicResource LayerFillColorAltBrush}" />
         <Setter Property="TextElement.FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
     </Style>
