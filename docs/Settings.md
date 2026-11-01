@@ -1,6 +1,10 @@
 # Settings
 
-Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)).
+Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)). The **Open settings window** button at the top of the Bitwarden page in Command Palette Settings opens the same window.
+
+## Server
+
+The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**) and, for **Self-hosted**, **Server URL** and a collapsed **Advanced** row with optional Web Vault, API, Identity, Icons, Notifications, Events and Key Connector URLs. It is not part of the Command Palette settings page. A change logs you out. See [Server URL](Companion-Window#server-url).
 
 ## Available Settings
 
@@ -20,19 +24,19 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | Off |
 | **Description** | Log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) (`bw login --apikey`) instead of your email and master password. Use this when your account uses FIDO2 or Duo two-step login. The login form asks for the Client ID and Client Secret, and the extension stores them in Windows Credential Manager. When you are logged out, the extension logs in again with the stored key, so you only unlock with your master password. Changing this setting logs you out and deletes the stored API key and session key. Logging out also deletes the stored API key. See [API key login](Getting-Started#api-key-login). |
 
-### Integrate with Bitwarden Desktop App
+### Unlock with Windows Hello
 
 | | |
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. |
+| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. In the companion window, a green dot on this row means the extension can reach the Desktop app and a red dot means it cannot; no dot shows while the setting is off. |
 
 ### Automatically Prompt for Biometrics
 
 | | |
 |---|---|
-| **Type** | Toggle (shown under **Integrate with Bitwarden Desktop App**) |
+| **Type** | Toggle (shown under **Unlock with Windows Hello**) |
 | **Default** | On |
 | **Description** | Start Windows Hello when you open the Bitwarden page on a locked vault, so you do not select **Unlock Vault** first. The prompt starts only from that page open: not when PowerToys or Command Palette starts, not on the Command Palette home page, not from a Dock band refresh, and not when the vault locks while you are on another page. If the vault locks while the Bitwarden page is open, select **Unlock Vault** or open the page again. After a cancelled or failed Windows Hello prompt, the page does not prompt again until the vault unlocks. With **Remember Session** on, the extension first tries the stored session and prompts only when that fails. |
 
@@ -53,7 +57,15 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Options** | Never, 1 minute, 2 minutes, 5 minutes, 15 minutes, 30 minutes, 1 hour |
 | **Description** | Automatically lock the vault after a period of inactivity. The timer resets whenever you copy a vault item. Selecting **Never** disables the inactivity lock entirely. |
 
-### Show Watchtower Tags
+### Show Tags
+
+| | |
+|---|---|
+| **Type** | Toggle |
+| **Default** | On |
+| **Description** | Master switch for tags on vault items. When off, no tags are shown (including the Context tag) and the five tag settings below (Watchtower, Protected, Passkey, TOTP, Organisation) are hidden in the companion window. |
+
+### Watchtower
 
 | | |
 |---|---|
@@ -77,7 +89,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | Off |
 | **Description** | Display a "Context" tag on vault items that match the foreground application. Requires Context Awareness to be enabled. |
 
-### Show Protected Tag
+### Protected
 
 | | |
 |---|---|
@@ -85,7 +97,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | On |
 | **Description** | Display a "🔒" tag on vault items that require master password re-prompt before accessing sensitive fields. |
 
-### Show Passkey Tag
+### Passkey
 
 | | |
 |---|---|
@@ -93,22 +105,22 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 | **Default** | On |
 | **Description** | Display a "Passkey" tag on vault items that have a FIDO2 credential registered for passwordless sign-in. |
 
-### TOTP Tag Style
+### TOTP
 
 | | |
 |---|---|
 | **Type** | Choice (dropdown) |
 | **Default** | Static |
-| **Options** | Off, Static (show 2FA badge only), Live (show live code + countdown) |
+| **Options** | Off, Static, Live |
 | **Description** | Controls how TOTP-enabled vault items are tagged. **Off** hides the tag entirely, **Static** shows a "2FA" badge, and **Live** displays the current code with a countdown timer that updates every second. |
 
-### Organization Tag Style
+### Organisation
 
 | | |
 |---|---|
 | **Type** | Choice (dropdown) |
 | **Default** | Name |
-| **Options** | Initials (compact 1-3 char badge), Name (full organization name), Off |
+| **Options** | Initials, Name, Off |
 | **Description** | Controls how items belonging to a Bitwarden organization are tagged. **Initials** shows a compact avatar-style badge (single-word orgs get one letter, e.g. `Nintex` → `N`; multi-word orgs get up to three initials, e.g. `Test Organization` → `TO`). **Name** shows the organization name on the tag (truncated to 20 characters). **Off** hides the tag entirely. Each organization gets a stable, deterministic colour from a pastel palette, so two items from the same organization always render in the same colour. |
 
 ### Context Items Limit
@@ -160,7 +172,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Text |
 | **Default** | *(empty)* |
-| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. When set, this always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. |
+| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. When set, this always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. While the box is empty, the companion window shows the `bw` path in use as the placeholder text, and hovering the box shows the full path and where it came from. |
 
 ### Use CLI Path as Data Directory
 
@@ -168,7 +180,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Requires **CLI Path Override** to be set. Useful for fully portable Bitwarden setups. |
+| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Useful for fully portable Bitwarden setups. The companion window shows this setting under **CLI Path Override**, and only while that box is not empty. |
 
 ### CLI Data Directory Override
 
@@ -176,7 +188,7 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Text |
 | **Default** | *(empty)* |
-| **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. |
+| **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. While the box is empty, the companion window shows the folder that holds `data.json` now as the placeholder text, and hovering the box shows the full path and where it came from. |
 
 ### Debug Logging
 
@@ -184,7 +196,14 @@ Open settings from the gear icon in the vault browser. All settings take effect 
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. Logs are kept in memory only and cleared when the extension process restarts. No sensitive data (passwords, session keys, search text) is logged. |
+| **Description** | Enable debug logging to help diagnose issues. When enabled, the extension records timestamped log entries for all key operations (CLI calls, session verification, cache refreshes, status checks) in an in-memory buffer (up to 500 entries) and writes them to files in the log folder (see **Logs** below). A **Copy Debug Log** command appears at the bottom of the vault browser so you can copy the log to your clipboard and paste it into a GitHub issue. No sensitive data (passwords, session keys, search text) is logged. The section that holds this setting is named **Diagnostics**. |
+
+### Logs
+
+| | |
+|---|---|
+| **Type** | Link (companion window only) |
+| **Description** | Appears under **Debug Logging** in the companion window. It opens the folder `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\logs` in File Explorer, and creates the folder if it does not exist. The Command Palette settings page does not show it. |
 
 ### Re-prompt Grace Period
 

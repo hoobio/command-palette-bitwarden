@@ -138,7 +138,7 @@ internal sealed partial class BitwardenCliService
     return null;
   }
 
-  private string CliExecutable => ResolveCliExecutable(
+  internal string CliExecutable => ResolveCliExecutable(
     _settings?.CliDirectoryOverride.Value,
     _settings?.AutoInstalledCliPath);
 
@@ -150,6 +150,21 @@ internal sealed partial class BitwardenCliService
   internal string? DataFileOverride { get; set; }
 
   private string DataFile => DataFileOverride ?? HubProtocol.CliDataFile(DataDirectory);
+
+  internal string? DataFileFolder => Path.GetDirectoryName(DataFile);
+
+  internal ServerConfig? ReadServerUrls()
+  {
+    try
+    {
+      return HubProtocol.ReadServerUrls(DataFile);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Text.Json.JsonException)
+    {
+      DebugLogService.Log("Status", $"CLI data file unreadable: {ex.GetType().Name}");
+      return null;
+    }
+  }
 
   private sealed record DataFileStamp(DateTime WriteTimeUtc, long Length);
 

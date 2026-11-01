@@ -6,7 +6,9 @@ Each vault item type exposes different actions. Select an item to trigger the de
 
 The Enter key runs the default action. A login with a web URL opens the website. An SSH key with a `host` custom field starts the SSH session. Every other item opens in the [companion window](Companion-Window), or in the web vault if the companion is not available.
 
-**Open in window** is the first more-command of every item (`Ctrl+Shift+O`), so `Ctrl+Enter` also opens the companion window.
+**Open in window** is the first more-command of every item (`Ctrl+O`), so `Ctrl+Enter` also opens the companion window.
+
+The Enter action and the shortcut of each action can be changed (see [Keyboard Shortcuts](Keyboard-Shortcuts)). The behaviour above is the default.
 
 ## Top-level commands
 
@@ -33,8 +35,8 @@ Both commands show in the Command Palette root. When the vault is locked, they s
 | Action | Description | Clipboard |
 |--------|-------------|----------|
 | Copy Card Number | Copies the full card number | Secure |
-| Copy Security Code | Copies the CVV/CVC | Secure |
-| Copy Cardholder Name | Copies the name on the card | Standard |
+| Copy Code | Copies the CVV/CVC | Secure |
+| Copy Cardholder | Copies the name on the card | Standard |
 
 ## Identity Items
 

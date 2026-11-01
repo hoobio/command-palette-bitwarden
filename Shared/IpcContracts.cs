@@ -41,7 +41,6 @@ internal static class Ops
   public const string ApiKeyLogin = "apiKeyLogin";
   public const string ShowUnlock = "showUnlock";
   public const string Unlock = "unlock";
-  public const string ShowSetServer = "showSetServer";
   public const string SetServer = "setServer";
   public const string ShowLogin = "showLogin";
   public const string Login = "login";
@@ -54,6 +53,13 @@ internal static class Ops
   public const string GetSettings = "getSettings";
   public const string SetSetting = "setSetting";
   public const string SettingsChanged = "settingsChanged";
+  public const string GetAbout = "getAbout";
+  public const string CheckUpdates = "checkUpdates";
+  public const string InstallUpdate = "installUpdate";
+  public const string GetHotkeys = "getHotkeys";
+  public const string SetHotkey = "setHotkey";
+  public const string SetEnterAction = "setEnterAction";
+  public const string ResetHotkeys = "resetHotkeys";
 }
 
 internal static class SettingKinds
@@ -62,6 +68,62 @@ internal static class SettingKinds
   public const string Toggle = "toggle";
   public const string Choice = "choice";
   public const string Text = "text";
+  public const string Link = "link";
+  public const string Expander = "expander";
+}
+
+internal static class SettingStatuses
+{
+  public const string Ok = "ok";
+  public const string Error = "error";
+}
+
+internal static class SettingKeys
+{
+  public const string OpenLogs = "openLogs";
+  public const string Hotkeys = "hotkeys";
+  public const string ServerRegion = "serverRegion";
+  public const string ServerUrl = "serverUrl";
+  public const string ServerAdvanced = "serverAdvanced";
+  public const string ServerWebVaultUrl = "serverWebVaultUrl";
+  public const string ServerApiUrl = "serverApiUrl";
+  public const string ServerIdentityUrl = "serverIdentityUrl";
+  public const string ServerIconsUrl = "serverIconsUrl";
+  public const string ServerNotificationsUrl = "serverNotificationsUrl";
+  public const string ServerEventsUrl = "serverEventsUrl";
+  public const string ServerKeyConnectorUrl = "serverKeyConnectorUrl";
+}
+
+internal static class SettingsFocus
+{
+  public const string Server = "server";
+}
+
+internal static class ParentValues
+{
+  public const string NonEmpty = "*";
+}
+
+internal static class AppChannels
+{
+  public const string Dev = "Dev";
+  public const string Prerelease = "Prerelease";
+  public const string Release = "Release";
+}
+
+internal static class UpdateStates
+{
+  public const string Off = "off";
+  public const string UpToDate = "upToDate";
+  public const string Available = "available";
+  public const string Failed = "failed";
+}
+
+internal static class InstallStates
+{
+  public const string Installed = "installed";
+  public const string OpenStore = "openStore";
+  public const string Failed = "failed";
 }
 
 internal static class ServerRegions
@@ -166,7 +228,7 @@ internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
-internal sealed record DialogRequest(long ReturnWindow);
+internal sealed record DialogRequest(long ReturnWindow, string? Focus = null, bool Force = false);
 
 internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
 
@@ -177,8 +239,6 @@ internal sealed record UnlockDialogRequest(long ReturnWindow, bool RememberSessi
 internal sealed record UnlockRequest(string Password, bool RememberSession, bool Biometric = false);
 
 internal sealed record UnlockResponse(bool Success, string? Error, bool LoggedOut = false);
-
-internal sealed record SetServerDialogRequest(long ReturnWindow, string Region, string? Url);
 
 internal sealed record SetServerRequest(
   string Region,
@@ -325,15 +385,35 @@ internal sealed record SavedResponse(string Id, DateTime RevisionDate);
 
 internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed);
 
-internal sealed record ChoiceDto(string Title, string Value);
+internal sealed record ChoiceDto(string Title, string Value, string? Description = null);
 
-internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null);
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null, string? Confirm = null);
 
 internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
+
+internal sealed record AboutResponse(string Version, string? Commit, string Channel, bool IsStore);
+
+internal sealed record UpdateResponse(string State, string? LatestVersion, string? ReleaseUrl, bool IsStore);
+
+internal sealed record InstallResponse(string State);
 
 internal sealed record SetSettingRequest(string Key, string Value);
 
 internal sealed record SetSettingResponse(bool Success, string? Error);
+
+internal sealed record ChordDto(int Key, int Modifiers, string Display);
+
+internal sealed record HotkeyActionDto(string Id, string Title, ChordDto? Default, ChordDto? Current);
+
+internal sealed record HotkeyGroupDto(string ItemType, string Title, string InheritedEnter, string CurrentEnter, IReadOnlyList<ChoiceDto> EnterChoices, IReadOnlyList<HotkeyActionDto> Actions);
+
+internal sealed record HotkeysResponse(IReadOnlyList<HotkeyGroupDto> Groups);
+
+internal sealed record SetHotkeyRequest(string ActionId, ChordDto? Chord);
+
+internal sealed record SetEnterActionRequest(string ItemType, string? ActionId);
+
+internal sealed record HotkeyResponse(bool Success, string? Error);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(Envelope))]
@@ -346,7 +426,6 @@ internal sealed record SetSettingResponse(bool Success, string? Error);
 [JsonSerializable(typeof(UnlockDialogRequest))]
 [JsonSerializable(typeof(UnlockRequest))]
 [JsonSerializable(typeof(UnlockResponse))]
-[JsonSerializable(typeof(SetServerDialogRequest))]
 [JsonSerializable(typeof(SetServerRequest))]
 [JsonSerializable(typeof(SetServerResponse))]
 [JsonSerializable(typeof(LoginDialogRequest))]
@@ -376,6 +455,13 @@ internal sealed record SetSettingResponse(bool Success, string? Error);
 [JsonSerializable(typeof(SettingsResponse))]
 [JsonSerializable(typeof(SetSettingRequest))]
 [JsonSerializable(typeof(SetSettingResponse))]
+[JsonSerializable(typeof(AboutResponse))]
+[JsonSerializable(typeof(UpdateResponse))]
+[JsonSerializable(typeof(InstallResponse))]
+[JsonSerializable(typeof(HotkeysResponse))]
+[JsonSerializable(typeof(SetHotkeyRequest))]
+[JsonSerializable(typeof(SetEnterActionRequest))]
+[JsonSerializable(typeof(HotkeyResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);

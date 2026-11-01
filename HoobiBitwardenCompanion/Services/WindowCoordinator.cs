@@ -14,6 +14,7 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
   private SettingsWindow? _settingsWindow;
+  private HotkeysWindow? _hotkeysWindow;
   private readonly Dictionary<Type, DialogWindow> _dialogs = [];
   private FiltersResponse? _filters;
 
@@ -25,6 +26,8 @@ internal sealed class WindowCoordinator : IDisposable
   internal Action<nint> ReturnForeground { get; set; } = WindowAlertInterop.ReturnForeground;
 
   internal Action<Window> TakeForeground { get; set; } = WindowAlertInterop.TakeForeground;
+
+  internal Action<Window> ForceForeground { get; set; } = WindowAlertInterop.ForceForeground;
 
   internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlertInterop.WindowCentre;
 
@@ -96,7 +99,8 @@ internal sealed class WindowCoordinator : IDisposable
         await Dispatcher.UIThread.InvokeAsync(ShowGenerator);
         return null;
       case Ops.ShowSettings:
-        await Dispatcher.UIThread.InvokeAsync(ShowSettings);
+        var settings = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
+        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Focus, settings?.Force ?? false));
         return null;
       case Ops.ShowApiKeyLogin:
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
@@ -105,10 +109,6 @@ internal sealed class WindowCoordinator : IDisposable
       case Ops.ShowUnlock:
         var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockDialogRequest);
         await Dispatcher.UIThread.InvokeAsync(() => ShowUnlock((nint)unlock.ReturnWindow, unlock.RememberSession, unlock.WindowsHello));
-        return null;
-      case Ops.ShowSetServer:
-        var server = IpcJson.Read(payload, IpcJson.Default.SetServerDialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowSetServer((nint)server.ReturnWindow, server.Region, server.Url));
         return null;
       case Ops.ShowLogin:
         var login = IpcJson.Read(payload, IpcJson.Default.LoginDialogRequest);
@@ -177,19 +177,35 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
-  public SettingsWindow ShowSettings()
+  public SettingsWindow ShowSettings(string? focus = null, bool force = false)
   {
     if (_settingsWindow is null)
     {
-      var viewModel = new SettingsViewModel(Channel);
+      var viewModel = new SettingsViewModel(Channel, showHotkeys: () => ShowHotkeys());
       var window = new SettingsWindow(viewModel);
       window.Closed += (_, _) => _settingsWindow = null;
       _settingsWindow = window;
       _ = viewModel.LoadAsync();
     }
 
-    BringToFront(_settingsWindow);
+    BringToFront(_settingsWindow, force);
+    _settingsWindow.ViewModel?.Focus(focus);
     return _settingsWindow;
+  }
+
+  public HotkeysWindow ShowHotkeys()
+  {
+    if (_hotkeysWindow is null)
+    {
+      var viewModel = new HotkeysViewModel(Channel);
+      var window = new HotkeysWindow(viewModel);
+      window.Closed += (_, _) => _hotkeysWindow = null;
+      _hotkeysWindow = window;
+      _ = viewModel.LoadAsync();
+    }
+
+    BringToFront(_hotkeysWindow);
+    return _hotkeysWindow;
   }
 
   public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0) =>
@@ -197,9 +213,6 @@ internal sealed class WindowCoordinator : IDisposable
 
   public UnlockWindow ShowUnlock(nint returnWindow = 0, bool rememberSession = false, bool windowsHello = false) =>
     ShowDialog(() => new UnlockWindow(new UnlockViewModel(Channel, rememberSession, windowsHello)), returnWindow);
-
-  public SetServerWindow ShowSetServer(nint returnWindow = 0, string region = ServerRegions.Cloud, string? url = null) =>
-    ShowDialog(() => new SetServerWindow(new SetServerViewModel(Channel, region, url)), returnWindow);
 
   public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null) =>
     ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir)), returnWindow);
@@ -292,8 +305,8 @@ internal sealed class WindowCoordinator : IDisposable
     return window;
   }
 
-  // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused.
-  private void BringToFront(Window window)
+  // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused. Only the Command Palette Settings form button sets force, because that form grants no right and the thread-input fallback takes focus from whatever app is in front.
+  private void BringToFront(Window window, bool force = false)
   {
     window.Show();
     if (window.WindowState == WindowState.Minimized)
@@ -302,7 +315,7 @@ internal sealed class WindowCoordinator : IDisposable
     window.Topmost = true;
     window.Topmost = topmost;
     window.Activate();
-    TakeForeground(window);
+    (force ? ForceForeground : TakeForeground)(window);
     (window as SettingsWindow)?.FocusSearch();
   }
 

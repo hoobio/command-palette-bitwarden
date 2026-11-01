@@ -20,7 +20,7 @@
     "reason": "HTTP client wrapper, requires live network I/O"
   },
   {
-    "pattern": "VaultItemHelper\\.cs$",
+    "pattern": "VaultItemHelper(\\.Actions)?\\.cs$",
     "reason": "WinRT UI helpers, returns SDK types that cannot be instantiated in unit tests"
   },
   {
@@ -62,5 +62,13 @@
   {
     "pattern": "WindowAlertInterop\\.cs$",
     "reason": "Win32 MessageBeep and FlashWindowEx on a live window handle, cannot be exercised in unit tests"
+  },
+  {
+    "pattern": "StoreUpdates\\.cs$",
+    "reason": "Microsoft Store WinRT update APIs (AppInstallManager, StoreContext), need a Store-signed package identity and live Store services"
+  },
+  {
+    "pattern": "PackageFacts\\.cs$",
+    "reason": "Reads Windows.ApplicationModel.Package.Current, which throws without package identity; the fallback in AppInfo is tested"
   }
 ]

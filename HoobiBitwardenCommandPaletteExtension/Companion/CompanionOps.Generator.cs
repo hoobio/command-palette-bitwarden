@@ -21,7 +21,6 @@ internal sealed partial class CompanionOps
 
   internal GeneratedResponse Generate(GeneratorOptions options)
   {
-    RequireUnlocked();
     var value = RequireGenerated(options, PasswordGenerator.Generate(options));
     lock (_historyLock)
     {
@@ -33,14 +32,12 @@ internal sealed partial class CompanionOps
 
   internal GeneratorHistoryResponse ListGeneratorHistory()
   {
-    RequireUnlocked();
     lock (_historyLock)
       return new GeneratorHistoryResponse(_history.Select(h => h.Entry).ToList());
   }
 
   internal void CopyGenerated(long id)
   {
-    RequireUnlocked();
     _copySecret(Keep(id) ?? throw new IpcException(IpcErrors.NotFound));
   }
 

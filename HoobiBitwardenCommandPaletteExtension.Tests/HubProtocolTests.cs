@@ -255,6 +255,23 @@ public class HubProtocolTests : IDisposable
   public void ReadConnectionInfo_MissingToken_ReturnsNull() =>
     Assert.Null(HubProtocol.ReadConnectionInfo(WriteDataFile("{\"global_account_activeAccountId\":\"u1\"}")));
 
+  [Fact]
+  public void ReadServerUrls_ReturnsTheActiveEnvironmentOverrides()
+  {
+    var path = WriteDataFile("""
+      {
+        "global_account_activeAccountId": "u1",
+        "user_u1_environment_environment": {"region":"Self-hosted","urls":{"base":"https://vault.example.com","api":"https://api.example.com","keyConnector":"https://kc.example.com","icons":null}}
+      }
+      """);
+
+    Assert.Equal(new Models.ServerConfig("https://vault.example.com", ApiUrl: "https://api.example.com", KeyConnectorUrl: "https://kc.example.com"), HubProtocol.ReadServerUrls(path));
+  }
+
+  [Fact]
+  public void ReadServerUrls_NoEnvironmentUrls_ReturnsNull() =>
+    Assert.Null(HubProtocol.ReadServerUrls(WriteDataFile("{\"global_environment_environment\":{\"region\":\"US\"}}")));
+
   private static string Jwt(string payloadJson) =>
     $"{Base64Url.EncodeToString("{\"alg\":\"none\"}"u8)}.{Base64Url.EncodeToString(Encoding.UTF8.GetBytes(payloadJson))}.sig";
 

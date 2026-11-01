@@ -149,11 +149,11 @@ public class CompanionHostTests
   }
 
   [Fact]
-  public void ShowUnlockAndSetServer_WithoutTheCompanionExe_DoNotThrow()
+  public void ShowUnlockAndServerSettings_WithoutTheCompanionExe_DoNotThrow()
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), exePath: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.exe"));
     host.ShowUnlock(true, true);
-    host.ShowSetServer();
+    host.ShowServerSettings();
     host.ShowLogin();
     host.ShowReprompt(Guid.NewGuid().ToString(), () => { });
     Assert.Null(host.Process);

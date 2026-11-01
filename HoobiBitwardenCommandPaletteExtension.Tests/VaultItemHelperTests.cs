@@ -350,7 +350,7 @@ public class VaultItemHelperTests
       CardNumber = ProtectedSecret.From("4111111111111111"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
-    var holderItem = contextItems.First(c => c.Title == "Copy Cardholder Name");
+    var holderItem = contextItems.First(c => c.Title == "Copy Cardholder");
     Assert.IsNotType<RepromptPage>(holderItem.Command);
   }
 
@@ -653,6 +653,24 @@ public class VaultItemHelperTests
     RepromptPage.RecordVerification("totp-reprompt");
     Assert.Contains("s)", VaultItemHelper.BuildTotpTag(item)!.Text, StringComparison.Ordinal);
     RepromptPage.ClearGracePeriod();
+  }
+
+  [Fact]
+  public void BuildTags_ShowTagsOff_ReturnsNoTags()
+  {
+    var item = new BitwardenItem
+    {
+      Id = "tags-off",
+      Type = BitwardenItemType.Login,
+      Favorite = true,
+      Reprompt = 1,
+      HasPasskey = true,
+      HasTotp = true,
+      TotpSecret = ProtectedSecret.From("JBSWY3DPEHPK3PXP"),
+    };
+    Assert.Empty(VaultItemHelper.BuildTags(item, totpTagStyle: "live", collectionNames: ["Engineering"], showTags: false));
+    Assert.Empty(VaultItemHelper.BuildBaseTags(item, collectionNames: ["Engineering"], showTags: false));
+    Assert.NotEmpty(VaultItemHelper.BuildTags(item, totpTagStyle: "live", showTags: true));
   }
 
   [Fact]

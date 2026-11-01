@@ -46,6 +46,57 @@ public class DesktopIpcServiceTests
   }
 
   [Fact]
+  public void IsDesktopReachable_IsTrueOnlyWhileAServerListens()
+  {
+    DesktopIpcService.ResetProbeCache();
+    var name = $"bw-test-{Guid.NewGuid():N}";
+    var start = DateTime.UtcNow;
+    Assert.False(DesktopIpcService.IsDesktopReachable(name, _ => true, () => start));
+
+    using var server = new System.IO.Pipes.NamedPipeServerStream(name, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+    Assert.True(DesktopIpcService.IsDesktopReachable(name, _ => true, () => start.AddSeconds(6)));
+  }
+
+  [Fact]
+  public void IsDesktopReachable_IsFalseWhenTheServerIsNotBitwarden()
+  {
+    DesktopIpcService.ResetProbeCache();
+    var name = $"bw-test-{Guid.NewGuid():N}";
+    using var server = new System.IO.Pipes.NamedPipeServerStream(name, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+
+    Assert.False(DesktopIpcService.IsDesktopReachable(name));
+  }
+
+  [Fact]
+  public void IsDesktopReachable_ReusesTheResultForFiveSeconds_ThenProbesAgain()
+  {
+    DesktopIpcService.ResetProbeCache();
+    var name = $"bw-test-{Guid.NewGuid():N}";
+    var start = DateTime.UtcNow;
+    var checks = 0;
+    System.IO.Pipes.NamedPipeServerStream Listen() => new(name, System.IO.Pipes.PipeDirection.InOut, 3, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+    using var first = Listen();
+    using var second = Listen();
+    using var third = Listen();
+    bool Trusted(System.IO.Pipes.PipeStream _)
+    {
+      checks++;
+      return true;
+    }
+
+    Assert.True(DesktopIpcService.IsDesktopReachable(name, Trusted, () => start));
+    Assert.True(DesktopIpcService.IsDesktopReachable(name, Trusted, () => start.AddSeconds(4.9)));
+    Assert.Equal(1, checks);
+
+    Assert.True(DesktopIpcService.IsDesktopReachable(name, Trusted, () => start.AddSeconds(5.1)));
+    Assert.Equal(2, checks);
+
+    DesktopIpcService.ResetProbeCache();
+    Assert.True(DesktopIpcService.IsDesktopReachable(name, Trusted, () => start.AddSeconds(5.2)));
+    Assert.Equal(3, checks);
+  }
+
+  [Fact]
   public void EncryptWithSessionKey_Returns_Base64_BinaryType2()
   {
     var sessionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));

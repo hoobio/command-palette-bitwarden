@@ -25,7 +25,17 @@ Add-AppxPackage -Register -Path "$out\AppxManifest.xml" -ForceUpdateFromAnyVersi
 Start-Process 'shell:AppsFolder\Microsoft.PowerToysWin32'
 ```
 
-**Never stop only the extension process.** Command Palette keeps its connection to a dead extension process and fails every call with `0x800706BA` (RPC server unavailable) until PowerToys restarts. A build or test that hits a locked `HoobiBitwardenCommandPaletteExtension.exe` uses the full cycle above, which stops and restarts PowerToys as well. Package install, update and uninstall do not need a restart, because Command Palette reloads the extension on those package events.
+**Redeploy without a PowerToys restart.** When the Dev package is already registered from this checkout's `bin`, VS Code task **Build & Reload (Debug x64)** stops the Dev extension and companion, builds, and reloads Command Palette:
+
+```powershell
+Get-Process HoobiBitwardenCommandPaletteExtension, HoobiBitwardenCompanion -ErrorAction SilentlyContinue | Where-Object Path -like "$PWD*" | Stop-Process -Force
+dotnet build .\HoobiBitwardenCommandPaletteExtension\HoobiBitwardenCommandPaletteExtension.csproj -c Debug /p:Platform=x64
+Start-Process 'x-cmdpal://reload'
+```
+
+`x-cmdpal://reload` runs the Command Palette **Reload** command, which starts every extension again. The first request asks for consent: select **Always allow**. It needs the Command Palette setting **Enable external command links** on.
+
+**Never stop only the extension process without a reload.** Command Palette keeps its connection to a dead extension process and fails every call with `0x800706BA` (RPC server unavailable) until it reloads or PowerToys restarts. Use the full cycle above when the registration changes: a first deploy, a deploy from another checkout or worktree, or a manifest change. Remove-then-register while PowerToys runs leaves a duplicate entry in Command Palette Settings until PowerToys restarts.
 
 The extension build also publishes the `HoobiBitwardenCompanion` window app (self-contained, same RID) into `$out\Companion\`, so the loose layout and the MSIX both contain it. The companion exits on its own when the extension process ends. It is in the stop list because a build that starts before it exits finds `Companion\*` locked.
 

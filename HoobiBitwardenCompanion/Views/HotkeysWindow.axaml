@@ -1,0 +1,91 @@
+<Window
+    x:Class="HoobiBitwardenCompanion.Views.HotkeysWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:ipc="using:HoobiBitwarden.Ipc"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:HotkeysViewModel"
+    Title="Keyboard shortcuts"
+    Width="520"
+    Height="700"
+    MinWidth="380"
+    MinHeight="320"
+    WindowStartupLocation="CenterScreen"
+    CanMinimize="False"
+    CanMaximize="False"
+    ExtendClientAreaToDecorationsHint="True"
+    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
+    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
+    Background="{DynamicResource WindowGroundBrush}">
+    <Grid RowDefinitions="48,*" Background="Transparent">
+        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" />
+                <TextBlock Text="Keyboard shortcuts" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer x:Name="Scroller" Grid.Row="1">
+            <StackPanel MaxWidth="880" Margin="24,0,24,24" Grid.IsSharedSizeScope="True">
+                <TextBlock x:Name="ErrorText" Classes="Warn" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:HotkeyGroupViewModel">
+                            <StackPanel>
+                                <TextBlock Classes="GroupHeader" Text="{Binding Title}" />
+                                <Border Classes="Group">
+                                    <StackPanel Classes="Rows">
+                                        <Border Classes="Row Switch">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="EnterAction" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock VerticalAlignment="Center" Text="Enter action" />
+                                                <Button Grid.Column="1" Content="Reset" VerticalAlignment="Center" IsVisible="{Binding IsEnterModified}" Command="{Binding ResetEnterCommand}" AutomationProperties.Name="Reset Enter action" />
+                                                <Grid Grid.Column="2" VerticalAlignment="Center">
+                                                    <ItemsControl Height="0" Margin="10,0,44,0" ClipToBounds="True" IsHitTestVisible="False" Focusable="False" ItemsSource="{Binding EnterChoices}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="ipc:ChoiceDto">
+                                                                <TextBlock Text="{Binding Title}" FontSize="{StaticResource ControlContentThemeFontSize}" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <ComboBox ItemsSource="{Binding EnterChoices}" SelectedItem="{Binding SelectedEnter, Mode=TwoWay}" HorizontalContentAlignment="Center" AutomationProperties.Name="Enter action">
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate x:DataType="ipc:ChoiceDto">
+                                                                <TextBlock Text="{Binding Title}" />
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                </Grid>
+                                            </Grid>
+                                        </Border>
+                                        <ItemsControl Classes="Rows" ItemsSource="{Binding Rows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:HotkeyRowViewModel">
+                                                    <Border Classes="Row Switch">
+                                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+                                                            <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Title}" />
+                                                            <Button Grid.Column="1" Content="Reset" VerticalAlignment="Center" IsVisible="{Binding IsModified}" Command="{Binding ResetCommand}" AutomationProperties.Name="{Binding Title, StringFormat='Reset {0}'}" />
+                                                            <ItemsControl Grid.Column="2" Classes="KeyCaps" VerticalAlignment="Center" ItemsSource="{Binding Caps}" IsVisible="{Binding HasChord}" />
+                                                            <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="None" IsVisible="{Binding !HasChord}" />
+                                                            <Button Grid.Column="3" Theme="{StaticResource IconButtonStyle}" VerticalAlignment="Center" Content="{StaticResource Glyph.Edit}" Command="{Binding EditCommand}" ToolTip.Tip="Change shortcut" AutomationProperties.Name="{Binding Title, StringFormat='Change shortcut for {0}'}" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Margin="0,16,0,0" HorizontalAlignment="Right" Content="Reset all" Command="{Binding ResetAllCommand}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

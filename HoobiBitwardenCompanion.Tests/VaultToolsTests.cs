@@ -243,6 +243,9 @@ public class VaultToolsTests(AvaloniaSession session)
     var view = window.GetVisualDescendants().OfType<GeneratorView>().Single();
     Assert.Equal(vm.Value, view.FindControl<SelectableTextBlock>("ValueText")!.Text);
     Assert.Equal("Use password", GeneratorView.CreateDialog(vm).PrimaryButtonText);
+    Assert.False(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
+    vm.OptionsExpanded = true;
+    window.UpdateLayout();
     Assert.True(view.FindControl<StackPanel>("PasswordOptions")!.IsEffectivelyVisible);
     Assert.False(view.FindControl<StackPanel>("PassphraseOptions")!.IsEffectivelyVisible);
     var history = view.FindControl<ItemsControl>("HistoryList")!;
@@ -258,6 +261,77 @@ public class VaultToolsTests(AvaloniaSession session)
     window.UpdateLayout();
     Assert.True(view.FindControl<StackPanel>("PassphraseOptions")!.IsEffectivelyVisible);
     window.Close();
+    vm.OptionsExpanded = false;
+    File.Delete(CompanionSettings.FilePath);
+  });
+
+  [Fact]
+  public Task GeneratorOptions_CollapsedByDefault_SharedAndStillApplied() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    var first = new GeneratorViewModel(h.Channel) { Special = true };
+    Assert.False(first.OptionsExpanded);
+    Assert.False(new GeneratorViewModel(h.Channel).OptionsExpanded);
+
+    var window = new Window { Width = 460, Height = 900, Content = new GeneratorView { DataContext = first, Margin = new Avalonia.Thickness(24) } };
+    window.Show();
+    window.UpdateLayout();
+    var view = window.GetVisualDescendants().OfType<GeneratorView>().Single();
+    var toggle = view.FindControl<Avalonia.Controls.Primitives.ToggleButton>("OptionsToggle")!;
+    Assert.Equal("Options", Avalonia.Automation.AutomationProperties.GetName(toggle));
+    Assert.False(toggle.IsChecked);
+    Assert.False(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
+
+    toggle.IsChecked = true;
+    window.UpdateLayout();
+    Assert.True(first.OptionsExpanded);
+    Assert.True(new GeneratorViewModel(h.Channel).OptionsExpanded);
+    Assert.True(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
+
+    toggle.IsChecked = false;
+    window.UpdateLayout();
+    Assert.False(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
+    Assert.True(first.Special);
+    Assert.True(first.ToOptions().Special);
+    window.Close();
+    File.Delete(CompanionSettings.FilePath);
+  });
+
+  [Fact]
+  public Task GeneratorWindow_CollapsedDefaultSize_ShowsNoScrollBar_OnEachTab() => session.RunAsync(async () =>
+  {
+    using var h = new Harness();
+    foreach (var tab in (int[])[0, 1])
+    {
+      var vm = new GeneratorViewModel(h.Channel) { SelectedTab = tab };
+      await vm.InitializeAsync();
+      var window = new GeneratorWindow(vm);
+      window.Show();
+      window.UpdateLayout();
+      var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().First();
+      Assert.True(scroll.Extent.Height <= scroll.Viewport.Height + 0.5, $"tab {tab}: extent {scroll.Extent.Height} viewport {scroll.Viewport.Height} window {window.Bounds.Height}");
+      Assert.True(window.Bounds.Height >= window.MinHeight);
+      var collapsed = window.Bounds.Height;
+      Assert.True(window.Bounds.Height - scroll.Viewport.Height + scroll.Extent.Height <= window.MinHeight + 0.5, $"tab {tab}: collapsed content needs {collapsed}, min {window.MinHeight}");
+      try
+      {
+        vm.OptionsExpanded = true;
+        AvaloniaSession.WaitFor(() =>
+        {
+          window.UpdateLayout();
+          return window.Bounds.Height > collapsed;
+        });
+        vm.OptionsExpanded = false;
+        AvaloniaSession.WaitFor(() => window.Bounds.Height == collapsed);
+      }
+      finally
+      {
+        vm.OptionsExpanded = false;
+      }
+
+      window.Close();
+    }
+
     File.Delete(CompanionSettings.FilePath);
   });
 
