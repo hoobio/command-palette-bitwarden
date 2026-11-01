@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using FluentAvalonia.UI.Controls;
 using HoobiBitwardenCompanion.ViewModels;
@@ -11,12 +12,16 @@ internal sealed partial class SelfHostedServerView : UserControl
     InitializeComponent();
   }
 
+  private const double DialogChromeHeight = 200;
+
   internal static FAContentDialog CreateDialog(SelfHostedServerViewModel viewModel)
   {
+    var scroll = new ScrollViewer { Margin = new Thickness(0, 0, -24, 0), Content = new SelfHostedServerView { DataContext = viewModel, Margin = new Thickness(0, 0, 24, 0) } };
+    scroll.AttachedToVisualTree += (_, _) => scroll.MaxHeight = Math.Max(150, (TopLevel.GetTopLevel(scroll)?.Bounds.Height ?? 800) - DialogChromeHeight);
     var dialog = new FAContentDialog
     {
       Title = "Self-hosted environment",
-      Content = new SelfHostedServerView { DataContext = viewModel },
+      Content = scroll,
       PrimaryButtonText = "Save",
       CloseButtonText = "Cancel",
       DefaultButton = FAContentDialogButton.Primary,
