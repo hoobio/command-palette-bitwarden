@@ -57,6 +57,20 @@ internal sealed partial class GeneratorViewModel : ObservableObject
   [NotifyPropertyChangedFor(nameof(IsPassword), nameof(IsPassphrase))]
   public partial int SelectedTab { get; set; }
 
+  private static bool s_optionsExpanded;
+
+  public bool OptionsExpanded
+  {
+    get => s_optionsExpanded;
+    set
+    {
+      if (s_optionsExpanded == value)
+        return;
+      s_optionsExpanded = value;
+      OnPropertyChanged();
+    }
+  }
+
   public bool IsPassword => SelectedTab == 0;
 
   public bool IsPassphrase => SelectedTab == 1;
