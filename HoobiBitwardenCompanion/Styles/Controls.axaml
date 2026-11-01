@@ -414,15 +414,23 @@
         <Setter Property="Background" Value="{DynamicResource WindowGroundBrush}" />
         <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
         <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="Border.GroupHighlight">
+        <Setter Property="BorderThickness" Value="2" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="Opacity" Value="0" />
         <Setter Property="Transitions">
             <Transitions>
-                <BrushTransition Property="Background" Duration="0:0:0.5" />
+                <DoubleTransition Property="Opacity" Duration="0:0:0.4" />
             </Transitions>
         </Setter>
     </Style>
 
-    <Style Selector="Border.Group.Highlighted">
-        <Setter Property="Background" Value="#4D409FFF" />
+    <Style Selector="Border.GroupHighlight.Highlighted">
+        <Setter Property="Opacity" Value="1" />
     </Style>
 
     <Style Selector="StackPanel.Rows">
