@@ -136,7 +136,7 @@ Passwords, old passwords from the password history, TOTP secrets, notes, card nu
 
 ## Design system
 
-The companion's theme, controls, dialogs, window chrome, memory trim and popup acrylic come from the `Hoobi.Design.Avalonia` NuGet package. App views compose it and define no styles of their own. A change to the look goes to the package, not to the app. The build checks `HOOBI001`, `HOOBI002` and `HOOBI003` come from the package. The tests use `Hoobi.Design.Avalonia.Testing` (`HoverFlashProbe`, `PopupSurfaceProbe`).
+The companion's theme, controls, dialogs, window chrome, memory trim and popup acrylic come from the `Hoobi.Design.Avalonia` NuGet package. App views compose it and define no styles of their own. A change to the look goes to the package, not to the app. The build checks come from the package: `HOOBI001` fails a literal colour in an `.axaml` file, `HOOBI002` fails a package resource key redefined at app scope, and `HOOBI003` fails a popup background set in the app or the popup acrylic turned off. The tests use `Hoobi.Design.Avalonia.Testing` (`HoverFlashProbe`, `PopupSurfaceProbe`).
 
 The packages come from a private feed built from the private hoobi-design repository, so restoring them needs access to that feed. CI on a fork pull request cannot restore them, and an outside contributor cannot build the companion locally without feed access.
 
