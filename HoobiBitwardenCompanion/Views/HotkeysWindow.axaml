@@ -53,7 +53,7 @@
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
-                                                    <ComboBox ItemsSource="{Binding EnterChoices}" SelectedItem="{Binding SelectedEnter, Mode=TwoWay}" AutomationProperties.Name="Enter action">
+                                                    <ComboBox ItemsSource="{Binding EnterChoices}" SelectedItem="{Binding SelectedEnter, Mode=TwoWay}" HorizontalContentAlignment="Center" AutomationProperties.Name="Enter action">
                                                         <ComboBox.ItemTemplate>
                                                             <DataTemplate x:DataType="ipc:ChoiceDto">
                                                                 <TextBlock Text="{Binding Title}" />
