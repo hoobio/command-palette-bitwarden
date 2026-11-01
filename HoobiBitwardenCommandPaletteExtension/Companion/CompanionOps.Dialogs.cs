@@ -40,9 +40,6 @@ internal sealed partial class CompanionOps
     if (!TryBuildServerConfig(request, out var config, out var invalid))
       return new SetServerResponse(false, invalid);
 
-    if (_service.LastStatus is VaultStatus.Locked or VaultStatus.Unlocked)
-      await _service.LogoutAsync();
-
     var error = await _service.SetServerUrlAsync(config);
     return new SetServerResponse(error is null, error);
   }

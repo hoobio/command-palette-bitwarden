@@ -1096,7 +1096,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         RunAction(async () =>
         {
             await _service.LogoutAsync();
-            _currentItems = BuildUnauthenticatedItems();
+            _currentItems = _service.LastStatus == VaultStatus.Unauthenticated ? BuildUnauthenticatedItems() : BuildLockedItems();
             RaiseItemsChanged();
         });
     }
