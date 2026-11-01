@@ -146,7 +146,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                             IsLoading = false;
                             break;
                         default:
-                            _currentItems = [];
+                            _currentItems = WithCommonItems([]);
                             IsLoading = false;
                             break;
                     }
@@ -325,7 +325,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildLoadingPlaceholder("Retrieving items from vault...", "bw list items");
                 break;
             case VaultStatus.Unlocked:
-                _currentItems = WithDebugLog(
+                _currentItems = WithCommonItems(
                 [
                     new ListItem(new NoOpCommand())
                     {
@@ -334,7 +334,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                         Icon = new IconInfo(""),
                     },
                     BuildSyncItem(),
-                    BuildSetServerItem(),
                     BuildLockItem(),
                     BuildLogoutItem(),
                 ]);
@@ -353,7 +352,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 _currentItems = BuildCliNotFoundItems();
                 break;
             default:
-                _currentItems = [];
+                _currentItems = WithCommonItems([]);
                 break;
         }
 
@@ -419,14 +418,25 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
     }
 
-    private static IListItem[] WithDebugLog(IListItem[] items) =>
-        DebugLogService.Enabled ? [.. items, BuildCopyDebugLogItem()] : items;
+    private static IListItem[] WithCommonItems(IListItem[] items)
+    {
+        List<IListItem> all = [.. items];
+        if (CompanionHost.Current is { } companion)
+        {
+            all.Add(BuildGenerateItem(companion));
+            all.Add(BuildSettingsItem(companion));
+        }
+
+        if (DebugLogService.Enabled)
+            all.Add(BuildCopyDebugLogItem());
+        return [.. all];
+    }
 
     private IListItem[] BuildCliNotFoundItems()
     {
         if (_cliInstalling)
         {
-            return WithDebugLog(
+            return WithCommonItems(
             [
                 new ListItem(new NoOpCommand())
                 {
@@ -457,7 +467,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             Icon = new IconInfo("\uE774"),
         };
 
-        return WithDebugLog([install, manual]);
+        return WithCommonItems([install, manual]);
     }
 
     private const int CliInstallTimeoutMs = 300_000;
@@ -578,7 +588,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             };
             if (_errorMessage != null)
                 hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return WithDebugLog([hint, BuildBackToLoginItem()]);
+            return WithCommonItems([hint, BuildBackToLoginItem()]);
         }
 
         if (_deviceVerificationRequired && _pendingEmail != null && _pendingPassword != null)
@@ -599,7 +609,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             };
             if (_errorMessage != null)
                 hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return WithDebugLog([hint, BuildBackToLoginItem()]);
+            return WithCommonItems([hint, BuildBackToLoginItem()]);
         }
 
         PlaceholderText = "Search your vault... (try url:github)";
@@ -619,13 +629,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_errorMessage != null)
             item.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
 
-        return WithDebugLog([item, BuildSetServerItem()]);
+        return WithCommonItems([item, BuildSetServerItem()]);
     }
 
-    private IListItem[] BuildLockedItems() => WithDebugLog(
+    private IListItem[] BuildLockedItems() => WithCommonItems(
     [
         BuildUnlockItem(),
-        BuildSetServerItem(),
         BuildLogoutItem(),
     ]);
 
@@ -676,7 +685,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     }
 
     private ListItem BuildSetServerItem() => new(CompanionHost.Current is { } companion
-        ? (ICommand)new AnonymousCommand(companion.ShowSetServer) { Name = "Set server", Result = CommandResult.KeepOpen() }
+        ? (ICommand)new AnonymousCommand(companion.ShowServerSettings) { Name = "Set server", Result = CommandResult.Dismiss() }
         : new Pages.SetServerPage(OnSetServerSubmitted))
     {
         Title = "Set Bitwarden Server",
@@ -820,7 +829,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (companion != null && !boostGenerate) tail.Add(BuildGenerateItem(companion));
         if (companion != null && !boostSettings) tail.Add(BuildSettingsItem(companion));
         if (!boostSync) tail.Add(BuildSyncItem());
-        tail.Add(BuildSetServerItem());
         if (!boostLock) tail.Add(BuildLockItem());
         if (!boostLogout) tail.Add(BuildLogoutItem());
         if (DebugLogService.Enabled && !boostDebug)
@@ -1588,7 +1596,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         OnPropertyChanged(nameof(SearchText));
     }
 
-    private static IListItem[] BuildLoadingPlaceholder(string title, string command) => WithDebugLog(
+    private static IListItem[] BuildLoadingPlaceholder(string title, string command) => WithCommonItems(
     [
         new ListItem(new NoOpCommand())
         {

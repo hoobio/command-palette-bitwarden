@@ -43,7 +43,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
                 Subtitle = "Create a new login, new password, note, card, identity or SSH key",
                 Icon = new IconInfo(""),
             },
-            new CommandItem(new CompanionCommand("Generate password", _service, companion.ShowGenerator))
+            new CommandItem(new AnonymousCommand(companion.ShowGenerator) { Name = "Generate password", Result = CommandResult.Dismiss() })
             {
                 Title = "Generate password",
                 Subtitle = "Open the generator for a new password or passphrase",

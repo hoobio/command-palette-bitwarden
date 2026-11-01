@@ -345,6 +345,19 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
   }
 
   [Fact]
+  public async Task Generate_WorksWithoutAnUnlockedVault()
+  {
+    var h = new Harness();
+    h.Service.ClearSession();
+
+    var generated = IpcJson.Read(await h.Handle(Ops.Generate, new GeneratorOptions(), IpcJson.Default.GeneratorOptions), IpcJson.Default.GeneratedResponse);
+    await h.Handle(Ops.CopyGenerated, new HistoryEntryRequest(generated.EntryId), IpcJson.Default.HistoryEntryRequest);
+
+    Assert.Equal(20, generated.Value.Length);
+    Assert.Equal(generated.EntryId, Assert.Single(h.Ops.ListGeneratorHistory().Entries).Id);
+  }
+
+  [Fact]
   public async Task Generate_KeepsOnlyTheLatestUncopiedValues()
   {
     var h = new Harness();
@@ -392,8 +405,6 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
 
     h.Service.ClearSession();
     h.Ops.RaiseIfLocked();
-    Assert.Equal(IpcErrors.Locked, Assert.Throws<IpcException>(() => h.Ops.ListGeneratorHistory()).Code);
-    h.Service.SetSession("session-key");
     Assert.Empty(h.Ops.ListGeneratorHistory().Entries);
     Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.CopyGenerated, new HistoryEntryRequest(ids[^1]), IpcJson.Default.HistoryEntryRequest));
     Assert.Equal(IpcErrors.NotFound, await h.Fails(Ops.CopyGenerated, new HistoryEntryRequest(uncopied), IpcJson.Default.HistoryEntryRequest));
