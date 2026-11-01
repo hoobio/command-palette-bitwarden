@@ -6,7 +6,7 @@ Each vault item type exposes different actions. Select an item to trigger the de
 
 The Enter key runs the default action. A login with a web URL opens the website. An SSH key with a `host` custom field starts the SSH session. Every other item opens in the [companion window](Companion-Window), or in the web vault if the companion is not available.
 
-**Open in companion** is the first more-command of every item (`Ctrl+O`), so `Ctrl+Enter` also opens the companion window.
+**Open in companion** is the first more-command of every item (`Ctrl+O`), so `Ctrl+Enter` also opens the companion window. The menu does not show the Enter action when that action has no shortcut.
 
 The Enter action and the shortcut of each action can be changed (see [Keyboard Shortcuts](Keyboard-Shortcuts)). The behaviour above is the default.
 

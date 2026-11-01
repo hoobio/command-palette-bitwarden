@@ -87,9 +87,8 @@ internal static partial class VaultItemHelper
   private static void OpenWebVault(string itemId) =>
     Process.Start(new ProcessStartInfo($"{GetVaultBaseUrl()}/#/vault?itemId={Uri.EscapeDataString(itemId)}") { UseShellExecute = true });
 
-  private static ICommand ResolveEnterCommand(BitwardenItem item, BitwardenCliService? service)
+  private static (string Id, BuiltAction Built) ResolveEnterAction(BitwardenItem item, BitwardenCliService? reprompt)
   {
-    var reprompt = item.Reprompt == 1 ? service : null;
     var itemType = HotkeyItemTypes.For(item.Type);
     BuiltAction? built = null;
     var chosen = HotkeyCatalog.ResolveEnter(itemType, HotkeyStore.Current.EnterFor(itemType), actionId =>
@@ -99,7 +98,13 @@ internal static partial class VaultItemHelper
         built = candidate;
       return candidate is not null;
     });
-    built ??= BuildAction(item, chosen, reprompt)!;
+    return (chosen, built ?? BuildAction(item, chosen, reprompt)!);
+  }
+
+  private static ICommand ResolveEnterCommand(BitwardenItem item, BitwardenCliService? service)
+  {
+    var reprompt = item.Reprompt == 1 ? service : null;
+    var built = ResolveEnterAction(item, reprompt).Built;
     return built.Run is { } run && reprompt is not null && !RepromptPage.IsWithinGracePeriod(item.Id)
       ? BuildRepromptCommand(reprompt, item.Id, run, "Open")
       : built.Command;

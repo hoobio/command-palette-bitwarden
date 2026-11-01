@@ -57,9 +57,12 @@ internal static partial class VaultItemHelper
     var id = item.Id;
     var reprompt = item.Reprompt == 1 ? service : null;
     var itemType = HotkeyItemTypes.For(item.Type);
+    var enter = ResolveEnterAction(item, reprompt).Id;
 
     void Add(string actionId)
     {
+      if (actionId == enter && HotkeyStore.Current.ChordFor(actionId) is null)
+        return;
       if (BuildContextItem(item, actionId, reprompt) is { } contextItem)
         items.Add(contextItem);
     }

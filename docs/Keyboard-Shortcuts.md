@@ -13,7 +13,7 @@ Open the page from the **Shortcuts** section of the [settings window](Companion-
 | Login | Copy Username | `Ctrl+C` |
 | Login | Copy Password | `Ctrl+Shift+C` |
 | Login | Copy OTP | `Ctrl+Alt+C` |
-| Login | Open in Browser | `Alt+Enter` |
+| Login | Open in Browser | None |
 | Login | Rotate password | None |
 | Card | Copy Card Number | `Ctrl+C` |
 | Card | Copy Code | `Ctrl+Shift+C` |
@@ -27,7 +27,7 @@ Open the page from the **Shortcuts** section of the [settings window](Companion-
 | Secure note | Copy Notes | `Ctrl+C` |
 | SSH key | Copy Public Key | `Ctrl+C` |
 | SSH key | Copy Fingerprint | `Ctrl+Shift+C` |
-| SSH key | Open SSH Session | `Alt+Enter` |
+| SSH key | Open SSH Session | None |
 
 The custom field copy actions have no shortcut and cannot be changed.
 
@@ -55,6 +55,8 @@ The first row of each group is the **Enter action**, the action that Enter runs 
 | Login | Open in Browser |
 | SSH key | Open SSH Session |
 | Card, Identity, Secure note | Open in companion |
+
+The more-commands menu does not show the Enter action when that action has no shortcut, because Enter already runs it. Give the action a shortcut to show it in the menu again.
 
 The **All items** row sets the Enter action for card, identity and secure note items that have no setting of their own. **Reset** next to the Enter action of those types removes their setting, so they follow **All items** again.
 

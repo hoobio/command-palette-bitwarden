@@ -42,7 +42,7 @@ public class HotkeyTests : IDisposable
   [InlineData(HotkeyIds.LoginCopyUsername, "Ctrl+C")]
   [InlineData(HotkeyIds.LoginCopyPassword, "Ctrl+Shift+C")]
   [InlineData(HotkeyIds.LoginCopyOtp, "Ctrl+Alt+C")]
-  [InlineData(HotkeyIds.LoginOpenBrowser, "Alt+Enter")]
+  [InlineData(HotkeyIds.LoginOpenBrowser, null)]
   [InlineData(HotkeyIds.LoginRotatePassword, null)]
   [InlineData(HotkeyIds.NoteCopyNotes, "Ctrl+C")]
   [InlineData(HotkeyIds.CardCopyNumber, "Ctrl+C")]
@@ -56,7 +56,7 @@ public class HotkeyTests : IDisposable
   [InlineData(HotkeyIds.IdentityCopyAddress, "Ctrl+Shift+A")]
   [InlineData(HotkeyIds.SshCopyPublicKey, "Ctrl+C")]
   [InlineData(HotkeyIds.SshCopyFingerprint, "Ctrl+Shift+C")]
-  [InlineData(HotkeyIds.SshOpenSession, "Alt+Enter")]
+  [InlineData(HotkeyIds.SshOpenSession, null)]
   public void Catalog_DefaultChords_MatchTheShippedShortcuts(string id, string? expected)
   {
     Assert.Equal(expected, HotkeyCatalog.Find(id)!.Default?.Display);
@@ -511,15 +511,23 @@ public class HotkeyTests : IDisposable
     };
 
     var defaults = VaultItemHelper.BuildContextItems(item);
-    Assert.Equal(["Copy Username", "Copy Password", "Open in Browser"], defaults.Select(ci => ci.Title));
+    Assert.Equal(["Copy Username", "Copy Password"], defaults.Select(ci => ci.Title));
     Assert.Equal((0x43, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift), (defaults[1].RequestedShortcut.Vkey, defaults[1].RequestedShortcut.Modifiers));
 
     _store.SetChord(HotkeyIds.LoginCopyPassword, new HotkeyChord(0x50, Ctrl | Alt));
-    _store.SetChord(HotkeyIds.LoginOpenBrowser, null);
+    _store.SetChord(HotkeyIds.LoginOpenBrowser, new HotkeyChord(HotkeyKeys.Enter, Alt));
     var changed = VaultItemHelper.BuildContextItems(item);
 
+    Assert.Equal(["Copy Username", "Copy Password", "Open in Browser"], changed.Select(ci => ci.Title));
     Assert.Equal((0x50, Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Menu), (changed[1].RequestedShortcut.Vkey, changed[1].RequestedShortcut.Modifiers));
-    Assert.Equal(0, changed[2].RequestedShortcut.Vkey);
+    Assert.Equal((HotkeyKeys.Enter, Windows.System.VirtualKeyModifiers.Menu), ((int)changed[2].RequestedShortcut.Vkey, changed[2].RequestedShortcut.Modifiers));
+
+    _store.SetEnter(HotkeyItemTypes.Login, HotkeyIds.LoginCopyUsername);
+    _store.SetChord(HotkeyIds.LoginOpenBrowser, null);
+    var notEnter = VaultItemHelper.BuildContextItems(item);
+
+    Assert.Equal(["Copy Username", "Copy Password", "Open in Browser"], notEnter.Select(ci => ci.Title));
+    Assert.Equal(0, notEnter[2].RequestedShortcut.Vkey);
   }
 
   [Fact]
@@ -545,6 +553,9 @@ public class HotkeyTests : IDisposable
 
     Assert.Equal("Copy Password", VaultItemHelper.GetDefaultCommand(login).Name);
     Assert.NotEqual("Copy Password", VaultItemHelper.GetDefaultCommand(noPassword).Name);
+    Assert.DoesNotContain(VaultItemHelper.BuildContextItems(noPassword), ci => ci.Title == "Open in Browser");
+
+    _store.SetChord(HotkeyIds.LoginOpenBrowser, new HotkeyChord(HotkeyKeys.Enter, Alt));
     Assert.Equal(VaultItemHelper.GetDefaultCommand(noPassword).Name, VaultItemHelper.BuildContextItems(noPassword).Single(ci => ci.Title == "Open in Browser").Command!.Name);
   }
 

@@ -261,7 +261,7 @@ public class VaultItemHelperTests
   }
 
   [Fact]
-  public void BuildContextItems_SshKey_HiddenHost_OffersSshSessionWithoutExposingHost()
+  public void BuildContextItems_SshKey_HiddenHost_DoesNotExposeHost()
   {
     var item = new BitwardenItem
     {
@@ -273,8 +273,8 @@ public class VaultItemHelperTests
       },
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
-    var ssh = Assert.Single(contextItems, ci => ci.Title == "Open SSH Session");
-    Assert.DoesNotContain("server.com", ssh.Command?.Name);
+    Assert.DoesNotContain(contextItems, ci => ci.Title == "Open SSH Session");
+    Assert.DoesNotContain("server.com", VaultItemHelper.GetDefaultCommand(item).Name);
     Assert.DoesNotContain(contextItems, ci => ci.Title.Contains("host"));
   }
 

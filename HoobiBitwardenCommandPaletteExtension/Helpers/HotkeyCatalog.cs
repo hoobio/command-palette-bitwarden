@@ -76,7 +76,7 @@ internal static class HotkeyCatalog
     new(HotkeyIds.LoginCopyUsername, HotkeyItemTypes.Login, "Copy Username", Ctrl(KeyC)),
     new(HotkeyIds.LoginCopyPassword, HotkeyItemTypes.Login, "Copy Password", Ctrl(KeyC, HotkeyModifiers.Shift)),
     new(HotkeyIds.LoginCopyOtp, HotkeyItemTypes.Login, "Copy OTP", Ctrl(KeyC, HotkeyModifiers.Alt)),
-    new(HotkeyIds.LoginOpenBrowser, HotkeyItemTypes.Login, "Open in Browser", new(HotkeyKeys.Enter, HotkeyModifiers.Alt)),
+    new(HotkeyIds.LoginOpenBrowser, HotkeyItemTypes.Login, "Open in Browser", null),
     new(HotkeyIds.LoginRotatePassword, HotkeyItemTypes.Login, "Rotate password", null),
     new(HotkeyIds.CardCopyNumber, HotkeyItemTypes.Card, "Copy Card Number", Ctrl(KeyC)),
     new(HotkeyIds.CardCopyCode, HotkeyItemTypes.Card, "Copy Code", Ctrl(KeyC, HotkeyModifiers.Shift)),
@@ -90,7 +90,7 @@ internal static class HotkeyCatalog
     new(HotkeyIds.NoteCopyNotes, HotkeyItemTypes.Note, "Copy Notes", Ctrl(KeyC)),
     new(HotkeyIds.SshCopyPublicKey, HotkeyItemTypes.Ssh, "Copy Public Key", Ctrl(KeyC)),
     new(HotkeyIds.SshCopyFingerprint, HotkeyItemTypes.Ssh, "Copy Fingerprint", Ctrl(KeyC, HotkeyModifiers.Shift)),
-    new(HotkeyIds.SshOpenSession, HotkeyItemTypes.Ssh, "Open SSH Session", new(HotkeyKeys.Enter, HotkeyModifiers.Alt)),
+    new(HotkeyIds.SshOpenSession, HotkeyItemTypes.Ssh, "Open SSH Session", null),
   ];
 
   private static HotkeyChord Ctrl(int key, int extra = 0) => new(key, HotkeyModifiers.Ctrl | extra);

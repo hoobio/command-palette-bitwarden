@@ -44,16 +44,22 @@ internal sealed partial class ItemView : UserControl
     AddHandler(PointerPressedEvent, OnFieldPointerPressed);
     AddHandler(PointerMovedEvent, OnFieldPointerMoved);
     AddHandler(PointerReleasedEvent, (_, _) => _dragPress = null);
+    AddHandler(PointerCaptureLostEvent, (_, _) => _dragPress = null);
   }
 
   private void OnFieldPointerPressed(object? sender, PointerPressedEventArgs e) =>
-    _dragPress = e.Source is not SelectableTextBlock && e.Source is StyledElement { DataContext: FieldViewModel { CanCopy: true } }
+    _dragPress = e.Pointer.Type == PointerType.Mouse && e.Source is not SelectableTextBlock && e.Source is StyledElement { DataContext: FieldViewModel { CanCopy: true } }
       && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed ? e : null;
 
   private void OnFieldPointerMoved(object? sender, PointerEventArgs e)
   {
     if (_dragPress is not { Source: StyledElement { DataContext: FieldViewModel field } } press || _dragStarting)
       return;
+    if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+    {
+      _dragPress = null;
+      return;
+    }
     var delta = e.GetPosition(this) - press.GetPosition(this);
     if (Math.Abs(delta.X) < DragThreshold && Math.Abs(delta.Y) < DragThreshold)
       return;
@@ -74,7 +80,8 @@ internal sealed partial class ItemView : UserControl
     finally
     {
       _dragStarting = false;
-      _dragPress = null;
+      if (_dragPress == press)
+        _dragPress = null;
     }
   }
 

@@ -601,12 +601,13 @@ public class ItemWindowTests(AvaloniaSession session)
     var start = label.TranslatePoint(new Avalonia.Point(label.Bounds.Width / 2, label.Bounds.Height / 2), window)!.Value;
 
     window.MouseDown(start, Avalonia.Input.MouseButton.Left);
-    window.MouseMove(start + new Avalonia.Point(2, 2));
+    window.MouseMove(start + new Avalonia.Point(2, 2), Avalonia.Input.RawInputModifiers.LeftMouseButton);
     window.MouseUp(start, Avalonia.Input.MouseButton.Left);
+    window.MouseMove(start + new Avalonia.Point(12, 0));
     Assert.Equal(0, extension.Count(Ops.Reveal));
 
     window.MouseDown(start, Avalonia.Input.MouseButton.Left);
-    window.MouseMove(start + new Avalonia.Point(12, 0));
+    window.MouseMove(start + new Avalonia.Point(12, 0), Avalonia.Input.RawInputModifiers.LeftMouseButton);
     AvaloniaSession.WaitFor(() => extension.Count(Ops.Reveal) == 1);
     window.MouseUp(start, Avalonia.Input.MouseButton.Left);
     Assert.Equal(FieldViewModel.Mask, Field(vm, ItemFields.Password).DisplayValue);
