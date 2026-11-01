@@ -8,7 +8,7 @@ Open the page from the **Shortcuts** section of the [settings window](Companion-
 
 | Item type | Action | Shortcut |
 |-----------|--------|----------|
-| All items | Open in window | `Ctrl+O` |
+| All items | Open in companion | `Ctrl+O` |
 | All items | View in Web Vault | `Ctrl+Shift+O` |
 | Login | Copy Username | `Ctrl+C` |
 | Login | Copy Password | `Ctrl+Shift+C` |
@@ -54,11 +54,11 @@ The first row of each group is the **Enter action**, the action that Enter runs 
 |-----------|----------------------|
 | Login | Open in Browser |
 | SSH key | Open SSH Session |
-| Card, Identity, Secure note | Open in window |
+| Card, Identity, Secure note | Open in companion |
 
 The **All items** row sets the Enter action for card, identity and secure note items that have no setting of their own. **Reset** next to the Enter action of those types removes their setting, so they follow **All items** again.
 
-If the chosen action is not available for an item, Enter runs the default behaviour described in [Vault Item Actions](Vault-Item-Actions#default-action-and-open-in-window). Examples are Copy Password on a login with no password and Open in Browser on a login with no web URL.
+If the chosen action is not available for an item, Enter runs the default behaviour described in [Vault Item Actions](Vault-Item-Actions#default-action-and-open-in-companion). Examples are Copy Password on a login with no password and Open in Browser on a login with no web URL.
 
 ## Storage
 

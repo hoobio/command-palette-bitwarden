@@ -2,11 +2,11 @@
 
 Each vault item type exposes different actions. Select an item to trigger the default action, or press the actions shortcut to see all available actions.
 
-## Default action and Open in window
+## Default action and Open in companion
 
 The Enter key runs the default action. A login with a web URL opens the website. An SSH key with a `host` custom field starts the SSH session. Every other item opens in the [companion window](Companion-Window), or in the web vault if the companion is not available.
 
-**Open in window** is the first more-command of every item (`Ctrl+O`), so `Ctrl+Enter` also opens the companion window.
+**Open in companion** is the first more-command of every item (`Ctrl+O`), so `Ctrl+Enter` also opens the companion window.
 
 The Enter action and the shortcut of each action can be changed (see [Keyboard Shortcuts](Keyboard-Shortcuts)). The behaviour above is the default.
 
@@ -73,7 +73,7 @@ When an item has re-prompt enabled:
 - Fallback results in the root Command Palette also require the verification
 - Selecting the item (Enter key) opens a master password verification form before performing the default action
 - **All** copy actions — including normally non-sensitive fields like Username, Cardholder Name, and Email — require verification
-- Non-copy actions (Open in Browser, Open in window, View in Web Vault) via context menu remain unprotected
+- Non-copy actions (Open in Browser, Open in companion, View in Web Vault) via context menu remain unprotected
 - After entering the correct password, a toast confirms the action and a configurable **grace period** begins
 - During the grace period, subsequent actions on any protected item execute instantly without any prompt
 - The grace period is cleared when the vault is locked or you log out

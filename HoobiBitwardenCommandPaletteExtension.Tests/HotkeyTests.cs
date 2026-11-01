@@ -210,7 +210,7 @@ public class HotkeyTests : IDisposable
   [Fact]
   public void Validate_AllItemActionsConflictWithEveryItemType()
   {
-    Assert.Equal("Ctrl+O is already used by Open in window", _store.Validate(HotkeyIds.SshCopyPublicKey, new HotkeyChord(O, Ctrl)));
+    Assert.Equal("Ctrl+O is already used by Open in companion", _store.Validate(HotkeyIds.SshCopyPublicKey, new HotkeyChord(O, Ctrl)));
     Assert.Equal("Ctrl+E is already used by Copy Expiration (Card)", _store.Validate(HotkeyIds.OpenWebVault, new HotkeyChord(0x45, Ctrl)));
     Assert.Null(_store.Validate(HotkeyIds.OpenWebVault, new HotkeyChord(O, Ctrl | Shift)));
   }

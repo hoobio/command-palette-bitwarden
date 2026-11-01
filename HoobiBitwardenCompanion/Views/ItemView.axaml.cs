@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -12,7 +13,10 @@ namespace HoobiBitwardenCompanion.Views;
 
 internal sealed partial class ItemView : UserControl
 {
+  private const double DragThreshold = 4;
   private ItemViewModel? _subscribed;
+  private PointerPressedEventArgs? _dragPress;
+  private bool _dragStarting;
 
   public ItemView()
   {
@@ -37,6 +41,41 @@ internal sealed partial class ItemView : UserControl
       }
     };
     AddHandler(SelectableTextBlock.CopyingToClipboardEvent, OnCopyingToClipboard);
+    AddHandler(PointerPressedEvent, OnFieldPointerPressed);
+    AddHandler(PointerMovedEvent, OnFieldPointerMoved);
+    AddHandler(PointerReleasedEvent, (_, _) => _dragPress = null);
+  }
+
+  private void OnFieldPointerPressed(object? sender, PointerPressedEventArgs e) =>
+    _dragPress = e.Source is not SelectableTextBlock && e.Source is StyledElement { DataContext: FieldViewModel { CanCopy: true } }
+      && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed ? e : null;
+
+  private void OnFieldPointerMoved(object? sender, PointerEventArgs e)
+  {
+    if (_dragPress is not { Source: StyledElement { DataContext: FieldViewModel field } } press || _dragStarting)
+      return;
+    var delta = e.GetPosition(this) - press.GetPosition(this);
+    if (Math.Abs(delta.X) < DragThreshold && Math.Abs(delta.Y) < DragThreshold)
+      return;
+    _dragStarting = true;
+    _ = DragFieldAsync(press, field);
+  }
+
+  private async Task DragFieldAsync(PointerPressedEventArgs press, FieldViewModel field)
+  {
+    try
+    {
+      if (await field.GetDragTextAsync() is not { Length: > 0 } text || _dragPress != press)
+        return;
+      var data = new DataTransfer();
+      data.Add(DataTransferItem.CreateText(text));
+      await DragDrop.DoDragDropAsync(press, data, DragDropEffects.Copy);
+    }
+    finally
+    {
+      _dragStarting = false;
+      _dragPress = null;
+    }
   }
 
   // The extension copies the selection from its own copy of the secret, so the plaintext never reaches the clipboard from here.

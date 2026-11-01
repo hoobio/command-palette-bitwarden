@@ -38,7 +38,7 @@ internal static partial class VaultItemHelper
       : new RepromptPage(service, itemId, action, label);
 
   private static AnonymousCommand BuildOpenInWindowCommand(CompanionHost companion, string id) =>
-    new(() => companion.ShowItem(id)) { Name = "Open in window", Result = CommandResult.Dismiss() };
+    new(() => companion.ShowItem(id)) { Name = "Open in companion", Result = CommandResult.Dismiss() };
 
   internal static string? ToSafeWebUrl(string? uri)
   {

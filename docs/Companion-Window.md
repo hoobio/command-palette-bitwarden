@@ -4,7 +4,7 @@ The companion window shows a vault item in its own window next to Command Palett
 
 ## Window commands
 
-- **Open in window** is the first command in the more-commands menu of each vault item (`Ctrl+O` by default). Command Palette runs the first more-command on `Ctrl+Enter`, so `Ctrl+Enter` opens the item window.
+- **Open in companion** is the first command in the more-commands menu of each vault item (`Ctrl+O` by default). Command Palette runs the first more-command on `Ctrl+Enter`, so `Ctrl+Enter` opens the item window.
 - The Enter action of a note, card, identity, login without a URL or SSH key without a host opens the item window. Logins with a URL still open the website, and SSH keys with a host still open the SSH session. If the companion is not available, Enter opens the web vault.
 - **Rotate password** is in the more-commands menu of each login that has a password, after the commands for the item type. It opens the item window and then the **Rotate password** dialog (see [Quick Rotate](#quick-rotate)). It never rotates until you select **Save**.
 - **New Bitwarden item** is a top-level command in Command Palette. It opens an empty item window in create mode (see [New item](#new-item)). Search for it with words such as "new login", "new password", "note", "card" or "identity". You can also set an alias for it in Command Palette.
@@ -36,6 +36,7 @@ All item types also show Custom fields, Additional options (notes) and Item hist
 - You cannot select the text of a shown password, card number, security code or verification code, so `Ctrl+C` cannot go around the extension's clipboard. A shown note or SSH private key lets you select part of the text. `Ctrl+C` or **Copy** in its menu sends the selected range to the extension, and the extension copies that part of its own value through the secure clipboard. The companion never puts the selection on the clipboard.
 - For a login with old passwords, a **Password history** group with **Show password history** is below the fields. The group does not show when the item has no password history. It shows the date of each old password. The values are masked, and the copy button copies through the extension. The extension reads the history from its vault cache, so no Bitwarden CLI process starts.
 - The copy button copies through the extension. Secrets are excluded from clipboard history and cleared after the time set in [Settings](Settings), also after you close the window.
+- To type a field's value into another app, drag the field's label or row to a text box in that app. The value text itself stays selectable, so a drag on it selects text. A masked secret is sent with its real value and stays masked in the window. The drag does not use the clipboard. Windows does not let a drop reach an app that runs as administrator. If the item needs the master password, the window asks for it, then shows the field so you can drag it again.
 - The verification code changes at the end of each period. The ring shows the seconds left in the current period. The ring and the number turn yellow for the last 5 seconds.
 - The open button on a website opens it in your browser. Only `http` and `https` addresses open.
 - When a save, a rotate or another change does not reach the vault, the window plays the Windows error sound, flashes its taskbar button until you switch to it, and shows a red message with a warning icon at the top of the item.
@@ -94,7 +95,7 @@ The trash-can button opens a **Remove item** dialog that names the item. The red
 
 **New Bitwarden item** in Command Palette opens an item window in create mode. It is a top-level command and is also in the Bitwarden page list, after the vault items; type "new" to move it to the top. The header shows the type icon and a **New item** badge. The form starts as a login. The **Type** box at the top of the form changes it to a secure note, card, identity or SSH key. A type change keeps the name, folder, notes and favourite, and clears the fields of the old type. A new item can go into an organisation: select an **Owner** and at least one collection.
 
-**Save** has the same checks as an edit, and the extension creates the item with `bw create item`, reads it back to confirm it and adds it to the vault cache, so it shows in Command Palette. The window then shows the saved item read-only. A later **Open in window** for the item brings this window to the front.
+**Save** has the same checks as an edit, and the extension creates the item with `bw create item`, reads it back to confirm it and adds it to the vault cache, so it shows in Command Palette. The window then shows the saved item read-only. A later **Open in companion** for the item brings this window to the front.
 
 **Cancel**, or closing the window, closes a new item window. It asks first when you typed something. If Bitwarden does not confirm the create, the window says so and keeps the form. The next **Save** asks **Save another copy?** before it sends the item again, because Bitwarden may have saved the first one. When the vault locks, new item windows close without saving.
 

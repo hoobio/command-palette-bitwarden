@@ -200,8 +200,8 @@ public class VaultItemHelperTests
     try
     {
       var contextItems = VaultItemHelper.BuildContextItems(item);
-      Assert.Equal("Open in window", contextItems[0].Title);
-      Assert.Equal("Open in window", contextItems[0].Command?.Name);
+      Assert.Equal("Open in companion", contextItems[0].Title);
+      Assert.Equal("Open in companion", contextItems[0].Command?.Name);
       Assert.Equal(withoutCompanion.Select(ci => ci.Title), contextItems.Skip(1).SkipLast(1).Select(ci => ci.Title));
       Assert.Equal("Rotate password", contextItems[^1].Title);
       var card = new BitwardenItem { Id = Guid.NewGuid().ToString(), Type = BitwardenItemType.Card, CardBrand = "Visa" };
@@ -231,8 +231,8 @@ public class VaultItemHelperTests
     Companion.CompanionHost.Current = companion;
     try
     {
-      Assert.Equal("Open in window", VaultItemHelper.GetDefaultCommand(note).Name);
-      Assert.NotEqual("Open in window", VaultItemHelper.GetDefaultCommand(login).Name);
+      Assert.Equal("Open in companion", VaultItemHelper.GetDefaultCommand(note).Name);
+      Assert.NotEqual("Open in companion", VaultItemHelper.GetDefaultCommand(login).Name);
       Assert.Equal("Verify password", VaultItemHelper.GetDefaultCommand(protectedNote, new BitwardenCliService()).Name);
     }
     finally

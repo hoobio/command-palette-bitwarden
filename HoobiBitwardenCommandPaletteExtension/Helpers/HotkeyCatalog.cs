@@ -71,7 +71,7 @@ internal static class HotkeyCatalog
 
   internal static readonly HotkeyAction[] Actions =
   [
-    new(HotkeyIds.OpenWindow, HotkeyItemTypes.All, "Open in window", Ctrl(KeyO)),
+    new(HotkeyIds.OpenWindow, HotkeyItemTypes.All, "Open in companion", Ctrl(KeyO)),
     new(HotkeyIds.OpenWebVault, HotkeyItemTypes.All, "View in Web Vault", Ctrl(KeyO, HotkeyModifiers.Shift)),
     new(HotkeyIds.LoginCopyUsername, HotkeyItemTypes.Login, "Copy Username", Ctrl(KeyC)),
     new(HotkeyIds.LoginCopyPassword, HotkeyItemTypes.Login, "Copy Password", Ctrl(KeyC, HotkeyModifiers.Shift)),
