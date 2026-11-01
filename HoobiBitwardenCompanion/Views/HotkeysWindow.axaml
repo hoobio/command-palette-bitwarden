@@ -27,7 +27,7 @@
         </Grid>
 
         <ScrollViewer x:Name="Scroller" Grid.Row="1">
-            <StackPanel MaxWidth="880" Margin="24,0,24,24">
+            <StackPanel MaxWidth="880" Margin="24,0,24,24" Grid.IsSharedSizeScope="True">
                 <TextBlock x:Name="ErrorText" Classes="Warn" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 <ItemsControl x:Name="GroupList" ItemsSource="{Binding Groups}">
                     <ItemsControl.ItemTemplate>
@@ -37,7 +37,12 @@
                                 <Border Classes="Group">
                                     <StackPanel Classes="Rows">
                                         <Border Classes="Row Switch">
-                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="EnterAction" />
+                                                </Grid.ColumnDefinitions>
                                                 <TextBlock VerticalAlignment="Center" Text="Enter action" />
                                                 <Button Grid.Column="1" Content="Reset" VerticalAlignment="Center" IsVisible="{Binding IsEnterModified}" Command="{Binding ResetEnterCommand}" AutomationProperties.Name="Reset Enter action" />
                                                 <Grid Grid.Column="2" VerticalAlignment="Center">
