@@ -20,7 +20,7 @@
     "reason": "HTTP client wrapper, requires live network I/O"
   },
   {
-    "pattern": "VaultItemHelper\\.cs$",
+    "pattern": "VaultItemHelper(\\.Actions)?\\.cs$",
     "reason": "WinRT UI helpers, returns SDK types that cannot be instantiated in unit tests"
   },
   {

@@ -71,6 +71,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.AutoLocked += OnAutoLocked;
         _service.CliConfigChanged += OnCliConfigChanged;
         AccessTracker.ItemAccessed += OnItemAccessed;
+        HotkeyStore.Current.Changed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
         RepromptPage.GraceStarted += OnItemAccessed;
         RepromptPage.BiometricRequested += OnRepromptBiometricRequested;
@@ -914,6 +915,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _service.AutoLocked -= OnAutoLocked;
         _service.CliConfigChanged -= OnCliConfigChanged;
         AccessTracker.ItemAccessed -= OnItemAccessed;
+        HotkeyStore.Current.Changed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
         RepromptPage.GraceStarted -= OnItemAccessed;
         RepromptPage.BiometricRequested -= OnRepromptBiometricRequested;

@@ -7,7 +7,7 @@ using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCompanion.ViewModels;
 
-internal sealed partial class SettingsViewModel(PipeChannel channel, Action<string>? open = null) : ObservableObject
+internal sealed partial class SettingsViewModel(PipeChannel channel, Action<string>? open = null, Action? showHotkeys = null) : ObservableObject
 {
   private const string RepoUrl = "https://github.com/hoobio/command-palette-bitwarden";
   private const string DonateUrl = "https://www.paypal.com/donate/?hosted_button_id=E2UBLTYAT4K8Y";
@@ -183,7 +183,12 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
       if (current is null)
         Sections.Add(current = new SettingsSectionViewModel(string.Empty));
-      var row = new SettingRowViewModel(channel, setting, setting.Key == SettingKeys.OpenLogs ? OpenLogs : null);
+      var row = new SettingRowViewModel(channel, setting, setting.Key switch
+      {
+        SettingKeys.OpenLogs => OpenLogs,
+        SettingKeys.Hotkeys => showHotkeys,
+        _ => null,
+      });
       row.ValueChanged += RefreshVisibility;
       current.Rows.Add(row);
     }

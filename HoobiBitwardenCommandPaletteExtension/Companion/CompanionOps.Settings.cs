@@ -23,10 +23,16 @@ internal sealed partial class CompanionOps
       .Select(s => s with { Placeholder = PlaceholderFor(manager, s.Key), Tooltip = TooltipFor(manager, s.Key) })
       .Select(s => s.Key == manager.UseDesktopIntegration.Key ? WithDesktopStatus(s, manager.UseDesktopIntegration.Value, _desktopReachable) : s)
       .SelectMany(s => s.Key == manager.DebugLogging.Key ? new[] { s, OpenLogsLink } : new[] { s })
+      .Prepend(HotkeysLink)
+      .Prepend(ShortcutsSection)
       .ToArray());
   }
 
   private static readonly SettingDto OpenLogsLink = new(SettingKeys.OpenLogs, SettingKinds.Link, "Logs", "Opens the log folder", null, null);
+
+  private static readonly SettingDto ShortcutsSection = new("_section_shortcuts", SettingKinds.Section, "Shortcuts", null, null, null);
+
+  private static readonly SettingDto HotkeysLink = new(SettingKeys.Hotkeys, SettingKinds.Link, "Keyboard shortcuts", "Change item shortcuts and the Enter action", null, null);
 
   private string? PlaceholderFor(BitwardenSettingsManager manager, string key) =>
     key == manager.CliDirectoryOverride.Key ? _service.CliExecutable

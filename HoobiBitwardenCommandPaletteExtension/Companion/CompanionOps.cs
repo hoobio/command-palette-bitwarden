@@ -139,6 +139,14 @@ internal sealed partial class CompanionOps : IDisposable
           return IpcJson.ToElement(GetSettings(), IpcJson.Default.SettingsResponse);
         case Ops.SetSetting:
           return IpcJson.ToElement(SetSetting(IpcJson.Read(payload, IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
+        case Ops.GetHotkeys:
+          return IpcJson.ToElement(GetHotkeys(), IpcJson.Default.HotkeysResponse);
+        case Ops.SetHotkey:
+          return IpcJson.ToElement(SetHotkey(IpcJson.Read(payload, IpcJson.Default.SetHotkeyRequest)), IpcJson.Default.HotkeyResponse);
+        case Ops.SetEnterAction:
+          return IpcJson.ToElement(SetEnterAction(IpcJson.Read(payload, IpcJson.Default.SetEnterActionRequest)), IpcJson.Default.HotkeyResponse);
+        case Ops.ResetHotkeys:
+          return IpcJson.ToElement(ResetHotkeys(), IpcJson.Default.HotkeyResponse);
         case Ops.GetAbout:
           return IpcJson.ToElement(_updates.Value.About(), IpcJson.Default.AboutResponse);
         case Ops.CheckUpdates:

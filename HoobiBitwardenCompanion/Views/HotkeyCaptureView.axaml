@@ -1,0 +1,22 @@
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Views.HotkeyCaptureView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    x:DataType="vm:ChordCaptureViewModel">
+    <StackPanel Spacing="12" MinWidth="300">
+        <TextBlock Text="Press a key combination" />
+        <Border Background="{DynamicResource LayerFillColorAltBrush}" CornerRadius="{StaticResource ControlCornerRadius}" MinHeight="56" Padding="16">
+            <Grid>
+                <ItemsControl x:Name="CapList" Classes="KeyCaps" HorizontalAlignment="Center" VerticalAlignment="Center" ItemsSource="{Binding Caps}" IsVisible="{Binding !IsNone}" />
+                <TextBlock Text="None" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" IsVisible="{Binding IsNone}" />
+            </Grid>
+        </Border>
+        <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="Shortcuts must include Ctrl or Alt." />
+        <TextBlock Classes="Warn" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Reset" Command="{Binding ResetToDefaultCommand}" />
+            <Button Content="Clear" Command="{Binding ClearCommand}" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

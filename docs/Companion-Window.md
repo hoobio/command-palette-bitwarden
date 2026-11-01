@@ -4,7 +4,7 @@ The companion window shows a vault item in its own window next to Command Palett
 
 ## Window commands
 
-- **Open in window** is the first command in the more-commands menu of each vault item (`Ctrl+Shift+O`). Command Palette runs the first more-command on `Ctrl+Enter`, so `Ctrl+Enter` opens the item window.
+- **Open in window** is the first command in the more-commands menu of each vault item (`Ctrl+O` by default). Command Palette runs the first more-command on `Ctrl+Enter`, so `Ctrl+Enter` opens the item window.
 - The Enter action of a note, card, identity, login without a URL or SSH key without a host opens the item window. Logins with a URL still open the website, and SSH keys with a host still open the SSH session. If the companion is not available, Enter opens the web vault.
 - **Rotate password** is in the more-commands menu of each login that has a password, after the commands for the item type. It opens the item window and then the **Rotate password** dialog (see [Quick Rotate](#quick-rotate)). It never rotates until you select **Save**.
 - **New Bitwarden item** is a top-level command in Command Palette. It opens an empty item window in create mode (see [New item](#new-item)). Search for it with words such as "new login", "new password", "note", "card" or "identity". You can also set an alias for it in Command Palette.
@@ -202,6 +202,7 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 - An empty **CLI Path Override** box shows the `bw` path in use as placeholder text. An empty **CLI Data Directory Override** box shows the folder that holds `data.json`.
 - An option of **TOTP** or **Organisation** can have a tooltip that explains it.
 - A drop-down list is as wide as its widest option.
+- **Keyboard shortcuts**, in the **Shortcuts** section at the top, opens the window that changes item shortcuts and the Enter action (see [Keyboard Shortcuts](Keyboard-Shortcuts)).
 - **Logs**, under **Debug Logging** in the **Diagnostics** section, opens the log folder in File Explorer.
 - The **Help and feedback** section has **Report a bug**, **Request a feature** and **Project on GitHub**. Each opens a page in the browser.
 - The **About** section shows the app name, the version with the short commit and the copyright line. **Support** opens the donation page. **Check for updates** has a **Check now** button and a status line. The check runs only when you select **Check now**. A Dev build does not check. For a Microsoft Store install the **Install update** button installs the update or opens the Store update list, and the status line reports if the install did not complete. For a sideloaded install the **View release** button opens the GitHub release. See [Update check](Architecture#update-check).

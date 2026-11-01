@@ -42,14 +42,16 @@ public class CompanionSettingsOpsTests : IDisposable
   {
     var settings = await GetAsync();
 
-    Assert.Equal(_settings.OrderedSettings.Count + 1, settings.Count);
-    Assert.Equal(6, settings.Count(s => s.Kind == SettingKinds.Section));
-    Assert.Equal(1, settings.Count(s => s.Kind == SettingKinds.Link));
+    Assert.Equal(_settings.OrderedSettings.Count + 3, settings.Count);
+    Assert.Equal(7, settings.Count(s => s.Kind == SettingKinds.Section));
+    Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Link));
     Assert.Equal(15, settings.Count(s => s.Kind == SettingKinds.Toggle));
     Assert.Equal(7, settings.Count(s => s.Kind == SettingKinds.Choice));
     Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Text));
-    Assert.Equal(["_section_auth", "rememberSession", "useApiKeyAuthentication"], settings.Take(3).Select(s => s.Key));
-    Assert.Equal(new SettingDto("_section_auth", SettingKinds.Section, "Authentication", null, null, null), settings[0]);
+    Assert.Equal(["_section_shortcuts", "hotkeys"], settings.Take(2).Select(s => s.Key));
+    Assert.Equal((SettingKinds.Link, "Keyboard shortcuts", "Change item shortcuts and the Enter action"), (settings[1].Kind, settings[1].Label, settings[1].Description));
+    Assert.Equal(["_section_auth", "rememberSession", "useApiKeyAuthentication"], settings.Skip(2).Take(3).Select(s => s.Key));
+    Assert.Equal(new SettingDto("_section_auth", SettingKinds.Section, "Authentication", null, null, null), settings[2]);
 
     var liveSync = settings.Single(s => s.Key == "liveSync");
     Assert.Equal((SettingKinds.Toggle, "Live Sync", "true"), (liveSync.Kind, liveSync.Label, liveSync.Value));

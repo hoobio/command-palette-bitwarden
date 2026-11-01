@@ -456,6 +456,35 @@
         <Setter Property="Height" Value="36" />
     </Style>
 
+    <Style Selector="Border.KeyCap">
+        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="MinWidth" Value="26" />
+    </Style>
+
+    <Style Selector="Border.KeyCap > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource AccentButtonForeground}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="ItemsControl.KeyCaps">
+        <Setter Property="ItemsPanel">
+            <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="4" />
+            </ItemsPanelTemplate>
+        </Setter>
+        <Setter Property="ItemTemplate">
+            <DataTemplate x:DataType="x:String">
+                <Border Classes="KeyCap">
+                    <TextBlock Text="{Binding}" />
+                </Border>
+            </DataTemplate>
+        </Setter>
+    </Style>
+
     <Style Selector="Border.Row TextBox, Border.Row NumericUpDown, Border.Row ComboBox">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
     </Style>

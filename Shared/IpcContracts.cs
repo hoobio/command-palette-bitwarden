@@ -57,6 +57,10 @@ internal static class Ops
   public const string GetAbout = "getAbout";
   public const string CheckUpdates = "checkUpdates";
   public const string InstallUpdate = "installUpdate";
+  public const string GetHotkeys = "getHotkeys";
+  public const string SetHotkey = "setHotkey";
+  public const string SetEnterAction = "setEnterAction";
+  public const string ResetHotkeys = "resetHotkeys";
 }
 
 internal static class SettingKinds
@@ -77,6 +81,7 @@ internal static class SettingStatuses
 internal static class SettingKeys
 {
   public const string OpenLogs = "openLogs";
+  public const string Hotkeys = "hotkeys";
 }
 
 internal static class ParentValues
@@ -383,6 +388,20 @@ internal sealed record SetSettingRequest(string Key, string Value);
 
 internal sealed record SetSettingResponse(bool Success, string? Error);
 
+internal sealed record ChordDto(int Key, int Modifiers, string Display);
+
+internal sealed record HotkeyActionDto(string Id, string Title, ChordDto? Default, ChordDto? Current);
+
+internal sealed record HotkeyGroupDto(string ItemType, string Title, string DefaultEnter, string CurrentEnter, IReadOnlyList<ChoiceDto> EnterChoices, IReadOnlyList<HotkeyActionDto> Actions);
+
+internal sealed record HotkeysResponse(IReadOnlyList<HotkeyGroupDto> Groups);
+
+internal sealed record SetHotkeyRequest(string ActionId, ChordDto? Chord);
+
+internal sealed record SetEnterActionRequest(string ItemType, string ActionId);
+
+internal sealed record HotkeyResponse(bool Success, string? Error);
+
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(Envelope))]
 [JsonSerializable(typeof(ItemRequest))]
@@ -427,6 +446,10 @@ internal sealed record SetSettingResponse(bool Success, string? Error);
 [JsonSerializable(typeof(AboutResponse))]
 [JsonSerializable(typeof(UpdateResponse))]
 [JsonSerializable(typeof(InstallResponse))]
+[JsonSerializable(typeof(HotkeysResponse))]
+[JsonSerializable(typeof(SetHotkeyRequest))]
+[JsonSerializable(typeof(SetEnterActionRequest))]
+[JsonSerializable(typeof(HotkeyResponse))]
 internal sealed partial class IpcJson : JsonSerializerContext
 {
   public static JsonElement ToElement<T>(T value, JsonTypeInfo<T> info) => JsonSerializer.SerializeToElement(value, info);
