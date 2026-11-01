@@ -48,14 +48,16 @@ internal sealed partial class HotkeysViewModel(PipeChannel channel) : Observable
       Groups[i].Apply(groups[i]);
   }
 
-  internal async Task<string?> SetChordAsync(string actionId, ChordDto? chord)
+  internal async Task<string?> SetChordAsync(string actionId, ChordDto? chord, bool surfaceError = false)
   {
     var error = await SendAsync(Ops.SetHotkey, IpcJson.ToElement(new SetHotkeyRequest(actionId, chord), IpcJson.Default.SetHotkeyRequest));
     await LoadAsync();
+    if (surfaceError)
+      ErrorMessage ??= error;
     return error;
   }
 
-  internal async Task<string?> SetEnterAsync(string itemType, string actionId)
+  internal async Task<string?> SetEnterAsync(string itemType, string? actionId)
   {
     var error = await SendAsync(Ops.SetEnterAction, IpcJson.ToElement(new SetEnterActionRequest(itemType, actionId), IpcJson.Default.SetEnterActionRequest));
     await LoadAsync();
@@ -88,7 +90,7 @@ internal sealed partial class HotkeysViewModel(PipeChannel channel) : Observable
 internal sealed partial class HotkeyGroupViewModel : ObservableObject
 {
   private readonly HotkeysViewModel _owner;
-  private readonly string _defaultEnter;
+  private string _inheritedEnter;
   private bool _applying;
   private ChoiceDto? _selectedEnter;
 
@@ -97,7 +99,7 @@ internal sealed partial class HotkeyGroupViewModel : ObservableObject
     _owner = owner;
     ItemType = dto.ItemType;
     Title = dto.Title;
-    _defaultEnter = dto.DefaultEnter;
+    _inheritedEnter = dto.InheritedEnter;
     EnterChoices = dto.EnterChoices;
     foreach (var action in dto.Actions)
       Rows.Add(new HotkeyRowViewModel(owner, action));
@@ -127,10 +129,11 @@ internal sealed partial class HotkeyGroupViewModel : ObservableObject
     }
   }
 
-  public bool IsEnterModified => SelectedEnter is { } selected && selected.Value != _defaultEnter;
+  public bool IsEnterModified => SelectedEnter is { } selected && selected.Value != _inheritedEnter;
 
   internal void Apply(HotkeyGroupDto dto)
   {
+    _inheritedEnter = dto.InheritedEnter;
     _applying = true;
     try
     {
@@ -141,12 +144,14 @@ internal sealed partial class HotkeyGroupViewModel : ObservableObject
       _applying = false;
     }
 
+    OnPropertyChanged(nameof(IsEnterModified));
+
     for (var i = 0; i < Rows.Count; i++)
       Rows[i].Apply(dto.Actions[i]);
   }
 
   [RelayCommand]
-  private async Task ResetEnterAsync() => await _owner.SetEnterAsync(ItemType, _defaultEnter);
+  private async Task ResetEnterAsync() => await _owner.SetEnterAsync(ItemType, null);
 }
 
 internal sealed partial class HotkeyRowViewModel : ObservableObject
@@ -184,7 +189,7 @@ internal sealed partial class HotkeyRowViewModel : ObservableObject
   private void Edit() => _owner.RequestEdit(this);
 
   [RelayCommand]
-  private async Task ResetAsync() => await _owner.SetChordAsync(ActionId, Default);
+  private async Task ResetAsync() => await _owner.SetChordAsync(ActionId, Default, surfaceError: true);
 }
 
 internal sealed partial class ChordCaptureViewModel : ObservableObject
@@ -194,6 +199,7 @@ internal sealed partial class ChordCaptureViewModel : ObservableObject
   private int _key;
   private int _modifiers;
   private bool _meta;
+  private bool _unsupported;
 
   public ChordCaptureViewModel(HotkeysViewModel owner, HotkeyRowViewModel row)
   {
@@ -206,9 +212,9 @@ internal sealed partial class ChordCaptureViewModel : ObservableObject
 
   public IReadOnlyList<string> Caps => HotkeyKeys.Caps(_key, _modifiers);
 
-  public bool IsNone => _key == 0 && _modifiers == 0 && !_meta;
+  public bool IsNone => _key == 0 && _modifiers == 0 && !_meta && !_unsupported;
 
-  public bool IsValid => IsNone || (!_meta && HotkeyKeys.IsKey(_key) && (_modifiers & (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt)) != 0);
+  public bool IsValid => IsNone || (!_meta && !_unsupported && HotkeyKeys.IsKey(_key) && (_modifiers & (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt)) != 0);
 
   internal ChordDto? Chord => IsNone ? null : new(_key, _modifiers, HotkeyKeys.Display(_key, _modifiers));
 
@@ -220,7 +226,8 @@ internal sealed partial class ChordCaptureViewModel : ObservableObject
     _key = HotkeyKeyMap.VirtualKeyOf(key);
     _modifiers = HotkeyKeyMap.ModifiersOf(modifiers);
     _meta = modifiers.HasFlag(KeyModifiers.Meta);
-    ErrorMessage = _meta ? "The Windows key cannot be used." : null;
+    _unsupported = _key == 0 && !HotkeyKeyMap.IsModifierKey(key);
+    ErrorMessage = _meta ? "The Windows key cannot be used." : _unsupported ? "This key cannot be used." : null;
     Refresh();
   }
 
@@ -243,6 +250,7 @@ internal sealed partial class ChordCaptureViewModel : ObservableObject
     _key = chord?.Key ?? 0;
     _modifiers = chord?.Modifiers ?? 0;
     _meta = false;
+    _unsupported = false;
     ErrorMessage = null;
     Refresh();
   }

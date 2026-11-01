@@ -25,6 +25,8 @@ internal sealed class HotkeyStore
     "HoobiBitwardenCommandPalette",
     "hotkeys.json");
 
+  private const string SaveError = "Could not save the shortcuts";
+
   private readonly string _path;
   private readonly Lock _gate = new();
   private Dictionary<string, StoredChord> _chords = [];
@@ -54,9 +56,13 @@ internal sealed class HotkeyStore
   internal string EnterFor(string itemType)
   {
     lock (_gate)
-      return _enter.TryGetValue(itemType, out var own) ? own
-        : FollowsAll(itemType) && _enter.TryGetValue(HotkeyItemTypes.All, out var all) ? all
-        : HotkeyCatalog.DefaultEnter(itemType);
+      return _enter.TryGetValue(itemType, out var own) ? own : InheritedEnterFor(itemType);
+  }
+
+  internal string InheritedEnterFor(string itemType)
+  {
+    lock (_gate)
+      return FollowsAll(itemType) && _enter.TryGetValue(HotkeyItemTypes.All, out var all) ? all : HotkeyCatalog.DefaultEnter(itemType);
   }
 
   private static bool FollowsAll(string itemType) => itemType is HotkeyItemTypes.Card or HotkeyItemTypes.Identity or HotkeyItemTypes.Note;
@@ -72,65 +78,64 @@ internal sealed class HotkeyStore
     if ((value.Modifiers & (HotkeyModifiers.Ctrl | HotkeyModifiers.Alt)) == 0)
       return value.Key == HotkeyKeys.Enter ? "Enter on its own is reserved for the Enter action" : "Shortcuts must include Ctrl or Alt";
 
-    foreach (var type in HotkeyCatalog.TypesOf(action))
-      foreach (var other in HotkeyCatalog.AvailableOn(type).Where(o => o.Id != actionId))
-        if (ChordFor(other.Id) == value)
-          return $"{value.Display} is already used by {other.Title}{(other.ItemType == HotkeyItemTypes.All ? string.Empty : $" ({GroupTitle(other.ItemType)})")}";
-
-    return null;
+    lock (_gate)
+      return ConflictsWith(action, value).FirstOrDefault() is { } other
+        ? $"{value.Display} is already used by {other.Title}{(other.ItemType == HotkeyItemTypes.All ? string.Empty : $" ({GroupTitle(other.ItemType)})")}"
+        : null;
   }
 
-  internal string? SetChord(string actionId, HotkeyChord? chord)
+  private IEnumerable<HotkeyAction> ConflictsWith(HotkeyAction action, HotkeyChord value) =>
+    HotkeyCatalog.TypesOf(action).SelectMany(HotkeyCatalog.AvailableOn).Where(o => o.Id != action.Id && ChordFor(o.Id) == value);
+
+  internal string? SetChord(string actionId, HotkeyChord? chord) => Apply(() =>
   {
     if (Validate(actionId, chord) is { } error)
       return error;
 
-    lock (_gate)
-    {
-      var action = HotkeyCatalog.Find(actionId)!;
-      if (chord == action.Default)
-        _chords.Remove(actionId);
-      else
-        _chords[actionId] = chord is { } value ? new StoredChord(value.Key, value.Modifiers) : new StoredChord(0, 0);
-      if (!TrySave())
-        return "Could not save the shortcuts";
-    }
-
-    Changed?.Invoke();
+    if (chord == HotkeyCatalog.Find(actionId)!.Default)
+      _chords.Remove(actionId);
+    else
+      _chords[actionId] = chord is { } value ? new StoredChord(value.Key, value.Modifiers) : new StoredChord(0, 0);
     return null;
-  }
+  });
 
-  internal string? SetEnter(string itemType, string actionId)
+  internal string? SetEnter(string itemType, string? actionId) => Apply(() =>
   {
-    if (!HotkeyCatalog.IsItemType(itemType) || HotkeyCatalog.EnterChoices(itemType).All(a => a.Id != actionId))
+    if (!HotkeyCatalog.IsItemType(itemType) || (actionId is not null && HotkeyCatalog.EnterChoices(itemType).All(a => a.Id != actionId)))
       return "That action cannot be used for Enter";
 
+    if (actionId is null || (actionId == HotkeyCatalog.DefaultEnter(itemType) && !(FollowsAll(itemType) && _enter.ContainsKey(HotkeyItemTypes.All))))
+      _enter.Remove(itemType);
+    else
+      _enter[itemType] = actionId;
+    return null;
+  });
+
+  internal bool ResetAll() => Apply(() =>
+  {
+    _chords.Clear();
+    _enter.Clear();
+    return null;
+  }) is null;
+
+  private string? Apply(Func<string?> change)
+  {
     lock (_gate)
     {
-      if (actionId == HotkeyCatalog.DefaultEnter(itemType) && !(FollowsAll(itemType) && _enter.ContainsKey(HotkeyItemTypes.All)))
-        _enter.Remove(itemType);
-      else
-        _enter[itemType] = actionId;
+      var chords = new Dictionary<string, StoredChord>(_chords);
+      var enter = new Dictionary<string, string>(_enter);
+      if (change() is { } error)
+        return error;
       if (!TrySave())
-        return "Could not save the shortcuts";
+      {
+        _chords = chords;
+        _enter = enter;
+        return SaveError;
+      }
     }
 
     Changed?.Invoke();
     return null;
-  }
-
-  internal bool ResetAll()
-  {
-    lock (_gate)
-    {
-      _chords.Clear();
-      _enter.Clear();
-      if (!TrySave())
-        return false;
-    }
-
-    Changed?.Invoke();
-    return true;
   }
 
   private static string GroupTitle(string itemType) => HotkeyCatalog.Groups.First(g => g.ItemType == itemType).Title;
@@ -142,15 +147,39 @@ internal sealed class HotkeyStore
       if (!File.Exists(_path))
         return;
       var file = JsonSerializer.Deserialize(File.ReadAllText(_path), HotkeyJson.Default.HotkeyFile);
-      _chords = (file?.Chords ?? []).Where(c => HotkeyCatalog.Find(c.Key) is not null && IsStoredChordValid(c.Value)).ToDictionary(c => c.Key, c => c.Value);
-      _enter = (file?.Enter ?? []).Where(e => HotkeyCatalog.IsItemType(e.Key) && HotkeyCatalog.EnterChoices(e.Key).Any(a => a.Id == e.Value)).ToDictionary(e => e.Key, e => e.Value);
+      _chords = (file?.Chords ?? []).Where(c => HotkeyCatalog.Find(c.Key) is not null && c.Value is not null && IsStoredChordValid(c.Value)).ToDictionary(c => c.Key, c => c.Value);
+      _enter = (file?.Enter ?? []).Where(e => HotkeyCatalog.IsItemType(e.Key) && e.Value is not null && HotkeyCatalog.EnterChoices(e.Key).Any(a => a.Id == e.Value)).ToDictionary(e => e.Key, e => e.Value);
+      DropConflicts();
     }
-    catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+    catch (Exception ex)
     {
       DebugLogService.Log("Hotkeys", $"Ignoring {_path}: {ex.GetType().Name}: {ex.Message}");
       _chords = [];
       _enter = [];
     }
+  }
+
+  private void DropConflicts()
+  {
+    bool dropped;
+    do
+    {
+      dropped = false;
+      for (var i = 0; i < HotkeyCatalog.Actions.Length && !dropped; i++)
+      {
+        var action = HotkeyCatalog.Actions[i];
+        if (!_chords.TryGetValue(action.Id, out var stored) || stored.Key == 0)
+          continue;
+        var chord = new HotkeyChord(stored.Key, stored.Modifiers);
+        if (ConflictsWith(action, chord).Any(o => !_chords.ContainsKey(o.Id) || Array.IndexOf(HotkeyCatalog.Actions, o) < i))
+        {
+          DebugLogService.Log("Hotkeys", $"Dropping {action.Id}: {chord.Display} conflicts with another action");
+          _chords.Remove(action.Id);
+          dropped = true;
+        }
+      }
+    }
+    while (dropped);
   }
 
   private static bool IsStoredChordValid(StoredChord chord) =>

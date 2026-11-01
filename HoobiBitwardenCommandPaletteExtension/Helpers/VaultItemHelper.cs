@@ -19,14 +19,14 @@ internal static partial class VaultItemHelper
 {
   internal static IconInfo GetIcon(BitwardenItem item, bool showWebsiteIcons = true, int priority = int.MaxValue) => item.Type switch
   {
-    BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item, priority) : new IconInfo(""),
-    BitwardenItemType.SecureNote => new IconInfo(""),
+    BitwardenItemType.Login => showWebsiteIcons ? GetFaviconIcon(item, priority) : new IconInfo("\uE774"),
+    BitwardenItemType.SecureNote => new IconInfo("\uE70B"),
     BitwardenItemType.Card => showWebsiteIcons && item.CardBrand != null
       ? GetCardBrandIcon(item.CardBrand, priority)
-      : new IconInfo(""),
-    BitwardenItemType.Identity => new IconInfo(""),
-    BitwardenItemType.SshKey => new IconInfo(""),
-    _ => new IconInfo(""),
+      : new IconInfo("\uE8C7"),
+    BitwardenItemType.Identity => new IconInfo("\uE77B"),
+    BitwardenItemType.SshKey => new IconInfo("\uE8D7"),
+    _ => new IconInfo("\uE72E"),
   };
 
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null) =>
@@ -107,10 +107,10 @@ internal static partial class VaultItemHelper
       tags.Add(new Tag("Recent") { Foreground = ColorHelpers.FromRgb(0x87, 0xD9, 0x6C) });
 
     if (showProtectedTag && item.Reprompt == 1)
-      tags.Add(new Tag("🔒") { Foreground = ColorHelpers.FromRgb(0xFF, 0xD1, 0x73) });
+      tags.Add(new Tag("\uD83D\uDD12") { Foreground = ColorHelpers.FromRgb(0xFF, 0xD1, 0x73) });
 
     if (item.Favorite)
-      tags.Add(new Tag("★") { Foreground = ColorHelpers.FromRgb(0xFA, 0xCC, 0x6E) });
+      tags.Add(new Tag("\u2605") { Foreground = ColorHelpers.FromRgb(0xFA, 0xCC, 0x6E) });
 
     if (showContextTag)
     {
@@ -257,7 +257,7 @@ internal static partial class VaultItemHelper
       items.Add(new CommandContextItem(copyCmd)
       {
         Title = $"Copy \"{fieldName}\"",
-        Icon = new IconInfo(field.IsHidden ? "" : ""),
+        Icon = new IconInfo(field.IsHidden ? "\uE72E" : "\uE8C8"),
       });
     }
   }
@@ -310,13 +310,13 @@ internal static partial class VaultItemHelper
   internal static IconInfo GetCardBrandIcon(string brand, int priority = int.MaxValue)
   {
     if (!BitwardenCliService.ServerUrlResolved)
-      return new IconInfo("");
+      return new IconInfo("\uE8C7");
 
     var isDark = IsDarkTheme();
     return FaviconService.GetOrQueue(
       CardBrandCacheKey(brand, isDark),
       GetCardBrandImageUrl(brand, isDark),
-      new IconInfo(""),
+      new IconInfo("\uE8C7"),
       priority);
   }
 
@@ -334,14 +334,14 @@ internal static partial class VaultItemHelper
   {
     var host = item.FirstHost;
     if (string.IsNullOrEmpty(host))
-      return new IconInfo("");
+      return new IconInfo("\uE774");
 
     var serverUrl = BitwardenCliService.ServerUrl;
     var iconsUrl = BitwardenCliService.IconsUrl;
 
     // Until the server resolves, an empty ServerUrl is unknown, not cloud: guessing leaks self-hosted hostnames to icons.bitwarden.net.
     if (string.IsNullOrEmpty(iconsUrl) && !BitwardenCliService.ServerUrlResolved)
-      return new IconInfo("");
+      return new IconInfo("\uE774");
 
     string iconBase;
     if (!string.IsNullOrEmpty(iconsUrl))
@@ -354,7 +354,7 @@ internal static partial class VaultItemHelper
       iconBase = serverUrl + "/icons";
     var iconUrl = $"{iconBase}/{host}/icon.png";
 
-    return FaviconService.GetOrQueue(host, iconUrl, new IconInfo(""), priority);
+    return FaviconService.GetOrQueue(host, iconUrl, new IconInfo("\uE774"), priority);
   }
 
   internal static OpenUrlCommand BuildOpenInWebVaultCommand(string itemId) =>

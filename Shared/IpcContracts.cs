@@ -392,13 +392,13 @@ internal sealed record ChordDto(int Key, int Modifiers, string Display);
 
 internal sealed record HotkeyActionDto(string Id, string Title, ChordDto? Default, ChordDto? Current);
 
-internal sealed record HotkeyGroupDto(string ItemType, string Title, string DefaultEnter, string CurrentEnter, IReadOnlyList<ChoiceDto> EnterChoices, IReadOnlyList<HotkeyActionDto> Actions);
+internal sealed record HotkeyGroupDto(string ItemType, string Title, string InheritedEnter, string CurrentEnter, IReadOnlyList<ChoiceDto> EnterChoices, IReadOnlyList<HotkeyActionDto> Actions);
 
 internal sealed record HotkeysResponse(IReadOnlyList<HotkeyGroupDto> Groups);
 
 internal sealed record SetHotkeyRequest(string ActionId, ChordDto? Chord);
 
-internal sealed record SetEnterActionRequest(string ItemType, string ActionId);
+internal sealed record SetEnterActionRequest(string ItemType, string? ActionId);
 
 internal sealed record HotkeyResponse(bool Success, string? Error);
 

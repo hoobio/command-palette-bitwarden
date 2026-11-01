@@ -40,6 +40,11 @@ internal static class HotkeyKeys
     [0x28] = "Down",
     [0x2D] = "Insert",
     [0x2E] = "Delete",
+    [0x6A] = "Num *",
+    [0x6B] = "Num +",
+    [0x6D] = "Num -",
+    [0x6E] = "Num .",
+    [0x6F] = "Num /",
     [0xBA] = ";",
     [0xBB] = "=",
     [0xBC] = ",",
@@ -51,11 +56,13 @@ internal static class HotkeyKeys
     [0xDC] = "\\",
     [0xDD] = "]",
     [0xDE] = "'",
+    [0xE2] = "\\",
   };
 
   public static bool IsModifier(int key) => key is 0x10 or 0x11 or 0x12 or 0x5B or 0x5C or (>= 0xA0 and <= 0xA5);
 
-  public static bool IsKey(int key) => key is > 0 and < 255 && !IsModifier(key);
+  public static bool IsKey(int key) =>
+    key is (>= 0x30 and <= 0x39) or (>= 0x41 and <= 0x5A) or (>= 0x60 and <= 0x69) or (>= 0x70 and <= 0x87) || Names.ContainsKey(key);
 
   public static string Name(int key) => key switch
   {

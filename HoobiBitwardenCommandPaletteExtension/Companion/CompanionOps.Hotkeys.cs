@@ -14,7 +14,7 @@ internal sealed partial class CompanionOps
       .Select(group => new HotkeyGroupDto(
         group.ItemType,
         group.Title,
-        HotkeyCatalog.DefaultEnter(group.ItemType),
+        store.InheritedEnterFor(group.ItemType),
         store.EnterFor(group.ItemType),
         HotkeyCatalog.EnterChoices(group.ItemType).Select(a => new ChoiceDto(a.Title, a.Id)).ToArray(),
         HotkeyCatalog.ActionsFor(group.ItemType).Select(a => new HotkeyActionDto(a.Id, a.Title, a.Default?.ToDto(), store.ChordFor(a.Id)?.ToDto())).ToArray()))

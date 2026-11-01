@@ -29,6 +29,9 @@ internal sealed partial class HotkeyCaptureView : UserControl
     {
       if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None)
         return;
+      var bare = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) == KeyModifiers.None;
+      if (bare && (e.Key == Key.Tab || (e.Key is Key.Enter or Key.Space && e.Source is Button)))
+        return;
       capture.Press(e.Key, e.KeyModifiers);
       e.Handled = true;
     }, RoutingStrategies.Tunnel);

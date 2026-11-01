@@ -19,26 +19,26 @@ internal static partial class VaultItemHelper
 
   private static readonly Dictionary<string, string> ActionGlyphs = new()
   {
-    [HotkeyIds.OpenWindow] = "",
-    [HotkeyIds.OpenWebVault] = "",
-    [HotkeyIds.LoginCopyUsername] = "",
-    [HotkeyIds.LoginCopyPassword] = "",
-    [HotkeyIds.LoginCopyOtp] = "",
-    [HotkeyIds.LoginOpenBrowser] = "",
-    [HotkeyIds.LoginRotatePassword] = "",
-    [HotkeyIds.NoteCopyNotes] = "",
-    [HotkeyIds.CardCopyNumber] = "",
-    [HotkeyIds.CardCopyCode] = "",
-    [HotkeyIds.CardCopyCardholder] = "",
-    [HotkeyIds.CardCopyExpiration] = "",
-    [HotkeyIds.IdentityCopyEmail] = "",
-    [HotkeyIds.IdentityCopyName] = "",
-    [HotkeyIds.IdentityCopyPhone] = "",
-    [HotkeyIds.IdentityCopyUsername] = "",
-    [HotkeyIds.IdentityCopyAddress] = "",
-    [HotkeyIds.SshCopyPublicKey] = "",
-    [HotkeyIds.SshCopyFingerprint] = "",
-    [HotkeyIds.SshOpenSession] = "",
+    [HotkeyIds.OpenWindow] = "\uE8A7",
+    [HotkeyIds.OpenWebVault] = "\uE774",
+    [HotkeyIds.LoginCopyUsername] = "\uE77B",
+    [HotkeyIds.LoginCopyPassword] = "\uE72E",
+    [HotkeyIds.LoginCopyOtp] = "\uE916",
+    [HotkeyIds.LoginOpenBrowser] = "\uE774",
+    [HotkeyIds.LoginRotatePassword] = "\uE72C",
+    [HotkeyIds.NoteCopyNotes] = "\uE70B",
+    [HotkeyIds.CardCopyNumber] = "\uE8C7",
+    [HotkeyIds.CardCopyCode] = "\uE72E",
+    [HotkeyIds.CardCopyCardholder] = "\uE77B",
+    [HotkeyIds.CardCopyExpiration] = "\uE787",
+    [HotkeyIds.IdentityCopyEmail] = "\uE715",
+    [HotkeyIds.IdentityCopyName] = "\uE77B",
+    [HotkeyIds.IdentityCopyPhone] = "\uE717",
+    [HotkeyIds.IdentityCopyUsername] = "\uE77B",
+    [HotkeyIds.IdentityCopyAddress] = "\uE80F",
+    [HotkeyIds.SshCopyPublicKey] = "\uE8D7",
+    [HotkeyIds.SshCopyFingerprint] = "\uE928",
+    [HotkeyIds.SshOpenSession] = "\uE756",
   };
 
   private static BuiltAction? BuildAction(BitwardenItem item, string actionId, BitwardenCliService? reprompt)
@@ -94,7 +94,7 @@ internal static partial class VaultItemHelper
     BuiltAction? built = null;
     var chosen = HotkeyCatalog.ResolveEnter(itemType, HotkeyStore.Current.EnterFor(itemType), actionId =>
     {
-      var candidate = BuildAction(item, actionId, reprompt);
+      var candidate = actionId == HotkeyIds.OpenWebVault && string.IsNullOrEmpty(BitwardenCliService.ServerUrl) ? null : BuildAction(item, actionId, reprompt);
       if (candidate is not null)
         built = candidate;
       return candidate is not null;

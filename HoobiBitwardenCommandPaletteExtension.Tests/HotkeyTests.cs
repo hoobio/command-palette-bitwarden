@@ -242,6 +242,24 @@ public class HotkeyTests : IDisposable
     Assert.DoesNotContain("\"login\"", File.ReadAllText(FilePath));
   }
 
+  [Fact]
+  public void SetEnter_Null_RemovesTheOverrideSoTheTypeFollowsAllItems()
+  {
+    Assert.Null(_store.SetEnter(HotkeyItemTypes.All, HotkeyIds.OpenWebVault));
+    Assert.Null(_store.SetEnter(HotkeyItemTypes.Card, HotkeyIds.OpenWindow));
+    Assert.Equal(HotkeyIds.OpenWindow, _store.EnterFor(HotkeyItemTypes.Card));
+    Assert.Equal(HotkeyIds.OpenWebVault, _store.InheritedEnterFor(HotkeyItemTypes.Card));
+
+    Assert.Null(_store.SetEnter(HotkeyItemTypes.Card, null));
+
+    Assert.Equal(HotkeyIds.OpenWebVault, _store.EnterFor(HotkeyItemTypes.Card));
+    Assert.DoesNotContain("\"card\"", File.ReadAllText(FilePath));
+    Assert.Null(_store.SetEnter(HotkeyItemTypes.All, null));
+    Assert.Equal(HotkeyIds.OpenWindow, _store.EnterFor(HotkeyItemTypes.Card));
+    Assert.Equal(HotkeyIds.LoginOpenBrowser, _store.InheritedEnterFor(HotkeyItemTypes.Login));
+    Assert.Equal("That action cannot be used for Enter", _store.SetEnter("nope", null));
+  }
+
   [Theory]
   [InlineData("login", "card.copyNumber")]
   [InlineData("all", "login.copyPassword")]
@@ -329,6 +347,60 @@ public class HotkeyTests : IDisposable
   }
 
   [Fact]
+  public void Load_NullAndMalformedEntries_AreIgnoredWithoutThrowing()
+  {
+    Directory.CreateDirectory(_dir);
+    File.WriteAllText(FilePath, """
+      {
+        "chords": { "login.copyUsername": null, "login.copyPassword": { "key": 80, "modifiers": 1 } },
+        "enter": { "login": null, "card": "all.openWebVault" }
+      }
+      """);
+
+    var store = new HotkeyStore(FilePath);
+
+    Assert.Equal("Ctrl+C", store.ChordFor(HotkeyIds.LoginCopyUsername)?.Display);
+    Assert.Equal("Ctrl+P", store.ChordFor(HotkeyIds.LoginCopyPassword)?.Display);
+    Assert.Equal(HotkeyIds.LoginOpenBrowser, store.EnterFor(HotkeyItemTypes.Login));
+    Assert.Equal(HotkeyIds.OpenWebVault, store.EnterFor(HotkeyItemTypes.Card));
+  }
+
+  [Fact]
+  public void Load_ConflictingChords_KeepTheFirstAndDropTheRest()
+  {
+    Directory.CreateDirectory(_dir);
+    File.WriteAllText(FilePath, """
+      {
+        "chords": {
+          "login.copyUsername": { "key": 75, "modifiers": 1 },
+          "login.copyPassword": { "key": 79, "modifiers": 1 },
+          "login.copyOtp": { "key": 75, "modifiers": 1 },
+          "login.rotatePassword": { "key": 79, "modifiers": 1 }
+        }
+      }
+      """);
+
+    var store = new HotkeyStore(FilePath);
+
+    Assert.Equal("Ctrl+K", store.ChordFor(HotkeyIds.LoginCopyUsername)?.Display);
+    Assert.Equal("Ctrl+Shift+C", store.ChordFor(HotkeyIds.LoginCopyPassword)?.Display);
+    Assert.Equal("Ctrl+Alt+C", store.ChordFor(HotkeyIds.LoginCopyOtp)?.Display);
+    Assert.Null(store.ChordFor(HotkeyIds.LoginRotatePassword));
+  }
+
+  [Fact]
+  public void Load_ASwapThroughAFreedChord_IsKept()
+  {
+    _store.SetChord(HotkeyIds.LoginCopyPassword, new HotkeyChord(0x50, Ctrl));
+    Assert.Null(_store.SetChord(HotkeyIds.LoginCopyUsername, new HotkeyChord(C, Ctrl | Shift)));
+
+    var reloaded = new HotkeyStore(FilePath);
+
+    Assert.Equal("Ctrl+Shift+C", reloaded.ChordFor(HotkeyIds.LoginCopyUsername)?.Display);
+    Assert.Equal("Ctrl+P", reloaded.ChordFor(HotkeyIds.LoginCopyPassword)?.Display);
+  }
+
+  [Fact]
   public void SetChord_UnwritableLocation_ReportsAnErrorWithoutRaisingChanged()
   {
     Directory.CreateDirectory(_dir);
@@ -344,6 +416,62 @@ public class HotkeyTests : IDisposable
     Assert.Equal(0, changes);
   }
 
+  [Fact]
+  public void FailedSave_RollsTheMemoryBackToWhatIsOnDisk()
+  {
+    Directory.CreateDirectory(_dir);
+    var blocked = Path.Combine(_dir, "blocked");
+    File.WriteAllText(blocked, "file");
+    var store = new HotkeyStore(Path.Combine(blocked, "hotkeys.json"));
+
+    store.SetChord(HotkeyIds.LoginCopyPassword, null);
+    store.SetEnter(HotkeyItemTypes.Login, HotkeyIds.LoginCopyPassword);
+    store.ResetAll();
+
+    Assert.Equal("Ctrl+Shift+C", store.ChordFor(HotkeyIds.LoginCopyPassword)?.Display);
+    Assert.Equal(HotkeyIds.LoginOpenBrowser, store.EnterFor(HotkeyItemTypes.Login));
+  }
+
+  [Fact]
+  public async Task SetChord_ConcurrentCallsForTheSameChord_BindItOnce()
+  {
+    for (var i = 0; i < 25; i++)
+    {
+      var store = new HotkeyStore(Path.Combine(_dir, $"race{i}.json"));
+      var chord = new HotkeyChord(0x4B, Ctrl);
+      using var gate = new ManualResetEventSlim();
+      var tasks = new[] { HotkeyIds.LoginCopyUsername, HotkeyIds.LoginCopyPassword }
+        .Select(id => Task.Run(() =>
+        {
+          gate.Wait();
+          return store.SetChord(id, chord);
+        }))
+        .ToArray();
+      gate.Set();
+      var results = await Task.WhenAll(tasks);
+
+      Assert.Single(results, r => r is null);
+    }
+  }
+
+  [Theory]
+  [InlineData(0x01)]
+  [InlineData(0x04)]
+  [InlineData(0xE5)]
+  public void SetChord_KeysTheCompanionCannotDisplay_AreRejected(int key)
+  {
+    Assert.False(HotkeyKeys.IsKey(key));
+    Assert.Equal("Choose a key as well as the modifiers", _store.SetChord(HotkeyIds.LoginCopyUsername, new HotkeyChord(key, Ctrl)));
+  }
+
+  [Fact]
+  public void SetChord_NumpadOperatorsAndIsoBackslash_AreAccepted()
+  {
+    Assert.Null(_store.SetChord(HotkeyIds.LoginCopyUsername, new HotkeyChord(0x6A, Ctrl)));
+    Assert.Null(_store.SetChord(HotkeyIds.LoginCopyPassword, new HotkeyChord(0xE2, Ctrl)));
+    Assert.Equal("Ctrl+Num *", _store.ChordFor(HotkeyIds.LoginCopyUsername)?.Display);
+  }
+
   [Theory]
   [InlineData(0x41, "A")]
   [InlineData(0x35, "5")]
@@ -353,6 +481,9 @@ public class HotkeyTests : IDisposable
   [InlineData(0x0D, "Enter")]
   [InlineData(0x21, "Page Up")]
   [InlineData(0xBC, ",")]
+  [InlineData(0x6A, "Num *")]
+  [InlineData(0x6F, "Num /")]
+  [InlineData(0xE2, "\\")]
   [InlineData(0xE7, "Key 231")]
   public void HotkeyKeys_Name(int key, string expected) => Assert.Equal(expected, HotkeyKeys.Name(key));
 
@@ -418,6 +549,23 @@ public class HotkeyTests : IDisposable
   }
 
   [Fact]
+  public void GetDefaultCommand_WebVaultChosenWithoutAServerUrl_FallsBack()
+  {
+    BitwardenCliService.ResetStaticState();
+    var login = new BitwardenItem
+    {
+      Id = "test-login",
+      Type = BitwardenItemType.Login,
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    var expected = VaultItemHelper.GetDefaultCommand(login).Name;
+    _store.SetEnter(HotkeyItemTypes.Login, HotkeyIds.OpenWebVault);
+
+    Assert.Equal(expected, VaultItemHelper.GetDefaultCommand(login).Name);
+    Assert.DoesNotContain(VaultItemHelper.BuildContextItems(login), ci => ci.Title == "View in Web Vault");
+  }
+
+  [Fact]
   public void GetDefaultCommand_ChosenCopyWithReprompt_UsesTheCopyRepromptFlow()
   {
     Pages.RepromptPage.ClearGracePeriod();
@@ -473,7 +621,7 @@ public class CompanionHotkeyOpsTests : IDisposable
     Assert.Equal(["all", "login", "card", "identity", "note", "ssh"], response.Groups.Select(g => g.ItemType));
     Assert.Equal(["All items", "Login", "Card", "Identity", "Secure note", "SSH key"], response.Groups.Select(g => g.Title));
     var login = response.Groups.Single(g => g.ItemType == "login");
-    Assert.Equal(("login.openBrowser", "login.openBrowser"), (login.DefaultEnter, login.CurrentEnter));
+    Assert.Equal(("login.openBrowser", "login.openBrowser"), (login.InheritedEnter, login.CurrentEnter));
     Assert.Equal(["login.copyUsername", "login.copyPassword", "login.copyOtp", "login.openBrowser", "login.rotatePassword"], login.Actions.Select(a => a.Id));
     var password = login.Actions.Single(a => a.Id == "login.copyPassword");
     Assert.Equal(new ChordDto(0x43, HotkeyModifiers.Ctrl | HotkeyModifiers.Shift, "Ctrl+Shift+C"), password.Default);
@@ -505,6 +653,13 @@ public class CompanionHotkeyOpsTests : IDisposable
     Assert.True(reply.Success);
     Assert.Equal("login.copyPassword", (await GetAsync()).Groups.Single(g => g.ItemType == "login").CurrentEnter);
 
+    var cleared = IpcJson.Read(
+      await _ops.HandleAsync(Ops.SetEnterAction, IpcJson.ToElement(new SetEnterActionRequest("login", null), IpcJson.Default.SetEnterActionRequest), CancellationToken.None),
+      IpcJson.Default.HotkeyResponse);
+    Assert.True(cleared.Success);
+    Assert.Equal("login.openBrowser", (await GetAsync()).Groups.Single(g => g.ItemType == "login").CurrentEnter);
+    await _ops.HandleAsync(Ops.SetEnterAction, IpcJson.ToElement(new SetEnterActionRequest("login", "login.copyPassword"), IpcJson.Default.SetEnterActionRequest), CancellationToken.None);
+
     var rejected = IpcJson.Read(
       await _ops.HandleAsync(Ops.SetEnterAction, IpcJson.ToElement(new SetEnterActionRequest("login", "card.copyNumber"), IpcJson.Default.SetEnterActionRequest), CancellationToken.None),
       IpcJson.Default.HotkeyResponse);
@@ -515,6 +670,18 @@ public class CompanionHotkeyOpsTests : IDisposable
     var login = (await GetAsync()).Groups.Single(g => g.ItemType == "login");
     Assert.Equal("login.openBrowser", login.CurrentEnter);
     Assert.Equal("Ctrl+C", login.Actions.Single(a => a.Id == "login.copyUsername").Current?.Display);
+  }
+
+  [Fact]
+  public async Task GetHotkeys_ReportsTheInheritedEnterActionOfTypesThatFollowAllItems()
+  {
+    await _ops.HandleAsync(Ops.SetEnterAction, IpcJson.ToElement(new SetEnterActionRequest("all", "all.openWebVault"), IpcJson.Default.SetEnterActionRequest), CancellationToken.None);
+
+    var groups = (await GetAsync()).Groups;
+
+    Assert.Equal("all.openWebVault", groups.Single(g => g.ItemType == "card").InheritedEnter);
+    Assert.Equal("all.openWebVault", groups.Single(g => g.ItemType == "card").CurrentEnter);
+    Assert.Equal("login.openBrowser", groups.Single(g => g.ItemType == "login").InheritedEnter);
   }
 
   [Fact]

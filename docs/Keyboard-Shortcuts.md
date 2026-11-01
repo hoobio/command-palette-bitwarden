@@ -56,7 +56,7 @@ The first row of each group is the **Enter action**, the action that Enter runs 
 | SSH key | Open SSH Session |
 | Card, Identity, Secure note | Open in window |
 
-The **All items** row sets the Enter action for card, identity and secure note items that have no setting of their own.
+The **All items** row sets the Enter action for card, identity and secure note items that have no setting of their own. **Reset** next to the Enter action of those types removes their setting, so they follow **All items** again.
 
 If the chosen action is not available for an item, Enter runs the default behaviour described in [Vault Item Actions](Vault-Item-Actions#default-action-and-open-in-window). Examples are Copy Password on a login with no password and Open in Browser on a login with no web URL.
 

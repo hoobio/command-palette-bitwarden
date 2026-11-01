@@ -38,6 +38,12 @@ public class HotkeysWindowTests(AvaloniaSession session)
 
     public string LoginEnter { get; set; } = "login.openBrowser";
 
+    public string LoginInherited { get; set; } = "login.openBrowser";
+
+    public List<string?> EnterRequests { get; } = [];
+
+    public bool FailSetHotkey { get; set; }
+
     public int Resets { get; private set; }
 
     public List<string> Calls { get; } = [];
@@ -58,18 +64,22 @@ public class HotkeysWindowTests(AvaloniaSession session)
           var groups = new List<HotkeyGroupDto>
           {
             new("all", "All items", "all.openWindow", "all.openWindow", [new("Open in window", "all.openWindow")], [Action("all.openWindow", "Open in window")]),
-            new("login", "Login", "login.openBrowser", LoginEnter, [new("Open in Browser", "login.openBrowser"), new("Copy Password", "login.copyPassword")],
+            new("login", "Login", LoginInherited, LoginEnter, [new("Open in Browser", "login.openBrowser"), new("Copy Password", "login.copyPassword")],
               [Action("login.copyUsername", "Copy Username"), Action("login.copyPassword", "Copy Password"), Action("login.rotatePassword", "Rotate password")]),
           };
           return Reply(new HotkeysResponse(groups), IpcJson.Default.HotkeysResponse);
         case Ops.SetHotkey:
           var set = IpcJson.Read(payload, IpcJson.Default.SetHotkeyRequest);
+          if (FailSetHotkey)
+            return Reply(new HotkeyResponse(false, "Could not save the shortcuts"), IpcJson.Default.HotkeyResponse);
           if (set.Chord is { } chord && Current.Any(c => c.Key != set.ActionId && c.Value?.Key == chord.Key && c.Value.Modifiers == chord.Modifiers))
             return Reply(new HotkeyResponse(false, "Ctrl+C is already used by Copy Username (Login)"), IpcJson.Default.HotkeyResponse);
           Current[set.ActionId] = set.Chord is { } value ? new ChordDto(value.Key, value.Modifiers, HotkeyKeys.Display(value.Key, value.Modifiers)) : null;
           return Reply(new HotkeyResponse(true, null), IpcJson.Default.HotkeyResponse);
         case Ops.SetEnterAction:
-          LoginEnter = IpcJson.Read(payload, IpcJson.Default.SetEnterActionRequest).ActionId;
+          var enterRequest = IpcJson.Read(payload, IpcJson.Default.SetEnterActionRequest);
+          EnterRequests.Add(enterRequest.ActionId);
+          LoginEnter = enterRequest.ActionId ?? LoginInherited;
           return Reply(new HotkeyResponse(true, null), IpcJson.Default.HotkeyResponse);
         case Ops.ResetHotkeys:
           Resets++;
@@ -160,6 +170,70 @@ public class HotkeysWindowTests(AvaloniaSession session)
     Assert.False(row.IsModified);
     Assert.Equal(["Ctrl", "C"], row.Caps);
   });
+
+  [Fact]
+  public Task RowReset_Failure_ShowsTheErrorOnThePage() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { FailSetHotkey = true };
+    extension.Current["login.copyUsername"] = new ChordDto(0x55, Ctrl, "Ctrl+U");
+    var (vm, pair) = await LoadedAsync(extension);
+    using var _ = pair;
+
+    await vm.Groups[1].Rows[0].ResetCommand.ExecuteAsync(null);
+
+    Assert.Equal("Could not save the shortcuts", vm.ErrorMessage);
+    Assert.True(vm.Groups[1].Rows[0].IsModified);
+  });
+
+  [Fact]
+  public Task EnterReset_SendsNoAction_AndComparesAgainstTheInheritedValue() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { LoginInherited = "login.copyPassword", LoginEnter = "login.copyPassword" };
+    var (vm, pair) = await LoadedAsync(extension);
+    using var _ = pair;
+    var login = vm.Groups[1];
+    Assert.False(login.IsEnterModified);
+
+    login.SelectedEnter = login.EnterChoices[0];
+    AvaloniaSession.WaitFor(() => login.IsEnterModified);
+
+    await login.ResetEnterCommand.ExecuteAsync(null);
+
+    Assert.Null(extension.EnterRequests[^1]);
+    Assert.Equal("login.copyPassword", login.SelectedEnter?.Value);
+    Assert.False(login.IsEnterModified);
+  });
+
+  [Fact]
+  public Task Press_AKeyWithoutAVirtualKey_IsRejectedWithAnExplanation() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    var (vm, pair) = await LoadedAsync(extension);
+    using var _ = pair;
+    var capture = new ChordCaptureViewModel(vm, vm.Groups[1].Rows[2]);
+
+    capture.Press(Key.OemClear, KeyModifiers.None);
+
+    Assert.False(capture.IsValid);
+    Assert.False(capture.IsNone);
+    Assert.Equal("This key cannot be used.", capture.ErrorMessage);
+    capture.Press(Key.LeftCtrl, KeyModifiers.Control);
+    Assert.Null(capture.ErrorMessage);
+  });
+
+  [Theory]
+  [InlineData(Key.Escape, 0x1B)]
+  [InlineData(Key.Multiply, 0x6A)]
+  [InlineData(Key.Add, 0x6B)]
+  [InlineData(Key.Subtract, 0x6D)]
+  [InlineData(Key.Decimal, 0x6E)]
+  [InlineData(Key.Divide, 0x6F)]
+  [InlineData(Key.OemBackslash, 0xE2)]
+  public void VirtualKeyOf_MapsEveryKeyTheExtensionCanDisplay(Key key, int expected)
+  {
+    Assert.Equal(expected, HotkeyKeyMap.VirtualKeyOf(key));
+    Assert.True(HotkeyKeys.IsKey(expected));
+  }
 
   [Fact]
   public Task ResetAll_AsksTheExtensionAndReloads() => session.RunAsync(async () =>
@@ -333,6 +407,14 @@ public class HotkeysWindowTests(AvaloniaSession session)
 
     dialog.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.C, KeyModifiers = KeyModifiers.Control, Source = dialog });
     Assert.True(dialog.IsPrimaryButtonEnabled);
+
+    var chord = capture.Caps.ToList();
+    foreach (var tabModifiers in new[] { KeyModifiers.None, KeyModifiers.Shift })
+    {
+      var args = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Tab, KeyModifiers = tabModifiers, Source = dialog };
+      dialog.RaiseEvent(args);
+      Assert.Equal(chord, capture.Caps);
+    }
   });
 
   [Fact]
