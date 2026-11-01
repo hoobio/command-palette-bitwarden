@@ -309,6 +309,50 @@ public class CompanionDialogOpsTests
   }
 
   [Fact]
+  public async Task SetServerOp_StaleSignedOutStatus_LogsOutWhenTheCliAsks_AndRetries()
+  {
+    var (svc, factory, settingsPath) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stderr: "Logout required before server config update.\n", exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
+    var realIconDir = FaviconService.CacheDir;
+    FaviconService.CacheDir = Path.Combine(Path.GetTempPath(), $"bw-icons-{Guid.NewGuid():N}");
+    using var ops = new CompanionOps(svc);
+    try
+    {
+      var reply = await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.Cloud, null));
+
+      Assert.Equal(new SetServerResponse(true, null), reply);
+      Assert.Equal(["config server \"bitwarden.com\"", "logout", "config server \"bitwarden.com\""], factory.AllArgs);
+      Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
+    }
+    finally
+    {
+      FaviconService.CacheDir = realIconDir;
+      File.Delete(settingsPath);
+    }
+  }
+
+  [Fact]
+  public async Task SetServerOp_SignedOut_DoesNotLogOut()
+  {
+    var (svc, factory, settingsPath) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
+    using var ops = new CompanionOps(svc);
+    try
+    {
+      var reply = await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.Eu, null));
+
+      Assert.True(reply.Success);
+      Assert.Equal(["config server \"https://vault.bitwarden.eu\""], factory.AllArgs);
+    }
+    finally
+    {
+      File.Delete(settingsPath);
+    }
+  }
+
+  [Fact]
   public async Task SetServerOp_UnknownRegion_IsRejectedAsInvalid()
   {
     var (svc, _, settingsPath) = CreateService();
