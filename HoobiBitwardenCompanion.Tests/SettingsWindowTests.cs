@@ -133,7 +133,7 @@ public class SettingsWindowTests(AvaloniaSession session)
     [
       new("_section_server", SettingKinds.Section, "Server", null, null, null),
       new("serverRegion", SettingKinds.Choice, "Region", "Where your vault is hosted", region, [new("Bitwarden.com", "cloud"), new("Bitwarden.eu", "eu"), new("Self-hosted", "selfHosted")], Confirm: confirm),
-      new("serverUrl", SettingKinds.Text, "Server URL", null, region == "selfHosted" ? "https://vault.example.com" : string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm),
+      new("serverUrl", SettingKinds.Text, "Server URL", null, region == "selfHosted" ? "https://vault.example.com" : string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm, ReadOnlyValues: new Dictionary<string, string> { ["cloud"] = "https://vault.bitwarden.com", ["eu"] = "https://vault.bitwarden.eu" }),
       new("serverAdvanced", SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, "serverRegion", "selfHosted"),
       new("serverWebVaultUrl", SettingKinds.Text, "Web Vault URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/", Confirm: confirm),
       new("serverApiUrl", SettingKinds.Text, "API URL", null, apiUrl ?? string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/api", Confirm: confirm),
@@ -237,6 +237,32 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     Assert.Equal(new SetServerRequest(ServerRegions.SelfHosted, "https://vault.example.com"), extension.Servers[^1]);
     Assert.Null(url.ErrorMessage);
+  });
+
+  [Fact]
+  public Task ServerUrl_ShowsThePresetReadOnly_AndFollowsTheLocalRegion() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var url = ServerRow(vm, "serverUrl");
+
+    Assert.True(url.IsShown);
+    Assert.True(url.IsReadOnly);
+    Assert.Equal("https://vault.bitwarden.com", url.TextValue);
+
+    await url.CommitTextAsync("https://other.example.com");
+    Assert.Empty(extension.Servers);
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "eu");
+    AvaloniaSession.WaitFor(() => url.TextValue == "https://vault.bitwarden.eu");
+    Assert.True(url.IsReadOnly);
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "selfHosted");
+    Assert.False(url.IsReadOnly);
+    Assert.True(url.IsShown);
+    Assert.Equal(string.Empty, url.TextValue);
   });
 
   private static readonly string[] AdvancedKeys = ["serverWebVaultUrl", "serverApiUrl", "serverIdentityUrl", "serverIconsUrl", "serverNotificationsUrl", "serverEventsUrl", "serverKeyConnectorUrl"];

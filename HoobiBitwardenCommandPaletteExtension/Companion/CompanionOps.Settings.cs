@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -61,6 +62,12 @@ internal sealed partial class CompanionOps
     new("Self-hosted", ServerRegions.SelfHosted),
   ];
 
+  private static readonly Dictionary<string, string> PresetUrls = new()
+  {
+    [ServerRegions.Cloud] = "https://vault.bitwarden.com",
+    [ServerRegions.Eu] = "https://vault.bitwarden.eu",
+  };
+
   internal static string RegionOf(string? serverUrl) => Pages.SetServerPage.DetectPreset(serverUrl) switch
   {
     "bitwarden.com" => ServerRegions.Cloud,
@@ -85,7 +92,7 @@ internal sealed partial class CompanionOps
     [
       new("_section_server", SettingKinds.Section, "Server", null, null, null),
       new(SettingKeys.ServerRegion, SettingKinds.Choice, "Region", loggedIn ? warning : "Where your vault is hosted", region, ServerChoices, Confirm: confirm),
-      new(SettingKeys.ServerUrl, SettingKinds.Text, "Server URL", "Address of your self-hosted server", region == ServerRegions.SelfHosted ? url : string.Empty, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted, Placeholder: "https://vault.example.com", Confirm: confirm),
+      new(SettingKeys.ServerUrl, SettingKinds.Text, "Server URL", "Address of your Bitwarden server", region == ServerRegions.SelfHosted ? url : string.Empty, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted, Placeholder: "https://vault.example.com", Confirm: confirm, ReadOnlyValues: PresetUrls),
       new(SettingKeys.ServerAdvanced, SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted),
       Advanced(SettingKeys.ServerWebVaultUrl, "Web Vault URL", urls?.WebVaultUrl, "/"),
       Advanced(SettingKeys.ServerApiUrl, "API URL", urls?.ApiUrl, "/api"),
