@@ -19,7 +19,7 @@ internal sealed partial class LoginViewModel : DialogViewModel
 
   public LoginViewModel(PipeChannel channel, bool rememberSession, string? customDataDir, SetServerRequest? server = null) : base(channel)
   {
-    Server = new ServerPickerViewModel(channel, server);
+    Server = FollowServerSwitch(new ServerPickerViewModel(channel, server));
     RememberSession = rememberSession;
     CustomDataDirWarning = customDataDir is null
       ? null

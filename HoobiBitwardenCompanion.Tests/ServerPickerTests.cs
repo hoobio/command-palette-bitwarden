@@ -16,13 +16,17 @@ public class ServerPickerTests(AvaloniaSession session)
 
     public SetServerResponse Reply { get; set; } = new(true, null);
 
-    public Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
+    public SemaphoreSlim? Gate { get; set; }
+
+    public async Task<JsonElement?> HandleAsync(string op, JsonElement? payload, CancellationToken cancellationToken)
     {
       if (op != Ops.SetServer)
         throw new IpcException(IpcErrors.Invalid);
       lock (Servers)
         Servers.Add(IpcJson.Read(payload, IpcJson.Default.SetServerRequest));
-      return Task.FromResult<JsonElement?>(IpcJson.ToElement(Reply, IpcJson.Default.SetServerResponse));
+      if (Gate is not null)
+        await Gate.WaitAsync(cancellationToken);
+      return IpcJson.ToElement(Reply, IpcJson.Default.SetServerResponse);
     }
   }
 
@@ -121,6 +125,85 @@ public class ServerPickerTests(AvaloniaSession session)
     Assert.Equal("Could not set the server", picker.ErrorMessage);
     Assert.Equal("vault.hoobi.io", picker.Host);
     Assert.True(picker.IsSelfHosted);
+    window.Close();
+  });
+
+  [Fact]
+  public Task Choosing_Eu_SwitchesTheLabelAtOnce_AndLocksTheLoginWindowUntilTheReply() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { Gate = new SemaphoreSlim(0) };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+    var window = coordinator.ShowLogin(server: SelfHosted);
+    var login = window.ViewModel!;
+    login.Email = "a@b.c";
+    login.MasterPassword = "pw";
+
+    var selecting = login.Server.SelectAsync(ServerRegions.Eu);
+
+    Assert.Equal("bitwarden.eu", login.Server.Host);
+    Assert.True(login.Server.IsSwitching);
+    Assert.True(login.IsBusy);
+    Assert.Equal("Switching to bitwarden.eu...", login.BusyText);
+    Assert.False(login.CredentialsEnabled);
+    Assert.False(login.SubmitEnabled);
+    await login.SubmitAsync();
+    Assert.Equal("Switching to bitwarden.eu...", login.BusyText);
+
+    extension.Gate.Release();
+    await selecting;
+
+    Assert.False(login.IsBusy);
+    Assert.Null(login.BusyText);
+    Assert.True(login.SubmitEnabled);
+    Assert.Equal("bitwarden.eu", login.Server.Host);
+    window.Close();
+  });
+
+  [Fact]
+  public Task Choosing_Failure_RevertsTheOptimisticLabel_AndClearsTheBusyState() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { Reply = new SetServerResponse(false, "Could not set the server"), Gate = new SemaphoreSlim(0) };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+    var window = coordinator.ShowApiKeyLogin(server: SelfHosted);
+    var api = window.ViewModel!;
+
+    var selecting = api.Server.SelectAsync(ServerRegions.Eu);
+    Assert.Equal("bitwarden.eu", api.Server.Host);
+    Assert.True(api.IsBusy);
+    Assert.Equal("Switching to bitwarden.eu...", api.BusyText);
+    extension.Gate.Release();
+    await selecting;
+
+    Assert.Equal("vault.hoobi.io", api.Server.Host);
+    Assert.True(api.Server.IsSelfHosted);
+    Assert.Equal("Could not set the server", api.Server.ErrorMessage);
+    Assert.False(api.IsBusy);
+    window.Close();
+  });
+
+  [Fact]
+  public Task SelfHostedDialog_DisablesSave_WhileSaving_AndReenablesAfterAValidationError() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension { Reply = new SetServerResponse(false, "bad url"), Gate = new SemaphoreSlim(0) };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+    var window = coordinator.ShowLogin();
+    var picker = window.ViewModel!.Server;
+    SelfHostedServerViewModel? viewModel = null;
+    picker.SelfHostedRequested += d => viewModel = d;
+    await picker.SelectAsync(ServerRegions.SelfHosted);
+    var dialog = SelfHostedServerView.CreateDialog(viewModel!);
+
+    var saving = viewModel!.SaveAsync();
+
+    Assert.True(viewModel.IsSaving);
+    Assert.False(dialog.IsPrimaryButtonEnabled);
+    extension.Gate.Release();
+    Assert.False(await saving);
+    Assert.False(viewModel.IsSaving);
+    Assert.True(dialog.IsPrimaryButtonEnabled);
     window.Close();
   });
 

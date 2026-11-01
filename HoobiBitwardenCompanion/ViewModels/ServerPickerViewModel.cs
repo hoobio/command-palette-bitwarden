@@ -28,6 +28,9 @@ internal sealed partial class ServerPickerViewModel(PipeChannel channel, SetServ
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
 
+  [ObservableProperty]
+  public partial bool IsSwitching { get; private set; }
+
   [RelayCommand]
   internal async Task SelectAsync(string region)
   {
@@ -40,24 +43,35 @@ internal sealed partial class ServerPickerViewModel(PipeChannel channel, SetServ
 
   private async Task<string?> ApplyAsync(SetServerRequest request)
   {
-    SetServerResponse reply;
+    var previous = _server;
+    Show(request);
+    IsSwitching = true;
     try
     {
-      reply = IpcJson.Read(await channel.RequestAsync(Ops.SetServer, IpcJson.ToElement(request, IpcJson.Default.SetServerRequest), Timeout.InfiniteTimeSpan), IpcJson.Default.SetServerResponse);
+      var reply = IpcJson.Read(await channel.RequestAsync(Ops.SetServer, IpcJson.ToElement(request, IpcJson.Default.SetServerRequest), Timeout.InfiniteTimeSpan), IpcJson.Default.SetServerResponse);
+      if (reply.Success)
+        return null;
+      Show(previous);
+      return reply.Error ?? "Failed to set server URL";
     }
     catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
     {
+      Show(previous);
       return ItemViewModel.Describe(ex);
     }
+    finally
+    {
+      IsSwitching = false;
+    }
+  }
 
-    if (!reply.Success)
-      return reply.Error ?? "Failed to set server URL";
-    _server = request;
+  private void Show(SetServerRequest server)
+  {
+    _server = server;
     OnPropertyChanged(nameof(Host));
     OnPropertyChanged(nameof(IsCloud));
     OnPropertyChanged(nameof(IsEu));
     OnPropertyChanged(nameof(IsSelfHosted));
-    return null;
   }
 }
 
@@ -103,11 +117,23 @@ internal sealed partial class SelfHostedServerViewModel : ObservableObject
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
 
+  [ObservableProperty]
+  public partial bool IsSaving { get; private set; }
+
   internal async Task<bool> SaveAsync()
   {
     ErrorMessage = null;
     string? Override(int index) => string.IsNullOrWhiteSpace(Fields[index].Value) ? null : Fields[index].Value;
-    ErrorMessage = await _apply(new SetServerRequest(ServerRegions.SelfHosted, BaseUrl, Override(0), Override(1), Override(2), Override(3), Override(4), Override(5), Override(6)));
+    IsSaving = true;
+    try
+    {
+      ErrorMessage = await _apply(new SetServerRequest(ServerRegions.SelfHosted, BaseUrl, Override(0), Override(1), Override(2), Override(3), Override(4), Override(5), Override(6)));
+    }
+    finally
+    {
+      IsSaving = false;
+    }
+
     return ErrorMessage is null;
   }
 }

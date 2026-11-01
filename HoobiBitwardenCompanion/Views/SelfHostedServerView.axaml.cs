@@ -22,6 +22,12 @@ internal sealed partial class SelfHostedServerView : UserControl
       DefaultButton = FAContentDialogButton.Primary,
     };
     dialog.PrimaryButtonClick += (sender, e) => _ = SaveDeferredAsync(viewModel, e);
+    viewModel.PropertyChanged += (_, e) =>
+    {
+      if (e.PropertyName == nameof(SelfHostedServerViewModel.IsSaving))
+        dialog.IsPrimaryButtonEnabled = !viewModel.IsSaving;
+    };
+    dialog.Closing += (_, e) => e.Cancel |= viewModel.IsSaving;
     return dialog;
   }
 
