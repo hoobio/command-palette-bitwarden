@@ -30,7 +30,7 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. In the companion window, a green dot on this row means the extension can reach the Desktop app and a red dot means it cannot; no dot shows while the setting is off. |
+| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. In the companion window, a check mark on this row means the extension can reach the Desktop app and a warning mark means it cannot; no mark shows while the setting is off. |
 
 ### Automatically Prompt for Biometrics
 
