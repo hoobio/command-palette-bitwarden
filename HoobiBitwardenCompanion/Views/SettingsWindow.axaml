@@ -17,9 +17,9 @@
     ExtendClientAreaToDecorationsHint="True"
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
     WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
-    Background="{DynamicResource WindowGroundBrush}">
+    Background="{DynamicResource HoobiBgBrush}">
     <Grid RowDefinitions="48,*" Background="Transparent">
-        <Grid x:Name="AppTitleBar" ColumnDefinitions="Auto,*,46" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+        <Grid x:Name="AppTitleBar" ColumnDefinitions="Auto,*,48" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
             <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
             <TextBox x:Name="SearchBox" Grid.Column="1" MaxWidth="260" Margin="16,0,8,0" VerticalAlignment="Center" PlaceholderText="Search settings" TextAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}" AutomationProperties.Name="Search settings" />
         </Grid>
@@ -47,7 +47,7 @@
                                                             <StackPanel VerticalAlignment="Center" Spacing="2">
                                                                 <WrapPanel>
                                                                     <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                                                                    <TextBlock Classes="Icon" Margin="8,0,0,0" FontSize="14" Text="{StaticResource Glyph.Checkmark}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" IsVisible="{Binding IsStatusOk}" ToolTip.Tip="{Binding Tooltip}" AutomationProperties.Name="{Binding Tooltip}" />
+                                                                    <TextBlock Classes="Icon" Margin="8,0,0,0" FontSize="14" Text="{StaticResource Glyph.CheckMark}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" IsVisible="{Binding IsStatusOk}" ToolTip.Tip="{Binding Tooltip}" AutomationProperties.Name="{Binding Tooltip}" />
                                                                     <TextBlock Classes="Icon" Margin="8,0,0,0" FontSize="14" Text="{StaticResource Glyph.Warning}" Foreground="{DynamicResource SystemFillColorCriticalBrush}" IsVisible="{Binding IsStatusError}" ToolTip.Tip="{Binding Tooltip}" AutomationProperties.Name="{Binding Tooltip}" />
                                                                 </WrapPanel>
                                                                 <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
@@ -69,8 +69,8 @@
                                                                     </ComboBox.ItemTemplate>
                                                                 </ComboBox>
                                                             </Grid>
-                                                            <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.Open}" IsVisible="{Binding IsLink}" />
-                                                            <Button Grid.ColumnSpan="2" Margin="-16,-8" Theme="{StaticResource RowOverlayButtonStyle}" IsVisible="{Binding IsLink}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
+                                                            <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.OpenInNewWindow}" IsVisible="{Binding IsLink}" />
+                                                            <Button Grid.ColumnSpan="2" Margin="-16,-8" Classes="RowOverlay" Theme="{StaticResource SubtleButtonStyle}" IsVisible="{Binding IsLink}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
                                                         </Grid>
                                                         <ToggleButton Classes="Disclosure" Margin="-16,-8" Padding="16,8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsVisible="{Binding IsExpander}" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
                                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -113,8 +113,8 @@
                                                             <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
                                                             <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
                                                         </StackPanel>
-                                                        <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.Open}" />
-                                                        <Button Grid.ColumnSpan="2" Margin="-16,-8" Theme="{StaticResource RowOverlayButtonStyle}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
+                                                        <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.OpenInNewWindow}" />
+                                                        <Button Grid.ColumnSpan="2" Margin="-16,-8" Classes="RowOverlay" Theme="{StaticResource SubtleButtonStyle}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>

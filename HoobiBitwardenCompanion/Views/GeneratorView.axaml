@@ -28,7 +28,7 @@
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
                         <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
                             <TextBlock Classes="FieldLabel" Text="Current password" />
-                            <TextBlock x:Name="CurrentPasswordText" Text="{Binding DisplayValue}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" FontSize="13" LetterSpacing="1" />
+                            <TextBlock x:Name="CurrentPasswordText" Text="{Binding DisplayValue}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" FontSize="13" LetterSpacing="1" />
                         </StackPanel>
                         <Button x:Name="PeekButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" ToolTip.Tip="Hold to show" AutomationProperties.Name="Hold to show">
                             <Panel>
@@ -50,7 +50,7 @@
         <Border Classes="Group" Margin="0,16,0,0">
             <Border Classes="Row Field" MinHeight="64">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
-                    <SelectableTextBlock x:Name="ValueText" Text="{Binding Value}" FontFamily="{StaticResource MonoFontFamily}" FontSize="18" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <SelectableTextBlock x:Name="ValueText" Text="{Binding Value}" FontFamily="{StaticResource HoobiMonoFontFamily}" FontSize="18" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <Button x:Name="RegenerateButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Refresh}" Command="{Binding RegenerateCommand}" ToolTip.Tip="Regenerate" AutomationProperties.Name="Regenerate" />
                     <Button x:Name="CopyButton" Grid.Column="2" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy" AutomationProperties.Name="Copy" />
                 </Grid>
@@ -130,7 +130,7 @@
                     <Border Classes="Row Switch">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                             <TextBlock Text="Word separator" VerticalAlignment="Center" />
-                            <TextBox Grid.Column="1" Width="92" HorizontalAlignment="Right" MaxLength="1" Text="{Binding Separator}" PlaceholderText="-" FontFamily="{StaticResource MonoFontFamily}" />
+                            <TextBox Grid.Column="1" Width="92" HorizontalAlignment="Right" MaxLength="1" Text="{Binding Separator}" PlaceholderText="-" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </Grid>
                     </Border>
                     <Border Classes="Row Switch">
@@ -161,7 +161,7 @@
                             <Border Classes="Row Field">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Static vm:FieldViewModel.Mask}" FontFamily="{StaticResource MonoFontFamily}" FontSize="13" LetterSpacing="1" />
+                                        <TextBlock Text="{x:Static vm:FieldViewModel.Mask}" FontFamily="{StaticResource HoobiMonoFontFamily}" FontSize="13" LetterSpacing="1" />
                                         <TextBlock Classes="FieldLabel">
                                             <TextBlock.Text>
                                                 <MultiBinding StringFormat="{}{0} · {1}">

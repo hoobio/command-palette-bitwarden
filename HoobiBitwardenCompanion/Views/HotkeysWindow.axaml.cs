@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using Avalonia.Input;
+using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -13,9 +13,10 @@ internal sealed partial class HotkeysWindow : Window
   public HotkeysWindow(HotkeysViewModel? viewModel)
   {
     InitializeComponent();
+    HoobiChrome.Attach(this);
     DataContext = viewModel;
     Topmost = ItemWindow.AlwaysOnTop;
-    AppTitleBar.PointerPressed += OnTitleBarPointerPressed;
+    HoobiChrome.AttachDragHandle(AppTitleBar);
     if (viewModel is not null)
       viewModel.EditRequested += row => _ = EditAsync(viewModel, row);
   }
@@ -29,17 +30,11 @@ internal sealed partial class HotkeysWindow : Window
     OpenDialog = HotkeyCaptureView.CreateDialog(new ChordCaptureViewModel(viewModel, row));
     try
     {
-      await OpenDialog.ShowAsync(this);
+      await AppDialogs.ShowAsync(OpenDialog, this);
     }
     finally
     {
       OpenDialog = null;
     }
-  }
-
-  private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
-  {
-    if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-      BeginMoveDrag(e);
   }
 }

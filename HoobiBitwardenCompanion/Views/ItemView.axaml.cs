@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
 using FluentAvalonia.UI.Controls;
+using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -27,12 +28,12 @@ internal sealed partial class ItemView : UserControl
         if (viewModel.IsPrompting)
           FocusPasswordBox();
         viewModel.Confirm ??= ConfirmAsync;
-        viewModel.ConfirmAction ??= request => ConfirmActionAsync(TopLevel.GetTopLevel(this), request);
+        viewModel.ConfirmAction ??= request => ConfirmActionAsync(TopLevel.GetTopLevel(this)!, request);
         viewModel.PickSavePath ??= PickSavePathAsync;
         viewModel.PickOpenPath ??= PickOpenPathAsync;
         viewModel.Toast ??= (message, success) => ToastWindow.Show(TopLevel.GetTopLevel(this), message, success);
-        viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this), viewModel.Channel);
-        viewModel.OpenRotateGenerator ??= () => GeneratorView.ShowForRotateAsync(TopLevel.GetTopLevel(this), viewModel);
+        viewModel.OpenGenerator ??= () => GeneratorView.ShowAsync(TopLevel.GetTopLevel(this)!, viewModel.Channel);
+        viewModel.OpenRotateGenerator ??= () => GeneratorView.ShowForRotateAsync(TopLevel.GetTopLevel(this)!, viewModel);
       }
     };
     AddHandler(SelectableTextBlock.CopyingToClipboardEvent, OnCopyingToClipboard);
@@ -72,11 +73,11 @@ internal sealed partial class ItemView : UserControl
     {
       Title = request.Title,
       Content = new StackPanel { Spacing = 12, Children = { new TextBlock { Text = request.Message, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, busy, error } },
-      PrimaryButtonText = request.PrimaryLabel ?? string.Empty,
-      SecondaryButtonText = request.DangerLabel,
+      PrimaryButtonText = request.DangerLabel,
+      SecondaryButtonText = request.PrimaryLabel ?? string.Empty,
       CloseButtonText = "Cancel",
       DefaultButton = FAContentDialogButton.Close,
-      Classes = { "Action" },
+      Classes = { "Danger" },
     };
     dialog.Closing += (_, e) => e.Cancel |= busy.IsVisible;
     return (dialog, error, busy);
@@ -98,17 +99,17 @@ internal sealed partial class ItemView : UserControl
     {
       busy.IsVisible = false;
       dialog.IsPrimaryButtonEnabled = dialog.IsSecondaryButtonEnabled = true;
-      dialog.PrimaryButtonText = request.PrimaryLabel ?? string.Empty;
+      dialog.SecondaryButtonText = request.PrimaryLabel ?? string.Empty;
     }
   }
 
-  internal static async Task<bool> ConfirmActionAsync(TopLevel? owner, ActionDialogRequest request)
+  internal static async Task<bool> ConfirmActionAsync(TopLevel owner, ActionDialogRequest request)
   {
     var (dialog, error, busy) = CreateActionDialog(request);
     var done = false;
-    dialog.PrimaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Primary ?? request.Danger);
-    dialog.SecondaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Danger);
-    await dialog.ShowAsync(owner);
+    dialog.PrimaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Danger);
+    dialog.SecondaryButtonClick += (sender, e) => _ = RunDeferredAsync(e, request.Primary ?? request.Danger);
+    await AppDialogs.ShowAsync(dialog, owner);
     return done;
 
     async Task RunDeferredAsync(FAContentDialogButtonClickEventArgs e, Func<Task<string?>> run)
@@ -136,7 +137,7 @@ internal sealed partial class ItemView : UserControl
   };
 
   private async Task<bool> ConfirmAsync(string title, string message, string primary, string close) =>
-    await CreateConfirmDialog(title, message, primary, close).ShowAsync(TopLevel.GetTopLevel(this)) == FAContentDialogResult.Primary;
+    await AppDialogs.ShowAsync(CreateConfirmDialog(title, message, primary, close), TopLevel.GetTopLevel(this)!) == FAContentDialogResult.Primary;
 
   private void OnVerifyClick(object? sender, RoutedEventArgs e) => _ = SubmitPasswordAsync();
 

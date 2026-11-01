@@ -72,8 +72,7 @@ HoobiBitwardenCompanion/               # Avalonia companion window app
 ├── Services/WindowCoordinator.cs      # Pipe requests from the extension, window registry
 ├── Services/CompanionSettings.cs      # Generator options file (no generated values)
 ├── ViewModels/                        # Item, field, edit form and generator view models
-├── Views/                             # Item window, item view, edit form, generator dialog and window, toast
-└── Styles/                            # Hoobi design tokens, control styles, glyphs, fonts
+└── Views/                             # Item window, item view, edit form, generator dialog and window (styles come from Hoobi.Design.Avalonia)
 Shared/                                # IPC contracts and PipeChannel, linked into both projects
 ```
 

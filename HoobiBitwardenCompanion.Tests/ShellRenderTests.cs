@@ -25,7 +25,7 @@ public class ShellRenderTests(AvaloniaSession session)
     window.Show();
     var dialog = ItemView.CreateConfirmDialog("Discard changes?", "Your changes to this item are not saved.", "Discard", "Keep editing");
 
-    var shown = dialog.ShowAsync(window);
+    var shown = AppDialogs.ShowAsync(dialog, window);
     AvaloniaSession.WaitFor(() => TopLevel.GetTopLevel(dialog) is not null && dialog.IsLoaded);
 
     Assert.NotNull(window.CaptureRenderedFrame());

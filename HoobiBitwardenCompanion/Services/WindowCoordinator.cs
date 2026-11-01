@@ -2,6 +2,7 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Hoobi.Design.Avalonia;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.ViewModels;
 using HoobiBitwardenCompanion.Views;
@@ -23,13 +24,13 @@ internal sealed class WindowCoordinator : IDisposable
 
   public PipeChannel Channel { get; }
 
-  internal Action<nint> ReturnForeground { get; set; } = WindowAlertInterop.ReturnForeground;
+  internal Action<nint> ReturnForeground { get; set; } = WindowAlert.ReturnForeground;
 
-  internal Action<Window> TakeForeground { get; set; } = WindowAlertInterop.TakeForeground;
+  internal Action<Window> TakeForeground { get; set; } = WindowAlert.TakeForeground;
 
-  internal Action<Window> ForceForeground { get; set; } = WindowAlertInterop.ForceForeground;
+  internal Action<Window> ForceForeground { get; set; } = ForegroundGate.ForceForeground;
 
-  internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlertInterop.WindowCentre;
+  internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlert.WindowCentre;
 
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
 
@@ -257,7 +258,7 @@ internal sealed class WindowCoordinator : IDisposable
       existing.ReturnWindow = returnWindow;
     existing.Show();
     if (created && anchor is { } centre)
-      existing.CentreOnScreenOf(centre);
+      HoobiChrome.CentreOnScreenOf(existing, centre);
     if (existing.WindowState == WindowState.Minimized)
       existing.WindowState = WindowState.Normal;
     existing.Activate();

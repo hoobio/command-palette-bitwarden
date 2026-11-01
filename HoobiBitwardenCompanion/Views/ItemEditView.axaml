@@ -8,12 +8,6 @@
         <Style Selector="StackPanel.Solo">
             <Setter Property="Grid.ColumnSpan" Value="3" />
         </Style>
-        <Style Selector="TextBox.Notes">
-            <Setter Property="AcceptsReturn" Value="True" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="MinHeight" Value="80" />
-            <Setter Property="VerticalContentAlignment" Value="Top" />
-        </Style>
     </UserControl.Styles>
 
     <StackPanel>
@@ -93,7 +87,7 @@
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Password" />
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                                <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" Text="{Binding Password}" PasswordChar="•" PlaceholderText="Password" FontFamily="{StaticResource MonoFontFamily}" />
+                                <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" Text="{Binding Password}" PasswordChar="•" PlaceholderText="Password" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                                 <Button x:Name="GeneratePasswordButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Password}" Command="{Binding GeneratePasswordCommand}" ToolTip.Tip="Generate password" AutomationProperties.Name="Generate password" />
                             </Grid>
                         </StackPanel>
@@ -101,7 +95,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Authenticator key (TOTP)" />
-                            <TextBox Classes="revealPasswordButton" Text="{Binding Totp}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" PlaceholderText="otpauth://totp/…" />
+                            <TextBox Classes="revealPasswordButton" Text="{Binding Totp}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="otpauth://totp/…" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -157,7 +151,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Number" />
-                            <TextBox Classes="revealPasswordButton" Text="{Binding CardNumber}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" />
+                            <TextBox Classes="revealPasswordButton" Text="{Binding CardNumber}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
@@ -175,7 +169,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Security code" />
-                            <TextBox Classes="revealPasswordButton" Text="{Binding CardCode}" PasswordChar="•" FontFamily="{StaticResource MonoFontFamily}" />
+                            <TextBox Classes="revealPasswordButton" Text="{Binding CardCode}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -321,7 +315,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Private key" />
-                            <TextBox x:Name="PrivateKeyBox" Classes="revealPasswordButton Notes" PasswordChar="•" Text="{Binding PrivateKey}" FontFamily="{StaticResource MonoFontFamily}" PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                            <TextBox x:Name="PrivateKeyBox" Classes="revealPasswordButton Multiline" PasswordChar="•" Text="{Binding PrivateKey}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----" />
                             <Button x:Name="ImportKeyButton" Margin="0,8,0,0" Background="{DynamicResource LayerFillColorAltBrush}" Command="{Binding ImportSshKeyCommand}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Classes="Icon" Text="{StaticResource Glyph.Import}" FontSize="16" Foreground="{DynamicResource DefaultTextForegroundThemeBrush}" />
@@ -333,13 +327,13 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Public key" />
-                            <TextBox Text="{Binding PublicKey}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" />
+                            <TextBox Text="{Binding PublicKey}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Fingerprint" />
-                            <TextBox Text="{Binding Fingerprint}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" />
+                            <TextBox Text="{Binding Fingerprint}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -393,7 +387,7 @@
             <Border Classes="Row Edit">
                 <StackPanel>
                     <TextBlock Classes="FieldLabel" Text="Notes" />
-                    <TextBox Classes="Notes" Text="{Binding Notes}" />
+                    <TextBox Classes="Multiline" Text="{Binding Notes}" />
                 </StackPanel>
             </Border>
         </Border>

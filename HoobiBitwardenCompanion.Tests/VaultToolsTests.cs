@@ -340,6 +340,21 @@ public class VaultToolsTests(AvaloniaSession session)
     File.Delete(CompanionSettings.FilePath);
   });
 
+  // AppDialogs takes a dialog button only from a real press, not from a raised Click event.
+  private static void Click(Window window, Button button)
+  {
+    var root = button.GetVisualAncestors().OfType<Panel>().First(p => p.Name == "LayoutRoot");
+    AvaloniaSession.WaitFor(() =>
+    {
+      AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+      return root.Opacity >= 1;
+    });
+    Hoobi.Design.Avalonia.Testing.HeadlessSession.Pump();
+    var centre = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+    window.MouseDown(centre, MouseButton.Left);
+    window.MouseUp(centre, MouseButton.Left);
+  }
+
   [Fact]
   public Task GeneratorDialog_ReturnsTheUsedValue_AndBlanksOnLock() => session.RunAsync(async () =>
   {
@@ -357,7 +372,7 @@ public class VaultToolsTests(AvaloniaSession session)
     await vm.RegenerateCommand.ExecuteAsync(null);
     var use = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PrimaryButton");
     Assert.Equal("Use password", use.Content);
-    use.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+    Click(window, use);
     AvaloniaSession.WaitFor(() => shown.IsCompleted);
     Assert.Equal(new string('x', 20), await shown);
     window.Close();
@@ -406,7 +421,7 @@ public class VaultToolsTests(AvaloniaSession session)
     await vm.RegenerateCommand.ExecuteAsync(null);
     var save = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PrimaryButton");
     Assert.Equal("Save", save.Content);
-    save.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+    Click(window, save);
     AvaloniaSession.WaitFor(() => shown.IsCompleted);
     Assert.Equal(h.Extension.Generated[0].Id, await shown);
 

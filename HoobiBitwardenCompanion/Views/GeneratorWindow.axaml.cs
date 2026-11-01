@@ -1,9 +1,9 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -17,9 +17,10 @@ internal sealed partial class GeneratorWindow : Window
   public GeneratorWindow(GeneratorViewModel? viewModel)
   {
     InitializeComponent();
+    HoobiChrome.Attach(this);
     DataContext = viewModel;
     Topmost = ItemWindow.AlwaysOnTop;
-    AppTitleBar.PointerPressed += OnTitleBarPointerPressed;
+    HoobiChrome.AttachDragHandle(AppTitleBar);
     if (viewModel is not null)
       viewModel.PropertyChanged += OnViewModelPropertyChanged;
     Opened += (_, _) =>
@@ -56,12 +57,6 @@ internal sealed partial class GeneratorWindow : Window
     var content = (Control)Content!;
     content.Measure(new Size(ClientSize.Width, double.PositiveInfinity));
     Height = Math.Clamp(content.DesiredSize.Height, MinHeight, MaxHeight);
-  }
-
-  private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
-  {
-    if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-      BeginMoveDrag(e);
   }
 
   internal Task SaveAsNewItemAsync() =>

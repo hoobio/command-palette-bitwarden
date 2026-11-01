@@ -5,7 +5,6 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using HoobiBitwardenCompanion.Styles;
 
 namespace HoobiBitwardenCompanion.Tests;
 

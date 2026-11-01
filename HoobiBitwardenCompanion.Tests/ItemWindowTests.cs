@@ -668,12 +668,6 @@ public class ItemWindowTests(AvaloniaSession session)
     window.Close();
   });
 
-  [Theory]
-  [InlineData(1.0, 0, 0, 1920, 1032, 320, 60, 800, 972)]
-  [InlineData(1.5, 1920, 0, 2560, 1380, 320, 60, 2960, 1290)]
-  public void ToastPlacement_IsBottomCentreOfTheWorkArea(double scaling, int x, int y, int width, int height, double dipWidth, double dipHeight, int expectedX, int expectedY) =>
-    Assert.Equal(new Avalonia.PixelPoint(expectedX, expectedY), ToastWindow.Place(new Avalonia.PixelRect(x, y, width, height), new Avalonia.Size(dipWidth, dipHeight), scaling));
-
   [Fact]
   public Task Coordinator_ReadLoopFault_StillShutsDownTheCompanion() => session.RunAsync(async () =>
   {

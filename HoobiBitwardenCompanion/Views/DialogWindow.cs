@@ -1,9 +1,9 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -16,9 +16,9 @@ internal abstract class DialogWindow : Window
 
   protected void InitializeDialog(DialogViewModel? viewModel)
   {
+    HoobiChrome.Attach(this);
     DataContext = viewModel;
     Topmost = true;
-    this.FindControl<Control>("AppTitleBar")!.PointerPressed += OnTitleBarPointerPressed;
     KeyDown += OnWindowKeyDown;
     if (viewModel is not null)
     {
@@ -44,21 +44,6 @@ internal abstract class DialogWindow : Window
   }
 
   protected void OnCancelClick(object? sender, RoutedEventArgs e) => Close();
-
-  internal void CentreOnScreenOf(PixelPoint anchor)
-  {
-    if (Screens.ScreenFromPoint(anchor) is not { } screen)
-      return;
-    var area = screen.WorkingArea;
-    var size = PixelSize.FromSize(ClientSize, screen.Scaling);
-    Position = new PixelPoint(area.X + (area.Width - size.Width) / 2, area.Y + (area.Height - size.Height) / 2);
-  }
-
-  private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
-  {
-    if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-      BeginMoveDrag(e);
-  }
 
   private void OnWindowKeyDown(object? sender, KeyEventArgs e)
   {
