@@ -73,6 +73,38 @@ public class BitwardenSettingsManagerTests : IDisposable
         Assert.Equal("", m.CliDirectoryOverride.Value);
         Assert.Equal("", m.CliDataDirectoryOverride.Value);
         Assert.False(m.UsePortableDataDirectory.Value);
+        Assert.False(m.UseCliDirectoryOverride.Value);
+        Assert.False(m.UseCliDataDirectoryOverride.Value);
+    }
+
+    [Fact]
+    public void OverrideSwitches_StartOnForAnExistingPath_AndOffWithout()
+    {
+        var path = Path.Combine(_tempDir, "settings.json");
+        File.WriteAllText(path, """{"cliDirectoryOverride":"C:\\tools\\bw.exe"}""");
+
+        var m = new BitwardenSettingsManager(path);
+
+        Assert.True(m.UseCliDirectoryOverride.Value);
+        Assert.Equal(@"C:\tools\bw.exe", m.EffectiveCliDirectoryOverride);
+        Assert.False(m.UseCliDataDirectoryOverride.Value);
+        Assert.Equal(string.Empty, m.EffectiveCliDataDirectoryOverride);
+    }
+
+    [Fact]
+    public void OverrideSwitch_TurnedOff_StaysOffAfterReload_AndKeepsThePath()
+    {
+        var path = Path.Combine(_tempDir, "settings.json");
+        File.WriteAllText(path, """{"cliDirectoryOverride":"C:\\tools\\bw.exe"}""");
+        var m = new BitwardenSettingsManager(path);
+
+        m.UseCliDirectoryOverride.Value = false;
+        FireSettingsChanged(m);
+        var reloaded = new BitwardenSettingsManager(path);
+
+        Assert.False(reloaded.UseCliDirectoryOverride.Value);
+        Assert.Equal(@"C:\tools\bw.exe", reloaded.CliDirectoryOverride.Value);
+        Assert.Equal(string.Empty, reloaded.EffectiveCliDirectoryOverride);
     }
 
     [Fact]

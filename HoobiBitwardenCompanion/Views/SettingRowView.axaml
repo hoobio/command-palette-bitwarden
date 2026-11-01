@@ -10,7 +10,7 @@
         <Border Classes="Row Switch" Classes.Child="{Binding IsChild}" IsVisible="{Binding !IsGroup}">
             <local:SettingRowBody />
         </Border>
-        <hoobi:SettingsCard x:Name="GroupCard" Classes="Item" BorderThickness="0" IsClickEnabled="True" IsVisible="{Binding IsGroup}" IsExpanded="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
+        <hoobi:SettingsCard x:Name="GroupCard" Classes="Item" BorderThickness="0" IsClickEnabled="{Binding !RevealsChildren}" IsVisible="{Binding IsGroup}" IsExpanded="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
             <hoobi:SettingsCard.Header>
                 <local:SettingRowBody x:Name="GroupHeader" />
             </hoobi:SettingsCard.Header>

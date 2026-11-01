@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using HoobiBitwarden.Ipc;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -184,11 +186,29 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
             new("2 minutes", "120"),
         ]);
 
+    public ToggleSetting UseCliDirectoryOverride { get; } = new(
+        "useCliDirectoryOverride",
+        "CLI Path Override",
+        "Uses your own bw instead of the one the extension finds",
+        false);
+
     public TextSetting CliDirectoryOverride { get; } = new(
         "cliDirectoryOverride",
-        "CLI Path Override",
+        "CLI path",
         "Folder that contains bw, or the path to bw.exe. Empty uses PATH",
         "");
+
+    public ToggleSetting UseCliDataDirectoryOverride { get; } = new(
+        "useCliDataDirectoryOverride",
+        "CLI Data Directory Override",
+        "Uses your own folder for CLI data",
+        false);
+
+    internal string EffectiveCliDirectoryOverride => UseCliDirectoryOverride.Value ? CliDirectoryOverride.Value ?? string.Empty : string.Empty;
+
+    internal string EffectiveCliDataDirectoryOverride => UseCliDataDirectoryOverride.Value ? CliDataDirectoryOverride.Value ?? string.Empty : string.Empty;
+
+    internal bool RevealsChildren(string key) => key == UseCliDirectoryOverride.Key || key == UseCliDataDirectoryOverride.Key;
 
     public ToggleSetting UsePortableDataDirectory { get; } = new(
         "usePortableDataDirectory",
@@ -198,7 +218,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
 
     public TextSetting CliDataDirectoryOverride { get; } = new(
         "cliDataDirectoryOverride",
-        "CLI Data Directory Override",
+        "CLI data folder",
         "Folder for CLI data (data.json). Overrides the other locations",
         "");
 
@@ -286,20 +306,42 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         AddSetting(ClipboardClearDelay, AutoClearClipboard);
 
         AddSetting(new SectionHeaderSetting("_section_cli", "Bitwarden CLI"));
-        AddSetting(CliDirectoryOverride);
+        AddSetting(UseCliDirectoryOverride);
+        AddSetting(CliDirectoryOverride, UseCliDirectoryOverride);
         AddSetting(UsePortableDataDirectory, CliDirectoryOverride);
-        AddSetting(CliDataDirectoryOverride);
+        AddSetting(UseCliDataDirectoryOverride);
+        AddSetting(CliDataDirectoryOverride, UseCliDataDirectoryOverride);
 
         AddSetting(new SectionHeaderSetting("_section_advanced", "Diagnostics"));
         AddSetting(DebugLogging);
         CaptureDefaults();
         Settings.SettingsChanged += OnSettingsChanged;
         LoadSettings();
+        MigrateOverrideSwitches();
         SyncClipboardSettings();
         SyncRepromptSettings();
         DebugLogService.LogDirectory = Path.Combine(Path.GetDirectoryName(FilePath) is { Length: > 0 } dir ? dir : SettingsDir, "logs");
         DebugLogService.Enabled = DebugLogging.Value;
         LogConfig("startup");
+    }
+
+    private void MigrateOverrideSwitches()
+    {
+        JsonObject? stored = null;
+        try
+        {
+            if (File.Exists(FilePath))
+                stored = JsonNode.Parse(File.ReadAllText(FilePath)) as JsonObject;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            DebugLogService.Log("Config", $"Could not read settings for the override migration: {ex.Message}");
+        }
+
+        if (stored?.ContainsKey(UseCliDirectoryOverride.Key) != true)
+            UseCliDirectoryOverride.Value = !string.IsNullOrEmpty(CliDirectoryOverride.Value);
+        if (stored?.ContainsKey(UseCliDataDirectoryOverride.Key) != true)
+            UseCliDataDirectoryOverride.Value = !string.IsNullOrEmpty(CliDataDirectoryOverride.Value);
     }
 
     // Stored apart from CliDirectoryOverride so an automated install never overwrites a hand-set path (issue #178).
@@ -411,8 +453,10 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (ContextItemLimit.Key, ContextItemLimit.Value);
         yield return (AutoClearClipboard.Key, AutoClearClipboard.Value);
         yield return (ClipboardClearDelay.Key, ClipboardClearDelay.Value);
+        yield return (UseCliDirectoryOverride.Key, (object?)UseCliDirectoryOverride.Value);
         yield return (CliDirectoryOverride.Key, CliDirectoryOverride.Value);
         yield return (UsePortableDataDirectory.Key, (object?)UsePortableDataDirectory.Value);
+        yield return (UseCliDataDirectoryOverride.Key, (object?)UseCliDataDirectoryOverride.Value);
         yield return (CliDataDirectoryOverride.Key, CliDataDirectoryOverride.Value);
         yield return (DebugLogging.Key, (object?)DebugLogging.Value);
     }

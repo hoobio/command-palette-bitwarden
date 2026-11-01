@@ -157,8 +157,10 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
     foreach (var row in rows)
     {
-      row.ShownChildren = [.. row.Children.Where(c => c.IsShown)];
-      if (query.Length > 0 && row.ShownChildren.Count > 0)
+      row.ShownChildren = [.. row.Children.Where(c => c.IsShown || (row.RevealsChildren && !row.BoolValue))];
+      if (row.RevealsChildren)
+        row.Expanded = row.BoolValue;
+      else if (query.Length > 0 && row.ShownChildren.Count > 0)
         row.Expanded = true;
     }
 
@@ -303,6 +305,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     Parent = setting.Parent;
     ParentValue = setting.ParentValue;
     ReadOnlyValues = setting.ReadOnlyValues;
+    RevealsChildren = setting.RevealsChildren;
     Choices = setting.Choices ?? [];
     Apply(setting);
   }
@@ -316,6 +319,8 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   public string? ParentValue { get; }
 
   public IReadOnlyDictionary<string, string>? ReadOnlyValues { get; }
+
+  public bool RevealsChildren { get; }
 
   public bool IsChild => Parent is not null;
 

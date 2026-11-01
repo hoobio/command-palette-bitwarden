@@ -139,13 +139,13 @@ internal sealed partial class BitwardenCliService
   }
 
   internal string CliExecutable => ResolveCliExecutable(
-    _settings?.CliDirectoryOverride.Value,
+    _settings?.EffectiveCliDirectoryOverride,
     _settings?.AutoInstalledCliPath);
 
   internal string? DataDirectory => ResolveDataDirectory(
-    _settings?.CliDirectoryOverride.Value,
+    _settings?.EffectiveCliDirectoryOverride,
     _settings?.UsePortableDataDirectory.Value ?? false,
-    _settings?.CliDataDirectoryOverride.Value);
+    _settings?.EffectiveCliDataDirectoryOverride);
 
   internal string? DataFileOverride { get; set; }
 

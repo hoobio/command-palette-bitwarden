@@ -438,6 +438,47 @@ public class SettingsWindowTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task OverrideSwitch_KeepsTheCard_AndExpandsItWithTheSwitch() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    extension.Schema.Clear();
+    extension.Schema.AddRange(
+    [
+      new("_section_cli", SettingKinds.Section, "Bitwarden CLI", null, null, null),
+      new("useCliDirectoryOverride", SettingKinds.Toggle, "CLI Path Override", "Uses your own bw", "false", null, RevealsChildren: true),
+      new("cliDirectoryOverride", SettingKinds.Text, "CLI path", "Path to bw", @"C:\tools\bw.exe", null, "useCliDirectoryOverride", "true", Placeholder: "bw"),
+    ]);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    var vm = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.Sections.SelectMany(s => s.Rows).Any(r => r.Key == "useCliDirectoryOverride"));
+    var toggle = vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "useCliDirectoryOverride");
+    var card = Find<Hoobi.Design.Avalonia.SettingsCard>(window, "useCliDirectoryOverride");
+
+    Assert.False(card.IsExpanded);
+    Assert.False(card.IsClickEnabled);
+    Assert.False(vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "cliDirectoryOverride").IsShown);
+
+    toggle.BoolValue = true;
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 1);
+    window.UpdateLayout();
+
+    Assert.Same(card, Find<Hoobi.Design.Avalonia.SettingsCard>(window, "useCliDirectoryOverride"));
+    Assert.True(card.IsExpanded);
+    Assert.True(vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "cliDirectoryOverride").IsShown);
+    Assert.Equal(("useCliDirectoryOverride", "true"), extension.Sets.Single());
+
+    toggle.BoolValue = false;
+    window.UpdateLayout();
+    Assert.False(card.IsExpanded);
+    Assert.True(card.IsEffectivelyVisible);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
   public Task ServerAdvanced_PlaceholdersFollowTheTypedServerUrl_AndFallBackToTheExample() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();

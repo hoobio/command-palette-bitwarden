@@ -170,9 +170,9 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 
 | | |
 |---|---|
-| **Type** | Text |
-| **Default** | *(empty)* |
-| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. When set, this always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. While the box is empty, the companion window shows the `bw` path in use as the placeholder text, and hovering the box shows the full path and where it came from. |
+| **Type** | Switch, with a **CLI path** text box under it |
+| **Default** | Off |
+| **Description** | Use your own Bitwarden CLI. When the switch is on, the **CLI path** box opens under it. The box accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave the box empty to use the default PATH-based resolution. A path in the box always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. When the switch is off, the box is hidden and the extension finds the CLI as usual, but it keeps the path, so turning the switch on again restores it. While the box is empty, it shows the `bw` path in use as the placeholder text, and hovering the box shows the full path and where it came from. If you set a path before this switch existed, the switch starts on. |
 
 ### Use CLI Path as Data Directory
 
@@ -180,15 +180,15 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Useful for fully portable Bitwarden setups. The companion window shows this setting under **CLI Path Override**, and only while that box is not empty. |
+| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Useful for fully portable Bitwarden setups. The companion window shows this setting under the **CLI path** box, and only while that box is not empty. It has no effect while **CLI Path Override** is off. |
 
 ### CLI Data Directory Override
 
 | | |
 |---|---|
-| **Type** | Text |
-| **Default** | *(empty)* |
-| **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. While the box is empty, the companion window shows the folder that holds `data.json` now as the placeholder text, and hovering the box shows the full path and where it came from. |
+| **Type** | Switch, with a **CLI data folder** text box under it |
+| **Default** | Off |
+| **Description** | Use your own directory for Bitwarden CLI data (`data.json`). When the switch is on, the **CLI data folder** box opens under it. A folder in the box sets the `BITWARDENCLI_APPDATA_DIR` environment variable and takes precedence over the portable directory toggle. Leave the box empty to use the default location, or the portable CLI directory if that toggle is on. When the switch is off, the box is hidden and the extension uses the default location, but it keeps the folder, so turning the switch on again restores it. While the box is empty, it shows the folder that holds `data.json` now as the placeholder text, and hovering the box shows the full path and where it came from. If you set a folder before this switch existed, the switch starts on. |
 
 ### Debug Logging
 

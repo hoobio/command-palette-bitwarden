@@ -49,7 +49,7 @@ internal sealed partial class CompanionOps
     var manager = Manager();
     return new((SettingDto[])[.. ServerRows(), .. manager.OrderedSettings.Select(DescribeSetting).OfType<SettingDto>()
       .Select(s => manager.TryGetParent(s.Key, out var parent) ? s with { Parent = parent.Key, ParentValue = parent.Value } : s)
-      .Select(s => s with { Placeholder = PlaceholderFor(manager, s.Key), Tooltip = TooltipFor(manager, s.Key) })
+      .Select(s => s with { Placeholder = PlaceholderFor(manager, s.Key), Tooltip = TooltipFor(manager, s.Key), RevealsChildren = manager.RevealsChildren(s.Key) })
       .Select(s => s.Key == manager.UseDesktopIntegration.Key ? WithDesktopStatus(s, manager.UseDesktopIntegration.Value, _desktopReachable) : s)
       .SelectMany(s => s.Key == manager.DebugLogging.Key ? new[] { s, OpenLogsLink } : new[] { s })
       .Prepend(HotkeysLink)
@@ -125,8 +125,8 @@ internal sealed partial class CompanionOps
     : null;
 
   private string? TooltipFor(BitwardenSettingsManager manager, string key) =>
-    key == manager.CliDirectoryOverride.Key ? CachedCliTooltip(_service.CliExecutable, manager.CliDirectoryOverride.Value)
-    : key == manager.CliDataDirectoryOverride.Key ? DataTooltip(_service.DataFileFolder, manager.CliDataDirectoryOverride.Value, _service.DataDirectory, Environment.GetEnvironmentVariable("BITWARDENCLI_APPDATA_DIR"))
+    key == manager.CliDirectoryOverride.Key ? CachedCliTooltip(_service.CliExecutable, manager.EffectiveCliDirectoryOverride)
+    : key == manager.CliDataDirectoryOverride.Key ? DataTooltip(_service.DataFileFolder, manager.EffectiveCliDataDirectoryOverride, _service.DataDirectory, Environment.GetEnvironmentVariable("BITWARDENCLI_APPDATA_DIR"))
     : null;
 
   internal static SettingDto WithDesktopStatus(SettingDto row, bool enabled, Func<bool> reachable) =>
