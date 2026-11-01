@@ -7,8 +7,22 @@ using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCompanion.ViewModels;
 
-internal sealed partial class SettingsViewModel(PipeChannel channel, Action<string>? open = null, Action? showHotkeys = null) : ObservableObject
+internal sealed partial class SettingsViewModel(PipeChannel channel, Action<string>? open = null) : ObservableObject
 {
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsShortcutsOpen))]
+  public partial HotkeysViewModel? Shortcuts { get; private set; }
+
+  public bool IsShortcutsOpen => Shortcuts is not null;
+
+  internal void OpenShortcuts()
+  {
+    Shortcuts = new HotkeysViewModel(channel);
+    _ = Shortcuts.LoadAsync();
+  }
+
+  internal void CloseShortcuts() => Shortcuts = null;
+
   private const string RepoUrl = "https://github.com/hoobio/command-palette-bitwarden";
   private const string DonateUrl = "https://www.paypal.com/donate/?hosted_button_id=E2UBLTYAT4K8Y";
 
@@ -218,7 +232,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
       var row = new SettingRowViewModel(channel, setting, setting.Key switch
       {
         SettingKeys.OpenLogs => OpenLogs,
-        SettingKeys.Hotkeys => showHotkeys,
+        SettingKeys.Hotkeys => OpenShortcuts,
         _ => null,
       }, setting.Key.StartsWith("server", StringComparison.Ordinal) ? CommitServerAsync : null);
       row.Expanded = row.IsExpander && advancedExpanded;
@@ -338,6 +352,10 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   public bool IsText => Kind == SettingKinds.Text;
 
   public bool IsLink => Kind == SettingKinds.Link;
+
+  public bool IsPageLink => IsLink && Key == SettingKeys.Hotkeys;
+
+  public bool IsExternalLink => IsLink && !IsPageLink;
 
   [ObservableProperty]
   public partial string? Placeholder { get; private set; }

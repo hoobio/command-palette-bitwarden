@@ -26,6 +26,7 @@ internal sealed partial class SettingsWindow : Window
     AddHandler(LostFocusEvent, OnLostFocus);
     AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
     SearchBox.TextChanged += OnSearchTextChanged;
+    ShortcutsPage.Back.Click += (_, _) => ViewModel?.CloseShortcuts();
     if (viewModel is not null)
       viewModel.Confirm ??= ConfirmAsync;
   }
@@ -65,6 +66,17 @@ internal sealed partial class SettingsWindow : Window
   {
     if (DialogWindow.HasOpenDialog(this))
       return;
+
+    if (ViewModel is { IsShortcutsOpen: true } settings)
+    {
+      if (e.Key == Key.Escape)
+      {
+        settings.CloseShortcuts();
+        e.Handled = true;
+      }
+
+      return;
+    }
 
     if (e.Key == Key.Escape && !string.IsNullOrEmpty(SearchBox.Text))
     {

@@ -1,29 +1,17 @@
-<Window
-    x:Class="HoobiBitwardenCompanion.Views.HotkeysWindow"
+<UserControl
+    x:Class="HoobiBitwardenCompanion.Views.HotkeysView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:chrome="using:Avalonia.Controls.Chrome"
     xmlns:ipc="using:HoobiBitwarden.Ipc"
+    xmlns:ui="using:FluentAvalonia.UI.Controls"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
-    x:DataType="vm:HotkeysViewModel"
-    Title="Keyboard shortcuts"
-    Width="520"
-    Height="700"
-    MinWidth="380"
-    MinHeight="320"
-    WindowStartupLocation="CenterScreen"
-    CanMinimize="False"
-    CanMaximize="False"
-    ExtendClientAreaToDecorationsHint="True"
-    ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
-    WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
-    Background="{DynamicResource HoobiBgBrush}">
-    <Grid RowDefinitions="48,*" Background="Transparent">
-        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" />
-                <TextBlock Text="Keyboard shortcuts" FontSize="12" VerticalAlignment="Center" />
-            </StackPanel>
+    x:DataType="vm:HotkeysViewModel">
+    <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="16,0,24,12">
+            <Button x:Name="BackButton" Theme="{StaticResource IconButtonStyle}" VerticalAlignment="Center" ToolTip.Tip="Back" AutomationProperties.Name="Back">
+                <ui:FASymbolIcon Symbol="Back" FontSize="16" />
+            </Button>
+            <TextBlock Grid.Column="1" Classes="PageTitle" VerticalAlignment="Center" Text="Keyboard shortcuts" />
         </Grid>
 
         <ScrollViewer x:Name="Scroller" Grid.Row="1">
@@ -88,4 +76,4 @@
             </StackPanel>
         </ScrollViewer>
     </Grid>
-</Window>
+</UserControl>

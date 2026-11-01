@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chrome="using:Avalonia.Controls.Chrome"
     xmlns:ipc="using:HoobiBitwarden.Ipc"
+    xmlns:local="using:HoobiBitwardenCompanion.Views"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:SettingsViewModel"
     Title="Bitwarden settings"
@@ -21,10 +22,14 @@
     <Grid RowDefinitions="48,*" Background="Transparent">
         <Grid x:Name="AppTitleBar" ColumnDefinitions="Auto,*,48" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
             <Image Source="avares://HoobiBitwardenCompanion/Assets/app.ico" Width="20" Height="20" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
-            <TextBox x:Name="SearchBox" Grid.Column="1" MaxWidth="260" Margin="16,0,8,0" VerticalAlignment="Center" PlaceholderText="Search settings" TextAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}" AutomationProperties.Name="Search settings" />
+            <TextBox x:Name="SearchBox" Grid.Column="1" IsVisible="{Binding !IsShortcutsOpen}" MaxWidth="260" Margin="16,0,8,0" VerticalAlignment="Center" PlaceholderText="Search settings" TextAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}" AutomationProperties.Name="Search settings" />
         </Grid>
 
-        <ScrollViewer x:Name="Scroller" Grid.Row="1">
+        <Panel Grid.Row="1" IsVisible="{Binding IsShortcutsOpen}">
+            <local:HotkeysView x:Name="ShortcutsPage" DataContext="{Binding Shortcuts}" />
+        </Panel>
+
+        <ScrollViewer x:Name="Scroller" Grid.Row="1" IsVisible="{Binding !IsShortcutsOpen}">
             <StackPanel MaxWidth="880" Margin="24,0,24,24">
                 <TextBlock x:Name="ErrorText" Classes="Warn" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 <ItemsControl x:Name="SectionList" ItemsSource="{Binding Sections}">
@@ -69,7 +74,8 @@
                                                                     </ComboBox.ItemTemplate>
                                                                 </ComboBox>
                                                             </Grid>
-                                                            <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.OpenInNewWindow}" IsVisible="{Binding IsLink}" />
+                                                            <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.OpenInNewWindow}" IsVisible="{Binding IsExternalLink}" />
+                                                            <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.ChevronRight}" IsVisible="{Binding IsPageLink}" />
                                                             <Button Grid.ColumnSpan="2" Margin="-16,-8" Classes="RowOverlay" Theme="{StaticResource SubtleButtonStyle}" IsVisible="{Binding IsLink}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
                                                         </Grid>
                                                         <ToggleButton Classes="Disclosure" Margin="-16,-8" Padding="16,8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsVisible="{Binding IsExpander}" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">

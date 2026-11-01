@@ -15,7 +15,6 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
   private SettingsWindow? _settingsWindow;
-  private HotkeysWindow? _hotkeysWindow;
   private readonly Dictionary<Type, DialogWindow> _dialogs = [];
   private FiltersResponse? _filters;
 
@@ -182,7 +181,7 @@ internal sealed class WindowCoordinator : IDisposable
   {
     if (_settingsWindow is null)
     {
-      var viewModel = new SettingsViewModel(Channel, showHotkeys: () => ShowHotkeys());
+      var viewModel = new SettingsViewModel(Channel);
       var window = new SettingsWindow(viewModel);
       window.Closed += (_, _) => _settingsWindow = null;
       _settingsWindow = window;
@@ -191,21 +190,6 @@ internal sealed class WindowCoordinator : IDisposable
 
     BringToFront(_settingsWindow, force);
     return _settingsWindow;
-  }
-
-  public HotkeysWindow ShowHotkeys()
-  {
-    if (_hotkeysWindow is null)
-    {
-      var viewModel = new HotkeysViewModel(Channel);
-      var window = new HotkeysWindow(viewModel);
-      window.Closed += (_, _) => _hotkeysWindow = null;
-      _hotkeysWindow = window;
-      _ = viewModel.LoadAsync();
-    }
-
-    BringToFront(_hotkeysWindow);
-    return _hotkeysWindow;
   }
 
   public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0, SetServerRequest? server = null) =>
