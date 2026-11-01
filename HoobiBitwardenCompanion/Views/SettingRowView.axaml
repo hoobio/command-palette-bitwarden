@@ -3,6 +3,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:hoobi="using:Hoobi.Design.Avalonia"
+    xmlns:ipc="using:HoobiBitwarden.Ipc"
     xmlns:local="using:HoobiBitwardenCompanion.Views"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:SettingRowViewModel">
@@ -15,12 +16,40 @@
                 <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
             </hoobi:SettingsCard.Header>
         </hoobi:SettingsCard>
+        <hoobi:SettingsCard Classes="Item" BorderThickness="0" IsVisible="{Binding IsTagRow}" Preview="{Binding Preview}" AutomationProperties.Name="{Binding Label}">
+            <hoobi:SettingsCard.DataTemplates>
+                <DataTemplate x:DataType="vm:TagPreview">
+                    <Border Classes="Badge">
+                        <TextBlock VerticalAlignment="Center" Text="{Binding Text}" Foreground="{Binding Foreground}" />
+                    </Border>
+                </DataTemplate>
+            </hoobi:SettingsCard.DataTemplates>
+            <hoobi:SettingsCard.Header>
+                <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </hoobi:SettingsCard.Header>
+            <hoobi:SettingsCard.Description>
+                <StackPanel>
+                    <TextBlock Classes="Caption" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
+                    <TextBlock Classes="Warn" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+            </hoobi:SettingsCard.Description>
+            <Panel>
+                <ToggleSwitch MinWidth="0" IsVisible="{Binding IsToggle}" IsChecked="{Binding BoolValue, Mode=TwoWay}" OnContent="{x:Null}" OffContent="{x:Null}" AutomationProperties.Name="{Binding Label}" />
+                <ComboBox IsVisible="{Binding IsChoice}" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="ipc:ChoiceDto">
+                            <TextBlock Text="{Binding Title}" ToolTip.Tip="{Binding Description}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Panel>
+        </hoobi:SettingsCard>
         <hoobi:SettingsCard x:Name="GroupCard" Classes="Item" BorderThickness="0" IsClickEnabled="{Binding !RevealsChildren}" IsVisible="{Binding IsGroup}" IsExpanded="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
             <hoobi:SettingsCard.Header>
                 <local:SettingRowBody x:Name="GroupHeader" />
             </hoobi:SettingsCard.Header>
             <hoobi:SettingsCard.ExpandedContent>
-                <ItemsControl x:Name="GroupRows" Classes="Rows" Margin="0,1,0,0" ItemsSource="{Binding ShownChildren}">
+                <ItemsControl x:Name="GroupRows" Classes="Rows" Margin="0,1,0,0" hoobi:SettingsCard.PreviewScope="True" ItemsSource="{Binding ShownChildren}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:SettingRowViewModel">
                             <local:SettingRowView />

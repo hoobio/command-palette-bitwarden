@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HoobiBitwarden.Ipc;
@@ -265,6 +266,11 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
   }
 }
 
+internal sealed record TagPreview(string Text, uint Rgb)
+{
+  public IBrush Foreground { get; } = new SolidColorBrush(Color.FromUInt32(0xFF000000 | Rgb));
+}
+
 internal sealed partial class SettingsSectionViewModel(string title) : ObservableObject
 {
   public string Title { get; } = title;
@@ -355,7 +361,21 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 
   public bool IsGroup => ShownChildren.Count > 0;
 
-  public bool IsRow => !IsGroup && !IsLink;
+  public bool IsRow => !IsGroup && !IsLink && !IsTagRow;
+
+  public bool IsTagRow => Key is "showWatchtowerTags" or "showProtectedTag" or "showPasskeyTag" or "totpTagStyle" or "organizationTagStyle";
+
+  public TagPreview? Preview => (Key, CurrentValue) switch
+  {
+    ("showWatchtowerTags", _) => new("Weak", 0xED8274),
+    ("showProtectedTag", _) => new("🔒", 0xFFD173),
+    ("showPasskeyTag", _) => new("Passkey", 0xA0C4FF),
+    ("totpTagStyle", "static") => new("2FA", 0x90E1C6),
+    ("totpTagStyle", "live") => new("123456 (24s)", 0x90E1C6),
+    ("organizationTagStyle", "initials") => new("AC", 0xB79CE6),
+    ("organizationTagStyle", "name") => new("Acme Corp", 0xB79CE6),
+    _ => null,
+  };
 
   public bool IsExpander => Kind == SettingKinds.Expander;
 
@@ -429,6 +449,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     {
       if (!SetProperty(ref _selectedChoice, value))
         return;
+      OnPropertyChanged(nameof(Preview));
       ValueChanged?.Invoke();
       if (!_applying && value is not null)
         _ = SubmitAsync(value.Value);

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
@@ -1073,6 +1074,94 @@ public class SettingsWindowTests(AvaloniaSession session)
     var comboRight = combo.TranslatePoint(new Point(combo.Bounds.Width, 0), card)!.Value.X;
     var glyphLeft = chevron.TranslatePoint(new Point((chevron.Bounds.Width - chevron.FontSize) / 2, 0), card)!.Value.X;
     Assert.Equal(22, glyphLeft - comboRight, 0.5);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  private static void UseTagSchema(FakeExtension extension)
+  {
+    extension.Schema.Clear();
+    extension.Schema.AddRange(
+    [
+      new("_section_a", SettingKinds.Section, "Appearance", null, null, null),
+      new("showTags", SettingKinds.Toggle, "Show Tags", "Shows tags on vault items", "true", null),
+      new("showWatchtowerTags", SettingKinds.Toggle, "Watchtower", "Tags weak, old or insecure passwords", "true", null, "showTags", "true"),
+      new("showProtectedTag", SettingKinds.Toggle, "Protected", "Tags items that need a master password re-prompt", "true", null, "showTags", "true"),
+      new("showPasskeyTag", SettingKinds.Toggle, "Passkey", "Tags items that have a passkey", "true", null, "showTags", "true"),
+      new("totpTagStyle", SettingKinds.Choice, "TOTP", "Tags items that have an authenticator key", "static", [new("Off", "off"), new("Static", "static"), new("Live", "live")], "showTags", "true"),
+      new("organizationTagStyle", SettingKinds.Choice, "Organisation", "Tags items owned by an organisation", "name", [new("Initials", "initials"), new("Name", "name"), new("Off", "off")], "showTags", "true"),
+    ]);
+  }
+
+  private static readonly string[] TagKeys = ["showWatchtowerTags", "showProtectedTag", "showPasskeyTag", "totpTagStyle", "organizationTagStyle"];
+
+  private static Control PreviewHost(SettingsCard card) =>
+    card.GetVisualDescendants().OfType<Control>().First(c => c.Name == "PART_PreviewHost" && ReferenceEquals(c.TemplatedParent, card));
+
+  private static string? PreviewText(SettingsCard card) =>
+    PreviewHost(card).GetVisualDescendants().OfType<TextBlock>().SingleOrDefault()?.Text;
+
+  private static SettingsWindow OpenTagWindow(WindowCoordinator coordinator, FakeExtension extension, ManualClock clock)
+  {
+    UseTagSchema(extension);
+    var window = coordinator.ShowSettings();
+    window.Width = 900;
+    window.Show();
+    clock.Attach(window);
+    AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.Count == 1 && window.ViewModel!.Sections[0].Rows[0].IsGroup);
+    window.ViewModel!.Sections[0].Rows[0].Expanded = true;
+    clock.Settle();
+    window.UpdateLayout();
+    return window;
+  }
+
+  [Fact]
+  public Task TagPreviews_ShowTogetherWhenWide_AndHideTogetherWhenNarrow() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var clock = new ManualClock();
+    var window = OpenTagWindow(coordinator, extension, clock);
+    var cards = TagKeys.Select(key => Find<SettingsCard>(window, key)).ToList();
+
+    Assert.All(cards, card => Assert.True(PreviewHost(card).IsVisible));
+    Assert.Equal(["Weak", "🔒", "Passkey", "2FA", "Acme Corp"], cards.Select(PreviewText));
+    Assert.Equal(Color.FromRgb(0xED, 0x82, 0x74), ((ISolidColorBrush)PreviewHost(cards[0]).GetVisualDescendants().OfType<TextBlock>().Single().Foreground!).Color);
+
+    window.Width = 380;
+    window.UpdateLayout();
+    Assert.All(cards, card => Assert.False(PreviewHost(card).IsVisible));
+
+    window.Width = 900;
+    window.UpdateLayout();
+    Assert.All(cards, card => Assert.True(PreviewHost(card).IsVisible));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task TagPreviews_FollowTheTotpAndOrganisationModes() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var clock = new ManualClock();
+    var window = OpenTagWindow(coordinator, extension, clock);
+    Find<ComboBox>(window, "totpTagStyle").SelectedIndex = 2;
+    Find<ComboBox>(window, "organizationTagStyle").SelectedIndex = 0;
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 2);
+    Assert.Equal("123456 (24s)", PreviewText(Find<SettingsCard>(window, "totpTagStyle")));
+    Assert.Equal("AC", PreviewText(Find<SettingsCard>(window, "organizationTagStyle")));
+
+    Find<ComboBox>(window, "totpTagStyle").SelectedIndex = 0;
+    Find<ComboBox>(window, "organizationTagStyle").SelectedIndex = 2;
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 4);
+    Assert.False(PreviewHost(Find<SettingsCard>(window, "totpTagStyle")).IsVisible);
+    Assert.False(PreviewHost(Find<SettingsCard>(window, "organizationTagStyle")).IsVisible);
+    Assert.True(PreviewHost(Find<SettingsCard>(window, "showPasskeyTag")).IsVisible);
     window.Close();
     await Task.CompletedTask;
   });
