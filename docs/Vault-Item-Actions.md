@@ -35,8 +35,8 @@ Both commands show in the Command Palette root. When the vault is locked, they s
 | Action | Description | Clipboard |
 |--------|-------------|----------|
 | Copy Card Number | Copies the full card number | Secure |
-| Copy Security Code | Copies the CVV/CVC | Secure |
-| Copy Cardholder Name | Copies the name on the card | Standard |
+| Copy Code | Copies the CVV/CVC | Secure |
+| Copy Cardholder | Copies the name on the card | Standard |
 
 ## Identity Items
 

@@ -16,8 +16,8 @@ Open the window from the **Shortcuts** section at the top of the [settings windo
 | Login | Open in Browser | `Alt+Enter` |
 | Login | Rotate password | None |
 | Card | Copy Card Number | `Ctrl+C` |
-| Card | Copy Security Code | `Ctrl+Shift+C` |
-| Card | Copy Cardholder Name | `Ctrl+Alt+C` |
+| Card | Copy Code | `Ctrl+Shift+C` |
+| Card | Copy Cardholder | `Ctrl+Alt+C` |
 | Card | Copy Expiration | `Ctrl+E` |
 | Identity | Copy Email | `Ctrl+C` |
 | Identity | Copy Name | `Ctrl+Shift+C` |

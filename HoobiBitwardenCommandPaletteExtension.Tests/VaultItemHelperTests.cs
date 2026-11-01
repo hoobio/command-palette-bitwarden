@@ -350,7 +350,7 @@ public class VaultItemHelperTests
       CardNumber = ProtectedSecret.From("4111111111111111"),
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
-    var holderItem = contextItems.First(c => c.Title == "Copy Cardholder Name");
+    var holderItem = contextItems.First(c => c.Title == "Copy Cardholder");
     Assert.IsNotType<RepromptPage>(holderItem.Command);
   }
 
