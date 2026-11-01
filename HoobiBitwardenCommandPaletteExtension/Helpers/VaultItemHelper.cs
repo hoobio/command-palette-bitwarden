@@ -135,9 +135,9 @@ internal static partial class VaultItemHelper
     return items.ToArray();
   }
 
-  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off", bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off")
+  internal static Tag[] BuildTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, string totpTagStyle = "off", bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off", IReadOnlyList<string>? collectionNames = null)
   {
-    var baseTags = BuildBaseTags(item, showWatchtowerTags, context, showContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
+    var baseTags = BuildBaseTags(item, showWatchtowerTags, context, showContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle, collectionNames);
 
     if (totpTagStyle != "off" && item.HasTotp)
     {
@@ -149,7 +149,7 @@ internal static partial class VaultItemHelper
     return baseTags;
   }
 
-  internal static Tag[] BuildBaseTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off")
+  internal static Tag[] BuildBaseTags(BitwardenItem item, bool showWatchtowerTags = true, ForegroundContext? context = null, bool showContextTag = true, bool showPasskeyTag = true, bool showProtectedTag = true, string? organizationName = null, string organizationTagStyle = "off", IReadOnlyList<string>? collectionNames = null)
   {
     var tags = new List<Tag>();
 
@@ -175,6 +175,9 @@ internal static partial class VaultItemHelper
     var orgTag = BuildOrganizationTag(item, organizationName, organizationTagStyle);
     if (orgTag != null)
       tags.Add(orgTag);
+
+    foreach (var collection in collectionNames ?? [])
+      tags.Add(new Tag(TruncateTag(collection)) { ToolTip = collection, Foreground = CollectionColor });
 
     if (showWatchtowerTags)
       AddWatchtowerTags(tags, item);
@@ -218,13 +221,17 @@ internal static partial class VaultItemHelper
     var color = GetOrganizationColor(item.OrganizationId);
     var text = organizationTagStyle == "initials"
       ? GetOrganizationInitials(organizationName)
-      : (organizationName.Length > 20 ? organizationName[..20] + "\u2026" : organizationName);
+      : TruncateTag(organizationName);
     return new Tag(text)
     {
       ToolTip = organizationName,
       Foreground = color,
     };
   }
+
+  private static readonly OptionalColor CollectionColor = ColorHelpers.FromRgb(0xB0, 0xB8, 0xC4);
+
+  private static string TruncateTag(string text) => text.Length > 20 ? text[..20] + "\u2026" : text;
 
   internal static string GetOrganizationInitials(string name)
   {
