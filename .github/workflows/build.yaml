@@ -103,7 +103,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
       - name: Azure login (OIDC)
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.4.0
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID }}
           tenant-id: ${{ vars.ADO_HOOBI_TENANT_ID }}
@@ -307,7 +307,7 @@ jobs:
 
       - name: Azure login (OIDC)
         if: env.SHOULD_BUILD == 'true'
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.4.0
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID }}
           tenant-id: ${{ vars.ADO_HOOBI_TENANT_ID }}
@@ -637,7 +637,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
       - name: Azure login (OIDC)
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.4.0
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID }}
           tenant-id: ${{ vars.ADO_HOOBI_TENANT_ID }}
