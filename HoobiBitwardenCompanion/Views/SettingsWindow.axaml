@@ -42,8 +42,8 @@
                                                             <StackPanel VerticalAlignment="Center" Spacing="2">
                                                                 <WrapPanel>
                                                                     <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                                                                    <Ellipse Width="8" Height="8" Margin="8,0,0,0" VerticalAlignment="Center" Fill="{DynamicResource SystemFillColorSuccessBrush}" IsVisible="{Binding IsStatusOk}" ToolTip.Tip="{Binding Tooltip}" />
-                                                                    <Ellipse Width="8" Height="8" Margin="8,0,0,0" VerticalAlignment="Center" Fill="{DynamicResource SystemFillColorCriticalBrush}" IsVisible="{Binding IsStatusError}" ToolTip.Tip="{Binding Tooltip}" />
+                                                                    <TextBlock Classes="Icon" Margin="8,0,0,0" FontSize="14" Text="{StaticResource Glyph.Checkmark}" Foreground="{DynamicResource SystemFillColorSuccessBrush}" IsVisible="{Binding IsStatusOk}" ToolTip.Tip="{Binding Tooltip}" AutomationProperties.Name="{Binding Tooltip}" />
+                                                                    <TextBlock Classes="Icon" Margin="8,0,0,0" FontSize="14" Text="{StaticResource Glyph.Warning}" Foreground="{DynamicResource SystemFillColorCriticalBrush}" IsVisible="{Binding IsStatusError}" ToolTip.Tip="{Binding Tooltip}" AutomationProperties.Name="{Binding Tooltip}" />
                                                                 </WrapPanel>
                                                                 <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
                                                             </StackPanel>

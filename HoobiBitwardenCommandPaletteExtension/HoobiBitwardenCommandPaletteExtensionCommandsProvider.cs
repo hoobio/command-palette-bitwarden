@@ -57,7 +57,7 @@ public partial class HoobiBitwardenCommandPaletteExtensionCommandsProvider : Com
             },
         ];
 
-        Settings = new SettingsWithButton(_settingsManager.Settings, companion.ShowSettings);
+        Settings = new SettingsWithButton(_settingsManager.Settings, companion.ShowSettingsFromForm);
         _ = _service.WarmCacheAsync();
     }
 

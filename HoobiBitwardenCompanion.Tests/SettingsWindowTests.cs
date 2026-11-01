@@ -330,6 +330,33 @@ public class SettingsWindowTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task ShowSettings_ForcesTheForegroundOnlyWhenTheRequestAsksForIt() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    var taken = 0;
+    var forced = 0;
+    coordinator.TakeForeground = _ => taken++;
+    coordinator.ForceForeground = _ => forced++;
+    _ = coordinator.RunAsync(() => { });
+
+    var plain = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0), IpcJson.Default.DialogRequest));
+    AvaloniaSession.WaitFor(() => plain.IsCompleted);
+    Assert.Equal((1, 0), (taken, forced));
+
+    var form = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0, null, true), IpcJson.Default.DialogRequest));
+    AvaloniaSession.WaitFor(() => form.IsCompleted);
+    Assert.Equal((1, 1), (taken, forced));
+
+    var legacy = pair.Extension.RequestAsync(Ops.ShowSettings, null);
+    AvaloniaSession.WaitFor(() => legacy.IsCompleted);
+    Assert.Equal((2, 1), (taken, forced));
+    coordinator.ShowSettings().Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
   public Task ToggleAndChoice_SendSetSettingAtOnce() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();

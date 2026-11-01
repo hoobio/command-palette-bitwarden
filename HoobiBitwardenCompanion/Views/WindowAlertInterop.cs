@@ -32,6 +32,12 @@ internal static partial class WindowAlertInterop
 
   internal static void TakeForeground(TopLevel window)
   {
+    if (window.TryGetPlatformHandle() is { HandleDescriptor: "HWND", Handle: var hwnd })
+      ReturnForeground(hwnd);
+  }
+
+  internal static void ForceForeground(TopLevel window)
+  {
     if (window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND", Handle: var hwnd })
       return;
     ReturnForeground(hwnd);

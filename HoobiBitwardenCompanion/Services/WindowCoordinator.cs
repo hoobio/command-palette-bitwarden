@@ -27,6 +27,8 @@ internal sealed class WindowCoordinator : IDisposable
 
   internal Action<Window> TakeForeground { get; set; } = WindowAlertInterop.TakeForeground;
 
+  internal Action<Window> ForceForeground { get; set; } = WindowAlertInterop.ForceForeground;
+
   internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlertInterop.WindowCentre;
 
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
@@ -98,7 +100,7 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowSettings:
         var settings = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Focus));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Focus, settings?.Force ?? false));
         return null;
       case Ops.ShowApiKeyLogin:
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
@@ -175,7 +177,7 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
-  public SettingsWindow ShowSettings(string? focus = null)
+  public SettingsWindow ShowSettings(string? focus = null, bool force = false)
   {
     if (_settingsWindow is null)
     {
@@ -186,7 +188,7 @@ internal sealed class WindowCoordinator : IDisposable
       _ = viewModel.LoadAsync();
     }
 
-    BringToFront(_settingsWindow);
+    BringToFront(_settingsWindow, force);
     _settingsWindow.ViewModel?.Focus(focus);
     return _settingsWindow;
   }
@@ -303,8 +305,8 @@ internal sealed class WindowCoordinator : IDisposable
     return window;
   }
 
-  // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused.
-  private void BringToFront(Window window)
+  // Activate takes focus only when the extension passed on its foreground right (CompanionHost.GrantForeground); the Topmost toggle still raises the window when that grant is refused. Only the Command Palette Settings form button sets force, because that form grants no right and the thread-input fallback takes focus from whatever app is in front.
+  private void BringToFront(Window window, bool force = false)
   {
     window.Show();
     if (window.WindowState == WindowState.Minimized)
@@ -313,7 +315,7 @@ internal sealed class WindowCoordinator : IDisposable
     window.Topmost = true;
     window.Topmost = topmost;
     window.Activate();
-    TakeForeground(window);
+    (force ? ForceForeground : TakeForeground)(window);
     (window as SettingsWindow)?.FocusSearch();
   }
 

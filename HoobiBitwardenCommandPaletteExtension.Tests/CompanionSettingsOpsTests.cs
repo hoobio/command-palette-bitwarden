@@ -198,6 +198,48 @@ public class CompanionSettingsOpsTests : IDisposable
   }
 
   [Fact]
+  public async Task GetSettings_ScansPathOncePerExecutable_UntilASettingChanges()
+  {
+    var original = Environment.GetEnvironmentVariable("PATH");
+    var onPath = Path.Combine(_dir, "pathdir");
+    Directory.CreateDirectory(onPath);
+    Environment.SetEnvironmentVariable("PATH", onPath);
+    try
+    {
+      Assert.Equal("bw\nNot found on PATH", (await GetAsync()).Single(s => s.Key == "cliDirectoryOverride").Tooltip);
+
+      await File.WriteAllTextAsync(Path.Combine(onPath, "bw.exe"), string.Empty, TestContext.Current.CancellationToken);
+      Assert.Equal("bw\nNot found on PATH", (await GetAsync()).Single(s => s.Key == "cliDirectoryOverride").Tooltip);
+
+      await SetAsync("liveSync", "false");
+      Assert.Equal($"{Path.Combine(onPath, "bw.exe")}\nFound on PATH", (await GetAsync()).Single(s => s.Key == "cliDirectoryOverride").Tooltip);
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable("PATH", original);
+    }
+  }
+
+  [Fact]
+  public async Task GetSettings_ScansPathAgain_WhenTheCliPathOverrideChanges()
+  {
+    var original = Environment.GetEnvironmentVariable("PATH");
+    Environment.SetEnvironmentVariable("PATH", Path.Combine(_dir, "empty"));
+    try
+    {
+      Assert.Equal("bw\nNot found on PATH", (await GetAsync()).Single(s => s.Key == "cliDirectoryOverride").Tooltip);
+      var cli = Path.Combine(_dir, "bw.exe");
+      await File.WriteAllTextAsync(cli, string.Empty, TestContext.Current.CancellationToken);
+      await SetAsync("cliDirectoryOverride", cli);
+      Assert.Equal($"{cli}\nSet here", (await GetAsync()).Single(s => s.Key == "cliDirectoryOverride").Tooltip);
+    }
+    finally
+    {
+      Environment.SetEnvironmentVariable("PATH", original);
+    }
+  }
+
+  [Fact]
   public async Task GetSettings_ShowsTheDesktopStatus_OnlyWhileIntegrationIsOn()
   {
     var row = (await GetAsync()).Single(s => s.Key == "useDesktopIntegration");

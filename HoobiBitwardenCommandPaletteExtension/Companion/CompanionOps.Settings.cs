@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Services;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -13,7 +14,32 @@ internal sealed partial class CompanionOps
 
   internal event Action? SettingsChanged;
 
-  private void RaiseSettingsChanged(object sender, Settings e) => SettingsChanged?.Invoke();
+  private readonly Lock _cliTooltipLock = new();
+  private (string Executable, string? Override, string Tooltip)? _cliTooltip;
+
+  private void RaiseSettingsChanged(object sender, Settings e)
+  {
+    ClearCliTooltip();
+    SettingsChanged?.Invoke();
+  }
+
+  internal void ClearCliTooltip()
+  {
+    lock (_cliTooltipLock)
+      _cliTooltip = null;
+  }
+
+  private string CachedCliTooltip(string executable, string? pathOverride)
+  {
+    lock (_cliTooltipLock)
+    {
+      if (_cliTooltip is { } cached && cached.Executable == executable && cached.Override == pathOverride)
+        return cached.Tooltip;
+      var tooltip = CliTooltip(executable, pathOverride, Environment.GetEnvironmentVariable("PATH"));
+      _cliTooltip = (executable, pathOverride, tooltip);
+      return tooltip;
+    }
+  }
 
   internal SettingsResponse GetSettings()
   {
@@ -68,7 +94,7 @@ internal sealed partial class CompanionOps
     : null;
 
   private string? TooltipFor(BitwardenSettingsManager manager, string key) =>
-    key == manager.CliDirectoryOverride.Key ? CliTooltip(_service.CliExecutable, manager.CliDirectoryOverride.Value, Environment.GetEnvironmentVariable("PATH"))
+    key == manager.CliDirectoryOverride.Key ? CachedCliTooltip(_service.CliExecutable, manager.CliDirectoryOverride.Value)
     : key == manager.CliDataDirectoryOverride.Key ? DataTooltip(_service.DataFileFolder, manager.CliDataDirectoryOverride.Value, _service.DataDirectory, Environment.GetEnvironmentVariable("BITWARDENCLI_APPDATA_DIR"))
     : null;
 

@@ -33,14 +33,38 @@ internal static partial class DesktopIpcService
   private const int ConnectTimeoutMs = 5_000;
   private const int ProbeTimeoutMs = 200;
 
-  // Connect-and-close sends no message, so Desktop shows no fingerprint or Windows Hello prompt.
-  internal static bool IsDesktopReachable(string? pipeName = null)
+  private static readonly TimeSpan ProbeCacheLifetime = TimeSpan.FromSeconds(5);
+  private static readonly Lock ProbeLock = new();
+  private static (string Pipe, DateTime At, bool Reachable)? _probe;
+
+  internal static void ResetProbeCache()
+  {
+    lock (ProbeLock)
+      _probe = null;
+  }
+
+  // Connect-and-close sends no message, so Desktop shows no fingerprint or Windows Hello prompt. The signer check only reads the server's file signature.
+  internal static bool IsDesktopReachable(string? pipeName = null, Func<PipeStream, bool>? isTrusted = null, Func<DateTime>? utcNow = null)
+  {
+    var name = pipeName ?? GetWindowsPipeName();
+    var now = (utcNow ?? (() => DateTime.UtcNow))();
+    lock (ProbeLock)
+    {
+      if (_probe is { } cached && cached.Pipe == name && now - cached.At < ProbeCacheLifetime)
+        return cached.Reachable;
+      var reachable = Probe(name, isTrusted ?? IsPipeServerBitwarden);
+      _probe = (name, now, reachable);
+      return reachable;
+    }
+  }
+
+  private static bool Probe(string pipeName, Func<PipeStream, bool> isTrusted)
   {
     try
     {
-      using var pipe = new NamedPipeClientStream(".", pipeName ?? GetWindowsPipeName(), PipeDirection.InOut);
+      using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
       pipe.Connect(ProbeTimeoutMs);
-      return true;
+      return isTrusted(pipe);
     }
     catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
     {

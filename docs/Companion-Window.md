@@ -201,9 +201,11 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 
 - A toggle is a switch. A choice is a drop-down list. A text setting is a box that saves when you press `Enter` or move to another control.
 - Each control shows its name and its description.
-- A setting that only matters when another setting is on sits under that setting, indented. The window hides it while the parent is off and shows it when you turn the parent on. A hidden setting keeps its value. **Automatically Prompt for Biometrics** sits under **Unlock with Windows Hello**, **Show Context Tag** and **Context Items Limit** sit under **Context Awareness**, and **Clipboard Clear Delay** sits under **Auto-Clear Clipboard**.
+- A setting that only matters when another setting is on sits under that setting, indented. The window hides it while the parent is off and shows it when you turn the parent on. A hidden setting keeps its value. **Automatically Prompt for Biometrics** sits under **Unlock with Windows Hello**, **Show Context Tag** and **Context Items Limit** sit under **Context Awareness**, **Clipboard Clear Delay** sits under **Auto-Clear Clipboard**, and **Watchtower**, **Protected**, **Passkey**, **TOTP** and **Organisation** sit under **Show Tags**.
 - **Use CLI Path as Data Directory** sits under **CLI Path Override** and shows only while the **CLI Path Override** box is not empty.
 - An empty **CLI Path Override** box shows the `bw` path in use as placeholder text. An empty **CLI Data Directory Override** box shows the folder that holds `data.json`.
+- The tooltip of the **CLI Path Override** box shows the `bw` path in use and where it came from: set in the box, installed by the extension, found on `PATH` or not found. The window searches `PATH` once and keeps the result until a setting changes.
+- **Unlock with Windows Hello** shows a status mark next to its name while it is on: a check mark when Bitwarden Desktop is reachable, a warning mark when it is not. The tooltip and the screen reader name give the same text. Reachable means the Desktop pipe server is a Bitwarden-signed program. The window checks at most once every 5 seconds.
 - An option of **TOTP** or **Organisation** can have a tooltip that explains it.
 - A drop-down list is as wide as its widest option.
 - The **Server** section is above all other sections (see [Server URL](#server-url)).

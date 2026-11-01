@@ -219,7 +219,7 @@ internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
-internal sealed record DialogRequest(long ReturnWindow, string? Focus = null);
+internal sealed record DialogRequest(long ReturnWindow, string? Focus = null, bool Force = false);
 
 internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
 
