@@ -203,7 +203,7 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
     svc.TriggerBackgroundRefreshIfStale();
     await Task.Delay(200, TestContext.Current.CancellationToken);
 
-    Assert.Equal(3, Volatile.Read(ref counter.Lists));
+    Assert.Equal(4, Volatile.Read(ref counter.Lists));
     Assert.True(DateTime.UtcNow - svc.LastRefresh < TimeSpan.FromMinutes(1));
   }
 
@@ -218,9 +218,9 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
     File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(1));
 
     svc.TriggerBackgroundRefreshIfStale();
-    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 6);
+    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 8);
 
-    Assert.Equal(6, Volatile.Read(ref counter.Lists));
+    Assert.Equal(8, Volatile.Read(ref counter.Lists));
   }
 
   [Fact]
@@ -236,9 +236,9 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
     File.SetLastWriteTimeUtc(path, writeTime);
 
     svc.TriggerBackgroundRefreshIfStale();
-    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 6);
+    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 8);
 
-    Assert.Equal(6, Volatile.Read(ref counter.Lists));
+    Assert.Equal(8, Volatile.Read(ref counter.Lists));
   }
 
   [Fact]
@@ -251,9 +251,9 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
     svc.LastRefresh = DateTime.UtcNow.AddHours(-1);
 
     svc.TriggerBackgroundRefreshIfStale();
-    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 6);
+    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 8);
 
-    Assert.Equal(6, Volatile.Read(ref counter.Lists));
+    Assert.Equal(8, Volatile.Read(ref counter.Lists));
   }
 
   [Fact]
@@ -267,8 +267,8 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
     File.Delete(path);
 
     svc.TriggerBackgroundRefreshIfStale();
-    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 6);
+    await WaitFor(() => Volatile.Read(ref counter.Lists) >= 8);
 
-    Assert.Equal(6, Volatile.Read(ref counter.Lists));
+    Assert.Equal(8, Volatile.Read(ref counter.Lists));
   }
 }

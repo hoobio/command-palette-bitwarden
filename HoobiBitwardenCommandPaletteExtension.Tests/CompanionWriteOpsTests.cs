@@ -271,7 +271,7 @@ public class CompanionWriteOpsTests
     {
       "create item" => never,
       "sync" => throw new InvalidOperationException("sync could not start"),
-      "list items" or "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
+      "list items" or "list folders" or "list organizations" or "list collections" => new FakeCliProcess("[]\n"),
       _ => null,
     };
     var save = h.Handle(Ops.CreateItem, new EditableItem(null, 2, "Note", null, null, [], false, false, "n", null, []), IpcJson.Default.EditableItem);
@@ -784,7 +784,7 @@ public class CompanionWriteOpsTests
     h.Vault.Override = args => args switch
     {
       "list items" => ++lists == 1 ? held : new FakeCliProcess("[" + h.Vault.Items[id].ToJsonString() + "]\n"),
-      "list folders" or "list organizations" => new FakeCliProcess("[]\n"),
+      "list folders" or "list organizations" or "list collections" => new FakeCliProcess("[]\n"),
       _ => null,
     };
 

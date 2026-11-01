@@ -487,9 +487,11 @@ public class BitwardenCliServiceMockedTests
     var folders = new FakeCliProcess(exitCode: 0, id: 101);
     var items = new FakeCliProcess(exitCode: 0, id: 102);
     var orgs = new FakeCliProcess(exitCode: 0, id: 103);
+    var collections = new FakeCliProcess(exitCode: 0, id: 105);
     factory.Enqueue(folders);
     factory.Enqueue(items);
     factory.Enqueue(orgs);
+    factory.Enqueue(collections);
     var cacheUpdated = false;
     svc.CacheUpdated += () => cacheUpdated = true;
 
@@ -497,7 +499,7 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 104));
     await svc.LockAsync();
 
-    foreach (var p in new[] { folders, items, orgs })
+    foreach (var p in new[] { folders, items, orgs, collections })
     {
       p.StdoutStream.Enqueue("[]\n");
       p.StdoutStream.Complete();
@@ -634,6 +636,7 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: folders.ToJsonString() + "\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: items.ToJsonString() + "\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
 
     var cacheUpdated = false;
     svc.CacheUpdated += () => cacheUpdated = true;
@@ -643,6 +646,26 @@ public class BitwardenCliServiceMockedTests
     var results = svc.SearchCached();
     Assert.Single(results);
     Assert.Equal("Test Login", results[0].Name);
+  }
+
+  [Fact]
+  public async Task RefreshCache_LoadsCollections_WithoutChangingReprompt()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("key");
+    const string items = "[{\"id\":\"item1\",\"name\":\"Shared\",\"type\":1,\"organizationId\":\"o1\",\"collectionIds\":[\"c1\",\"c2\"],\"reprompt\":0,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]";
+    const string collections = "[{\"id\":\"c1\",\"name\":\"Engineering\",\"organizationId\":\"o1\"},{\"id\":\"c2\",\"name\":\"Admin\",\"organizationId\":\"o1\"}]";
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: items + "\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: collections + "\n", exitCode: 0));
+
+    await svc.RefreshCacheAsync();
+
+    var item = Assert.Single(svc.SearchCached());
+    Assert.Equal(["Admin", "Engineering"], svc.GetCollectionNames(item.CollectionIds));
+    Assert.Equal(0, item.Reprompt);
+    Assert.Empty(svc.SearchCached("is:protected"));
   }
 
   [Fact]
@@ -663,7 +686,7 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
-    var held = new[] { new FakeCliProcess(exitCode: 0, id: 301), new FakeCliProcess(exitCode: 0, id: 302), new FakeCliProcess(exitCode: 0, id: 303) };
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 301), new FakeCliProcess(exitCode: 0, id: 302), new FakeCliProcess(exitCode: 0, id: 303), new FakeCliProcess(exitCode: 0, id: 304) };
     foreach (var p in held) factory.Enqueue(p);
     var statusChanged = false;
     svc.StatusChanged += () => statusChanged = true;
@@ -689,7 +712,7 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
-    var held = new[] { new FakeCliProcess(exitCode: 0, id: 311), new FakeCliProcess(exitCode: 0, id: 312), new FakeCliProcess(exitCode: 0, id: 313) };
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 311), new FakeCliProcess(exitCode: 0, id: 312), new FakeCliProcess(exitCode: 0, id: 313), new FakeCliProcess(exitCode: 0, id: 314) };
     foreach (var p in held) factory.Enqueue(p);
     var refreshingWhenRaised = (bool?)null;
     svc.StatusChanged += () => refreshingWhenRaised = svc.IsRefreshing;
@@ -712,7 +735,8 @@ public class BitwardenCliServiceMockedTests
     var (svc, factory) = CreateService();
     svc.SetSession("key");
     factory.Enqueue(new FakeCliProcess(stdout: "Syncing complete.\n", exitCode: 0));
-    // Folders, items and organizations are fetched in parallel and dequeued in invocation order.
+    // Folders, items, organizations and collections are fetched in parallel and dequeued in invocation order.
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
@@ -726,7 +750,7 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
-    var held = new[] { new FakeCliProcess(exitCode: 0, id: 201), new FakeCliProcess(exitCode: 0, id: 202), new FakeCliProcess(exitCode: 0, id: 203) };
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 201), new FakeCliProcess(exitCode: 0, id: 202), new FakeCliProcess(exitCode: 0, id: 203), new FakeCliProcess(exitCode: 0, id: 208) };
     foreach (var p in held) factory.Enqueue(p);
     var refresh = svc.RefreshCacheAsync();
 
@@ -736,6 +760,7 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 205));
     factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Synced\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0, id: 206));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 207));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 209));
     foreach (var p in held)
     {
       p.StdoutStream.Enqueue("[]\n");
@@ -752,7 +777,7 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
-    var held = new[] { new FakeCliProcess(exitCode: 0, id: 211), new FakeCliProcess(exitCode: 0, id: 212), new FakeCliProcess(exitCode: 0, id: 213) };
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 211), new FakeCliProcess(exitCode: 0, id: 212), new FakeCliProcess(exitCode: 0, id: 213), new FakeCliProcess(exitCode: 0, id: 215) };
     foreach (var p in held) factory.Enqueue(p);
     var refresh = svc.RefreshCacheAsync();
     await svc.RefreshCacheAsync();
@@ -775,7 +800,7 @@ public class BitwardenCliServiceMockedTests
   {
     var (svc, factory) = CreateService();
     svc.SetSession("key");
-    var held = new[] { new FakeCliProcess(exitCode: 0, id: 221), new FakeCliProcess(exitCode: 0, id: 222), new FakeCliProcess(exitCode: 0, id: 223) };
+    var held = new[] { new FakeCliProcess(exitCode: 0, id: 221), new FakeCliProcess(exitCode: 0, id: 222), new FakeCliProcess(exitCode: 0, id: 223), new FakeCliProcess(exitCode: 0, id: 228) };
     foreach (var p in held) factory.Enqueue(p);
     var refresh = svc.RefreshCacheAsync();
     await svc.RefreshCacheAsync();
@@ -786,6 +811,7 @@ public class BitwardenCliServiceMockedTests
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 225));
     factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Restored\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0, id: 226));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 227));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 229));
     foreach (var p in held)
     {
       p.StdoutStream.Enqueue("[]\n");
@@ -806,7 +832,7 @@ public class BitwardenCliServiceMockedTests
     var sync = new FakeCliProcess(exitCode: 0, id: 301);
     sync.StdoutStream.Enqueue("Syncing complete.\n");
     factory.Enqueue(sync);
-    for (var i = 0; i < 3; i++) factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 302 + i));
+    for (var i = 0; i < 4; i++) factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0, id: 302 + i));
     await svc.SyncVaultAsync();
 
     factory.Enqueue(new FakeCliProcess(stdout: "Your vault is locked.\n", exitCode: 0, id: 310));
@@ -853,6 +879,7 @@ public class BitwardenCliServiceMockedTests
     svc.SetSession("key");
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[{\"id\":\"1\",\"name\":\"Item\",\"type\":1,\"revisionDate\":\"2025-01-01T00:00:00Z\",\"login\":{\"username\":\"u\",\"password\":\"p\",\"uris\":[]}}]\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "[]\n", exitCode: 0));
 
     await svc.RefreshCacheAsync();

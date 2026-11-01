@@ -795,4 +795,24 @@ public class VaultItemHelperTests
       .Count();
     Assert.True(distinctColors >= 3, $"Expected colour spread, got {distinctColors} distinct colours");
   }
+
+  [Fact]
+  public void BuildBaseTags_CollectionNames_AddsTruncatedTagsWithFullToolTip()
+  {
+    var item = new BitwardenItem { Id = "c-1", Type = BitwardenItemType.Login };
+    var longName = new string('x', 25);
+    var tags = VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false, collectionNames: ["Engineering", longName]);
+    Assert.Equal(2, tags.Length);
+    Assert.Equal("Engineering", tags[0].Text);
+    Assert.Equal("Engineering", tags[0].ToolTip);
+    Assert.Equal(new string('x', 20) + "…", tags[1].Text);
+    Assert.Equal(longName, tags[1].ToolTip);
+  }
+
+  [Fact]
+  public void BuildBaseTags_NullCollectionNames_AddsNoTags()
+  {
+    var item = new BitwardenItem { Id = "c-2", Type = BitwardenItemType.Login };
+    Assert.Empty(VaultItemHelper.BuildBaseTags(item, showWatchtowerTags: false, collectionNames: null));
+  }
 }

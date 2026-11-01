@@ -60,6 +60,7 @@ internal sealed partial class BitwardenCliService
   private VaultStatus? _lastStatus;
   private Dictionary<string, string> _folders = [];
   private Dictionary<string, string> _organizations = [];
+  private Dictionary<string, string> _collections = [];
 
   private Timer? _autoLockTimer;
   private TimeSpan _autoLockTimeout;
@@ -266,9 +267,9 @@ internal sealed partial class BitwardenCliService
     _ = LogoutAsync();
   }
 
-  internal void LoadTestData(List<BitwardenItem> items, Dictionary<string, string> folders, Dictionary<string, string>? organizations = null)
+  internal void LoadTestData(List<BitwardenItem> items, Dictionary<string, string> folders, Dictionary<string, string>? organizations = null, Dictionary<string, string>? collections = null)
   {
-    lock (_cacheLock) { _cache = items; _folders = folders; _organizations = organizations ?? []; _cacheLoaded = true; }
+    lock (_cacheLock) { _cache = items; _folders = folders; _organizations = organizations ?? []; _collections = collections ?? []; _cacheLoaded = true; }
   }
 
   private void ApplyAutoLockSetting()
@@ -1298,6 +1299,13 @@ internal sealed partial class BitwardenCliService
       return _organizations.GetValueOrDefault(organizationId);
   }
 
+  internal List<string> GetCollectionNames(IReadOnlyList<string> collectionIds)
+  {
+    if (collectionIds.Count == 0) return [];
+    lock (_cacheLock)
+      return [.. collectionIds.Select(id => _collections.GetValueOrDefault(id)).OfType<string>().Order(StringComparer.OrdinalIgnoreCase)];
+  }
+
   private static int ContextBoost(BitwardenItem item, ForegroundContext? context)
   {
     if (context == null)
@@ -1375,7 +1383,7 @@ internal sealed partial class BitwardenCliService
       yield return buffer.ToString();
   }
 
-  internal static bool IsKnownFilter(string key) => key is "folder" or "url" or "host" or "type" or "org" or "is";
+  internal static bool IsKnownFilter(string key) => key is "folder" or "url" or "host" or "type" or "org" or "collection" or "is";
 
   internal IEnumerable<BitwardenItem> ApplyOrgFilter(IEnumerable<BitwardenItem> items, string value)
   {
@@ -1411,6 +1419,8 @@ internal sealed partial class BitwardenCliService
         || ((int)i.Type).ToString(System.Globalization.CultureInfo.InvariantCulture) == filter.Value),
     "org" when filter.Value.Equals("none", StringComparison.OrdinalIgnoreCase) => items.Where(i => i.OrganizationId == null),
     "org" => ApplyOrgFilter(items, filter.Value),
+    "collection" => items.Where(i => i.CollectionIds.Contains(filter.Value, StringComparer.OrdinalIgnoreCase)
+        || GetCollectionNames(i.CollectionIds).Any(n => n.Contains(filter.Value, StringComparison.OrdinalIgnoreCase))),
     "has" => filter.Value switch
     {
       "totp" or "otp" or "2fa" or "mfa" => items.Where(i => i.HasTotp),
@@ -1475,11 +1485,13 @@ internal sealed partial class BitwardenCliService
       var foldersTask = RunCliAsync("list folders");
       var itemsTask = RunCliAsync("list items");
       var organizationsTask = RunCliAsync("list organizations");
-      await Task.WhenAll(foldersTask, itemsTask, organizationsTask);
+      var collectionsTask = RunCliAsync("list collections");
+      await Task.WhenAll(foldersTask, itemsTask, organizationsTask, collectionsTask);
 
       var folders = ParseFolders(await foldersTask);
       var items = ParseItems(await itemsTask);
       var organizations = ParseOrganizations(await organizationsTask);
+      var collections = ParseIdNameMap(await collectionsTask, "ParseCollections");
       lock (_cacheLock)
       {
         if (generation != _sessionGeneration)
@@ -1497,9 +1509,10 @@ internal sealed partial class BitwardenCliService
           Interlocked.Exchange(ref _refreshPending, 1);
           return;
         }
-        DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations");
+        DebugLogService.Log("Cache", $"Cache refreshed: {items.Count} items, {folders.Count} folders, {organizations.Count} organizations, {collections.Count} collections");
         _folders = folders;
         _organizations = organizations;
+        _collections = collections;
         _cache = items;
         _cacheLoaded = true;
         _lastRefresh = DateTime.UtcNow;

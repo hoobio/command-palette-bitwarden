@@ -861,11 +861,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             }
             var contextForTags = capContextTags ? null : _context;
             var organizationName = organizationTagStyle != "off" ? _service?.GetOrganizationName(item.OrganizationId) : null;
-            var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, i, organizationName, organizationTagStyle);
+            var collectionNames = _service?.GetCollectionNames(item.CollectionIds);
+            var listItem = BuildListItem(item, showWatchtower, allowContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, showWebsiteIcons, contextForTags, i, organizationName, organizationTagStyle, collectionNames);
             list.Built.Add(listItem);
             if (totpTagStyle == "live" && item.HasTotp)
             {
-                var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
+                var baseTags = VaultItemHelper.BuildBaseTags(item, showWatchtower, contextForTags, allowContextTag, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle, collectionNames);
                 list.Totp.Add((listItem, item, baseTags));
             }
         }
@@ -882,7 +883,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         }
     }
 
-    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null, int iconPriority = int.MaxValue, string? organizationName = null, string organizationTagStyle = "off")
+    private ListItem BuildListItem(BitwardenItem item, bool showWatchtower, bool showContextTag, string totpTagStyle, bool showPasskeyTag, bool showProtectedTag, bool showWebsiteIcons = true, ForegroundContext? context = null, int iconPriority = int.MaxValue, string? organizationName = null, string organizationTagStyle = "off", IReadOnlyList<string>? collectionNames = null)
     {
         var listItem = new ListItem(VaultItemHelper.GetDefaultCommand(item, _service))
         {
@@ -892,7 +893,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             MoreCommands = VaultItemHelper.BuildContextItems(item, _service),
         };
 
-        var tags = VaultItemHelper.BuildTags(item, showWatchtower, context, showContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle);
+        var tags = VaultItemHelper.BuildTags(item, showWatchtower, context, showContextTag, totpTagStyle, showPasskeyTag, showProtectedTag, organizationName, organizationTagStyle, collectionNames);
         if (tags.Length > 0)
             listItem.Tags = tags;
 
