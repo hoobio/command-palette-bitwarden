@@ -1,14 +1,29 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCompanion.ViewModels;
 
-internal sealed partial class SettingsViewModel(PipeChannel channel, Action<string>? open = null, Action? showHotkeys = null) : ObservableObject
+internal sealed partial class SettingsViewModel(PipeChannel channel, Action<string>? open = null) : ObservableObject
 {
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsShortcutsOpen))]
+  public partial HotkeysViewModel? Shortcuts { get; private set; }
+
+  public bool IsShortcutsOpen => Shortcuts is not null;
+
+  internal void OpenShortcuts()
+  {
+    Shortcuts = new HotkeysViewModel(channel);
+    _ = Shortcuts.LoadAsync();
+  }
+
+  internal void CloseShortcuts() => Shortcuts = null;
+
   private const string RepoUrl = "https://github.com/hoobio/command-palette-bitwarden";
   private const string DonateUrl = "https://www.paypal.com/donate/?hosted_button_id=E2UBLTYAT4K8Y";
 
@@ -39,6 +54,12 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
   }
 
   private SettingRowViewModel ServerRow(string key) => Sections.SelectMany(s => s.Rows).First(r => r.Key == key);
+
+  internal void ServerUrlTyped(string? text)
+  {
+    foreach (var row in Sections.SelectMany(s => s.Rows))
+      row.FollowServerUrl(text);
+  }
 
   private Task<bool> AskAsync(string title, string message, string primary, string close) =>
     Confirm?.Invoke(title, message, primary, close) ?? Task.FromResult(false);
@@ -120,7 +141,7 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     var rows = Sections.SelectMany(s => s.Rows).ToList();
     var byKey = rows.ToDictionary(r => r.Key);
     bool ParentOn(SettingRowViewModel row) => row.Parent is null || row.ReadOnlyValues is not null || !byKey.TryGetValue(row.Parent, out var owner)
-      || ((row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue) && (!owner.IsExpander || ParentOn(owner)));
+      || (owner.IsExpander ? ParentOn(owner) : row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue);
     bool Matches(SettingRowViewModel row) => TextMatches(query, row.Label, row.Description);
 
     foreach (var row in rows)
@@ -131,9 +152,18 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     }
 
     if (query.Length > 0)
-      foreach (var child in rows.Where(r => r.Parent is not null && !ParentOn(r) && Matches(r)))
+      foreach (var child in Enumerable.Reverse(rows).Where(r => r.Parent is not null && (r.IsShown || Matches(r))))
         if (byKey.TryGetValue(child.Parent!, out var parent))
           parent.IsShown = true;
+
+    foreach (var row in rows)
+    {
+      row.ShownChildren = [.. row.Children.Where(c => c.IsShown || (row.RevealsChildren && !row.BoolValue))];
+      if (row.RevealsChildren)
+        row.Expanded = row.BoolValue;
+      else if (query.Length > 0 && row.ShownChildren.Count > 0)
+        row.Expanded = true;
+    }
 
     foreach (var section in Sections)
       section.IsShown = section.Rows.Any(r => r.IsShown);
@@ -202,7 +232,8 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private void Rebuild(IReadOnlyList<SettingDto> settings)
   {
-    var advancedExpanded = Sections.SelectMany(s => s.Rows).Any(r => r.IsExpander && r.Expanded);
+    var expanded = Sections.SelectMany(s => s.Rows).Where(r => r.Expanded).Select(r => r.Key).ToHashSet();
+    var byKey = new Dictionary<string, SettingRowViewModel>();
     Sections.Clear();
     SettingsSectionViewModel? current = null;
     foreach (var setting in settings)
@@ -218,16 +249,26 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
       var row = new SettingRowViewModel(channel, setting, setting.Key switch
       {
         SettingKeys.OpenLogs => OpenLogs,
-        SettingKeys.Hotkeys => showHotkeys,
+        SettingKeys.Hotkeys => OpenShortcuts,
         _ => null,
       }, setting.Key.StartsWith("server", StringComparison.Ordinal) ? CommitServerAsync : null);
-      row.Expanded = row.IsExpander && advancedExpanded;
+      row.Expanded = expanded.Contains(row.Key);
       row.ValueChanged += RefreshVisibility;
       current.Rows.Add(row);
+      byKey[row.Key] = row;
+      if (row.Parent is not null && byKey.TryGetValue(row.Parent, out var parent))
+        parent.Children.Add(row);
+      else
+        current.Roots.Add(row);
     }
 
     RefreshVisibility();
   }
+}
+
+internal sealed record TagPreview(string Text, uint Rgb)
+{
+  public IBrush Foreground { get; } = new SolidColorBrush(Color.FromUInt32(0xFF000000 | Rgb));
 }
 
 internal sealed partial class SettingsSectionViewModel(string title) : ObservableObject
@@ -240,6 +281,8 @@ internal sealed partial class SettingsSectionViewModel(string title) : Observabl
   public bool HasTitle => Title.Length > 0;
 
   public List<SettingRowViewModel> Rows { get; } = [];
+
+  public List<SettingRowViewModel> Roots { get; } = [];
 }
 
 internal sealed partial class SettingRowViewModel : ObservableObject
@@ -268,6 +311,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     Parent = setting.Parent;
     ParentValue = setting.ParentValue;
     ReadOnlyValues = setting.ReadOnlyValues;
+    RevealsChildren = setting.RevealsChildren;
     Choices = setting.Choices ?? [];
     Apply(setting);
   }
@@ -281,6 +325,8 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   public string? ParentValue { get; }
 
   public IReadOnlyDictionary<string, string>? ReadOnlyValues { get; }
+
+  public bool RevealsChildren { get; }
 
   public bool IsChild => Parent is not null;
 
@@ -301,25 +347,39 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   {
     SettingKinds.Toggle => _boolValue ? "true" : "false",
     SettingKinds.Choice => _selectedChoice?.Value ?? _committed,
-    SettingKinds.Expander => _expanded ? "true" : "false",
     _ => _committed,
   };
 
-  private bool _expanded;
+  [ObservableProperty]
+  public partial bool Expanded { get; set; }
 
-  public bool Expanded
+  internal List<SettingRowViewModel> Children { get; } = [];
+
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(IsGroup), nameof(IsRow))]
+  public partial IReadOnlyList<SettingRowViewModel> ShownChildren { get; set; } = [];
+
+  public bool IsGroup => ShownChildren.Count > 0;
+
+  public bool IsRow => !IsGroup && !IsLink && !IsTagRow;
+
+  public bool IsTagRow => Key is "showWatchtowerTags" or "showProtectedTag" or "showPasskeyTag" or "totpTagStyle" or "organizationTagStyle";
+
+  public TagPreview? Preview => (Key, CurrentValue) switch
   {
-    get => _expanded;
-    set
-    {
-      if (SetProperty(ref _expanded, value))
-        ValueChanged?.Invoke();
-    }
-  }
+    ("showWatchtowerTags", _) => new("Weak", 0xED8274),
+    ("showProtectedTag", _) => new("🔒", 0xFFD173),
+    ("showPasskeyTag", _) => new("Passkey", 0xA0C4FF),
+    ("totpTagStyle", "static") => new("2FA", 0x90E1C6),
+    ("totpTagStyle", "live") => new("123456 (24s)", 0x90E1C6),
+    ("organizationTagStyle", "initials") => new("AC", 0xB79CE6),
+    ("organizationTagStyle", "name") => new("Acme Corp", 0xB79CE6),
+    _ => null,
+  };
 
   public bool IsExpander => Kind == SettingKinds.Expander;
 
-  public bool IsPlain => !IsText && !IsExpander;
+  public bool IsPlain => !IsText;
 
   public string Kind { get; }
 
@@ -339,8 +399,16 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 
   public bool IsLink => Kind == SettingKinds.Link;
 
+  public bool IsPageLink => IsLink && Key == SettingKeys.Hotkeys;
+
   [ObservableProperty]
   public partial string? Placeholder { get; private set; }
+
+  internal void FollowServerUrl(string? baseUrl)
+  {
+    if (ServerUrlRules.AdvancedPaths.TryGetValue(Key, out var path))
+      Placeholder = ServerUrlRules.Placeholder(baseUrl, path);
+  }
 
   [ObservableProperty]
   public partial string? Tooltip { get; private set; }
@@ -381,6 +449,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     {
       if (!SetProperty(ref _selectedChoice, value))
         return;
+      OnPropertyChanged(nameof(Preview));
       ValueChanged?.Invoke();
       if (!_applying && value is not null)
         _ = SubmitAsync(value.Value);

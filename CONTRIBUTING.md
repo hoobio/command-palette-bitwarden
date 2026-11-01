@@ -24,6 +24,8 @@ cd command-palette-bitwarden
 dotnet build HoobiBitwardenCommandPaletteExtension -c Debug -p:Platform=x64
 ```
 
+The companion (`HoobiBitwardenCompanion`) uses the `Hoobi.Design.Avalonia` and `Hoobi.Design.Avalonia.Testing` NuGet packages. Both come from a private Azure Artifacts feed that `nuget.config` maps to `Hoobi.*`, and an anonymous restore returns 401. Restoring them needs access to that feed. CI authenticates to it with GitHub OIDC, and the federated credential covers repositories in the `hoobio` organisation only, so CI on a pull request from a fork cannot restore them. An outside contributor without feed access cannot build the companion locally.
+
 ### Running Tests
 
 ```powershell

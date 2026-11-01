@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Headless;
-using Avalonia.Threading;
-using HoobiBitwardenCompanion.Styles;
+using Hoobi.Design.Avalonia.Testing;
 
 [assembly: AssemblyFixture(typeof(HoobiBitwardenCompanion.Tests.AvaloniaSession))]
 [assembly: Xunit.v3.Parallelization(Mode = Xunit.Sdk.ParallelMode.None)]
@@ -10,19 +9,22 @@ namespace HoobiBitwardenCompanion.Tests;
 
 public sealed class AvaloniaSession : IDisposable
 {
-  private readonly HeadlessUnitTestSession _session = HeadlessUnitTestSession.StartNew(typeof(AvaloniaSession));
+  private readonly HeadlessSession _session = new(typeof(AvaloniaSession));
 
   public AvaloniaSession() =>
     HoobiBitwardenCompanion.Services.CompanionSettings.FilePath = Path.Combine(Path.GetTempPath(), $"companion-generator-{Guid.NewGuid():N}.json");
 
   public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
     .UseSkia()
-    .UseHoobiFonts()
+    .UseHoobiDesign()
     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 
-  public Task RunAsync(Action action) => _session.Dispatch(action, TestContext.Current.CancellationToken);
+  public Task RunAsync(Action action)
+  {
+    _session.Run(action, TestContext.Current.CancellationToken);
+    return Task.CompletedTask;
+  }
 
-  // The session thread only runs dispatched actions, so awaited continuations need the dispatcher pumped here.
   public Task RunAsync(Func<Task> action) => RunAsync(() =>
   {
     var task = action();
@@ -31,18 +33,7 @@ public sealed class AvaloniaSession : IDisposable
       System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException ?? ex);
   });
 
-  public static void WaitFor(Func<bool> condition)
-  {
-    var deadline = DateTime.UtcNow.AddSeconds(10);
-    while (!condition() && DateTime.UtcNow < deadline)
-    {
-      Dispatcher.UIThread.RunJobs();
-      Thread.Yield();
-    }
+  public static void WaitFor(Func<bool> condition) => Assert.True(HeadlessSession.WaitFor(condition));
 
-    Assert.True(condition());
-  }
-
-  // xunit can run fixture disposal on the session's own thread, where a blocking Dispose waits on itself.
-  public void Dispose() => _ = Task.Run(_session.Dispose);
+  public void Dispose() => _session.Dispose();
 }

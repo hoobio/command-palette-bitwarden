@@ -86,17 +86,19 @@ internal sealed partial class ServerUrlFieldViewModel(string label, string path,
 {
   public string Label { get; } = label;
 
-  public string Placeholder { get; } = "{base URL}" + path;
+  [ObservableProperty]
+  public partial string Placeholder { get; private set; } = ServerUrlRules.Placeholder(null, path);
 
   [ObservableProperty]
   public partial string? Value { get; set; } = value;
+
+  internal void FollowBaseUrl(string? baseUrl) => Placeholder = ServerUrlRules.Placeholder(baseUrl, path);
 }
 
 internal sealed partial class SelfHostedServerViewModel : ObservableObject
 {
   public SelfHostedServerViewModel(SetServerRequest current)
   {
-    BaseUrl = current.Region == ServerRegions.SelfHosted ? current.BaseUrl : null;
     Fields =
     [
       new("Web Vault URL", "/", current.WebVaultUrl),
@@ -107,7 +109,14 @@ internal sealed partial class SelfHostedServerViewModel : ObservableObject
       new("Events URL", "/events", current.EventsUrl),
       new("Key Connector URL", "/key-connector", current.KeyConnectorUrl),
     ];
+    BaseUrl = current.Region == ServerRegions.SelfHosted ? current.BaseUrl : null;
     Expanded = Fields.Any(f => !string.IsNullOrWhiteSpace(f.Value));
+  }
+
+  partial void OnBaseUrlChanged(string? value)
+  {
+    foreach (var field in Fields)
+      field.FollowBaseUrl(value);
   }
 
   public IReadOnlyList<ServerUrlFieldViewModel> Fields { get; }

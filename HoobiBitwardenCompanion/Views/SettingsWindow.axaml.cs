@@ -4,6 +4,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using FluentAvalonia.UI.Controls;
+using Hoobi.Design.Avalonia;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -17,19 +19,23 @@ internal sealed partial class SettingsWindow : Window
   public SettingsWindow(SettingsViewModel? viewModel)
   {
     InitializeComponent();
+    HoobiChrome.Attach(this);
     DataContext = viewModel;
     Topmost = ItemWindow.AlwaysOnTop;
-    AppTitleBar.PointerPressed += OnTitleBarPointerPressed;
+    HoobiChrome.AttachDragHandle(AppTitleBar);
     AddHandler(GotFocusEvent, OnGotFocus);
     AddHandler(LostFocusEvent, OnLostFocus);
     AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+    AddHandler(TextBox.TextChangedEvent, OnTextChanged);
+    AddHandler(SettingsCard.ClickEvent, OnCardClick);
     SearchBox.TextChanged += OnSearchTextChanged;
+    ShortcutsPage.Back.Click += (_, _) => ViewModel?.CloseShortcuts();
     if (viewModel is not null)
       viewModel.Confirm ??= ConfirmAsync;
   }
 
   private async Task<bool> ConfirmAsync(string title, string message, string primary, string close) =>
-    await ItemView.CreateConfirmDialog(title, message, primary, close).ShowAsync(this) == FAContentDialogResult.Primary;
+    await AppDialogs.ShowAsync(ItemView.CreateConfirmDialog(title, message, primary, close), this) == FAContentDialogResult.Primary;
 
   internal SettingsViewModel? ViewModel => DataContext as SettingsViewModel;
 
@@ -45,12 +51,23 @@ internal sealed partial class SettingsWindow : Window
       Scroller.ScrollToHome();
   }
 
-  private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
+  private void OnTextChanged(object? sender, TextChangedEventArgs e)
   {
-    if (e.Source is Visual source && (source == SearchBox || SearchBox.IsVisualAncestorOf(source)))
-      return;
-    if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-      BeginMoveDrag(e);
+    if (e.Source is TextBox { DataContext: SettingRowViewModel { Key: SettingKeys.ServerUrl } } box)
+      ViewModel?.ServerUrlTyped(box.Text);
+  }
+
+  private static void OnCardClick(object? sender, RoutedEventArgs e)
+  {
+    switch ((e.Source as Control)?.DataContext)
+    {
+      case SettingRowViewModel { IsLink: true } row:
+        row.OpenCommand.Execute(null);
+        break;
+      case LinkRowViewModel link:
+        link.OpenCommand.Execute(null);
+        break;
+    }
   }
 
   private static void OnGotFocus(object? sender, RoutedEventArgs e)
@@ -69,6 +86,20 @@ internal sealed partial class SettingsWindow : Window
 
   private void OnKeyDown(object? sender, KeyEventArgs e)
   {
+    if (DialogWindow.HasOpenDialog(this))
+      return;
+
+    if (ViewModel is { IsShortcutsOpen: true } settings)
+    {
+      if (e.Key == Key.Escape)
+      {
+        settings.CloseShortcuts();
+        e.Handled = true;
+      }
+
+      return;
+    }
+
     if (e.Key == Key.Escape && !string.IsNullOrEmpty(SearchBox.Text))
     {
       SearchBox.Clear();

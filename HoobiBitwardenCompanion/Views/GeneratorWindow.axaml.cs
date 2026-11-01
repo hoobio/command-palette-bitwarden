@@ -1,9 +1,10 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -17,11 +18,18 @@ internal sealed partial class GeneratorWindow : Window
   public GeneratorWindow(GeneratorViewModel? viewModel)
   {
     InitializeComponent();
+    HoobiChrome.Attach(this);
     DataContext = viewModel;
     Topmost = ItemWindow.AlwaysOnTop;
-    AppTitleBar.PointerPressed += OnTitleBarPointerPressed;
+    HoobiChrome.AttachDragHandle(AppTitleBar);
     if (viewModel is not null)
       viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    foreach (var slide in this.GetLogicalDescendants().OfType<SlideExpander>())
+      slide.Child?.PropertyChanged += (_, e) =>
+      {
+        if (e.Property == IsVisibleProperty && !_resizedByUser)
+          Dispatcher.UIThread.Post(FitToContent, DispatcherPriority.Loaded);
+      };
     Opened += (_, _) =>
     {
       if (Screens.ScreenFromWindow(this) is { } screen)
@@ -56,12 +64,6 @@ internal sealed partial class GeneratorWindow : Window
     var content = (Control)Content!;
     content.Measure(new Size(ClientSize.Width, double.PositiveInfinity));
     Height = Math.Clamp(content.DesiredSize.Height, MinHeight, MaxHeight);
-  }
-
-  private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
-  {
-    if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-      BeginMoveDrag(e);
   }
 
   internal Task SaveAsNewItemAsync() =>

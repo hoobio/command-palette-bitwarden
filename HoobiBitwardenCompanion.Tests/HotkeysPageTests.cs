@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -10,7 +12,7 @@ using HoobiBitwardenCompanion.Views;
 
 namespace HoobiBitwardenCompanion.Tests;
 
-public class HotkeysWindowTests(AvaloniaSession session)
+public class HotkeysPageTests(AvaloniaSession session)
 {
   private const int Ctrl = HotkeyModifiers.Ctrl;
   private const int Shift = HotkeyModifiers.Shift;
@@ -195,7 +197,7 @@ public class HotkeysWindowTests(AvaloniaSession session)
     Assert.False(login.IsEnterModified);
 
     login.SelectedEnter = login.EnterChoices[0];
-    AvaloniaSession.WaitFor(() => login.IsEnterModified);
+    AvaloniaSession.WaitFor(() => extension.LoginEnter == "login.openBrowser" && login.IsEnterModified);
 
     await login.ResetEnterCommand.ExecuteAsync(null);
 
@@ -417,19 +419,41 @@ public class HotkeysWindowTests(AvaloniaSession session)
     }
   });
 
+  private static (SettingsWindow Window, HotkeysView Page) OpenPage(WindowCoordinator coordinator)
+  {
+    var window = coordinator.ShowSettings();
+    window.Show();
+    var settings = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => settings.Sections.Count == 1);
+    var link = settings.Sections[0].Rows.Single(r => r.Key == "hotkeys");
+    Assert.True(link.IsPageLink);
+    link.OpenCommand.Execute(null);
+    window.UpdateLayout();
+    var page = window.GetVisualDescendants().OfType<HotkeysView>().Single();
+    AvaloniaSession.WaitFor(() => page.IsEffectivelyVisible && settings.Shortcuts!.Groups.Count == 2);
+    return (window, page);
+  }
+
+  private static void Press(Window window, Key key, PhysicalKey physical)
+  {
+    window.KeyPress(key, RawInputModifiers.None, physical, null);
+    window.KeyRelease(key, RawInputModifiers.None, physical, null);
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+  }
+
   [Fact]
-  public Task Window_RendersKeyCapsAndEnterActionPerGroup() => session.RunAsync(async () =>
+  public Task Page_RendersKeyCapsAndEnterActionPerGroup_InsideTheSettingsWindow() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();
     using var pair = new ChannelPair(extension.HandleAsync);
-    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
     _ = coordinator.RunAsync(() => { });
 
-    var window = coordinator.ShowHotkeys();
-    Assert.Same(window, coordinator.ShowHotkeys());
-    Assert.Equal(ItemWindow.AlwaysOnTop, window.Topmost);
-    var vm = window.ViewModel!;
-    AvaloniaSession.WaitFor(() => vm.Groups.Count == 2);
+    var (window, page) = OpenPage(coordinator);
+    var vm = window.ViewModel!.Shortcuts!;
+    Assert.False(window.FindControl<ScrollViewer>("Scroller")!.IsEffectivelyVisible);
+    Assert.False(window.FindControl<TextBox>("SearchBox")!.IsEffectivelyVisible);
+    Assert.Same(window, TopLevel.GetTopLevel(page));
     AvaloniaSession.WaitFor(() =>
     {
       window.UpdateLayout();
@@ -446,53 +470,100 @@ public class HotkeysWindowTests(AvaloniaSession session)
     var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible).ToList();
     Assert.Contains(buttons, b => b.Content as string == "Reset all");
     Assert.Equal(4, buttons.Count(b => b.Content is string glyph && glyph.Length == 1 && glyph[0] > 0xE000));
+    Assert.Contains(buttons, b => b.Name == "BackButton");
 
     window.Close();
-    Assert.NotSame(window, coordinator.ShowHotkeys());
-    coordinator.ShowHotkeys().Close();
     await Task.CompletedTask;
   });
 
   [Fact]
-  public Task EditButton_OpensTheCaptureDialogOverTheWindow() => session.RunAsync(async () =>
+  public Task BackButton_ReturnsToSettings() => session.RunAsync(async () =>
+  {
+    using var pair = new ChannelPair(new FakeExtension().HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var (window, page) = OpenPage(coordinator);
+
+    var back = page.Back;
+    window.UpdateLayout();
+    var point = back.TranslatePoint(new Avalonia.Point(back.Bounds.Width / 2, back.Bounds.Height / 2), window)!.Value;
+    window.MouseDown(point, MouseButton.Left);
+    window.MouseUp(point, MouseButton.Left);
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+    Assert.Null(window.ViewModel!.Shortcuts);
+    window.UpdateLayout();
+    Assert.False(page.IsEffectivelyVisible);
+    Assert.True(window.FindControl<ScrollViewer>("Scroller")!.IsEffectivelyVisible);
+    Assert.True(window.FindControl<TextBox>("SearchBox")!.IsEffectivelyVisible);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Escape_OnThePage_ReturnsToSettings_AndKeepsTheWindowOpen() => session.RunAsync(async () =>
+  {
+    using var pair = new ChannelPair(new FakeExtension().HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var (window, _) = OpenPage(coordinator);
+
+    Press(window, Key.Escape, PhysicalKey.Escape);
+
+    Assert.Null(window.ViewModel!.Shortcuts);
+    Assert.True(window.IsVisible);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task EditButton_OpensTheCaptureDialog_AndEscapeCancelsTheCaptureOnly() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension();
     using var pair = new ChannelPair(extension.HandleAsync);
-    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
     _ = coordinator.RunAsync(() => { });
-    var window = coordinator.ShowHotkeys();
-    var vm = window.ViewModel!;
-    AvaloniaSession.WaitFor(() => vm.Groups.Count == 2);
+    var (window, page) = OpenPage(coordinator);
+    var vm = window.ViewModel!.Shortcuts!;
 
     vm.Groups[1].Rows[2].EditCommand.Execute(null);
+    AvaloniaSession.WaitFor(() => page.OpenDialog is { IsLoaded: true });
+    Assert.Equal("Shortcut", page.OpenDialog!.Title);
+    var settled = DateTime.UtcNow.AddMilliseconds(300);
+    AvaloniaSession.WaitFor(() => DateTime.UtcNow > settled);
 
-    AvaloniaSession.WaitFor(() => window.OpenDialog is not null);
-    Assert.Equal("Shortcut", window.OpenDialog!.Title);
-    window.OpenDialog.Hide();
-    AvaloniaSession.WaitFor(() => window.OpenDialog is null);
+    var capture = (ChordCaptureViewModel)((HotkeyCaptureView)page.OpenDialog.Content!).DataContext!;
+    window.KeyPress(Key.R, RawInputModifiers.Control, PhysicalKey.R, null);
+    window.KeyRelease(Key.R, RawInputModifiers.Control, PhysicalKey.R, null);
+    Assert.Equal(["Ctrl", "R"], capture.Caps);
+    Press(window, Key.Escape, PhysicalKey.Escape);
+
+    AvaloniaSession.WaitFor(() => page.OpenDialog is null);
+    Assert.Same(vm, window.ViewModel.Shortcuts);
+    Assert.DoesNotContain(Ops.SetHotkey, extension.Calls);
     window.Close();
     await Task.CompletedTask;
   });
 
   [Fact]
-  public Task SettingsLink_OpensTheShortcutsWindow() => session.RunAsync(async () =>
+  public Task ReopeningThePage_OpensOneCaptureDialogPerEdit() => session.RunAsync(async () =>
   {
-    var extension = new FakeExtension();
-    using var pair = new ChannelPair(extension.HandleAsync);
-    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    using var pair = new ChannelPair(new FakeExtension().HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
     _ = coordinator.RunAsync(() => { });
-    var settings = coordinator.ShowSettings();
-    var vm = settings.ViewModel!;
-    AvaloniaSession.WaitFor(() => vm.Sections.Count == 1);
+    var (window, page) = OpenPage(coordinator);
+    window.ViewModel!.CloseShortcuts();
+    (window, page) = OpenPage(coordinator);
 
-    var link = vm.Sections[0].Rows.Single(r => r.Key == "hotkeys");
-    Assert.True(link.IsLink);
-    link.OpenCommand.Execute(null);
+    window.ViewModel!.Shortcuts!.Groups[1].Rows[2].EditCommand.Execute(null);
+    AvaloniaSession.WaitFor(() => page.OpenDialog is { IsLoaded: true });
+    page.OpenDialog!.Hide();
+    AvaloniaSession.WaitFor(() => page.OpenDialog is null);
+    var settled = DateTime.UtcNow.AddMilliseconds(500);
+    AvaloniaSession.WaitFor(() => DateTime.UtcNow > settled);
 
-    AvaloniaSession.WaitFor(() => extension.Calls.Contains(Ops.GetHotkeys));
-    Assert.NotNull(coordinator.ShowHotkeys());
-    coordinator.ShowHotkeys().Close();
-    settings.Close();
+    Assert.Null(page.OpenDialog);
+    window.Close();
     await Task.CompletedTask;
   });
 }

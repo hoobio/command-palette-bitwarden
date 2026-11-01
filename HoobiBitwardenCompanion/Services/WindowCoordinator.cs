@@ -2,6 +2,7 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Hoobi.Design.Avalonia;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.ViewModels;
 using HoobiBitwardenCompanion.Views;
@@ -14,7 +15,6 @@ internal sealed class WindowCoordinator : IDisposable
   private readonly List<ItemWindow> _newItemWindows = [];
   private GeneratorWindow? _generatorWindow;
   private SettingsWindow? _settingsWindow;
-  private HotkeysWindow? _hotkeysWindow;
   private readonly Dictionary<Type, DialogWindow> _dialogs = [];
   private FiltersResponse? _filters;
 
@@ -23,13 +23,13 @@ internal sealed class WindowCoordinator : IDisposable
 
   public PipeChannel Channel { get; }
 
-  internal Action<nint> ReturnForeground { get; set; } = WindowAlertInterop.ReturnForeground;
+  internal Action<nint> ReturnForeground { get; set; } = WindowAlert.ReturnForeground;
 
-  internal Action<Window> TakeForeground { get; set; } = WindowAlertInterop.TakeForeground;
+  internal Action<Window> TakeForeground { get; set; } = WindowAlert.TakeForeground;
 
-  internal Action<Window> ForceForeground { get; set; } = WindowAlertInterop.ForceForeground;
+  internal Action<Window> ForceForeground { get; set; } = ForegroundGate.ForceForeground;
 
-  internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlertInterop.WindowCentre;
+  internal Func<nint, PixelPoint?> AnchorOf { get; set; } = WindowAlert.WindowCentre;
 
   public IReadOnlyCollection<ItemWindow> ItemWindows => _itemWindows.Values;
 
@@ -181,7 +181,7 @@ internal sealed class WindowCoordinator : IDisposable
   {
     if (_settingsWindow is null)
     {
-      var viewModel = new SettingsViewModel(Channel, showHotkeys: () => ShowHotkeys());
+      var viewModel = new SettingsViewModel(Channel);
       var window = new SettingsWindow(viewModel);
       window.Closed += (_, _) => _settingsWindow = null;
       _settingsWindow = window;
@@ -190,21 +190,6 @@ internal sealed class WindowCoordinator : IDisposable
 
     BringToFront(_settingsWindow, force);
     return _settingsWindow;
-  }
-
-  public HotkeysWindow ShowHotkeys()
-  {
-    if (_hotkeysWindow is null)
-    {
-      var viewModel = new HotkeysViewModel(Channel);
-      var window = new HotkeysWindow(viewModel);
-      window.Closed += (_, _) => _hotkeysWindow = null;
-      _hotkeysWindow = window;
-      _ = viewModel.LoadAsync();
-    }
-
-    BringToFront(_hotkeysWindow);
-    return _hotkeysWindow;
   }
 
   public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0, SetServerRequest? server = null) =>
@@ -257,7 +242,7 @@ internal sealed class WindowCoordinator : IDisposable
       existing.ReturnWindow = returnWindow;
     existing.Show();
     if (created && anchor is { } centre)
-      existing.CentreOnScreenOf(centre);
+      HoobiChrome.CentreOnScreenOf(existing, centre);
     if (existing.WindowState == WindowState.Minimized)
       existing.WindowState = WindowState.Normal;
     existing.Activate();

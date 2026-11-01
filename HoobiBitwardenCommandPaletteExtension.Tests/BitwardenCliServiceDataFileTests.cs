@@ -116,6 +116,7 @@ public sealed class BitwardenCliServiceDataFileTests : IDisposable
   {
     File.WriteAllText(exe, "");
     var settings = new BitwardenSettingsManager(Path.Combine(_dir, "settings.json"));
+    settings.UseCliDirectoryOverride.Value = true;
     settings.CliDirectoryOverride.Value = exe;
     return settings;
   }

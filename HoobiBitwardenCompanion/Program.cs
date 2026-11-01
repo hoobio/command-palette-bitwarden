@@ -1,7 +1,7 @@
 using System.IO.Pipes;
 using Avalonia;
+using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.Services;
-using HoobiBitwardenCompanion.Styles;
 
 namespace HoobiBitwardenCompanion;
 
@@ -23,5 +23,5 @@ internal static class Program
 
   public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
     .UsePlatformDetect()
-    .UseHoobiFonts();
+    .UseHoobiDesign();
 }

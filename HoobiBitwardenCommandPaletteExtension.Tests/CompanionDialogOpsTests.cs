@@ -129,7 +129,8 @@ public class CompanionDialogOpsTests
   public async Task UnlockOp_Biometric_UnavailableDesktopApp_ReportsTheFailure()
   {
     var (svc, factory, settingsPath) = CreateService();
-    svc.Settings!.CliDataDirectoryOverride.Value = Path.Combine(Path.GetTempPath(), $"bw_nodata_{Guid.NewGuid():N}");
+    svc.Settings!.UseCliDataDirectoryOverride.Value = true;
+    svc.Settings.CliDataDirectoryOverride.Value =Path.Combine(Path.GetTempPath(), $"bw_nodata_{Guid.NewGuid():N}");
     using var ops = new CompanionOps(svc);
     try
     {
@@ -292,6 +293,7 @@ public class CompanionDialogOpsTests
     factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
     Assert.Equal(VaultStatus.Locked, await svc.GetVaultStatusAsync());
     factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: Unauthenticated, exitCode: 0));
     factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
     using var ops = new CompanionOps(svc);
     try
@@ -301,6 +303,81 @@ public class CompanionDialogOpsTests
       Assert.True(reply.Success);
       Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
       Assert.Equal("config server \"bitwarden.com\"", factory.LastArgs);
+    }
+    finally
+    {
+      File.Delete(settingsPath);
+    }
+  }
+
+  private const string Unauthenticated = "{\"status\":\"unauthenticated\"}\n";
+  private const string LogoutRequired = "Logout required before server config update.\n";
+
+  [Fact]
+  public async Task SetServerOp_StaleSignedOutStatus_LogsOutWhenTheCliAsks_AndRetries()
+  {
+    var (svc, factory, settingsPath) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stderr: LogoutRequired, exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: Unauthenticated, exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
+    using var ops = new CompanionOps(svc);
+    try
+    {
+      var reply = await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.Cloud, null));
+
+      Assert.Equal(new SetServerResponse(true, null), reply);
+      Assert.Equal(["config server \"bitwarden.com\"", "logout", "status", "config server \"bitwarden.com\""], factory.AllArgs);
+      Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
+    }
+    finally
+    {
+      File.Delete(settingsPath);
+    }
+  }
+
+  [Fact]
+  public async Task SetServerOp_AfterALogoutTheCliIgnored_SucceedsThroughTheRetry()
+  {
+    var (svc, factory, settingsPath) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "", exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
+    await svc.LogoutAsync();
+    Assert.Equal(VaultStatus.Locked, svc.LastStatus);
+
+    factory.Enqueue(new FakeCliProcess(stdout: "", exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stderr: LogoutRequired, exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: Unauthenticated, exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
+    using var ops = new CompanionOps(svc);
+    try
+    {
+      var reply = await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.Cloud, null));
+
+      Assert.Equal(new SetServerResponse(true, null), reply);
+      Assert.Equal(VaultStatus.Unauthenticated, svc.LastStatus);
+      Assert.Equal("config server \"bitwarden.com\"", factory.LastArgs);
+    }
+    finally
+    {
+      File.Delete(settingsPath);
+    }
+  }
+
+  [Fact]
+  public async Task SetServerOp_SignedOut_DoesNotLogOut()
+  {
+    var (svc, factory, settingsPath) = CreateService();
+    factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
+    using var ops = new CompanionOps(svc);
+    try
+    {
+      var reply = await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.Eu, null));
+
+      Assert.True(reply.Success);
+      Assert.Equal(["config server \"https://vault.bitwarden.eu\""], factory.AllArgs);
     }
     finally
     {

@@ -139,13 +139,13 @@ internal sealed partial class BitwardenCliService
   }
 
   internal string CliExecutable => ResolveCliExecutable(
-    _settings?.CliDirectoryOverride.Value,
+    _settings?.EffectiveCliDirectoryOverride,
     _settings?.AutoInstalledCliPath);
 
   internal string? DataDirectory => ResolveDataDirectory(
-    _settings?.CliDirectoryOverride.Value,
+    _settings?.EffectiveCliDirectoryOverride,
     _settings?.UsePortableDataDirectory.Value ?? false,
-    _settings?.CliDataDirectoryOverride.Value);
+    _settings?.EffectiveCliDataDirectoryOverride);
 
   internal string? DataFileOverride { get; set; }
 
@@ -665,7 +665,7 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  private async Task<VaultStatus> FetchStatusAsync()
+  private async Task<VaultStatus> FetchStatusAsync(VaultStatus onError = VaultStatus.Locked)
   {
     if (ReadDataFileLoginState() is { } state)
     {
@@ -694,7 +694,7 @@ internal sealed partial class BitwardenCliService
     catch (Exception ex)
     {
       DebugLogService.Log("Status", $"FetchStatusAsync exception: {ex.GetType().Name}: {ex.Message}");
-      return VaultStatus.Locked;
+      return onError;
     }
   }
 
@@ -1147,16 +1147,23 @@ internal sealed partial class BitwardenCliService
     DisposeDeviceVerificationProcess();
     KillAllRunning();
     ReplaceSessionKey(null);
-    SetStatus(VaultStatus.Unauthenticated);
+    SetStatus(VaultStatus.Locked);
     InvalidateCache();
     FaviconService.ClearMemCache();
     FaviconService.ClearDiskCache();
     SessionStore.Clear();
     ApiKeyStore.Clear();
-    StatusChanged?.Invoke();
 
-    try { await RunCliAsync("logout", CliLogoutTimeoutMs, "You have logged out."); }
-    catch (Exception ex) { DebugLogService.Log("Auth", $"bw logout failed (non-critical): {ex.GetType().Name}: {ex.Message}"); }
+    // A short timeout killed bw logout mid-write and left the account in data.json while the app showed signed out.
+    var loggedOut = false;
+    try { loggedOut = (await RunCliAsync("logout", CliTimeoutMs, "You have logged out.")).Contains("You have logged out.", StringComparison.OrdinalIgnoreCase); }
+    catch (Exception ex) { DebugLogService.Log("Auth", $"ERROR: bw logout failed: {ex.GetType().Name}: {ex.Message}"); }
+
+    var status = await FetchStatusAsync(loggedOut ? VaultStatus.Unauthenticated : VaultStatus.Locked);
+    if (status != VaultStatus.Unauthenticated)
+      DebugLogService.Log("Auth", $"ERROR: the CLI still holds the account after bw logout, status {status}");
+    SetStatus(status);
+    StatusChanged?.Invoke();
   }
 
   public async Task LockAsync(bool userInitiated = false)
@@ -1177,6 +1184,21 @@ internal sealed partial class BitwardenCliService
   }
 
   public async Task<string?> SetServerUrlAsync(ServerConfig config)
+  {
+    if (_lastStatus is VaultStatus.Locked or VaultStatus.Unlocked)
+      await LogoutAsync();
+
+    var error = await ConfigServerAsync(config);
+    // LastStatus can say signed out while data.json still holds an account, e.g. after a failed bw logout.
+    if (error?.Contains("Logout required", StringComparison.OrdinalIgnoreCase) != true)
+      return error;
+
+    DebugLogService.Log("Auth", "bw config server needs a logout, logging out and retrying");
+    await LogoutAsync();
+    return await ConfigServerAsync(config);
+  }
+
+  private async Task<string?> ConfigServerAsync(ServerConfig config)
   {
     DisposeDeviceVerificationProcess();
     KillAllRunning();
@@ -1771,7 +1793,6 @@ internal sealed partial class BitwardenCliService
   }
 
   private const int CliTimeoutMs = 30_000;
-  private const int CliLogoutTimeoutMs = 3_000;
 
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null, string? stdin = null, bool verbOnlyLog = false)
   {

@@ -19,4 +19,13 @@ internal static class TestEnvironment
     [ModuleInitializer]
     internal static void IsolateIconCache() =>
         Services.FaviconService.CacheDir = Path.Combine(Path.GetTempPath(), $"bw_icons_{Guid.NewGuid():N}");
+
+    // Logout and session tests write and delete credentials, which must not touch the developer's live Dev session or API key.
+    [ModuleInitializer]
+    internal static void IsolateCredentials()
+    {
+        var run = Guid.NewGuid().ToString("N");
+        Services.SessionStore.TargetName = $"BitwardenCommandPaletteExtension.Tests/{run}_sessionToken";
+        Services.ApiKeyStore.TargetName = $"BitwardenCommandPaletteExtension.Tests/{run}_apiKey";
+    }
 }

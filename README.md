@@ -87,6 +87,8 @@ dotnet build -c Debug -p:Platform=x64
 
 ## Building
 
+The companion restores `Hoobi.*` packages from a private feed. Without access to that feed it cannot be built. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```powershell
 # Debug
 dotnet build -p:Platform=x64

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using FluentAvalonia.UI.Controls;
+using Hoobi.Design.Avalonia;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.ViewModels;
 
@@ -27,7 +28,7 @@ internal sealed partial class ServerPickerView : UserControl
     OpenDialog = SelfHostedServerView.CreateDialog(viewModel, request => saved = request);
     try
     {
-      await OpenDialog.ShowAsync(TopLevel.GetTopLevel(this));
+      await AppDialogs.ShowAsync(OpenDialog, TopLevel.GetTopLevel(this)!);
     }
     finally
     {

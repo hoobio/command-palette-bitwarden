@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
@@ -97,7 +98,7 @@ internal static class HubProtocol
         var region = StringProperty(environment, "region");
         var urls = environment.ValueKind == JsonValueKind.Object && environment.TryGetProperty("urls", out var u) ? u : default;
         var notifications = StringProperty(urls, "notifications")?.TrimEnd('/')
-            ?? (region is not ("US" or "EU") && StringProperty(urls, "base") is { } baseUrl ? baseUrl.TrimEnd('/') + "/notifications" : null)
+            ?? (region is not ("US" or "EU") && StringProperty(urls, "base") is { } baseUrl ? ServerUrlRules.Derive(baseUrl, "/notifications") : null)
             ?? (region == "EU" ? "https://notifications.bitwarden.eu" : "https://notifications.bitwarden.com");
         return new Uri(notifications.StartsWith("http", StringComparison.OrdinalIgnoreCase)
             ? "ws" + notifications["http".Length..] + "/hub"

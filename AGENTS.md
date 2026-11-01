@@ -64,6 +64,29 @@ Stamping note: the per-channel identity and version are stamped into `Package.ap
 
 Commit note: a Debug build rewrites the tracked `Package.appxmanifest` to the Dev identity as a side effect. **Don't commit that change** - `git checkout -- HoobiBitwardenCommandPaletteExtension/Package.appxmanifest` before committing.
 
+## Companion design system
+
+The companion (`HoobiBitwardenCompanion`) takes its theme, fonts, glyphs, dialogs, toast, window chrome and scroll behaviour from the `Hoobi.Design.Avalonia` NuGet package. Its tests use `Hoobi.Design.Avalonia.Testing`. Both packages come from the Hoobi Azure Artifacts feed (`nuget.config`). The rules for a consumer are in the "Avalonia packages" section of `D:\hoobi-design\AGENTS.md`. Read that section before you change a style, a window or a dialog.
+
+- Change a shared style in hoobi-design and pin the new version here. Do not restyle a package control in this repo.
+- The build fails on `HOOBI001` (a literal colour in an `.axaml` file) and `HOOBI002` (a package-owned resource key redefined at app scope). Use a `Hoobi*` token. A colour that is not a palette value takes `<!-- hex-ok: reason -->` on the line above.
+- The app defines no app-wide styles or control themes. A style that the package does not have is added to hoobi-design.
+- Show every dialog with `AppDialogs.ShowAsync`. A dialog button counts only a real press, so a test clicks it with the pointer, not with a raised `Click` event.
+- A window calls `HoobiChrome.Attach(this)` after `InitializeComponent`.
+- CI authenticates to the Hoobi feed with OIDC (`azure/login` and an Azure DevOps token) before each restore, using the repository variables `ADO_HOOBI_ARTIFACTS_PULL_CLIENT_ID` and `ADO_HOOBI_TENANT_ID`. The federated credential covers `hoobio` repositories only, so fork PR CI cannot restore the packages.
+- Both package versions are pinned in `Directory.Packages.props` and move together.
+- The build also fails on `HOOBI003`: a popup background set or redefined in the app, or the package acrylic turned off. Popups (menus, flyouts, combo lists, tooltips) take their surface from the package. A deliberate exception takes `<!-- popup-ok: reason -->` on the line above.
+
+### Memory
+
+The figures are the private working set of the companion, measured with `D:\hoobi-design\dotnet\tools\Measure-Memory.ps1` (12 samples at 5 s). The build is Release x64 from `bin` (not the trimmed publish). The scenario: start the companion, open the generator window, close it, wait 15 s, then measure with no window open. Measured on 2026-11-01.
+
+| Build | Private working set (median, min to max) | Private bytes |
+| --- | --- | --- |
+| Before the package (hand-rolled styles, no trim) | 49.7 MB (49.3 to 51.7) | 119 MB |
+| `Hoobi.Design.Avalonia` 0.47.1 (GC defaults, trim after the last window closes) | 6.7 MB (5.8 to 8.1) | 119 MB |
+| `Hoobi.Design.Avalonia` 0.48.0 (`IdleMemory.ForApplication`) | 8.2 MB (5.8 to 8.8) | 126 MB |
+
 ## Git Commit Message Format
 
 All commit messages MUST follow [Conventional Commits](https://www.conventionalcommits.org/) for release-please compatibility. Commits and PRs in this repo do NOT require an Azure DevOps work item number (this repo isn't associated with an ADO project).

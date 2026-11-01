@@ -471,6 +471,7 @@ public class LiveSyncSyncTests : IDisposable
   public LiveSyncSyncTests()
   {
     _settings = new BitwardenSettingsManager(Path.Combine(_dir, "settings.json"));
+    _settings.UseCliDataDirectoryOverride.Value = true;
     _settings.CliDataDirectoryOverride.Value = Path.Combine(_dir, "data");
     _svc = new BitwardenCliService(_settings, _factory.Create);
   }
@@ -689,6 +690,7 @@ public class LiveSyncLifecycleTests : IDisposable
   public LiveSyncLifecycleTests()
   {
     _settings = new BitwardenSettingsManager(Path.Combine(_dir, "settings.json"));
+    _settings.UseCliDataDirectoryOverride.Value = true;
     _settings.CliDataDirectoryOverride.Value = Path.Combine(_dir, "data");
     _svc = new BitwardenCliService(_settings, _factory.Create);
   }

@@ -2,6 +2,7 @@
     x:Class="HoobiBitwardenCompanion.Views.GeneratorView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hoobi="using:Hoobi.Design.Avalonia"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:GeneratorViewModel">
     <StackPanel>
@@ -28,7 +29,7 @@
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
                         <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
                             <TextBlock Classes="FieldLabel" Text="Current password" />
-                            <TextBlock x:Name="CurrentPasswordText" Text="{Binding DisplayValue}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFontFamily}" FontSize="13" LetterSpacing="1" />
+                            <TextBlock x:Name="CurrentPasswordText" Text="{Binding DisplayValue}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" FontSize="13" LetterSpacing="1" />
                         </StackPanel>
                         <Button x:Name="PeekButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" ToolTip.Tip="Hold to show" AutomationProperties.Name="Hold to show">
                             <Panel>
@@ -50,21 +51,21 @@
         <Border Classes="Group" Margin="0,16,0,0">
             <Border Classes="Row Field" MinHeight="64">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="0">
-                    <SelectableTextBlock x:Name="ValueText" Text="{Binding Value}" FontFamily="{StaticResource MonoFontFamily}" FontSize="18" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <SelectableTextBlock x:Name="ValueText" Text="{Binding Value}" FontFamily="{StaticResource HoobiMonoFontFamily}" FontSize="18" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <Button x:Name="RegenerateButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Refresh}" Command="{Binding RegenerateCommand}" ToolTip.Tip="Regenerate" AutomationProperties.Name="Regenerate" />
                     <Button x:Name="CopyButton" Grid.Column="2" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy" AutomationProperties.Name="Copy" />
                 </Grid>
             </Border>
         </Border>
 
-        <ToggleButton x:Name="OptionsToggle" Classes="Disclosure" Margin="0,12,0,4" Padding="4,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding OptionsExpanded, Mode=TwoWay}" AutomationProperties.Name="Options">
+        <ToggleButton x:Name="OptionsToggle" Classes="Disclosure Chevron" Margin="0,12,0,4" Padding="4,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding OptionsExpanded, Mode=TwoWay}" AutomationProperties.Name="Options">
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Text="Options" FontSize="{StaticResource CaptionTextBlockFontSize}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.ChevronDown}" IsVisible="{Binding !OptionsExpanded}" />
-                <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.ChevronUp}" IsVisible="{Binding OptionsExpanded}" />
+                <TextBlock Grid.Column="1" Classes="Chevron" />
             </Grid>
         </ToggleButton>
-        <Border x:Name="OptionsGroup" Classes="Group" IsVisible="{Binding OptionsExpanded}">
+        <hoobi:SlideExpander IsExpanded="{Binding OptionsExpanded}">
+        <Border x:Name="OptionsGroup" Classes="Group">
             <Panel>
                 <StackPanel x:Name="PasswordOptions" Classes="Rows" IsVisible="{Binding IsPassword}">
                     <Border Classes="Row Switch">
@@ -130,7 +131,7 @@
                     <Border Classes="Row Switch">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                             <TextBlock Text="Word separator" VerticalAlignment="Center" />
-                            <TextBox Grid.Column="1" Width="92" HorizontalAlignment="Right" MaxLength="1" Text="{Binding Separator}" PlaceholderText="-" FontFamily="{StaticResource MonoFontFamily}" />
+                            <TextBox Grid.Column="1" Width="92" HorizontalAlignment="Right" MaxLength="1" Text="{Binding Separator}" PlaceholderText="-" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </Grid>
                     </Border>
                     <Border Classes="Row Switch">
@@ -148,6 +149,7 @@
                 </StackPanel>
             </Panel>
         </Border>
+        </hoobi:SlideExpander>
 
         <TextBlock x:Name="ErrorText" Margin="0,8,0,0" TextWrapping="Wrap" Classes="Warn" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         <TextBlock Classes="Caption" Margin="0,8,0,0" Text="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -161,7 +163,7 @@
                             <Border Classes="Row Field">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{x:Static vm:FieldViewModel.Mask}" FontFamily="{StaticResource MonoFontFamily}" FontSize="13" LetterSpacing="1" />
+                                        <TextBlock Text="{x:Static vm:FieldViewModel.Mask}" FontFamily="{StaticResource HoobiMonoFontFamily}" FontSize="13" LetterSpacing="1" />
                                         <TextBlock Classes="FieldLabel">
                                             <TextBlock.Text>
                                                 <MultiBinding StringFormat="{}{0} · {1}">

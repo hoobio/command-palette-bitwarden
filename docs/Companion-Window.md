@@ -88,7 +88,7 @@ Bank account, driver's licence and passport items show read-only, with no **Edit
 
 **Add website** and **Add field** are the last rows of their groups. The reorder and remove buttons of websites and custom fields are not red, because **Cancel** undoes them.
 
-The trash-can button opens a dialog that names the item. It offers **Archive**, **Permanently delete** and **Cancel**, one above the other so that each fits in a narrow window. When Bitwarden cannot archive the item (for example an organisation item, or an account without archive), **Move to Trash** replaces **Archive**, so a recoverable option stays available. The dialog stays open while Bitwarden runs the change and shows an error in the dialog when the change fails. After an archive, a move to the trash or a permanent delete, the window closes.
+The trash-can button opens a **Remove item** dialog that names the item. The red primary button is **Permanently delete**, the secondary button is **Archive**, and **Cancel** closes the dialog. When Bitwarden cannot archive the item (for example an organisation item, or an account without archive), **Move to Trash** replaces **Archive**, so a recoverable option stays available. The dialog stays open while Bitwarden runs the change and shows an error in the dialog when the change fails. After an archive, a move to the trash or a permanent delete, the window closes.
 
 ## New item
 
@@ -197,7 +197,7 @@ The **Server** section is the first section of the Settings window. It has these
 
 - **Region** is **Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**. The box starts with the region of the current server.
 - **Server URL** always shows. For **Bitwarden.com** and **Bitwarden.eu** it is read-only and shows `https://vault.bitwarden.com` or `https://vault.bitwarden.eu`. It follows the selection in the **Region** box. For **Self-hosted** it is editable. It must start with `http://` or `https://`. A change saves when you press `Enter` or move to another control. Choosing **Self-hosted** alone changes nothing until the URL is saved.
-- **Advanced** shows for **Self-hosted**, under **Server URL**. It is collapsed by default. Select the row to show seven optional URL boxes: **Web Vault URL**, **API URL**, **Identity URL**, **Icons URL**, **Notifications URL**, **Events URL** and **Key Connector URL**. Each box shows its default, for example `{base URL}/api`, as a placeholder. Leave a box blank to derive the address from **Server URL**. A URL in a box must start with `https://`. A change saves with **Server URL** in the same way, and the boxes show the overrides that the Bitwarden CLI has stored.
+- **Advanced** shows for **Self-hosted**, under **Server URL**. It is collapsed by default. Select the row to show seven optional URL boxes: **Web Vault URL**, **API URL**, **Identity URL**, **Icons URL**, **Notifications URL**, **Events URL** and **Key Connector URL**. Each box shows the address it derives from **Server URL** as a placeholder, for example `https://vault.example.com/api`. The placeholder changes as you type the server URL. When **Server URL** is empty or not valid, the placeholder shows the example address. Leave a box blank to derive the address from **Server URL**. A URL in a box must start with `https://`. A change saves with **Server URL** in the same way, and the boxes show the overrides that the Bitwarden CLI has stored.
 
 Choosing **Bitwarden.com** or **Bitwarden.eu** saves the server at once. The Bitwarden CLI changes the server only while you are logged out, so a change logs out of a locked or unlocked vault first. While you are logged in, the description of **Region** reads "Changing the server logs you out", and each change asks for confirmation in a **Change server?** dialog. **Cancel** keeps the server and shows "The server was not changed." under the control. A URL that is not valid, or an error from the CLI, shows under the control. A saved server leaves you logged out, and Command Palette then shows **Login to Bitwarden**. While you are logged out, you can also change the server in the [server picker](#server-picker) of a login window.
 
@@ -209,15 +209,17 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 
 - A toggle is a switch. A choice is a drop-down list. A text setting is a box that saves when you press `Enter` or move to another control.
 - Each control shows its name and its description.
-- A setting that only matters when another setting is on sits under that setting, indented. The window hides it while the parent is off and shows it when you turn the parent on. A hidden setting keeps its value. **Automatically Prompt for Biometrics** sits under **Unlock with Windows Hello**, **Show Context Tag** and **Context Items Limit** sit under **Context Awareness**, **Clipboard Clear Delay** sits under **Auto-Clear Clipboard**, and **Watchtower**, **Protected**, **Passkey**, **TOTP** and **Organisation** sit under **Show Tags**.
-- **Use CLI Path as Data Directory** sits under **CLI Path Override** and shows only while the **CLI Path Override** box is not empty.
-- An empty **CLI Path Override** box shows the `bw` path in use as placeholder text. An empty **CLI Data Directory Override** box shows the folder that holds `data.json`.
-- The tooltip of the **CLI Path Override** box shows the `bw` path in use and where it came from: set in the box, installed by the extension, found on `PATH` or not found. The window searches `PATH` once and keeps the result until a setting changes.
-- **Unlock with Windows Hello** shows a status mark next to its name while it is on: a check mark when Bitwarden Desktop is reachable, a warning mark when it is not. The tooltip and the screen reader name give the same text. Reachable means the Desktop pipe server is a Bitwarden-signed program. The window checks at most once every 5 seconds.
+- A setting with sub-settings is a collapsible group. The group is collapsed by default. Select the row, but not its own switch, to open or close it. A search match on a sub-setting opens its group. A sub-setting sits indented under its parent. The window hides it while the parent is off and shows it when you turn the parent on. A hidden setting keeps its value. **Automatically Prompt for Biometrics** sits under **Unlock with Windows Hello**, **Show Context Tag** and **Context Items Limit** sit under **Context Awareness**, **Clipboard Clear Delay** sits under **Auto-Clear Clipboard**, and **Watchtower**, **Protected**, **Passkey**, **TOTP** and **Organisation** sit under **Show Tags**.
+- **CLI Path Override** and **CLI Data Directory Override** are switches. When a switch is on, a **CLI path** or **CLI data folder** box opens under it. When it is off, the box is hidden and keeps its value.
+- **Use CLI Path as Data Directory** sits under the **CLI path** box and shows only while that box is not empty.
+- An empty **CLI path** box shows the `bw` path in use as placeholder text. An empty **CLI data folder** box shows the folder that holds `data.json`.
+- Each row under **Show Tags** shows a preview of its tag, with the text and colour of the tag in the vault list. **TOTP** and **Organisation** follow the selected option and show no preview for **Off**. The previews show together when the group is open.
+- The tooltip of the **CLI path** box shows the `bw` path in use and where it came from: set in the box, installed by the extension, found on `PATH` or not found. The window searches `PATH` once and keeps the result until a setting changes.
+- **Unlock with Windows Hello** shows a status mark next to its name while it is on: a check mark when Bitwarden Desktop is reachable, a warning mark when it is not. The tooltip and the screen reader name give the same text. Reachable means the Desktop pipe server is a Bitwarden-signed program. The check reads the program path in a way that Bitwarden Desktop allows, so a running Desktop shows as reachable. The window checks at most once every 5 seconds.
 - An option of **TOTP** or **Organisation** can have a tooltip that explains it.
 - A drop-down list is as wide as its widest option.
 - The **Server** section is above all other sections (see [Server URL](#server-url)).
-- **Keyboard shortcuts**, in the **Shortcuts** section below it, opens the window that changes item shortcuts and the Enter action (see [Keyboard Shortcuts](Keyboard-Shortcuts)).
+- **Keyboard shortcuts**, in the **Shortcuts** section below it, opens the shortcuts page in place of the settings list. A back arrow in the page header, or `Esc`, returns to the settings (see [Keyboard Shortcuts](Keyboard-Shortcuts)).
 - **Logs**, under **Debug Logging** in the **Diagnostics** section, opens the log folder in File Explorer.
 - The **Help and feedback** section has **Report a bug**, **Request a feature** and **Project on GitHub**. Each opens a page in the browser.
 - The **About** section shows the app name, the version with the short commit and the copyright line. **Support** opens the donation page. **Check for updates** has a **Check now** button and a status line. The check runs only when you select **Check now**. A Dev build does not check. For a Microsoft Store install the **Install update** button installs the update or opens the Store update list, and the status line reports if the install did not complete. For a sideloaded install the **View release** button opens the GitHub release. See [Update check](Architecture#update-check).
@@ -225,10 +227,10 @@ The window shows every setting of the [Settings](Settings) page, in the same ord
 - The content stays centred, at most 880 pixels wide.
 - `Ctrl+F` moves the focus to the search box. `Esc` clears the search and the full list returns, scrolled to the top.
 - The window opens with the focus in the search box.
-- A change applies at once and has no **Save** button. It runs the same code as a change on the Command Palette settings page.
+- A change applies at once and has no **Save** button.
 - If the extension refuses a value, the control goes back to its old value and the window shows the reason under the control.
-- A change on the Command Palette settings page while the window is open shows in the window. The window keeps the focus, the scroll position and a text box that you are editing.
-- Turning **Use API Key Authentication** on or off logs you out, as on the settings page.
+- A change made by the extension while the window is open shows in the window. The window keeps the focus, the scroll position and a text box that you are editing.
+- Turning **Use API Key Authentication** on or off logs you out.
 - The window stays open when the vault is locked.
 
 ## Locked vault

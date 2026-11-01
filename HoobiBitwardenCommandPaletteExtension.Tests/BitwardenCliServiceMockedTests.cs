@@ -446,6 +446,7 @@ public class BitwardenCliServiceMockedTests
     var (svc, factory) = CreateService();
     svc.SetSession("session-key");
     factory.Enqueue(new FakeCliProcess(stdout: "You have logged out.\n", exitCode: 0));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"unauthenticated\"}\n", exitCode: 0));
     var statusChanged = false;
     svc.StatusChanged += () => statusChanged = true;
     var realIconDir = FaviconService.CacheDir;
@@ -1324,7 +1325,7 @@ public class BitwardenCliServiceMockedTests
       var settings = new BitwardenSettingsManager(tempPath);
       settings.RememberSession.Value = true;
       var factory = new FakeProcessFactory();
-      var svc = new BitwardenCliService(settings, factory.Create);
+      var svc = new BitwardenCliService(settings, factory.Create) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
       svc.SetSession("some-session-key");
       SessionStore.Save("some-session-key");
       ApiKeyStore.Save("user.abc", "s3cret");
@@ -1361,5 +1362,23 @@ public class BitwardenCliServiceMockedTests
     await svc.LogoutAsync();
 
     Assert.Null(ApiKeyStore.Load());
+  }
+
+  [Fact]
+  public async Task Logout_CliStillHoldsTheAccount_ShowsTheCliState()
+  {
+    var (svc, factory) = CreateService();
+    svc.SetSession("session-key");
+    factory.Enqueue(new FakeCliProcess(stdout: "", exitCode: 1));
+    factory.Enqueue(new FakeCliProcess(stdout: "{\"status\":\"locked\"}\n", exitCode: 0));
+    var statusChanged = false;
+    svc.StatusChanged += () => statusChanged = true;
+
+    await svc.LogoutAsync();
+
+    Assert.False(svc.IsUnlocked);
+    Assert.Equal(VaultStatus.Locked, svc.LastStatus);
+    Assert.True(statusChanged);
+    Assert.Equal(["logout", "status"], factory.AllArgs);
   }
 }

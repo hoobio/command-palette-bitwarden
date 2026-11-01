@@ -866,8 +866,8 @@ public class EditTests(AvaloniaSession session)
 
     var request = new ActionDialogRequest("Remove item", "Archive or delete?", "Permanently delete") { PrimaryLabel = "Archive" };
     var (dialog, error, busy) = ItemView.CreateActionDialog(request);
-    Assert.Contains("Action", dialog.Classes);
-    Assert.Equal(("Archive", "Permanently delete", "Cancel"), (dialog.PrimaryButtonText, dialog.SecondaryButtonText, dialog.CloseButtonText));
+    Assert.Contains("Danger", dialog.Classes);
+    Assert.Equal(("Permanently delete", "Archive", "Cancel"), (dialog.PrimaryButtonText, dialog.SecondaryButtonText, dialog.CloseButtonText));
     using var gate = new SemaphoreSlim(0);
     var running = ItemView.RunActionAsync(dialog, error, busy, request, async () =>
     {
@@ -882,12 +882,12 @@ public class EditTests(AvaloniaSession session)
     Assert.False(busy.IsVisible);
     Assert.True(dialog.IsPrimaryButtonEnabled && dialog.IsSecondaryButtonEnabled);
     Assert.True(error.IsVisible);
-    Assert.Equal("Move to Trash", dialog.PrimaryButtonText);
+    Assert.Equal("Move to Trash", dialog.SecondaryButtonText);
     Assert.True(await ItemView.RunActionAsync(dialog, error, busy, request, () => Task.FromResult<string?>(null)));
     Assert.False(error.IsVisible);
 
     var (permanent, _, _) = ItemView.CreateActionDialog(new ActionDialogRequest("Delete attachment", "Gone?", "Delete attachment"));
-    Assert.Equal(string.Empty, permanent.PrimaryButtonText);
+    Assert.Equal(("Delete attachment", string.Empty), (permanent.PrimaryButtonText, permanent.SecondaryButtonText));
   });
 
   private static void SaveScreenshot(Avalonia.Media.Imaging.WriteableBitmap frame, string name)

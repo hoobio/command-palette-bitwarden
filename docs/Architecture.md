@@ -72,8 +72,7 @@ HoobiBitwardenCompanion/               # Avalonia companion window app
 ├── Services/WindowCoordinator.cs      # Pipe requests from the extension, window registry
 ├── Services/CompanionSettings.cs      # Generator options file (no generated values)
 ├── ViewModels/                        # Item, field, edit form and generator view models
-├── Views/                             # Item window, item view, edit form, generator dialog and window, toast
-└── Styles/                            # Hoobi design tokens, control styles, glyphs, fonts
+└── Views/                             # Item window, item view, edit form, generator dialog and window (styles come from Hoobi.Design.Avalonia)
 Shared/                                # IPC contracts and PipeChannel, linked into both projects
 ```
 
@@ -106,7 +105,7 @@ User selects an action
 | `SessionStore` | Static | Reads/writes session keys to Windows Credential Manager |
 | `ApiKeyStore` | Static | Reads/writes the personal API key (client ID and secret) to Windows Credential Manager for API key login |
 | `AccessTracker` | Static | Tracks item access times (persisted to JSON) and recent-copy state (5-min in-memory timer) |
-| `BitwardenSettingsManager` | Instance | Manages user-configurable settings via Command Palette settings UI |
+| `BitwardenSettingsManager` | Instance | Stores user-configurable settings, which the companion settings window reads and writes |
 | `FaviconService` | Static | Downloads favicons (PNG/SVG) with 7-day disk cache and 5-min negative cache; gives Command Palette the absolute path of the cached PNG (one icon per host, in the package `LocalCache\Icons` folder); fires `IconCached` to refresh the list UI |
 | `NotificationsService` | Instance (while unlocked, Live Sync on) | Listens to the server's notifications hub and requests a sync when the vault changes |
 
@@ -134,6 +133,12 @@ The Bitwarden apps get vault changes from the server's notifications hub, a Sign
 ## In-Memory Secret Protection
 
 Passwords, old passwords from the password history, TOTP secrets, notes, card numbers, card security codes, SSH private keys, hidden custom fields, the session key and the pending master password during a 2FA login are kept in `ProtectedSecret` instances. Each instance encrypts its value with `CryptProtectMemory` and a key that is bound to this process. A value is decrypted into a pinned buffer for a copy, a search, a TOTP calculation or a list subtitle, and the buffer is zeroed after use. The cached secrets are erased when the vault locks or logs out. This protection applies to the long-lived copies that the extension keeps. Plaintext also passes through the `bw` CLI output, the Command Palette form input, the clipboard, the secure-note subtitle and card last-4 digits in the list, and the `BW_SESSION`/`BW_MP` environment of `bw` child processes.
+
+## Design system
+
+The companion's theme, controls, dialogs, window chrome, memory trim and popup acrylic come from the `Hoobi.Design.Avalonia` NuGet package. App views compose it and define no styles of their own. A change to the look goes to the package, not to the app. The build checks come from the package: `HOOBI001` fails a literal colour in an `.axaml` file, `HOOBI002` fails a package resource key redefined at app scope, and `HOOBI003` fails a popup background set in the app or the popup acrylic turned off. The tests use `Hoobi.Design.Avalonia.Testing` (`HoverFlashProbe`, `PopupSurfaceProbe`).
+
+The packages come from a private feed built from the private hoobi-design repository, so restoring them needs access to that feed. CI on a fork pull request cannot restore them, and an outside contributor cannot build the companion locally without feed access.
 
 ## Extension Registration
 

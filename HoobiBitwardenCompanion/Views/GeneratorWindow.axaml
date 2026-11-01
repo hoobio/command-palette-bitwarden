@@ -17,7 +17,7 @@
     ExtendClientAreaToDecorationsHint="True"
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
     WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
-    Background="{DynamicResource WindowGroundBrush}">
+    Background="{DynamicResource HoobiBgBrush}">
     <Grid RowDefinitions="48,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">

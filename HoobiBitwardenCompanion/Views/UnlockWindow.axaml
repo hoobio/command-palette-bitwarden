@@ -16,9 +16,9 @@
     ExtendClientAreaToDecorationsHint="True"
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
     WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
-    Background="{DynamicResource WindowGroundBrush}">
+    Background="{DynamicResource HoobiBgBrush}">
     <Grid RowDefinitions="64,*,Auto" Background="Transparent">
-        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="User">
+        <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="TitleBar">
             <TextBlock Text="Unlock your vault" Margin="24,16,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
         </Grid>
 

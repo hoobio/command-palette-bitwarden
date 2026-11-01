@@ -1,10 +1,10 @@
 # Settings
 
-Open settings from the gear icon in the vault browser. All settings take effect immediately. The **Bitwarden settings** command opens the same settings in the companion window (see [Settings window](Companion-Window#settings-window)). The **Open settings window** button at the top of the Bitwarden page in Command Palette Settings opens the same window.
+All settings are in the companion settings window (see [Settings window](Companion-Window#settings-window)). Open it from the gear icon in the vault browser, with the **Bitwarden settings** command, or with the **Open settings window** button on the Bitwarden page in Command Palette Settings. That page shows only the button. All settings take effect immediately.
 
 ## Server
 
-The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**), **Server URL** (read-only for **Bitwarden.com** and **Bitwarden.eu**, editable for **Self-hosted**) and, for **Self-hosted**, a collapsed **Advanced** row with optional Web Vault, API, Identity, Icons, Notifications, Events and Key Connector URLs. It is not part of the Command Palette settings page. A change logs you out. See [Server URL](Companion-Window#server-url).
+The companion settings window starts with a **Server** section: **Region** (**Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**), **Server URL** (read-only for **Bitwarden.com** and **Bitwarden.eu**, editable for **Self-hosted**) and, for **Self-hosted**, a collapsed **Advanced** row with optional Web Vault, API, Identity, Icons, Notifications, Events and Key Connector URLs. A change logs you out. See [Server URL](Companion-Window#server-url).
 
 ## Available Settings
 
@@ -30,7 +30,7 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. In the companion window, a green dot on this row means the extension can reach the Desktop app and a red dot means it cannot; no dot shows while the setting is off. |
+| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. In the companion window, a check mark on this row means the extension can reach the Desktop app and a warning mark means it cannot; no mark shows while the setting is off. |
 
 ### Automatically Prompt for Biometrics
 
@@ -63,7 +63,7 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Master switch for tags on vault items. When off, no tags are shown (including the Context tag) and the five tag settings below (Watchtower, Protected, Passkey, TOTP, Organisation) are hidden in the companion window. |
+| **Description** | Master switch for tags on vault items. When off, no tags are shown (including the Context tag) and the five tag settings below (Watchtower, Protected, Passkey, TOTP, Organisation) are hidden in the companion window. In the companion window, each of the five rows previews its tag. |
 
 ### Watchtower
 
@@ -170,9 +170,9 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 
 | | |
 |---|---|
-| **Type** | Text |
-| **Default** | *(empty)* |
-| **Description** | Path to the Bitwarden CLI. Accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave empty to use the default PATH-based resolution. When set, this always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. While the box is empty, the companion window shows the `bw` path in use as the placeholder text, and hovering the box shows the full path and where it came from. |
+| **Type** | Switch, with a **CLI path** text box under it |
+| **Default** | Off |
+| **Description** | Use your own Bitwarden CLI. When the switch is on, the **CLI path** box opens under it. The box accepts a directory containing `bw`, or a direct path to `bw`/`bw.exe` (e.g. `C:\tools\bw-portable` or `C:\tools\bw-portable\bw.exe`). Leave the box empty to use the default PATH-based resolution. A path in the box always takes precedence over a CLI installed via the one-click installer, and the installer never overwrites it. When the switch is off, the box is hidden and the extension finds the CLI as usual, but it keeps the path, so turning the switch on again restores it. While the box is empty, it shows the `bw` path in use as the placeholder text, and hovering the box shows the full path and where it came from. If you set a path before this switch existed, the switch starts on. |
 
 ### Use CLI Path as Data Directory
 
@@ -180,15 +180,15 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Useful for fully portable Bitwarden setups. The companion window shows this setting under **CLI Path Override**, and only while that box is not empty. |
+| **Description** | Store Bitwarden CLI data (`data.json`) alongside the CLI executable instead of the default location. Sets the `BITWARDENCLI_APPDATA_DIR` environment variable to the CLI directory. Useful for fully portable Bitwarden setups. The companion window shows this setting under the **CLI path** box, and only while that box is not empty. It has no effect while **CLI Path Override** is off. |
 
 ### CLI Data Directory Override
 
 | | |
 |---|---|
-| **Type** | Text |
-| **Default** | *(empty)* |
-| **Description** | Custom directory for Bitwarden CLI data (`data.json`). Sets the `BITWARDENCLI_APPDATA_DIR` environment variable. Takes precedence over the portable directory toggle. Leave empty to use the default location, or the portable CLI directory if the toggle above is enabled. While the box is empty, the companion window shows the folder that holds `data.json` now as the placeholder text, and hovering the box shows the full path and where it came from. |
+| **Type** | Switch, with a **CLI data folder** text box under it |
+| **Default** | Off |
+| **Description** | Use your own directory for Bitwarden CLI data (`data.json`). When the switch is on, the **CLI data folder** box opens under it. A folder in the box sets the `BITWARDENCLI_APPDATA_DIR` environment variable and takes precedence over the portable directory toggle. Leave the box empty to use the default location, or the portable CLI directory if that toggle is on. When the switch is off, the box is hidden and the extension uses the default location, but it keeps the folder, so turning the switch on again restores it. While the box is empty, it shows the folder that holds `data.json` now as the placeholder text, and hovering the box shows the full path and where it came from. If you set a folder before this switch existed, the switch starts on. |
 
 ### Debug Logging
 
@@ -202,8 +202,8 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 
 | | |
 |---|---|
-| **Type** | Link (companion window only) |
-| **Description** | Appears under **Debug Logging** in the companion window. It opens the folder `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\logs` in File Explorer, and creates the folder if it does not exist. The Command Palette settings page does not show it. |
+| **Type** | Link |
+| **Description** | Appears under **Debug Logging**. It opens the folder `%LOCALAPPDATA%\HoobiBitwardenCommandPalette\logs` in File Explorer, and creates the folder if it does not exist. |
 
 ### Re-prompt Grace Period
 

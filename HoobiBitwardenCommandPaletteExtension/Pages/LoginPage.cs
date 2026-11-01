@@ -42,9 +42,9 @@ internal sealed partial class LoginForm : FormContent
   {
     var rememberChecked = _settings?.RememberSession.Value == true;
     var customDataDir = BitwardenCliService.ResolveDataDirectory(
-        _settings?.CliDirectoryOverride.Value,
+        _settings?.EffectiveCliDirectoryOverride,
         _settings?.UsePortableDataDirectory.Value ?? false,
-        _settings?.CliDataDirectoryOverride.Value);
+        _settings?.EffectiveCliDataDirectoryOverride);
     var dataDirWarningBlock = customDataDir != null && !_useApiKey
         ? BuildCustomDataDirWarningBlock(customDataDir)
         : string.Empty;

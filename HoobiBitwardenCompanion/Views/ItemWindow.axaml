@@ -17,7 +17,7 @@
     ExtendClientAreaToDecorationsHint="True"
     ExtendClientAreaTitleBarHeightHint="{StaticResource TitleBarHeight}"
     WindowDecorationsTheme="{StaticResource HoobiCloseOnlyDecorations}"
-    Background="{DynamicResource WindowGroundBrush}">
+    Background="{DynamicResource HoobiBgBrush}">
     <Grid x:Name="Root" RowDefinitions="Auto,*" Background="Transparent">
         <Grid.ContextMenu>
             <ContextMenu>
@@ -37,7 +37,7 @@
         <Grid
             x:Name="AppTitleBar"
             Background="Transparent"
-            ColumnDefinitions="*,Auto,46"
+            ColumnDefinitions="*,Auto,48"
             chrome:WindowDecorationProperties.ElementRole="User">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Margin="24,24,8,12" IsHitTestVisible="False">
                 <Border Classes="Tile Large">
@@ -120,8 +120,8 @@
                 </StackPanel>
             </Grid>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                <Button x:Name="EditButton" Classes="CaptionButton" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Edit}" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Edit" AutomationProperties.Name="Edit" />
-                <Button x:Name="DeleteButton" Classes="CaptionButton Danger" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
+                <Button x:Name="EditButton" Classes="CaptionButton Icon" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Edit}" Command="{Binding EditCommand}" IsVisible="{Binding CanEdit}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Edit" AutomationProperties.Name="Edit" />
+                <Button x:Name="DeleteButton" Classes="CaptionButton Icon Danger" Theme="{StaticResource CaptionButtonTheme}" Height="{StaticResource TitleBarHeight}" Content="{StaticResource Glyph.Delete}" Command="{Binding DeleteCommand}" IsVisible="{Binding IsReadOnly}" IsEnabled="{Binding !IsPrompting}" ToolTip.Tip="Delete" AutomationProperties.Name="Delete" />
             </StackPanel>
         </Grid>
 

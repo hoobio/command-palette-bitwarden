@@ -19,37 +19,18 @@ public class SettingsWithButtonTests
   }
 
   [Fact]
-  public void GetContent_ReturnsButtonFirstThenSettingsForm()
+  public void GetContent_ReturnsOnlyTheOpenWindowButton()
   {
-    var settings = new Settings();
-    settings.Add(new ToggleSetting("flag", "Flag", "", false));
-    var page = new SettingsWithButtonPage(settings, () => { });
+    var page = new SettingsWithButtonPage(() => { });
 
-    var content = page.GetContent();
-
-    Assert.Equal(2, content.Length);
-    Assert.IsType<OpenWindowForm>(content[0]);
-    Assert.IsAssignableFrom<IFormContent>(content[1]);
+    Assert.IsType<OpenWindowForm>(Assert.Single(page.GetContent()));
   }
 
   [Fact]
   public void SettingsPage_ReturnsSameInstanceEveryTime()
   {
-    var settings = new SettingsWithButton(new Settings(), () => { });
+    var settings = new SettingsWithButton(() => { });
 
     Assert.Same(settings.SettingsPage, settings.SettingsPage);
-  }
-
-  [Fact]
-  public void SettingsChanged_RaisesItemsChanged()
-  {
-    var settings = new Settings();
-    var page = new SettingsWithButtonPage(settings, () => { });
-    var raised = 0;
-    page.ItemsChanged += (_, _) => raised++;
-
-    typeof(Settings).GetMethod("RaiseSettingsChanged", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!.Invoke(settings, null);
-
-    Assert.Equal(1, raised);
   }
 }

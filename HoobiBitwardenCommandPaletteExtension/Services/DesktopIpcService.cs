@@ -1,7 +1,6 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -257,8 +256,7 @@ internal static partial class DesktopIpcService
         return false;
       }
 
-      using var process = Process.GetProcessById((int)pid);
-      var path = process.MainModule?.FileName;
+      var path = GetProcessImagePath(pid);
       var trusted = path != null && SignatureVerifier.IsTrustedBitwardenBinary(path);
       DebugLogService.Log("Biometric", trusted
         ? $"Pipe server pid {pid} is signed by Bitwarden"
@@ -271,6 +269,28 @@ internal static partial class DesktopIpcService
       return false;
     }
   }
+
+  // Process.MainModule needs PROCESS_VM_READ, which Bitwarden Desktop's process DACL denies; the limited query right is still granted.
+  internal static string? GetProcessImagePath(uint pid)
+  {
+    using var process = OpenProcess(ProcessQueryLimitedInformation, false, pid);
+    if (process.IsInvalid)
+      throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError());
+    var buffer = new char[32_768];
+    var length = buffer.Length;
+    if (!QueryFullProcessImageName(process, 0, buffer, ref length))
+      throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError());
+    return new string(buffer, 0, length);
+  }
+
+  private const uint ProcessQueryLimitedInformation = 0x1000;
+
+  [LibraryImport("kernel32.dll", SetLastError = true)]
+  private static partial SafeProcessHandle OpenProcess(uint desiredAccess, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, uint processId);
+
+  [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  private static partial bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, [Out] char[] exeName, ref int size);
 
   [LibraryImport("kernel32.dll", SetLastError = true)]
   [return: MarshalAs(UnmanagedType.Bool)]

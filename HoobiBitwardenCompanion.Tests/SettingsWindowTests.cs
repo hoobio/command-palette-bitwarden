@@ -1,7 +1,10 @@
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
@@ -135,13 +138,13 @@ public class SettingsWindowTests(AvaloniaSession session)
       new("serverRegion", SettingKinds.Choice, "Region", "Where your vault is hosted", region, [new("Bitwarden.com", "cloud"), new("Bitwarden.eu", "eu"), new("Self-hosted", "selfHosted")], Confirm: confirm),
       new("serverUrl", SettingKinds.Text, "Server URL", null, region == "selfHosted" ? "https://vault.example.com" : string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm, ReadOnlyValues: new Dictionary<string, string> { ["cloud"] = "https://vault.bitwarden.com", ["eu"] = "https://vault.bitwarden.eu" }),
       new("serverAdvanced", SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, "serverRegion", "selfHosted"),
-      new("serverWebVaultUrl", SettingKinds.Text, "Web Vault URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/", Confirm: confirm),
-      new("serverApiUrl", SettingKinds.Text, "API URL", null, apiUrl ?? string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/api", Confirm: confirm),
-      new("serverIdentityUrl", SettingKinds.Text, "Identity URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/identity", Confirm: confirm),
-      new("serverIconsUrl", SettingKinds.Text, "Icons URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/icons", Confirm: confirm),
-      new("serverNotificationsUrl", SettingKinds.Text, "Notifications URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/notifications", Confirm: confirm),
-      new("serverEventsUrl", SettingKinds.Text, "Events URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/events", Confirm: confirm),
-      new("serverKeyConnectorUrl", SettingKinds.Text, "Key Connector URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/key-connector", Confirm: confirm),
+      new("serverWebVaultUrl", SettingKinds.Text, "Web Vault URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/", Confirm: confirm),
+      new("serverApiUrl", SettingKinds.Text, "API URL", null, apiUrl ?? string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/api", Confirm: confirm),
+      new("serverIdentityUrl", SettingKinds.Text, "Identity URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/identity", Confirm: confirm),
+      new("serverIconsUrl", SettingKinds.Text, "Icons URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/icons", Confirm: confirm),
+      new("serverNotificationsUrl", SettingKinds.Text, "Notifications URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/notifications", Confirm: confirm),
+      new("serverEventsUrl", SettingKinds.Text, "Events URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/events", Confirm: confirm),
+      new("serverKeyConnectorUrl", SettingKinds.Text, "Key Connector URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "https://vault.example.com/key-connector", Confirm: confirm),
       new("_section_a", SettingKinds.Section, "General", null, null, null),
       new("showIcons", SettingKinds.Toggle, "Show icons", null, "true", null),
     ]);
@@ -283,10 +286,8 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     Assert.True(advanced.IsShown);
     Assert.False(advanced.Expanded);
-    Assert.All(AdvancedKeys, key => Assert.False(ServerRow(vm, key).IsShown));
-
-    advanced.Expanded = true;
-    Assert.All(AdvancedKeys, key => Assert.True(ServerRow(vm, key).IsShown));
+    Assert.True(advanced.IsGroup);
+    Assert.Equal(AdvancedKeys, advanced.ShownChildren.Select(r => r.Key));
 
     ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "eu");
     Assert.False(advanced.IsShown);
@@ -302,7 +303,7 @@ public class SettingsWindowTests(AvaloniaSession session)
     using var ownedPair = pair;
 
     Assert.Equal("https://api.example.com", ServerRow(vm, "serverApiUrl").CurrentValue);
-    Assert.Equal("{base URL}/api", ServerRow(vm, "serverApiUrl").Placeholder);
+    Assert.Equal("https://vault.example.com/api", ServerRow(vm, "serverApiUrl").Placeholder);
 
     ServerRow(vm, "serverAdvanced").Expanded = true;
     extension.Schema[1] = extension.Schema[1] with { Description = "changed" };
@@ -433,6 +434,73 @@ public class SettingsWindowTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() => extension.Sets.Count == 2);
     Assert.Equal(("limit", "5"), extension.Sets[1]);
     Assert.All(window.ViewModel!.Sections.SelectMany(s => s.Rows), r => Assert.Null(r.ErrorMessage));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task OverrideSwitch_KeepsTheCard_AndExpandsItWithTheSwitch() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    extension.Schema.Clear();
+    extension.Schema.AddRange(
+    [
+      new("_section_cli", SettingKinds.Section, "Bitwarden CLI", null, null, null),
+      new("useCliDirectoryOverride", SettingKinds.Toggle, "CLI Path Override", "Uses your own bw", "false", null, RevealsChildren: true),
+      new("cliDirectoryOverride", SettingKinds.Text, "CLI path", "Path to bw", @"C:\tools\bw.exe", null, "useCliDirectoryOverride", "true", Placeholder: "bw"),
+    ]);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    var vm = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.Sections.SelectMany(s => s.Rows).Any(r => r.Key == "useCliDirectoryOverride"));
+    var toggle = vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "useCliDirectoryOverride");
+    var card = Find<Hoobi.Design.Avalonia.SettingsCard>(window, "useCliDirectoryOverride");
+
+    Assert.False(card.IsExpanded);
+    Assert.False(card.IsClickEnabled);
+    Assert.False(vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "cliDirectoryOverride").IsShown);
+
+    toggle.BoolValue = true;
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 1);
+    window.UpdateLayout();
+
+    Assert.Same(card, Find<Hoobi.Design.Avalonia.SettingsCard>(window, "useCliDirectoryOverride"));
+    Assert.True(card.IsExpanded);
+    Assert.True(vm.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "cliDirectoryOverride").IsShown);
+    Assert.Equal(("useCliDirectoryOverride", "true"), extension.Sets.Single());
+
+    toggle.BoolValue = false;
+    window.UpdateLayout();
+    Assert.False(card.IsExpanded);
+    Assert.True(card.IsEffectivelyVisible);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task ServerAdvanced_PlaceholdersFollowTheTypedServerUrl_AndFallBackToTheExample() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null, region: "selfHosted");
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    var vm = window.ViewModel!;
+    AvaloniaSession.WaitFor(() => vm.Sections.SelectMany(s => s.Rows).Any(r => r.Key == "serverRegion"));
+    ServerRow(vm, "serverRegion").Expanded = true;
+    WaitForRows(window);
+    var box = Find<TextBox>(window, "serverUrl");
+
+    box.Text = "https://bw.contoso.com";
+    AvaloniaSession.WaitFor(() => ServerRow(vm, "serverApiUrl").Placeholder == "https://bw.contoso.com/api");
+    Assert.Equal(["https://bw.contoso.com/", "https://bw.contoso.com/api", "https://bw.contoso.com/identity", "https://bw.contoso.com/icons", "https://bw.contoso.com/notifications", "https://bw.contoso.com/events", "https://bw.contoso.com/key-connector"], AdvancedKeys.Select(k => ServerRow(vm, k).Placeholder));
+    Assert.Empty(extension.Servers);
+
+    box.Text = string.Empty;
+    AvaloniaSession.WaitFor(() => ServerRow(vm, "serverApiUrl").Placeholder == "https://vault.example.com/api");
     window.Close();
     await Task.CompletedTask;
   });
@@ -569,6 +637,7 @@ public class SettingsWindowTests(AvaloniaSession session)
 
     Find<ToggleSwitch>(window, "desktop").IsChecked = true;
     AvaloniaSession.WaitFor(() => rows["biometrics"].IsShown);
+    rows["desktop"].Expanded = true;
     Assert.True(Find<ToggleSwitch>(window, "biometrics").IsChecked);
     Assert.Equal(["desktop", "biometrics", "other", "cliPath"], ShownKeys(window.ViewModel!));
 
@@ -578,6 +647,117 @@ public class SettingsWindowTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() => extension.Sets.Count == 2);
     Assert.Equal(("desktop", "true"), extension.Sets[0]);
     Assert.Equal(("desktop", "false"), extension.Sets[1]);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  private static SettingsCard GroupCard(SettingsWindow window, string key)
+  {
+    window.UpdateLayout();
+    return window.GetVisualDescendants().OfType<SettingsCard>().Single(c => c.IsEffectivelyVisible && c.DataContext is SettingRowViewModel row && row.Key == key);
+  }
+
+  private static void Click(SettingsWindow window, Control target)
+  {
+    window.UpdateLayout();
+    var point = target.TranslatePoint(new Avalonia.Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
+    window.MouseDown(point, MouseButton.Left);
+    window.MouseUp(point, MouseButton.Left);
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+  }
+
+  private static SettingsWindow OpenGroupedWindow(WindowCoordinator coordinator, FakeExtension extension)
+  {
+    UseDependentSchema(extension);
+    extension.Change("desktop", "true");
+    var window = coordinator.ShowSettings();
+    window.Show();
+    WaitForRows(window);
+    AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.SelectMany(s => s.Rows).Single(r => r.Key == "desktop").IsGroup);
+    return window;
+  }
+
+  [Fact]
+  public Task Group_IsCollapsedByDefault_AndHidesItsChildren() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+
+    var card = GroupCard(window, "desktop");
+    Assert.False(card.IsExpanded);
+    Assert.True(window.ViewModel!.Sections[0].Rows.Single(r => r.Key == "biometrics").IsShown);
+    Assert.DoesNotContain(window.GetVisualDescendants().OfType<ToggleSwitch>(), t => t.IsEffectivelyVisible && t.DataContext is SettingRowViewModel { Key: "biometrics" });
+    Assert.Null(window.GetVisualDescendants().OfType<SettingsCard>().FirstOrDefault(c => c.IsEffectivelyVisible && c.DataContext is SettingRowViewModel { Key: "other" }));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Group_RowClick_ExpandsAndShowsTheChildren_AndCollapsesAgain() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+    var clock = new ManualClock();
+    clock.Attach(window);
+    var card = GroupCard(window, "desktop");
+    var label = card.GetVisualDescendants().OfType<TextBlock>().First(t => t.IsEffectivelyVisible && t.Text == "Desktop app");
+
+    Click(window, label);
+    clock.Settle();
+
+    Assert.True(card.IsExpanded);
+    AvaloniaSession.WaitFor(() => Find<ToggleSwitch>(window, "biometrics").IsChecked == true);
+    var child = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.IsEffectivelyVisible && t.Text == "Prompt for biometrics");
+    Click(window, child);
+    Assert.True(card.IsExpanded);
+    Assert.Empty(extension.Sets);
+
+    Click(window, label);
+    Assert.False(card.IsExpanded);
+    clock.Settle();
+    AvaloniaSession.WaitFor(() => { window.UpdateLayout(); return !window.GetVisualDescendants().OfType<ToggleSwitch>().Any(t => t.IsEffectivelyVisible && t.DataContext is SettingRowViewModel { Key: "biometrics" }); });
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Group_TogglingTheParentSwitch_DoesNotExpand() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+    var card = GroupCard(window, "desktop");
+
+    Click(window, Find<ToggleSwitch>(window, "desktop"));
+
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 1);
+    Assert.Equal(("desktop", "false"), extension.Sets[0]);
+    Assert.False(card.IsExpanded);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task Search_HitOnAChild_ExpandsItsGroup() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = OpenGroupedWindow(coordinator, extension);
+
+    window.ViewModel!.SearchText = "windows hello";
+
+    Assert.True(GroupCard(window, "desktop").IsExpanded);
+    Assert.True(Find<ToggleSwitch>(window, "biometrics").IsChecked);
     window.Close();
     await Task.CompletedTask;
   });
@@ -877,33 +1057,113 @@ public class SettingsWindowTests(AvaloniaSession session)
   }
 
   [Fact]
-  public Task Dropdown_SizesToItsWidestOption() => session.RunAsync(async () =>
+  public Task Dropdown_SitsTwentyTwoPixelsFromTheGroupChevron() => session.RunAsync(async () =>
   {
-    async Task<double> MeasureAsync(params ChoiceDto[] choices)
-    {
-      var extension = new FakeExtension();
-      extension.Schema.Clear();
-      extension.Schema.Add(new("style", SettingKinds.Choice, "Style", null, choices[0].Value, choices));
-      using var pair = new ChannelPair(extension.HandleAsync);
-      using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
-      _ = coordinator.RunAsync(() => { });
-      var window = coordinator.ShowSettings();
-      AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.Count == 1);
-      window.UpdateLayout();
-      var combo = Find<ComboBox>(window, "style");
-      var result = combo.Bounds.Width;
-      window.Close();
-      await Task.CompletedTask;
-      return result;
-    }
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    window.Show();
+    AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.Count == 2 && ServerRow(window.ViewModel!, SettingKeys.ServerRegion).IsGroup);
+    var card = GroupCard(window, SettingKeys.ServerRegion);
+    var combo = Find<ComboBox>(window, SettingKeys.ServerRegion);
+    var chevron = card.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "PART_Chevron" && ReferenceEquals(t.TemplatedParent, card));
 
-    var narrow = await MeasureAsync(new ChoiceDto("Never", "0"));
-    var wide = await MeasureAsync(new ChoiceDto("Never", "0"), new ChoiceDto("A much longer option title", "1"));
-    var wideOtherWayRound = await MeasureAsync(new ChoiceDto("A much longer option title", "1"), new ChoiceDto("Never", "0"));
+    var comboRight = combo.TranslatePoint(new Point(combo.Bounds.Width, 0), card)!.Value.X;
+    var glyphLeft = chevron.TranslatePoint(new Point((chevron.Bounds.Width - chevron.FontSize) / 2, 0), card)!.Value.X;
+    Assert.Equal(22, glyphLeft - comboRight, 0.5);
+    window.Close();
+    await Task.CompletedTask;
+  });
 
-    Assert.True(wide > narrow + 40, $"narrow {narrow}, wide {wide}");
-    Assert.Equal(wide, wideOtherWayRound);
-    Assert.True(wide < 300);
+  private static void UseTagSchema(FakeExtension extension)
+  {
+    extension.Schema.Clear();
+    extension.Schema.AddRange(
+    [
+      new("_section_a", SettingKinds.Section, "Appearance", null, null, null),
+      new("showTags", SettingKinds.Toggle, "Show Tags", "Shows tags on vault items", "true", null),
+      new("showWatchtowerTags", SettingKinds.Toggle, "Watchtower", "Tags weak, old or insecure passwords", "true", null, "showTags", "true"),
+      new("showProtectedTag", SettingKinds.Toggle, "Protected", "Tags items that need a master password re-prompt", "true", null, "showTags", "true"),
+      new("showPasskeyTag", SettingKinds.Toggle, "Passkey", "Tags items that have a passkey", "true", null, "showTags", "true"),
+      new("totpTagStyle", SettingKinds.Choice, "TOTP", "Tags items that have an authenticator key", "static", [new("Off", "off"), new("Static", "static"), new("Live", "live")], "showTags", "true"),
+      new("organizationTagStyle", SettingKinds.Choice, "Organisation", "Tags items owned by an organisation", "name", [new("Initials", "initials"), new("Name", "name"), new("Off", "off")], "showTags", "true"),
+    ]);
+  }
+
+  private static readonly string[] TagKeys = ["showWatchtowerTags", "showProtectedTag", "showPasskeyTag", "totpTagStyle", "organizationTagStyle"];
+
+  private static Control PreviewHost(SettingsCard card) =>
+    card.GetVisualDescendants().OfType<Control>().First(c => c.Name == "PART_PreviewHost" && ReferenceEquals(c.TemplatedParent, card));
+
+  private static string? PreviewText(SettingsCard card) =>
+    PreviewHost(card).GetVisualDescendants().OfType<TextBlock>().SingleOrDefault()?.Text;
+
+  private static SettingsWindow OpenTagWindow(WindowCoordinator coordinator, FakeExtension extension, ManualClock clock)
+  {
+    UseTagSchema(extension);
+    var window = coordinator.ShowSettings();
+    window.Width = 900;
+    window.Show();
+    clock.Attach(window);
+    AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.Count == 1 && window.ViewModel!.Sections[0].Rows[0].IsGroup);
+    window.ViewModel!.Sections[0].Rows[0].Expanded = true;
+    clock.Settle();
+    window.UpdateLayout();
+    return window;
+  }
+
+  [Fact]
+  public Task TagPreviews_ShowTogetherWhenWide_AndHideTogetherWhenNarrow() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var clock = new ManualClock();
+    var window = OpenTagWindow(coordinator, extension, clock);
+    var cards = TagKeys.Select(key => Find<SettingsCard>(window, key)).ToList();
+
+    Assert.All(cards, card => Assert.True(PreviewHost(card).IsVisible));
+    Assert.Equal(["Weak", "🔒", "Passkey", "2FA", "Acme Corp"], cards.Select(PreviewText));
+    Assert.Equal(Color.FromRgb(0xED, 0x82, 0x74), ((ISolidColorBrush)PreviewHost(cards[0]).GetVisualDescendants().OfType<TextBlock>().Single().Foreground!).Color);
+
+    window.Width = 380;
+    window.UpdateLayout();
+    Assert.All(cards, card => Assert.False(PreviewHost(card).IsVisible));
+
+    window.Width = 900;
+    window.UpdateLayout();
+    Assert.All(cards, card => Assert.True(PreviewHost(card).IsVisible));
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task TagPreviews_FollowTheTotpAndOrganisationModes() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var clock = new ManualClock();
+    var window = OpenTagWindow(coordinator, extension, clock);
+    Find<ComboBox>(window, "totpTagStyle").SelectedIndex = 2;
+    Find<ComboBox>(window, "organizationTagStyle").SelectedIndex = 0;
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 2);
+    Assert.Equal("123456 (24s)", PreviewText(Find<SettingsCard>(window, "totpTagStyle")));
+    Assert.Equal("AC", PreviewText(Find<SettingsCard>(window, "organizationTagStyle")));
+
+    Find<ComboBox>(window, "totpTagStyle").SelectedIndex = 0;
+    Find<ComboBox>(window, "organizationTagStyle").SelectedIndex = 2;
+    AvaloniaSession.WaitFor(() => extension.Sets.Count == 4);
+    Assert.False(PreviewHost(Find<SettingsCard>(window, "totpTagStyle")).IsVisible);
+    Assert.False(PreviewHost(Find<SettingsCard>(window, "organizationTagStyle")).IsVisible);
+    Assert.True(PreviewHost(Find<SettingsCard>(window, "showPasskeyTag")).IsVisible);
+    window.Close();
+    await Task.CompletedTask;
   });
 
   [Fact]
@@ -919,10 +1179,38 @@ public class SettingsWindowTests(AvaloniaSession session)
     WaitForRows(window);
 
     Assert.Equal("bw", Find<TextBox>(window, "cliPath").PlaceholderText);
-    Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.DataContext is SettingRowViewModel { Key: "openLogs" });
+    Assert.True(Find<SettingsCard>(window, "openLogs").IsClickEnabled);
     Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible && t.Text == "Help and feedback");
     Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.Content is "Check now");
     window.Close();
     await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task LinkRows_AreClickableCardsWithTheirGlyph_AndAClickOpensTheTarget() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    extension.Schema.Add(new(SettingKeys.Hotkeys, SettingKinds.Link, "Keyboard shortcuts", null, null, null));
+    var (vm, opened, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+    var window = new SettingsWindow(vm) { Height = 1600 };
+    window.Show();
+    window.UpdateLayout();
+    var cards = window.GetVisualDescendants().OfType<SettingsCard>().Where(c => c.IsEffectivelyVisible && c.DataContext is LinkRowViewModel or SettingRowViewModel { IsLink: true }).ToList();
+    var support = cards.Single(c => c.DataContext is LinkRowViewModel { Label: "Support" });
+    var shortcuts = cards.Single(c => c.DataContext is SettingRowViewModel { Key: SettingKeys.Hotkeys });
+
+    Assert.Equal(5, cards.Count);
+    Assert.All(cards, c => Assert.True(c.IsClickEnabled));
+    Assert.Equal(window.FindResource("Glyph.OpenInNewWindow"), support.ActionGlyph);
+    Assert.Equal(window.FindResource("Glyph.ChevronRight"), shortcuts.ActionGlyph);
+    Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Classes.Contains("RowOverlay"));
+
+    Click(window, support);
+    Assert.Equal(["https://www.paypal.com/donate/?hosted_button_id=E2UBLTYAT4K8Y"], opened);
+
+    Click(window, shortcuts);
+    Assert.True(vm.IsShortcutsOpen);
+    window.Close();
   });
 }

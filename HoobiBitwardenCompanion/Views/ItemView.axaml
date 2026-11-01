@@ -32,7 +32,7 @@
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" IsVisible="{Binding !IsEditing}">
-            <StackPanel Margin="{StaticResource PageGutter}">
+            <StackPanel Margin="0,0,24,24">
                 <Border x:Name="PasswordPanel" Classes="Group" Margin="0,8,0,0" IsVisible="{Binding IsPrompting}">
                     <Border Classes="Row" Padding="16,20">
                         <StackPanel Spacing="8">
@@ -94,21 +94,21 @@
                                                                 </StackPanel>
                                                                 <TextBlock
                                                                     Text="{Binding DisplayValue}"
-                                                                    FontFamily="{StaticResource MonoFontFamily}"
+                                                                    FontFamily="{StaticResource HoobiMonoFontFamily}"
                                                                     FontSize="20"
                                                                     LetterSpacing="1"
                                                                     IsVisible="{Binding IsTotp}" />
                                                                 <TextBlock
                                                                     Text="{Binding DisplayValue}"
                                                                     TextWrapping="Wrap"
-                                                                    FontFamily="{StaticResource MonoFontFamily}"
+                                                                    FontFamily="{StaticResource HoobiMonoFontFamily}"
                                                                     FontSize="13"
                                                                     LetterSpacing="1"
                                                                     IsVisible="{Binding IsFixedSecret}" />
                                                                 <SelectableTextBlock
                                                                     Text="{Binding DisplayValue}"
                                                                     TextWrapping="Wrap"
-                                                                    FontFamily="{StaticResource MonoFontFamily}"
+                                                                    FontFamily="{StaticResource HoobiMonoFontFamily}"
                                                                     FontSize="13"
                                                                     LetterSpacing="1"
                                                                     IsVisible="{Binding IsSelectableSecret}" />
@@ -119,7 +119,7 @@
                                                                 <SelectableTextBlock
                                                                     Text="{Binding DisplayValue}"
                                                                     TextWrapping="Wrap"
-                                                                    FontFamily="{StaticResource MonoFontFamily}"
+                                                                    FontFamily="{StaticResource HoobiMonoFontFamily}"
                                                                     FontSize="13"
                                                                     IsVisible="{Binding IsMono}" />
                                                             </StackPanel>
@@ -135,7 +135,7 @@
                                                                         <TextBlock Classes="Icon Accent" Text="{StaticResource Glyph.EyeOff}" IsVisible="{Binding IsRevealed}" />
                                                                     </Panel>
                                                                 </Button>
-                                                                <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Open}" Command="{Binding OpenCommand}" IsVisible="{Binding CanOpen}" ToolTip.Tip="Open in browser" />
+                                                                <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.OpenInNewWindow}" Command="{Binding OpenCommand}" IsVisible="{Binding CanOpen}" ToolTip.Tip="Open in browser" />
                                                                 <Button Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Copy}" Command="{Binding CopyCommand}" ToolTip.Tip="Copy" />
                                                             </StackPanel>
                                                         </Grid>
@@ -199,7 +199,7 @@
         </ScrollViewer>
 
         <ScrollViewer x:Name="EditorScroll" Grid.Row="1" IsVisible="{Binding IsEditing}">
-            <StackPanel Margin="{StaticResource PageGutter}">
+            <StackPanel Margin="0,0,24,24">
                 <StackPanel x:Name="NewItemPanel" IsVisible="{Binding IsNew}">
                     <TextBlock Classes="GroupHeader" Text="Item type" Margin="4,8,4,8" />
                     <Border Classes="Group">

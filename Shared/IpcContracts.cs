@@ -383,7 +383,7 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 
 internal sealed record ChoiceDto(string Title, string Value, string? Description = null);
 
-internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null, string? Confirm = null, IReadOnlyDictionary<string, string>? ReadOnlyValues = null);
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null, string? Confirm = null, IReadOnlyDictionary<string, string>? ReadOnlyValues = null, bool RevealsChildren = false);
 
 internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
 

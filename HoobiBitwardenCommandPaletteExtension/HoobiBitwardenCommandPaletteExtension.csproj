@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <RootNamespace>HoobiBitwardenCommandPaletteExtension</RootNamespace>
+    <AssemblyTitle>Bitwarden for Command Palette</AssemblyTitle>
     <ApplicationManifest>app.manifest</ApplicationManifest>
 
     <WindowsSdkPackageVersion>10.0.26100.87</WindowsSdkPackageVersion>

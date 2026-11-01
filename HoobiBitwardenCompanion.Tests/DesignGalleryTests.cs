@@ -6,6 +6,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FluentAvalonia.UI.Controls;
+using Hoobi.Design.Avalonia.Testing;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
 using HoobiBitwardenCompanion.ViewModels;
@@ -216,7 +217,7 @@ public class DesignGalleryTests(AvaloniaSession session)
 
   private static void ShowDialog(TopLevel window, FAContentDialog dialog, string name)
   {
-    var shown = dialog.ShowAsync(window);
+    var shown = AppDialogs.ShowAsync(dialog, window);
     AvaloniaSession.WaitFor(() => dialog.IsAttachedToVisualTree());
     var root = dialog.GetVisualDescendants().OfType<Panel>().First(p => p.Name == "LayoutRoot");
     AvaloniaSession.WaitFor(() =>
@@ -272,12 +273,12 @@ public class DesignGalleryTests(AvaloniaSession session)
     foreach (var name in FlashItems)
     {
       var (itemWindow, itemVm) = await ItemAsync(host, name);
-      HoverFlashProbe.Probe(itemWindow, flashes);
+      flashes.UnionWith(HoverFlashProbe.Probe(itemWindow));
       if (itemVm.CanEdit)
       {
         await itemVm.EditCommand.ExecuteAsync(null);
         Settle(itemWindow);
-        HoverFlashProbe.Probe(itemWindow, flashes);
+        flashes.UnionWith(HoverFlashProbe.Probe(itemWindow));
         var combo = itemWindow.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.IsEffectivelyVisible);
         if (combo is not null)
         {
@@ -285,7 +286,7 @@ public class DesignGalleryTests(AvaloniaSession session)
           combo.GetVisualDescendants().OfType<Popup>().Single().ShouldUseOverlayLayer = true;
           combo.IsDropDownOpen = true;
           Settle(itemWindow);
-          HoverFlashProbe.Probe(itemWindow, flashes);
+          flashes.UnionWith(HoverFlashProbe.Probe(itemWindow));
           combo.IsDropDownOpen = false;
         }
 
@@ -295,8 +296,8 @@ public class DesignGalleryTests(AvaloniaSession session)
           flyout.ShowAt(addField);
           Settle(itemWindow);
           Assert.True(flyout.IsOpen);
-          HoverFlashProbe.Probe(itemWindow, flashes);
-          HoverFlashProbe.ProbePopups(itemWindow, flashes);
+          flashes.UnionWith(HoverFlashProbe.Probe(itemWindow));
+          flashes.UnionWith(HoverFlashProbe.ProbePopups(itemWindow));
           flyout.Hide();
         }
 
@@ -311,30 +312,30 @@ public class DesignGalleryTests(AvaloniaSession session)
     await generatorVm.InitializeAsync();
     foreach (var dialog in ItemDialogs().Append(GeneratorView.CreateDialog(generatorVm)))
     {
-      var shown = dialog.ShowAsync(window);
+      var shown = AppDialogs.ShowAsync(dialog, window);
       AvaloniaSession.WaitFor(() => dialog.IsAttachedToVisualTree());
       Settle(window);
-      HoverFlashProbe.Probe(window, flashes);
+      flashes.UnionWith(HoverFlashProbe.Probe(window));
       dialog.Hide();
       AvaloniaSession.WaitFor(() => shown.IsCompleted);
     }
 
     var (menu, _) = OpenAlwaysOnTopMenu(window);
     Settle(window);
-    HoverFlashProbe.Probe(window, flashes);
-    HoverFlashProbe.ProbePopups(window, flashes);
+    flashes.UnionWith(HoverFlashProbe.Probe(window));
+    flashes.UnionWith(HoverFlashProbe.ProbePopups(window));
     menu.Close();
     window.Close();
 
     ToastWindow.Show(null, "Copied Password");
     Settle(ToastWindow.Current!);
-    HoverFlashProbe.Probe(ToastWindow.Current!, flashes);
+    flashes.UnionWith(HoverFlashProbe.Probe(ToastWindow.Current!));
     ToastWindow.Current!.Hide();
 
     var themes = new Window { Width = 600, Height = 900, Content = ThemeGallery() };
     themes.Show();
     Settle(themes);
-    HoverFlashProbe.Probe(themes, flashes);
+    flashes.UnionWith(HoverFlashProbe.Probe(themes));
     themes.Close();
 
     Assert.True(flashes.Count == 0, string.Join(Environment.NewLine, flashes));
@@ -355,7 +356,7 @@ public class DesignGalleryTests(AvaloniaSession session)
       {
         new Button { Content = "Default" },
         Themed("AccentButtonStyle"),
-        Themed("DangerButtonStyle"),
+        Themed("CriticalButtonStyle"),
         Themed("DialogCloseButtonStyle"),
         Themed("IconButtonStyle"),
         Themed("DangerIconButtonStyle"),

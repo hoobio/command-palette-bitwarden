@@ -45,7 +45,7 @@ public class CompanionSettingsOpsTests : IDisposable
     Assert.Equal(_settings.OrderedSettings.Count + 14, settings.Count);
     Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Section));
     Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Link));
-    Assert.Equal(15, settings.Count(s => s.Kind == SettingKinds.Toggle));
+    Assert.Equal(17, settings.Count(s => s.Kind == SettingKinds.Toggle));
     Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Choice));
     Assert.Equal(10, settings.Count(s => s.Kind == SettingKinds.Text));
     Assert.Equal(["_section_server", "serverRegion", "serverUrl", "serverAdvanced"], settings.Take(4).Select(s => s.Key));
@@ -83,6 +83,8 @@ public class CompanionSettingsOpsTests : IDisposable
       ("showPasskeyTag", "showTags"),
       ("totpTagStyle", "showTags"),
       ("organizationTagStyle", "showTags"),
+      ("cliDirectoryOverride", "useCliDirectoryOverride"),
+      ("cliDataDirectoryOverride", "useCliDataDirectoryOverride"),
     };
 
     foreach (var (child, parent) in dependencies)
@@ -129,8 +131,19 @@ public class CompanionSettingsOpsTests : IDisposable
     Assert.Equal((SettingKinds.Expander, "serverRegion", ServerRegions.SelfHosted, "Leave blank to derive from the server URL."), (advanced.Kind, advanced.Parent, advanced.ParentValue, advanced.Description));
     var overrides = rows.SkipWhile(r => r.Key != "serverAdvanced").Skip(1).ToList();
     Assert.All(overrides, r => Assert.Equal((SettingKinds.Text, "serverAdvanced", "true"), (r.Kind, r.Parent, r.ParentValue)));
-    Assert.Equal(["{base URL}/", "{base URL}/api", "{base URL}/identity", "{base URL}/icons", "{base URL}/notifications", "{base URL}/events", "{base URL}/key-connector"], overrides.Select(r => r.Placeholder));
+    Assert.Equal(["https://vault.example.com/", "https://vault.example.com/api", "https://vault.example.com/identity", "https://vault.example.com/icons", "https://vault.example.com/notifications", "https://vault.example.com/events", "https://vault.example.com/key-connector"], overrides.Select(r => r.Placeholder));
     Assert.Equal(["", "https://api.example.com", "", "", "", "", ""], overrides.Select(r => r.Value));
+  }
+
+  [Theory]
+  [InlineData("https://bw.contoso.com/", "https://bw.contoso.com/api")]
+  [InlineData(null, "https://vault.example.com/api")]
+  [InlineData("bw.contoso.com", "https://vault.example.com/api")]
+  public void ServerRows_AdvancedPlaceholders_DeriveFromTheServerUrl_OrShowTheExample(string? url, string api)
+  {
+    var rows = CompanionOps.ServerRows(url, loggedIn: false);
+
+    Assert.Equal(api, rows.Single(r => r.Key == "serverApiUrl").Placeholder);
   }
 
   [Fact]
@@ -208,6 +221,7 @@ public class CompanionSettingsOpsTests : IDisposable
 
     var cli = Path.Combine(_dir, "bw.exe");
     await File.WriteAllTextAsync(cli, string.Empty, TestContext.Current.CancellationToken);
+    await SetAsync("useCliDirectoryOverride", "true");
     await SetAsync("cliDirectoryOverride", cli);
     var after = await GetAsync();
 
@@ -219,6 +233,8 @@ public class CompanionSettingsOpsTests : IDisposable
   public async Task GetSettings_CarriesAPathAndSourceTooltip_OnTheTwoPathSettingsOnly()
   {
     var cli = Path.Combine(_dir, "bw.exe");
+    await SetAsync("useCliDirectoryOverride", "true");
+    await SetAsync("useCliDataDirectoryOverride", "true");
     await SetAsync("cliDirectoryOverride", cli);
     await SetAsync("cliDataDirectoryOverride", _dir);
     var settings = await GetAsync();
@@ -226,6 +242,24 @@ public class CompanionSettingsOpsTests : IDisposable
     Assert.Equal($"{cli}\nSet here", settings.Single(s => s.Key == "cliDirectoryOverride").Tooltip);
     Assert.Equal($"{_dir}\nSet here", settings.Single(s => s.Key == "cliDataDirectoryOverride").Tooltip);
     Assert.Equal(["cliDataDirectoryOverride", "cliDirectoryOverride", "useDesktopIntegration"], settings.Where(s => s.Tooltip is not null).Select(s => s.Key).Order(StringComparer.Ordinal));
+  }
+
+  [Fact]
+  public async Task GetSettings_OverrideSwitchOff_KeepsThePath_ButUsesTheNormalDetection()
+  {
+    var cli = Path.Combine(_dir, "bw.exe");
+    await File.WriteAllTextAsync(cli, string.Empty, TestContext.Current.CancellationToken);
+    await SetAsync("useCliDirectoryOverride", "true");
+    await SetAsync("cliDirectoryOverride", cli);
+    await SetAsync("useCliDirectoryOverride", "false");
+    var settings = await GetAsync();
+
+    var path = settings.Single(s => s.Key == "cliDirectoryOverride");
+    Assert.Equal(cli, path.Value);
+    Assert.Equal("bw", path.Placeholder);
+    Assert.DoesNotContain("Set here", path.Tooltip, StringComparison.Ordinal);
+    Assert.Equal([true, true], settings.Where(s => s.Key is "useCliDirectoryOverride" or "useCliDataDirectoryOverride").Select(s => s.RevealsChildren));
+    Assert.Equal(2, settings.Count(s => s.RevealsChildren));
   }
 
   [Fact]
@@ -261,6 +295,7 @@ public class CompanionSettingsOpsTests : IDisposable
       Assert.Equal("bw\nNot found on PATH", (await GetAsync()).Single(s => s.Key == "cliDirectoryOverride").Tooltip);
       var cli = Path.Combine(_dir, "bw.exe");
       await File.WriteAllTextAsync(cli, string.Empty, TestContext.Current.CancellationToken);
+      await SetAsync("useCliDirectoryOverride", "true");
       await SetAsync("cliDirectoryOverride", cli);
       Assert.Equal($"{cli}\nSet here", (await GetAsync()).Single(s => s.Key == "cliDirectoryOverride").Tooltip);
     }

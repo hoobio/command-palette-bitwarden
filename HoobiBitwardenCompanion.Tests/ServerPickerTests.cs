@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.VisualTree;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
@@ -242,11 +243,24 @@ public class ServerPickerTests(AvaloniaSession session)
     Assert.Equal("https://vault.example.com", dialog!.BaseUrl);
     Assert.Equal(7, dialog.Fields.Count);
     Assert.Equal("https://api.example.com", dialog.Fields.Single(f => f.Label == "API URL").Value);
-    Assert.Equal("{base URL}/api", dialog.Fields.Single(f => f.Label == "API URL").Placeholder);
+    Assert.Equal("https://vault.example.com/api", dialog.Fields.Single(f => f.Label == "API URL").Placeholder);
     Assert.True(dialog.Expanded);
     Assert.Empty(extension.Servers);
     window.Close();
   });
+
+  [Fact]
+  public void SelfHostedDialog_PlaceholdersFollowTheServerUrl_AndFallBackToTheExample()
+  {
+    var dialog = new SelfHostedServerViewModel(new SetServerRequest(ServerRegions.Cloud, null));
+    Assert.Equal(["https://vault.example.com/", "https://vault.example.com/api"], dialog.Fields.Take(2).Select(f => f.Placeholder));
+
+    dialog.BaseUrl = "https://bw.contoso.com";
+    Assert.Equal(["https://bw.contoso.com/", "https://bw.contoso.com/api", "https://bw.contoso.com/identity", "https://bw.contoso.com/icons", "https://bw.contoso.com/notifications", "https://bw.contoso.com/events", "https://bw.contoso.com/key-connector"], dialog.Fields.Select(f => f.Placeholder));
+
+    dialog.BaseUrl = string.Empty;
+    Assert.Equal("https://vault.example.com/key-connector", dialog.Fields[^1].Placeholder);
+  }
 
   [Fact]
   public Task SelfHostedDialog_WithoutOverrides_StartsCollapsed_AndEmptyForCloud() => session.RunAsync(async () =>
@@ -348,5 +362,71 @@ public class ServerPickerTests(AvaloniaSession session)
     view.OpenDialog.Hide();
     AvaloniaSession.WaitFor(() => view.OpenDialog is null);
     window.Close();
+  });
+
+  private static (LoginWindow Window, ServerPickerView View) OpenSelfHostedDialog(WindowCoordinator coordinator)
+  {
+    var window = coordinator.ShowLogin();
+    window.Show();
+    window.UpdateLayout();
+    var view = window.GetVisualDescendants().OfType<ServerPickerView>().Single();
+    SelfHostedServerViewModel? dialog = null;
+    window.ViewModel!.Server.SelfHostedRequested += d => dialog = d;
+    _ = window.ViewModel.Server.SelectAsync(ServerRegions.SelfHosted);
+    AvaloniaSession.WaitFor(() => view.OpenDialog is { IsLoaded: true });
+    var settled = DateTime.UtcNow.AddMilliseconds(300);
+    AvaloniaSession.WaitFor(() => DateTime.UtcNow > settled);
+    dialog!.BaseUrl = "https://vault.example.com";
+    return (window, view);
+  }
+
+  private static void Press(Window window, Avalonia.Input.Key key, Avalonia.Input.PhysicalKey physical)
+  {
+    window.KeyPress(key, Avalonia.Input.RawInputModifiers.None, physical, null);
+    window.KeyRelease(key, Avalonia.Input.RawInputModifiers.None, physical, null);
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+  }
+
+  [Fact]
+  public Task SelfHostedDialog_Enter_RunsThePrimaryAction_AndNotTheLoginSubmit() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+    var (window, view) = OpenSelfHostedDialog(coordinator);
+
+    Press(window, Avalonia.Input.Key.Enter, Avalonia.Input.PhysicalKey.Enter);
+
+    AvaloniaSession.WaitFor(() => view.OpenDialog is null && extension.Servers.Count == 1);
+    Assert.Equal("https://vault.example.com", extension.Servers.Single().BaseUrl);
+    Assert.Null(window.ViewModel!.ErrorMessage);
+    Assert.True(window.IsVisible);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task SelfHostedDialog_Escape_ClosesTheDialog_AndNotTheLoginWindow() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+    var (window, view) = OpenSelfHostedDialog(coordinator);
+
+    Press(window, Avalonia.Input.Key.Escape, Avalonia.Input.PhysicalKey.Escape);
+
+    AvaloniaSession.WaitFor(() => view.OpenDialog is null);
+    Assert.Empty(extension.Servers);
+    Assert.True(window.IsVisible);
+    Assert.Null(window.ViewModel!.ErrorMessage);
+
+    window.GetVisualDescendants().OfType<TextBox>().First(t => t.IsEffectivelyVisible && t.IsEnabled).Focus();
+    Press(window, Avalonia.Input.Key.Enter, Avalonia.Input.PhysicalKey.Enter);
+    AvaloniaSession.WaitFor(() => window.ViewModel.ErrorMessage is not null);
+    var closed = false;
+    window.Closed += (_, _) => closed = true;
+    window.KeyPress(Avalonia.Input.Key.Escape, Avalonia.Input.RawInputModifiers.None, Avalonia.Input.PhysicalKey.Escape, null);
+    Assert.True(closed);
+    await Task.CompletedTask;
   });
 }
