@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
@@ -23,6 +24,12 @@ internal sealed partial class GeneratorWindow : Window
     HoobiChrome.AttachDragHandle(AppTitleBar);
     if (viewModel is not null)
       viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    foreach (var slide in this.GetLogicalDescendants().OfType<SlideExpander>())
+      slide.PropertyChanged += (_, e) =>
+      {
+        if (e.Property == HeightProperty && !_resizedByUser)
+          Dispatcher.UIThread.Post(FitToContent, DispatcherPriority.Loaded);
+      };
     Opened += (_, _) =>
     {
       if (Screens.ScreenFromWindow(this) is { } screen)

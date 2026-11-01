@@ -2,6 +2,7 @@
     x:Class="HoobiBitwardenCompanion.Views.GeneratorView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hoobi="using:Hoobi.Design.Avalonia"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:GeneratorViewModel">
     <StackPanel>
@@ -57,14 +58,14 @@
             </Border>
         </Border>
 
-        <ToggleButton x:Name="OptionsToggle" Classes="Disclosure" Margin="0,12,0,4" Padding="4,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding OptionsExpanded, Mode=TwoWay}" AutomationProperties.Name="Options">
+        <ToggleButton x:Name="OptionsToggle" Classes="Disclosure Chevron" Margin="0,12,0,4" Padding="4,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding OptionsExpanded, Mode=TwoWay}" AutomationProperties.Name="Options">
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Text="Options" FontSize="{StaticResource CaptionTextBlockFontSize}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.ChevronDown}" IsVisible="{Binding !OptionsExpanded}" />
-                <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.ChevronUp}" IsVisible="{Binding OptionsExpanded}" />
+                <TextBlock Grid.Column="1" Classes="Chevron" />
             </Grid>
         </ToggleButton>
-        <Border x:Name="OptionsGroup" Classes="Group" IsVisible="{Binding OptionsExpanded}">
+        <hoobi:SlideExpander IsExpanded="{Binding OptionsExpanded}">
+        <Border x:Name="OptionsGroup" Classes="Group">
             <Panel>
                 <StackPanel x:Name="PasswordOptions" Classes="Rows" IsVisible="{Binding IsPassword}">
                     <Border Classes="Row Switch">
@@ -148,6 +149,7 @@
                 </StackPanel>
             </Panel>
         </Border>
+        </hoobi:SlideExpander>
 
         <TextBlock x:Name="ErrorText" Margin="0,8,0,0" TextWrapping="Wrap" Classes="Warn" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         <TextBlock Classes="Caption" Margin="0,8,0,0" Text="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />

@@ -2,34 +2,36 @@
     x:Class="HoobiBitwardenCompanion.Views.SelfHostedServerView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hoobi="using:Hoobi.Design.Avalonia"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:SelfHostedServerViewModel">
     <StackPanel Spacing="8" Margin="2,0">
         <TextBlock Text="Server URL" />
         <TextBox x:Name="BaseUrlBox" PlaceholderText="https://bitwarden.company.com" Text="{Binding BaseUrl, Mode=TwoWay}" AutomationProperties.Name="Server URL" />
         <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Base URL of your self-hosted Bitwarden server, for example https://bitwarden.company.com" />
-        <ToggleButton x:Name="CustomToggle" Classes="Disclosure" Padding="0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="Custom environment">
+        <ToggleButton x:Name="CustomToggle" Classes="Disclosure Chevron" Padding="0,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="Custom environment">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <TextBlock VerticalAlignment="Center" Text="Custom environment" />
-                <TextBlock Grid.Column="1" Classes="Icon" VerticalAlignment="Center" Text="{StaticResource Glyph.ChevronDown}" IsVisible="{Binding !Expanded}" />
-                <TextBlock Grid.Column="1" Classes="Icon" VerticalAlignment="Center" Text="{StaticResource Glyph.ChevronUp}" IsVisible="{Binding Expanded}" />
+                <TextBlock Grid.Column="1" Classes="Chevron" />
             </Grid>
         </ToggleButton>
-        <ItemsControl x:Name="FieldList" ItemsSource="{Binding Fields}" IsVisible="{Binding Expanded}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Spacing="8" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:ServerUrlFieldViewModel">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="{Binding Label}" />
-                        <TextBox PlaceholderText="{Binding Placeholder}" Text="{Binding Value, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
-                    </StackPanel>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <hoobi:SlideExpander IsExpanded="{Binding Expanded}">
+            <ItemsControl x:Name="FieldList" ItemsSource="{Binding Fields}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ServerUrlFieldViewModel">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="{Binding Label}" />
+                            <TextBox PlaceholderText="{Binding Placeholder}" Text="{Binding Value, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </hoobi:SlideExpander>
         <TextBlock x:Name="ErrorText" Classes="Warn" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     </StackPanel>
 </UserControl>

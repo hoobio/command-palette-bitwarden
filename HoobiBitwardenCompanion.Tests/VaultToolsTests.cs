@@ -34,6 +34,8 @@ public class VaultToolsTests(AvaloniaSession session)
     public bool HasPassword { get; set; } = true;
     public int? PasswordHistoryCount { get; set; }
 
+    public SemaphoreSlim? GetItemGate { get; set; }
+
     public List<JsonElement?> Payloads(string op)
     {
       lock (Requests)
@@ -61,6 +63,8 @@ public class VaultToolsTests(AvaloniaSession session)
       switch (op)
       {
         case Ops.GetItem:
+          if (GetItemGate is { } gate)
+            await gate.WaitAsync(cancellationToken);
           return IpcJson.ToElement(new ItemDto(ItemId, "GitHub", Type, "Work", null, false, false, false, Revision, Revision, null,
             [new FieldDto(ItemFields.Username, "Username", "Login credentials", "octocat", false), new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true)],
             Attachments: [.. Attachments], HasPassword: HasPassword, PasswordHistoryCount: PasswordHistoryCount), IpcJson.Default.ItemDto);
@@ -288,14 +292,24 @@ public class VaultToolsTests(AvaloniaSession session)
     Assert.True(new GeneratorViewModel(h.Channel).OptionsExpanded);
     Assert.True(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
 
+    var slide = view.GetVisualDescendants().OfType<Hoobi.Design.Avalonia.SlideExpander>().Single();
+    SettleSlide(slide);
+
     toggle.IsChecked = false;
-    window.UpdateLayout();
+    SettleSlide(slide);
     Assert.False(view.FindControl<Border>("OptionsGroup")!.IsEffectivelyVisible);
     Assert.True(first.Special);
     Assert.True(first.ToOptions().Special);
     window.Close();
     File.Delete(CompanionSettings.FilePath);
   });
+
+  private static void SettleSlide(Hoobi.Design.Avalonia.SlideExpander slide) =>
+    AvaloniaSession.WaitFor(() =>
+    {
+      AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+      return double.IsNaN(slide.Height);
+    });
 
   [Fact]
   public Task GeneratorWindow_CollapsedDefaultSize_ShowsNoScrollBar_OnEachTab() => session.RunAsync(async () =>
@@ -316,13 +330,16 @@ public class VaultToolsTests(AvaloniaSession session)
       Assert.True(scroll.Viewport.Height <= scroll.Extent.Height + 0.5, $"tab {tab}: window {collapsed} leaves a gap below the content (viewport {scroll.Viewport.Height}, extent {scroll.Extent.Height})");
       try
       {
+        var slide = window.GetVisualDescendants().OfType<Hoobi.Design.Avalonia.SlideExpander>().Single();
         vm.OptionsExpanded = true;
+        SettleSlide(slide);
         AvaloniaSession.WaitFor(() =>
         {
           window.UpdateLayout();
           return window.Bounds.Height > collapsed;
         });
         vm.OptionsExpanded = false;
+        SettleSlide(slide);
         AvaloniaSession.WaitFor(() =>
         {
           window.UpdateLayout();
@@ -586,7 +603,7 @@ public class VaultToolsTests(AvaloniaSession session)
   [Fact]
   public Task Coordinator_RotateItem_OpensTheWindow_AndTheGeneratorAfterLoading() => session.RunAsync(async () =>
   {
-    var extension = new FakeExtension();
+    var extension = new FakeExtension { GetItemGate = new SemaphoreSlim(0) };
     using var pair = new ChannelPair(extension.HandleAsync);
     using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
     _ = coordinator.RunAsync(() => { });
@@ -601,6 +618,7 @@ public class VaultToolsTests(AvaloniaSession session)
       opened++;
       return Task.FromResult<long?>(null);
     };
+    extension.GetItemGate.Release();
     AvaloniaSession.WaitFor(() => opened == 1);
     Assert.Single(extension.Payloads(Ops.GetItem));
     Assert.Empty(extension.Payloads(Ops.RotatePassword));
