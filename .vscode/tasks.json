@@ -64,7 +64,7 @@
     {
       "label": "Stop Extension",
       "type": "shell",
-      "command": "Get-Process HoobiBitwardenCommandPaletteExtension, HoobiBitwardenCompanion -ErrorAction SilentlyContinue | Where-Object Path -like '${workspaceFolder}*' | Stop-Process -Force; exit 0",
+      "command": "Get-CimInstance Win32_Process -Filter \"Name='HoobiBitwardenCommandPaletteExtension.exe' OR Name='HoobiBitwardenCompanion.exe'\" | Where-Object ExecutablePath -like '${workspaceFolder}*' | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; exit 0",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",

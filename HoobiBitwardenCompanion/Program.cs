@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using Avalonia;
 using Hoobi.Design.Avalonia;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.Services;
 
 namespace HoobiBitwardenCompanion;
@@ -10,6 +11,10 @@ internal static class Program
   [STAThread]
   public static int Main(string[] args)
   {
+    var hardeningError = ProcessHardening.Apply();
+    if (hardeningError != 0)
+      System.Diagnostics.Debug.WriteLine($"Process hardening failed (Win32 error {hardeningError})");
+
     if (args.Length < 2)
       return 2;
 
