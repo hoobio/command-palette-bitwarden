@@ -1165,6 +1165,69 @@ public class BitwardenCliServiceTests
   }
 
   [Fact]
+  public void ParseSearchFilters_CollectionFilter_ExtractedWithText()
+  {
+    var (filters, text) = BitwardenCliService.ParseSearchFilters("collection:eng github");
+    Assert.Single(filters);
+    Assert.Equal("collection", filters[0].Key);
+    Assert.Equal("eng", filters[0].Value);
+    Assert.Equal("github", text);
+  }
+
+  private static (BitwardenCliService Service, List<BitwardenItem> Items) CreateServiceWithCollections()
+  {
+    var svc = new BitwardenCliService();
+    svc.LoadTestData([], [], null, new Dictionary<string, string> { ["c1"] = "Engineering", ["c2"] = "Admin" });
+    List<BitwardenItem> items =
+    [
+      new() { Id = "a", Name = "A", Type = BitwardenItemType.Login, CollectionIds = ["c1"] },
+      new() { Id = "b", Name = "B", Type = BitwardenItemType.Login, CollectionIds = ["c1", "c2"] },
+      new() { Id = "c", Name = "C", Type = BitwardenItemType.Login },
+    ];
+    return (svc, items);
+  }
+
+  [Fact]
+  public void ApplyFilter_Collection_PartialNameMatch_CaseInsensitive()
+  {
+    var (svc, items) = CreateServiceWithCollections();
+    var result = svc.ApplyFilter(items, ("collection", "ENGIN")).ToList();
+    Assert.Equal(["a", "b"], result.Select(i => i.Id));
+  }
+
+  [Fact]
+  public void ApplyFilter_Collection_MatchesById()
+  {
+    var (svc, items) = CreateServiceWithCollections();
+    var result = svc.ApplyFilter(items, ("collection", "c2")).ToList();
+    Assert.Equal("b", Assert.Single(result).Id);
+  }
+
+  [Fact]
+  public void ApplyFilter_Collection_ItemInTwoCollections_MatchesEither()
+  {
+    var (svc, items) = CreateServiceWithCollections();
+    Assert.Contains(svc.ApplyFilter(items, ("collection", "admin")), i => i.Id == "b");
+    Assert.Contains(svc.ApplyFilter(items, ("collection", "engineering")), i => i.Id == "b");
+  }
+
+  [Fact]
+  public void ApplyFilter_Collection_ExcludesItemsWithoutCollection()
+  {
+    var (svc, items) = CreateServiceWithCollections();
+    Assert.DoesNotContain(svc.ApplyFilter(items, ("collection", "eng")), i => i.Id == "c");
+    Assert.Empty(svc.ApplyFilter(items, ("collection", "nonexistent")));
+  }
+
+  [Fact]
+  public void GetCollectionNames_ReturnsSortedNames_SkippingUnknownIds()
+  {
+    var (svc, _) = CreateServiceWithCollections();
+    Assert.Equal(["Admin", "Engineering"], svc.GetCollectionNames(["c1", "unknown", "c2"]));
+    Assert.Empty(svc.GetCollectionNames([]));
+  }
+
+  [Fact]
   public void ParseOrganizations_ValidJson_ReturnsIdToNameMap()
   {
     var json = "[{\"id\":\"org-1\",\"name\":\"Acme Corp\"},{\"id\":\"org-2\",\"name\":\"Globex\"}]";

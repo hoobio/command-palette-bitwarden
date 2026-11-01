@@ -124,7 +124,7 @@ public class BitwardenFallbackItemTests
     var svc = new BitwardenCliService(processFactory: psi => new FakeCliProcess(psi.Arguments switch
     {
       "list items" => """[{"id":"1","name":"GitHub","type":1,"login":{"username":"octocat"}}]""",
-      "list folders" or "list organizations" => "[]",
+      "list folders" or "list organizations" or "list collections" => "[]",
       _ => "session_key\n",
     }, id: Interlocked.Increment(ref id))) { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
     await svc.UnlockAsync("pw");
