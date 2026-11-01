@@ -84,4 +84,4 @@ This matches the Bitwarden desktop/web vault behaviour where re-prompt gates acc
 
 **Sync Vault** triggers a full `bw sync` followed by a cache refresh.
 
-If the vault is unlocked but the item list failed to load, the vault browser shows **Vault items not loaded** with the hint "Run Sync Vault to load them". The Sync Vault, Set Server, Lock and Log out commands stay available.
+If the vault is unlocked but the item list failed to load, the vault browser shows **Vault items not loaded** with the hint "Run Sync Vault to load them". The Sync Vault, Lock and Log out commands stay available.

@@ -3,8 +3,15 @@ using HoobiBitwarden.Ipc;
 
 namespace HoobiBitwardenCompanion.ViewModels;
 
-internal sealed partial class ApiKeyLoginViewModel(PipeChannel channel) : DialogViewModel(channel)
+internal sealed partial class ApiKeyLoginViewModel : DialogViewModel
 {
+  public ApiKeyLoginViewModel(PipeChannel channel, SetServerRequest? server = null) : base(channel)
+  {
+    Server = FollowServerSwitch(new ServerPickerViewModel(channel, server));
+  }
+
+  public ServerPickerViewModel Server { get; }
+
   [ObservableProperty]
   public partial string? ClientId { get; set; }
 

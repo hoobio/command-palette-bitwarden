@@ -111,6 +111,16 @@ public class CompanionSettingsOpsTests : IDisposable
   }
 
   [Fact]
+  public void ServerRows_ServerUrl_CarriesThePresetUrlsForTheCloudRegions()
+  {
+    var url = CompanionOps.ServerRows("bitwarden.eu", loggedIn: false).Single(r => r.Key == "serverUrl");
+
+    Assert.Equal(string.Empty, url.Value);
+    Assert.Equal("Address of your Bitwarden server", url.Description);
+    Assert.Equal(new Dictionary<string, string> { ["cloud"] = "https://vault.bitwarden.com", ["eu"] = "https://vault.bitwarden.eu" }, url.ReadOnlyValues);
+  }
+
+  [Fact]
   public void ServerRows_AdvancedRows_AreCollapsedBehindSelfHosted_WithPlaceholdersAndCurrentValues()
   {
     var rows = CompanionOps.ServerRows("https://vault.example.com", loggedIn: false, new Models.ServerConfig("https://vault.example.com", ApiUrl: "https://api.example.com"));

@@ -82,6 +82,7 @@ internal static class SettingKeys
 {
   public const string OpenLogs = "openLogs";
   public const string Hotkeys = "hotkeys";
+  public const string UseApiKeyAuthentication = "useApiKeyAuthentication";
   public const string ServerRegion = "serverRegion";
   public const string ServerUrl = "serverUrl";
   public const string ServerAdvanced = "serverAdvanced";
@@ -92,11 +93,6 @@ internal static class SettingKeys
   public const string ServerNotificationsUrl = "serverNotificationsUrl";
   public const string ServerEventsUrl = "serverEventsUrl";
   public const string ServerKeyConnectorUrl = "serverKeyConnectorUrl";
-}
-
-internal static class SettingsFocus
-{
-  public const string Server = "server";
 }
 
 internal static class ParentValues
@@ -228,7 +224,7 @@ internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 
-internal sealed record DialogRequest(long ReturnWindow, string? Focus = null, bool Force = false);
+internal sealed record DialogRequest(long ReturnWindow, bool Force = false, SetServerRequest? Server = null);
 
 internal sealed record ApiKeyLoginRequest(string ClientId, string ClientSecret);
 
@@ -253,7 +249,7 @@ internal sealed record SetServerRequest(
 
 internal sealed record SetServerResponse(bool Success, string? Error);
 
-internal sealed record LoginDialogRequest(long ReturnWindow, bool RememberSession, string? CustomDataDir);
+internal sealed record LoginDialogRequest(long ReturnWindow, bool RememberSession, string? CustomDataDir, SetServerRequest? Server = null);
 
 internal sealed record LoginRequest(string Email, string Password, int? Method, string? Code, bool RememberSession);
 
@@ -387,7 +383,7 @@ internal sealed record PasswordHistoryResponse(IReadOnlyList<DateTime> LastUsed)
 
 internal sealed record ChoiceDto(string Title, string Value, string? Description = null);
 
-internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null, string? Confirm = null);
+internal sealed record SettingDto(string Key, string Kind, string Label, string? Description, string? Value, IReadOnlyList<ChoiceDto>? Choices, string? Parent = null, string? ParentValue = null, string? Placeholder = null, string? Tooltip = null, string? Status = null, string? Confirm = null, IReadOnlyDictionary<string, string>? ReadOnlyValues = null);
 
 internal sealed record SettingsResponse(IReadOnlyList<SettingDto> Settings);
 

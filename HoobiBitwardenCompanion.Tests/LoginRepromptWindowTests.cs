@@ -15,6 +15,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     public Queue<LoginResponse> Logins { get; } = new([new LoginResponse(true, null)]);
     public LoginResponse Device { get; set; } = new(true, null);
     public RepromptConfirmResponse Confirm { get; set; } = new(true, null);
+    public SetSettingResponse Setting { get; set; } = new(true, null);
 
     public List<string> Ops_ => [.. Calls.Select(c => c.Op)];
 
@@ -29,6 +30,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
         Ops.Login => IpcJson.ToElement(Logins.Count > 1 ? Logins.Dequeue() : Logins.Peek(), IpcJson.Default.LoginResponse),
         Ops.SubmitDeviceVerification => IpcJson.ToElement(Device, IpcJson.Default.LoginResponse),
         Ops.ConfirmReprompt => IpcJson.ToElement(Confirm, IpcJson.Default.RepromptConfirmResponse),
+        Ops.SetSetting => IpcJson.ToElement(Setting, IpcJson.Default.SetSettingResponse),
         Ops.CancelLogin or Ops.CancelReprompt => null,
         _ => throw new IpcException(IpcErrors.Invalid),
       });
@@ -69,8 +71,128 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
   });
 
   [Fact]
+  public Task TwoStepPicker_DuoAndWebAuthnDisableTheCredentials_AndShowTheBanner_ThenTheDefaultRestoresThem() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin();
+    var viewModel = window.ViewModel!;
+    Assert.Equal(LoginViewModel.DefaultMethodIndex, viewModel.MethodIndex);
+    Assert.False(window.FindControl<Control>("TwoStepAlert")!.IsVisible);
+    Assert.True(window.FindControl<Control>("EmailBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("PasswordBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("SubmitButton")!.IsEnabled);
+
+    foreach (var index in Enumerable.Range(4, 2))
+    {
+      viewModel.MethodIndex = index;
+      Assert.True(window.FindControl<Control>("TwoStepAlert")!.IsVisible);
+      Assert.False(window.FindControl<Control>("EmailBox")!.IsEnabled);
+      Assert.False(window.FindControl<Control>("PasswordBox")!.IsEnabled);
+      Assert.False(window.FindControl<Control>("SubmitButton")!.IsEnabled);
+    }
+
+    viewModel.MethodIndex = LoginViewModel.DefaultMethodIndex;
+    Assert.False(window.FindControl<Control>("TwoStepAlert")!.IsVisible);
+    Assert.True(window.FindControl<Control>("EmailBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("PasswordBox")!.IsEnabled);
+    Assert.True(window.FindControl<Control>("SubmitButton")!.IsEnabled);
+    window.Close();
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task TwoStepPicker_ListsTheMethodsInOrder_AndTheFirstFourSendTheirCliMethod() => session.RunAsync(async () =>
+  {
+    Assert.Equal(["Auto-detect", "Authenticator app", "Email", "YubiKey OTP", "Duo", "WebAuthn (FIDO2)"], LoginViewModel.MethodChoices);
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin();
+    var viewModel = window.ViewModel!;
+    int?[] expected = [null, 0, 1, 3, null, null];
+    for (var index = 0; index < expected.Length; index++)
+    {
+      viewModel.MethodIndex = index;
+      Assert.Equal(expected[index], viewModel.Method);
+    }
+
+    window.Close();
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task TwoStepPicker_ChoiceIsRememberedForNextWindow() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin();
+    window.ViewModel!.MethodIndex = 5;
+    window.Close();
+    var next = coordinator.ShowLogin();
+    Assert.Equal(5, next.ViewModel!.MethodIndex);
+    next.Close();
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task UseApiKeyLogin_TurnsOnTheSetting_ThenClosesTheWindowAndOpensApiKeyLogin() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin(777);
+    var viewModel = window.ViewModel!;
+    viewModel.MethodIndex = 4;
+    await viewModel.UseApiKeyLoginCommand.ExecuteAsync(null);
+
+    var sent = IpcJson.Read(extension.Calls.Single(c => c.Op == Ops.SetSetting).Payload, IpcJson.Default.SetSettingRequest);
+    Assert.Equal(new SetSettingRequest("useApiKeyAuthentication", "true"), sent);
+    Assert.NotSame(window, coordinator.ShowLogin());
+    var apiKey = coordinator.ShowApiKeyLogin();
+    Assert.Equal(777, apiKey.ReturnWindow);
+    apiKey.Close();
+    coordinator.ShowLogin().Close();
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task UseApiKeyLogin_WhenTheSettingFails_ShowsTheErrorInTheBanner_AndKeepsTheWindow() => session.RunAsync(async () =>
+  {
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    var extension = new FakeExtension { Setting = new SetSettingResponse(false, "Not allowed") };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+
+    var window = coordinator.ShowLogin();
+    var viewModel = window.ViewModel!;
+    viewModel.MethodIndex = 5;
+    await viewModel.UseApiKeyLoginCommand.ExecuteAsync(null);
+
+    Assert.Equal("Not allowed", viewModel.TwoStepError);
+    Assert.True(window.FindControl<Control>("TwoStepErrorText")!.IsVisible);
+    Assert.Same(window, coordinator.ShowLogin());
+    window.Close();
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
+    await Task.CompletedTask;
+  });
+
+  [Fact]
   public Task Login_Submit_SendsTheCredentialsAndDefaultMethod_ThenClearsThem_AndClosesTheWindow() => session.RunAsync(async () =>
   {
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
     var extension = new FakeExtension();
     using var pair = new ChannelPair(extension.HandleAsync);
     using var coordinator = NewCoordinator(pair);
@@ -99,11 +221,12 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     var window = coordinator.ShowLogin();
     window.ViewModel!.Email = "user@test.com";
     window.ViewModel.MasterPassword = "pw";
-    window.ViewModel.MethodIndex = 3;
+    window.ViewModel.MethodIndex = 0;
     await window.ViewModel.SubmitAsync();
 
     Assert.Null(SentLogin(extension, 0).Method);
     coordinator.ShowLogin().Close();
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
   });
 
   [Fact]
@@ -159,7 +282,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     var viewModel = window.ViewModel!;
     viewModel.Email = "user@test.com";
     viewModel.MasterPassword = "pw";
-    viewModel.MethodIndex = 2;
+    viewModel.MethodIndex = 3;
     await viewModel.SubmitAsync();
 
     Assert.Equal(LoginViewModel.CodeStep, viewModel.Step);
@@ -178,7 +301,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     Assert.Equal("user@test.com", viewModel.Email);
     Assert.Equal("pw", viewModel.MasterPassword);
 
-    viewModel.MethodIndex = 0;
+    viewModel.MethodIndex = 1;
     await viewModel.SubmitAsync();
     Assert.Equal(LoginViewModel.CodeStep, viewModel.Step);
     viewModel.Code = " 123456 ";
@@ -187,6 +310,7 @@ public class LoginRepromptWindowTests(AvaloniaSession session)
     Assert.Equal(new LoginRequest("user@test.com", "pw", 0, "123456", false), SentLogin(extension, 2));
     Assert.NotSame(window, coordinator.ShowLogin());
     coordinator.ShowLogin().Close();
+    LoginViewModel.RememberedMethodIndex = LoginViewModel.DefaultMethodIndex;
   });
 
   [Fact]

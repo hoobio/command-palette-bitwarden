@@ -10,7 +10,7 @@
     Width="440"
     Height="300"
     MinWidth="340"
-    MinHeight="300"
+    MinHeight="220"
     WindowStartupLocation="CenterScreen"
     CanMinimize="False"
     CanMaximize="False"

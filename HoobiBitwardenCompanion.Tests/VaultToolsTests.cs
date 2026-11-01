@@ -307,12 +307,13 @@ public class VaultToolsTests(AvaloniaSession session)
       await vm.InitializeAsync();
       var window = new GeneratorWindow(vm);
       window.Show();
+      Avalonia.Threading.Dispatcher.UIThread.RunJobs();
       window.UpdateLayout();
       var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().First();
       Assert.True(scroll.Extent.Height <= scroll.Viewport.Height + 0.5, $"tab {tab}: extent {scroll.Extent.Height} viewport {scroll.Viewport.Height} window {window.Bounds.Height}");
       Assert.True(window.Bounds.Height >= window.MinHeight);
       var collapsed = window.Bounds.Height;
-      Assert.True(window.Bounds.Height - scroll.Viewport.Height + scroll.Extent.Height <= window.MinHeight + 0.5, $"tab {tab}: collapsed content needs {collapsed}, min {window.MinHeight}");
+      Assert.True(scroll.Viewport.Height <= scroll.Extent.Height + 0.5, $"tab {tab}: window {collapsed} leaves a gap below the content (viewport {scroll.Viewport.Height}, extent {scroll.Extent.Height})");
       try
       {
         vm.OptionsExpanded = true;
@@ -322,7 +323,11 @@ public class VaultToolsTests(AvaloniaSession session)
           return window.Bounds.Height > collapsed;
         });
         vm.OptionsExpanded = false;
-        AvaloniaSession.WaitFor(() => window.Bounds.Height == collapsed);
+        AvaloniaSession.WaitFor(() =>
+        {
+          window.UpdateLayout();
+          return Math.Abs(window.Bounds.Height - collapsed) < 1;
+        });
       }
       finally
       {

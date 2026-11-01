@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using HoobiBitwarden.Ipc;
+using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Services;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -61,12 +63,26 @@ internal sealed partial class CompanionOps
     new("Self-hosted", ServerRegions.SelfHosted),
   ];
 
-  internal static string RegionOf(string? serverUrl) => Pages.SetServerPage.DetectPreset(serverUrl) switch
+  private static readonly Dictionary<string, string> PresetUrls = new()
   {
-    "bitwarden.com" => ServerRegions.Cloud,
-    "bitwarden.eu" => ServerRegions.Eu,
-    _ => ServerRegions.SelfHosted,
+    [ServerRegions.Cloud] = "https://vault.bitwarden.com",
+    [ServerRegions.Eu] = "https://vault.bitwarden.eu",
   };
+
+  internal static string RegionOf(string? serverUrl) =>
+    string.IsNullOrEmpty(serverUrl) || VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.com") ? ServerRegions.Cloud
+    : VaultItemHelper.IsCloudHost(serverUrl, "bitwarden.eu") ? ServerRegions.Eu
+    : ServerRegions.SelfHosted;
+
+  internal SetServerRequest CurrentServer()
+  {
+    var url = BitwardenCliService.ServerUrl;
+    var region = RegionOf(url);
+    if (region != ServerRegions.SelfHosted)
+      return new SetServerRequest(region, null);
+    var urls = _service.ReadServerUrls();
+    return new SetServerRequest(region, url, urls?.WebVaultUrl, urls?.ApiUrl, urls?.IdentityUrl, urls?.IconsUrl, urls?.NotificationsUrl, urls?.EventsUrl, urls?.KeyConnectorUrl);
+  }
 
   private SettingDto[] ServerRows()
   {
@@ -85,7 +101,7 @@ internal sealed partial class CompanionOps
     [
       new("_section_server", SettingKinds.Section, "Server", null, null, null),
       new(SettingKeys.ServerRegion, SettingKinds.Choice, "Region", loggedIn ? warning : "Where your vault is hosted", region, ServerChoices, Confirm: confirm),
-      new(SettingKeys.ServerUrl, SettingKinds.Text, "Server URL", "Address of your self-hosted server", region == ServerRegions.SelfHosted ? url : string.Empty, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted, Placeholder: "https://vault.example.com", Confirm: confirm),
+      new(SettingKeys.ServerUrl, SettingKinds.Text, "Server URL", "Address of your Bitwarden server", region == ServerRegions.SelfHosted ? url : string.Empty, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted, Placeholder: "https://vault.example.com", Confirm: confirm, ReadOnlyValues: PresetUrls),
       new(SettingKeys.ServerAdvanced, SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, SettingKeys.ServerRegion, ServerRegions.SelfHosted),
       Advanced(SettingKeys.ServerWebVaultUrl, "Web Vault URL", urls?.WebVaultUrl, "/"),
       Advanced(SettingKeys.ServerApiUrl, "API URL", urls?.ApiUrl, "/api"),

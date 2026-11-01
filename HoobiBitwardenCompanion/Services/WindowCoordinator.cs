@@ -100,11 +100,11 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowSettings:
         var settings = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Focus, settings?.Force ?? false));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowSettings(settings?.Force ?? false));
         return null;
       case Ops.ShowApiKeyLogin:
         var dialog = payload is null ? null : IpcJson.Read(payload, IpcJson.Default.DialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowApiKeyLogin((nint)(dialog?.ReturnWindow ?? 0)));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowApiKeyLogin((nint)(dialog?.ReturnWindow ?? 0), dialog?.Server));
         return null;
       case Ops.ShowUnlock:
         var unlock = IpcJson.Read(payload, IpcJson.Default.UnlockDialogRequest);
@@ -112,7 +112,7 @@ internal sealed class WindowCoordinator : IDisposable
         return null;
       case Ops.ShowLogin:
         var login = IpcJson.Read(payload, IpcJson.Default.LoginDialogRequest);
-        await Dispatcher.UIThread.InvokeAsync(() => ShowLogin((nint)login.ReturnWindow, login.RememberSession, login.CustomDataDir));
+        await Dispatcher.UIThread.InvokeAsync(() => ShowLogin((nint)login.ReturnWindow, login.RememberSession, login.CustomDataDir, login.Server));
         return null;
       case Ops.ShowReprompt:
         var reprompt = IpcJson.Read(payload, IpcJson.Default.RepromptDialogRequest);
@@ -177,7 +177,7 @@ internal sealed class WindowCoordinator : IDisposable
     return _generatorWindow;
   }
 
-  public SettingsWindow ShowSettings(string? focus = null, bool force = false)
+  public SettingsWindow ShowSettings(bool force = false)
   {
     if (_settingsWindow is null)
     {
@@ -189,7 +189,6 @@ internal sealed class WindowCoordinator : IDisposable
     }
 
     BringToFront(_settingsWindow, force);
-    _settingsWindow.ViewModel?.Focus(focus);
     return _settingsWindow;
   }
 
@@ -208,14 +207,23 @@ internal sealed class WindowCoordinator : IDisposable
     return _hotkeysWindow;
   }
 
-  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0) =>
-    ShowDialog(() => new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel)), returnWindow);
+  public ApiKeyLoginWindow ShowApiKeyLogin(nint returnWindow = 0, SetServerRequest? server = null) =>
+    ShowDialog(() => new ApiKeyLoginWindow(new ApiKeyLoginViewModel(Channel, server)), returnWindow);
 
   public UnlockWindow ShowUnlock(nint returnWindow = 0, bool rememberSession = false, bool windowsHello = false) =>
     ShowDialog(() => new UnlockWindow(new UnlockViewModel(Channel, rememberSession, windowsHello)), returnWindow);
 
-  public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null) =>
-    ShowDialog(() => new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir)), returnWindow);
+  public LoginWindow ShowLogin(nint returnWindow = 0, bool rememberSession = false, string? customDataDir = null, SetServerRequest? server = null) =>
+    ShowDialog(() =>
+    {
+      var window = new LoginWindow(new LoginViewModel(Channel, rememberSession, customDataDir, server));
+      window.ViewModel!.ApiKeyLoginRequested = current =>
+      {
+        window.Close();
+        ShowApiKeyLogin(window.ReturnWindow, current);
+      };
+      return window;
+    }, returnWindow);
 
   public RepromptWindow ShowReprompt(nint returnWindow, string token, string itemName, bool windowsHello)
   {

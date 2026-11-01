@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FluentAvalonia.UI.Controls;
 using HoobiBitwardenCompanion.ViewModels;
@@ -26,23 +25,11 @@ internal sealed partial class SettingsWindow : Window
     AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
     SearchBox.TextChanged += OnSearchTextChanged;
     if (viewModel is not null)
-    {
       viewModel.Confirm ??= ConfirmAsync;
-      viewModel.FocusRequested += OnFocusRequested;
-    }
   }
 
   private async Task<bool> ConfirmAsync(string title, string message, string primary, string close) =>
     await ItemView.CreateConfirmDialog(title, message, primary, close).ShowAsync(this) == FAContentDialogResult.Primary;
-
-  private void OnFocusRequested(SettingRowViewModel row) =>
-    Dispatcher.UIThread.Post(() =>
-    {
-      UpdateLayout();
-      var box = this.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => c.DataContext == row);
-      box?.BringIntoView();
-      box?.Focus();
-    }, DispatcherPriority.Loaded);
 
   internal SettingsViewModel? ViewModel => DataContext as SettingsViewModel;
 

@@ -17,7 +17,7 @@
         <SolidColorBrush x:Key="ComboBoxForegroundPressed" Color="#FFCBCCC6" />
         <SolidColorBrush x:Key="ComboBoxForegroundFocused" Color="#FFCBCCC6" />
         <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#FFCBCCC6" />
-        <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF242936" />
+        <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FF15181F" />
         <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="Transparent" />
         <Thickness x:Key="ComboBoxBorderThemeThickness">0</Thickness>
         <Thickness x:Key="ComboBoxDropdownBorderThickness">0</Thickness>
@@ -414,15 +414,6 @@
         <Setter Property="Background" Value="{DynamicResource WindowGroundBrush}" />
         <Setter Property="CornerRadius" Value="{StaticResource OverlayCornerRadius}" />
         <Setter Property="ClipToBounds" Value="True" />
-        <Setter Property="Transitions">
-            <Transitions>
-                <BrushTransition Property="Background" Duration="0:0:0.5" />
-            </Transitions>
-        </Setter>
-    </Style>
-
-    <Style Selector="Border.Group.Highlighted">
-        <Setter Property="Background" Value="#4D409FFF" />
     </Style>
 
     <Style Selector="StackPanel.Rows">
@@ -519,6 +510,24 @@
 
     <Style Selector="TextBox /template/ ToggleButton:checked /template/ ui|FAFontIcon#Glyph">
         <Setter Property="Glyph" Value="{StaticResource Glyph.EyeOff}" />
+    </Style>
+
+    <Style Selector="ToggleButton.Disclosure">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.Disclosure:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.Disclosure:checked:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.Disclosure:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.Disclosure:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.Disclosure:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
     </Style>
 
     <Style Selector="ComboBox">
@@ -703,7 +712,7 @@
         <Setter Property="Height" Value="20" />
         <Setter Property="Padding" Value="8,0" />
         <Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}" />
-        <Setter Property="Background" Value="{DynamicResource TextControlBackground}" />
+        <Setter Property="Background" Value="{DynamicResource LayerFillColorAltBrush}" />
         <Setter Property="TextElement.FontSize" Value="{StaticResource CaptionTextBlockFontSize}" />
         <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
     </Style>

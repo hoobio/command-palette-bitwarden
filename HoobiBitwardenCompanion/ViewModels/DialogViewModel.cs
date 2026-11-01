@@ -29,6 +29,22 @@ internal abstract partial class DialogViewModel(PipeChannel channel) : Observabl
 
   protected abstract string BusyMessage { get; }
 
+  protected void SetBusy(bool busy, string? text)
+  {
+    BusyText = text;
+    IsBusy = busy;
+  }
+
+  protected ServerPickerViewModel FollowServerSwitch(ServerPickerViewModel server)
+  {
+    server.PropertyChanged += (_, e) =>
+    {
+      if (e.PropertyName == nameof(ServerPickerViewModel.IsSwitching))
+        SetBusy(server.IsSwitching, server.IsSwitching ? $"Switching to {server.Host}..." : null);
+    };
+    return server;
+  }
+
   [RelayCommand]
   internal async Task SubmitAsync()
   {

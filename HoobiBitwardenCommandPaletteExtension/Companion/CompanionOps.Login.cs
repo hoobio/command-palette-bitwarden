@@ -10,7 +10,7 @@ internal sealed partial class CompanionOps
   internal Task PostLoginSync { get; private set; } = Task.CompletedTask;
 
   internal LoginDialogRequest BuildLoginDialog(long returnWindow) =>
-    new(returnWindow, _service.Settings?.RememberSession.Value == true, _service.DataDirectory);
+    new(returnWindow, _service.Settings?.RememberSession.Value == true, _service.DataDirectory, CurrentServer());
 
   internal async Task<LoginResponse> LoginAsync(LoginRequest request)
   {

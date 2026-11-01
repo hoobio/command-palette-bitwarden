@@ -183,6 +183,32 @@ public class CompanionDialogOpsTests
   }
 
   [Fact]
+  public async Task CurrentServer_FollowsTheSavedServer_AndFeedsTheLoginDialog()
+  {
+    var (svc, factory, settingsPath) = CreateService();
+    for (var i = 0; i < 3; i++)
+      factory.Enqueue(new FakeCliProcess(stdout: "Saved setting `config`.\n", exitCode: 0));
+    using var ops = new CompanionOps(svc);
+    try
+    {
+      await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.Eu, null));
+      Assert.Equal(new SetServerRequest(ServerRegions.Eu, null), ops.CurrentServer());
+
+      await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.SelfHosted, "https://vault.example.com", ApiUrl: "https://api.example.com"));
+      Assert.Equal(ServerRegions.SelfHosted, ops.CurrentServer().Region);
+      Assert.Equal("https://vault.example.com", ops.CurrentServer().BaseUrl);
+      Assert.Equal(ops.CurrentServer(), ops.BuildLoginDialog(1).Server);
+
+      await SetServerOpAsync(ops, new SetServerRequest(ServerRegions.Cloud, null));
+      Assert.Equal(new SetServerRequest(ServerRegions.Cloud, null), ops.CurrentServer());
+    }
+    finally
+    {
+      File.Delete(settingsPath);
+    }
+  }
+
+  [Fact]
   public async Task SetServerOp_SelfHosted_TrimsTheUrl_AndPassesTheOverrides()
   {
     var (svc, factory, settingsPath) = CreateService();

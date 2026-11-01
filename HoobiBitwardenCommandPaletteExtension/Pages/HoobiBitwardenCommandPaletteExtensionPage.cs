@@ -629,7 +629,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_errorMessage != null)
             item.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
 
-        return WithCommonItems([item, BuildSetServerItem()]);
+        return WithCommonItems([item]);
     }
 
     private IListItem[] BuildLockedItems() => WithCommonItems(
@@ -683,15 +683,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
         return item;
     }
-
-    private ListItem BuildSetServerItem() => new(CompanionHost.Current is { } companion
-        ? (ICommand)new AnonymousCommand(companion.ShowServerSettings) { Name = "Set server", Result = CommandResult.Dismiss() }
-        : new Pages.SetServerPage(OnSetServerSubmitted))
-    {
-        Title = "Set Bitwarden Server",
-        Subtitle = BitwardenCliService.ServerUrl ?? "bitwarden.com",
-        Icon = new IconInfo("\uE774"),
-    };
 
     private ListItem BuildLogoutItem() => new(new AnonymousCommand(OnLogoutRequested)
     { Name = "Logout", Result = CommandResult.KeepOpen() })
@@ -1132,31 +1123,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             {
                 RebuildForCurrentStatus();
             }
-        });
-    }
-
-    private void OnSetServerSubmitted(Models.ServerConfig config)
-    {
-        DebugLogService.Log("Action", "Set server URL submitted by user");
-        _handlingAction = true;
-        ClearSearchText();
-        _errorMessage = null;
-        IsLoading = true;
-        ShowLoadingStatus("Setting server URL...", "bw config server");
-        RunAction(async () =>
-        {
-            var status = _service.LastStatus;
-            if (status == Services.VaultStatus.Locked || status == Services.VaultStatus.Unlocked)
-            {
-                ShowLoadingStatus("Logging out before server change...", "bw logout");
-                await _service.LogoutAsync();
-            }
-
-            var error = await _service.SetServerUrlAsync(config);
-            if (error != null)
-                _errorMessage = error;
-
-            RebuildForCurrentStatus();
         });
     }
 

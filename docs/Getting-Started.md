@@ -51,7 +51,7 @@ The extension stores the API key in Windows Credential Manager. When the CLI ses
 
 ## Setting Your Server
 
-Open **Bitwarden settings** and use the **Server** section at the top, where you pick a region (**Bitwarden.com**, **Bitwarden.eu**) or enter a self-hosted server URL. While you are logged out, **Set Bitwarden Server** in the vault browser opens the same section. If the companion is not available, **Set Bitwarden Server** opens a list in Command Palette instead. See [Server URL](Companion-Window#server-url). The default is `https://vault.bitwarden.com`. Only the exact hosts `bitwarden.com` and its subdomains are treated as cloud. A self-hosted server on a host that only contains "bitwarden.com" in its name is treated as self-hosted.
+Open **Bitwarden settings** and use the **Server** section at the top, where you pick a region (**Bitwarden.com**, **Bitwarden.eu**) or enter a self-hosted server URL. Both login windows also have an **Accessing:** server picker at the bottom. See [Server URL](Companion-Window#server-url) and [Server picker](Companion-Window#server-picker). The default is `https://vault.bitwarden.com`. Only the exact hosts `bitwarden.com` and its subdomains are treated as cloud. A self-hosted server on a host that only contains "bitwarden.com" in its name is treated as self-hosted.
 
 ## Sign-in Security
 

@@ -10,28 +10,52 @@ internal sealed partial class LoginViewModel : DialogViewModel
   internal const int CodeStep = 1;
   internal const int DeviceStep = 2;
 
-  private static readonly int?[] MethodValues = [TwoFactorRules.Authenticator, TwoFactorRules.Email, TwoFactorRules.YubiKey, null];
+  internal const int DefaultMethodIndex = 1;
+  private const int FirstUnsupportedMethodIndex = 4;
+
+  private static readonly int?[] MethodValues = [null, TwoFactorRules.Authenticator, TwoFactorRules.Email, TwoFactorRules.YubiKey];
 
   private bool _deviceVerificationPending;
 
-  public LoginViewModel(PipeChannel channel, bool rememberSession, string? customDataDir) : base(channel)
+  public LoginViewModel(PipeChannel channel, bool rememberSession, string? customDataDir, SetServerRequest? server = null) : base(channel)
   {
+    Server = FollowServerSwitch(new ServerPickerViewModel(channel, server));
     RememberSession = rememberSession;
     CustomDataDirWarning = customDataDir is null
       ? null
-      : $"Custom CLI data directory: {customDataDir}\n\nFor an interactive `bw login` (Duo Push, WebAuthn) to share session with this extension, set `BITWARDENCLI_APPDATA_DIR` in your terminal to that path before running `bw login`. Otherwise the CLI will write auth state to a different location and the extension won't see it.";
+      : $"Custom CLI data directory: {customDataDir}. Set BITWARDENCLI_APPDATA_DIR to this path before you run `bw login` in a terminal.";
+    MethodIndex = RememberedMethodIndex;
     PropertyChanged += (_, e) =>
     {
+      if (e.PropertyName == nameof(IsBusy))
+      {
+        OnPropertyChanged(nameof(CredentialsEnabled));
+        OnPropertyChanged(nameof(SubmitEnabled));
+      }
+
       if (e.PropertyName != nameof(Step))
         return;
       OnPropertyChanged(nameof(IsCredentialsStep));
       OnPropertyChanged(nameof(IsCodeStep));
       OnPropertyChanged(nameof(IsDeviceStep));
       OnPropertyChanged(nameof(SubmitLabel));
+      OnPropertyChanged(nameof(SubmitEnabled));
     };
   }
 
-  public static IReadOnlyList<string> MethodChoices { get; } = ["Authenticator app", "Email", "YubiKey OTP", "Auto-detect"];
+  internal static int RememberedMethodIndex = DefaultMethodIndex;
+
+  public static IReadOnlyList<string> MethodChoices { get; } = ["Auto-detect", "Authenticator app", "Email", "YubiKey OTP", "Duo", "WebAuthn (FIDO2)"];
+
+  internal Action<SetServerRequest>? ApiKeyLoginRequested { get; set; }
+
+  public bool IsUnsupportedTwoStep => MethodIndex >= FirstUnsupportedMethodIndex;
+
+  public bool CredentialsEnabled => !IsBusy && !IsUnsupportedTwoStep;
+
+  public bool SubmitEnabled => !IsBusy && !(IsCredentialsStep && IsUnsupportedTwoStep);
+
+  public ServerPickerViewModel Server { get; }
 
   public string? CustomDataDirWarning { get; }
 
@@ -64,7 +88,41 @@ internal sealed partial class LoginViewModel : DialogViewModel
   public partial int MethodIndex { get; set; }
 
   [ObservableProperty]
+  public partial string? TwoStepError { get; private set; }
+
+  [ObservableProperty]
   public partial bool RememberSession { get; set; }
+
+  partial void OnMethodIndexChanged(int value)
+  {
+    RememberedMethodIndex = value;
+    TwoStepError = null;
+    OnPropertyChanged(nameof(IsUnsupportedTwoStep));
+    OnPropertyChanged(nameof(CredentialsEnabled));
+    OnPropertyChanged(nameof(SubmitEnabled));
+  }
+
+  [RelayCommand]
+  internal async Task UseApiKeyLoginAsync()
+  {
+    TwoStepError = null;
+    try
+    {
+      var reply = IpcJson.Read(await Channel.RequestAsync(Ops.SetSetting, IpcJson.ToElement(new SetSettingRequest(SettingKeys.UseApiKeyAuthentication, "true"), IpcJson.Default.SetSettingRequest)), IpcJson.Default.SetSettingResponse);
+      if (!reply.Success)
+      {
+        TwoStepError = reply.Error ?? "Could not turn on API key login";
+        return;
+      }
+    }
+    catch (Exception ex) when (ex is IpcException or IOException or TimeoutException)
+    {
+      TwoStepError = ItemViewModel.Describe(ex);
+      return;
+    }
+
+    ApiKeyLoginRequested?.Invoke(Server.Current);
+  }
 
   [ObservableProperty]
   public partial string? Code { get; set; }

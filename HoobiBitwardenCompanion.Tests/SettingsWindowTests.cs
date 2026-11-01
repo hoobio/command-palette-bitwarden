@@ -133,7 +133,7 @@ public class SettingsWindowTests(AvaloniaSession session)
     [
       new("_section_server", SettingKinds.Section, "Server", null, null, null),
       new("serverRegion", SettingKinds.Choice, "Region", "Where your vault is hosted", region, [new("Bitwarden.com", "cloud"), new("Bitwarden.eu", "eu"), new("Self-hosted", "selfHosted")], Confirm: confirm),
-      new("serverUrl", SettingKinds.Text, "Server URL", null, region == "selfHosted" ? "https://vault.example.com" : string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm),
+      new("serverUrl", SettingKinds.Text, "Server URL", null, region == "selfHosted" ? "https://vault.example.com" : string.Empty, null, "serverRegion", "selfHosted", Confirm: confirm, ReadOnlyValues: new Dictionary<string, string> { ["cloud"] = "https://vault.bitwarden.com", ["eu"] = "https://vault.bitwarden.eu" }),
       new("serverAdvanced", SettingKinds.Expander, "Advanced", "Leave blank to derive from the server URL.", null, null, "serverRegion", "selfHosted"),
       new("serverWebVaultUrl", SettingKinds.Text, "Web Vault URL", null, string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/", Confirm: confirm),
       new("serverApiUrl", SettingKinds.Text, "API URL", null, apiUrl ?? string.Empty, null, "serverAdvanced", "true", Placeholder: "{base URL}/api", Confirm: confirm),
@@ -239,6 +239,32 @@ public class SettingsWindowTests(AvaloniaSession session)
     Assert.Null(url.ErrorMessage);
   });
 
+  [Fact]
+  public Task ServerUrl_ShowsThePresetReadOnly_AndFollowsTheLocalRegion() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    var (vm, _, pair) = await LoadedAsync(extension);
+    using var ownedPair = pair;
+    var url = ServerRow(vm, "serverUrl");
+
+    Assert.True(url.IsShown);
+    Assert.True(url.IsReadOnly);
+    Assert.Equal("https://vault.bitwarden.com", url.TextValue);
+
+    await url.CommitTextAsync("https://other.example.com");
+    Assert.Empty(extension.Servers);
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "eu");
+    AvaloniaSession.WaitFor(() => url.TextValue == "https://vault.bitwarden.eu");
+    Assert.True(url.IsReadOnly);
+
+    ServerRow(vm, "serverRegion").SelectedChoice = Region(vm, "selfHosted");
+    Assert.False(url.IsReadOnly);
+    Assert.True(url.IsShown);
+    Assert.Equal(string.Empty, url.TextValue);
+  });
+
   private static readonly string[] AdvancedKeys = ["serverWebVaultUrl", "serverApiUrl", "serverIdentityUrl", "serverIconsUrl", "serverNotificationsUrl", "serverEventsUrl", "serverKeyConnectorUrl"];
 
   [Fact]
@@ -319,61 +345,6 @@ public class SettingsWindowTests(AvaloniaSession session)
     Assert.Equal("Invalid IdentityUrl: must start with https://", identity.ErrorMessage);
   });
 
-  [Fact]
-  public Task Focus_Server_HighlightsTheServerSection_AndFocusesTheRegion() => session.RunAsync(async () =>
-  {
-    var extension = new FakeExtension();
-    UseServerSchema(extension, confirm: null);
-    var (vm, _, pair) = await LoadedAsync(extension);
-    using var ownedPair = pair;
-    var previous = SettingsSectionViewModel.HighlightDuration;
-    SettingsSectionViewModel.HighlightDuration = TimeSpan.FromMilliseconds(150);
-    try
-    {
-      SettingRowViewModel? focused = null;
-      vm.FocusRequested += row => focused = row;
-
-      vm.Focus(SettingsFocus.Server);
-
-      Assert.True(vm.Sections[0].IsHighlighted);
-      Assert.False(vm.Sections[1].IsHighlighted);
-      Assert.Equal("serverRegion", focused!.Key);
-      AvaloniaSession.WaitFor(() => !vm.Sections[0].IsHighlighted);
-    }
-    finally
-    {
-      SettingsSectionViewModel.HighlightDuration = previous;
-    }
-
-    vm.Focus(null);
-    Assert.False(vm.Sections[0].IsHighlighted);
-  });
-
-  [Fact]
-  public Task ShowSettings_WithAServerFocus_HighlightsOnceTheRowsLoad_AndOldRequestsDoNot() => session.RunAsync(async () =>
-  {
-    var extension = new FakeExtension();
-    UseServerSchema(extension, confirm: null);
-    using var pair = new ChannelPair(extension.HandleAsync);
-    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
-    _ = coordinator.RunAsync(() => { });
-
-    var reply = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0, SettingsFocus.Server), IpcJson.Default.DialogRequest));
-    AvaloniaSession.WaitFor(() => reply.IsCompleted);
-    var window = coordinator.ShowSettings();
-    var vm = window.ViewModel!;
-    AvaloniaSession.WaitFor(() => vm.Sections.Count == 2 && vm.Sections[0].IsHighlighted);
-    window.Close();
-
-    var plain = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0), IpcJson.Default.DialogRequest));
-    AvaloniaSession.WaitFor(() => plain.IsCompleted);
-    var again = coordinator.ShowSettings().ViewModel!;
-    AvaloniaSession.WaitFor(() => again.Sections.Count == 2);
-    Assert.False(again.Sections[0].IsHighlighted);
-    coordinator.ShowSettings().Close();
-    await Task.CompletedTask;
-  });
-
   private static TextBox SearchBox(SettingsWindow window) =>
     window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "SearchBox");
 
@@ -433,7 +404,7 @@ public class SettingsWindowTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() => plain.IsCompleted);
     Assert.Equal((1, 0), (taken, forced));
 
-    var form = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0, null, true), IpcJson.Default.DialogRequest));
+    var form = pair.Extension.RequestAsync(Ops.ShowSettings, IpcJson.ToElement(new DialogRequest(0, true), IpcJson.Default.DialogRequest));
     AvaloniaSession.WaitFor(() => form.IsCompleted);
     Assert.Equal((1, 1), (taken, forced));
 

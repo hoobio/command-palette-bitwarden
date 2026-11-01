@@ -14,32 +14,9 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
 
   private string _signature = string.Empty;
   private bool _aboutLoaded;
-  private string? _pendingFocus;
   private IReadOnlyList<InfoSectionViewModel>? _infoSections;
 
   internal Func<string, string, string, string, Task<bool>>? Confirm { get; set; }
-
-  internal event Action<SettingRowViewModel>? FocusRequested;
-
-  internal void Focus(string? focus)
-  {
-    if (focus is null)
-      return;
-    _pendingFocus = focus;
-    ApplyFocus();
-  }
-
-  private void ApplyFocus()
-  {
-    if (_pendingFocus != SettingsFocus.Server)
-      return;
-    var section = Sections.FirstOrDefault(s => s.Rows.Any(r => r.Key == SettingKeys.ServerRegion));
-    if (section is null)
-      return;
-    _pendingFocus = null;
-    _ = section.HighlightAsync();
-    FocusRequested?.Invoke(section.Rows.First(r => r.Key == SettingKeys.ServerRegion));
-  }
 
   private async Task<string?> CommitServerAsync(SettingRowViewModel row, string value)
   {
@@ -142,12 +119,16 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     var query = SearchText.Trim();
     var rows = Sections.SelectMany(s => s.Rows).ToList();
     var byKey = rows.ToDictionary(r => r.Key);
-    bool ParentOn(SettingRowViewModel row) => row.Parent is null || !byKey.TryGetValue(row.Parent, out var owner)
+    bool ParentOn(SettingRowViewModel row) => row.Parent is null || row.ReadOnlyValues is not null || !byKey.TryGetValue(row.Parent, out var owner)
       || ((row.ParentValue == ParentValues.NonEmpty ? !string.IsNullOrWhiteSpace(owner.CurrentValue) : owner.CurrentValue == row.ParentValue) && (!owner.IsExpander || ParentOn(owner)));
     bool Matches(SettingRowViewModel row) => TextMatches(query, row.Label, row.Description);
 
     foreach (var row in rows)
+    {
       row.IsShown = ParentOn(row) && Matches(row);
+      if (row.ReadOnlyValues is not null && row.Parent is not null && byKey.TryGetValue(row.Parent, out var owner))
+        row.FollowParent(owner.CurrentValue);
+    }
 
     if (query.Length > 0)
       foreach (var child in rows.Where(r => r.Parent is not null && !ParentOn(r) && Matches(r)))
@@ -246,7 +227,6 @@ internal sealed partial class SettingsViewModel(PipeChannel channel, Action<stri
     }
 
     RefreshVisibility();
-    ApplyFocus();
   }
 }
 
@@ -256,18 +236,6 @@ internal sealed partial class SettingsSectionViewModel(string title) : Observabl
 
   [ObservableProperty]
   public partial bool IsShown { get; set; } = true;
-
-  [ObservableProperty]
-  public partial bool IsHighlighted { get; private set; }
-
-  internal static TimeSpan HighlightDuration { get; set; } = TimeSpan.FromMilliseconds(1500);
-
-  internal async Task HighlightAsync()
-  {
-    IsHighlighted = true;
-    await Task.Delay(HighlightDuration);
-    IsHighlighted = false;
-  }
 
   public bool HasTitle => Title.Length > 0;
 
@@ -299,6 +267,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     Description = setting.Description;
     Parent = setting.Parent;
     ParentValue = setting.ParentValue;
+    ReadOnlyValues = setting.ReadOnlyValues;
     Choices = setting.Choices ?? [];
     Apply(setting);
   }
@@ -311,7 +280,19 @@ internal sealed partial class SettingRowViewModel : ObservableObject
 
   public string? ParentValue { get; }
 
+  public IReadOnlyDictionary<string, string>? ReadOnlyValues { get; }
+
   public bool IsChild => Parent is not null;
+
+  [ObservableProperty]
+  public partial bool IsReadOnly { get; private set; }
+
+  internal void FollowParent(string parentValue)
+  {
+    var preset = ReadOnlyValues!.GetValueOrDefault(parentValue);
+    IsReadOnly = preset is not null;
+    TextValue = preset ?? _committed;
+  }
 
   [ObservableProperty]
   public partial bool IsShown { get; set; } = true;
@@ -429,7 +410,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
       ValueChanged?.Invoke();
   }
 
-  internal Task CommitTextAsync(string text) => text == _committed ? Task.CompletedTask : SubmitAsync(text);
+  internal Task CommitTextAsync(string text) => IsReadOnly || text == _committed ? Task.CompletedTask : SubmitAsync(text);
 
   // Requests to the extension are handled concurrently, so a quick on-off toggle sent as two requests could be applied in the wrong order.
   internal async Task SubmitAsync(string value)
@@ -510,7 +491,7 @@ internal sealed partial class SettingRowViewModel : ObservableObject
     {
       BoolValue = IsToggle && _committed == "true";
       SelectedChoice = IsChoice ? Choices.FirstOrDefault(c => c.Value == _committed) : null;
-      if (IsText && (force || !IsEditing))
+      if (IsText && !IsReadOnly && (force || !IsEditing))
         TextValue = _committed;
     }
     finally

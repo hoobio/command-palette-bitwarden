@@ -148,10 +148,10 @@ A copy or open command in Command Palette for an item with master password re-pr
 When **Use API Key Authentication** is off, **Login to Bitwarden** opens the **Log in to Bitwarden** window. Command Palette stays open behind it. The window has these parts:
 
 - **Email** and a masked **Master password** box with an eye button.
-- **Two-factor method (if prompted)**: **Authenticator app** (the default), **Email**, **YubiKey OTP** or **Auto-detect**. **Email** makes Bitwarden send the code at the first attempt.
+- **Two-step login**: **Auto-detect**, **Authenticator app** (the default), **Email**, **YubiKey OTP**, **Duo** or **WebAuthn (FIDO2)**. The first four set the method sent to the CLI if a code is needed. **Email** makes Bitwarden send the code at the first attempt. The choice is kept until the companion exits. **Duo** and **WebAuthn (FIDO2)** show a warning, because the CLI cannot complete these logins, and disable **Email**, **Master password** and **Log in**. The warning has a **Use API key login** button. It turns on **Use API Key Authentication** (the setting), closes this window and opens the **Log in with your API key** window. If the setting cannot be turned on, the warning shows the error and the window stays open.
 - **Remember session** starts with the value of the setting. **Log in** saves the box value to the setting.
-- A note for Duo Push and WebAuthn, which the CLI cannot complete. Use an API key for these accounts.
 - A warning when a custom CLI data directory is set. A `bw login` that you run in a terminal must use the same `BITWARDENCLI_APPDATA_DIR`.
+- A server picker at the bottom, on the email and password step (see [Server picker](#server-picker)).
 
 **Log in** sends the email and password to the extension. The window then changes in place:
 
@@ -165,9 +165,18 @@ If the companion is not available, **Login to Bitwarden** opens the form in Comm
 
 ## API key login
 
-When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bitwarden** opens the **Log in with your API key** window. Command Palette stays open behind it. The window has a **Client ID** box and a masked **Client secret** box, with an eye button to show the secret. `Enter` in either box logs in. `Esc` and **Cancel** close the window.
+When **Use API Key Authentication** is on in [Settings](Settings), **Login to Bitwarden** opens the **Log in with your API key** window. Command Palette stays open behind it. The window has a **Client ID** box and a masked **Client secret** box, with an eye button to show the secret. `Enter` in either box logs in. `Esc` and **Cancel** close the window. A server picker at the bottom shows the current server (see [Server picker](#server-picker)).
 
 The window stays open when you switch to another app, for example to copy the values from the web vault. While the extension logs in, the boxes and buttons are disabled. A failed login shows the error from the CLI and keeps the values. A successful login clears the values, closes the window and returns focus to Command Palette. Command Palette then shows **Unlock**. The window does not close when the vault is locked, because you are logged out, not locked.
+
+## Server picker
+
+Both login windows show the line **Accessing:** and the current server as a link, with a chevron, on the left of the button row. The link shows `bitwarden.com`, `bitwarden.eu`, or the host name of a self-hosted server, for example `vault.example.com`. The extension sends the current server when it opens the window. Select the link to open a menu with **bitwarden.com**, **bitwarden.eu** and **self-hosted**. A check mark shows the current server.
+
+- **bitwarden.com** and **bitwarden.eu** save the server, with the same code as the **Server** section of the [Settings window](#server-url). There is no confirmation, because you are logged out. The link shows the new server at once. While the CLI changes the server, the window shows a progress bar with **Switching to** and the server, and its controls are disabled. A failed change shows a short error under the link, and the link goes back to the previous server.
+- **self-hosted** opens the **Self-hosted environment** dialog. **Server URL** has the URL of the current self-hosted server, and is empty for the Bitwarden cloud servers. It must start with `http://` or `https://`. **Custom environment** is collapsed unless a per-service URL is set. It shows the seven optional URL boxes of **Advanced** in the **Server** section, with the same placeholders. The dialog content scrolls when it is taller than the window. **Save** closes the dialog at once, and the login window switches the server in the background as for the cloud servers. An empty **Server URL** keeps the dialog open with an error. An error from the CLI shows under the link on the login window, and **self-hosted** opens the dialog again with the values you typed. **Cancel** leaves the server as it was.
+
+The picker does not show on the two-factor and device verification steps, and it is disabled while a login runs.
 
 ## Unlock
 
@@ -184,17 +193,13 @@ When the vault is locked, **Unlock Vault** opens the **Unlock your vault** windo
 
 ## Server URL
 
-**Set Bitwarden Server** shows in the Bitwarden page list only while you are logged out. It opens the [Settings window](#settings-window), scrolled to the **Server** section. The section pulses with the accent colour for about 1.5 seconds and the **Region** box takes the focus. The Command Palette settings button and the **Bitwarden settings** command open the same window without the pulse.
-
 The **Server** section is the first section of the Settings window. It has these parts:
 
 - **Region** is **Bitwarden.com**, **Bitwarden.eu** or **Self-hosted**. The box starts with the region of the current server.
-- **Server URL** shows for **Self-hosted**. It must start with `http://` or `https://`. A change saves when you press `Enter` or move to another control. Choosing **Self-hosted** alone changes nothing until the URL is saved.
+- **Server URL** always shows. For **Bitwarden.com** and **Bitwarden.eu** it is read-only and shows `https://vault.bitwarden.com` or `https://vault.bitwarden.eu`. It follows the selection in the **Region** box. For **Self-hosted** it is editable. It must start with `http://` or `https://`. A change saves when you press `Enter` or move to another control. Choosing **Self-hosted** alone changes nothing until the URL is saved.
 - **Advanced** shows for **Self-hosted**, under **Server URL**. It is collapsed by default. Select the row to show seven optional URL boxes: **Web Vault URL**, **API URL**, **Identity URL**, **Icons URL**, **Notifications URL**, **Events URL** and **Key Connector URL**. Each box shows its default, for example `{base URL}/api`, as a placeholder. Leave a box blank to derive the address from **Server URL**. A URL in a box must start with `https://`. A change saves with **Server URL** in the same way, and the boxes show the overrides that the Bitwarden CLI has stored.
 
-Choosing **Bitwarden.com** or **Bitwarden.eu** saves the server at once. The Bitwarden CLI changes the server only while you are logged out, so a change logs out of a locked or unlocked vault first. While you are logged in, the description of **Region** reads "Changing the server logs you out", and each change asks for confirmation in a **Change server?** dialog. **Cancel** keeps the server and shows "The server was not changed." under the control. A URL that is not valid, or an error from the CLI, shows under the control. A saved server leaves you logged out, and Command Palette then shows **Login to Bitwarden**.
-
-If the companion is not available, **Set Bitwarden Server** opens a list in Command Palette. That list sets the same optional URLs as **Advanced**.
+Choosing **Bitwarden.com** or **Bitwarden.eu** saves the server at once. The Bitwarden CLI changes the server only while you are logged out, so a change logs out of a locked or unlocked vault first. While you are logged in, the description of **Region** reads "Changing the server logs you out", and each change asks for confirmation in a **Change server?** dialog. **Cancel** keeps the server and shows "The server was not changed." under the control. A URL that is not valid, or an error from the CLI, shows under the control. A saved server leaves you logged out, and Command Palette then shows **Login to Bitwarden**. While you are logged out, you can also change the server in the [server picker](#server-picker) of a login window.
 
 ## Settings window
 
