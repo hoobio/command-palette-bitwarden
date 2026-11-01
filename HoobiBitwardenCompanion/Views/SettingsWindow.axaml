@@ -35,6 +35,11 @@
                                 <Panel>
                                 <Border Classes="Group">
                                     <ItemsControl Classes="Rows" ItemsSource="{Binding Rows}">
+                                        <ItemsControl.Styles>
+                                            <Style Selector="ItemsControl.Rows > ContentPresenter" x:DataType="vm:SettingRowViewModel">
+                                                <Setter Property="IsVisible" Value="{Binding IsShown}" />
+                                            </Style>
+                                        </ItemsControl.Styles>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:SettingRowViewModel">
                                                 <Border Classes="Row Switch" Classes.Child="{Binding IsChild}" IsVisible="{Binding IsShown}">
