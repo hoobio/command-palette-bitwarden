@@ -67,7 +67,7 @@
                                                             <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.Open}" IsVisible="{Binding IsLink}" />
                                                             <Button Grid.ColumnSpan="2" Margin="-16,-8" Theme="{StaticResource RowOverlayButtonStyle}" IsVisible="{Binding IsLink}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
                                                         </Grid>
-                                                        <ToggleButton Margin="-16,-8" Padding="16,8" Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsVisible="{Binding IsExpander}" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
+                                                        <ToggleButton Classes="Disclosure" Margin="-16,-8" Padding="16,8" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsVisible="{Binding IsExpander}" IsChecked="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
                                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                                                     <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />

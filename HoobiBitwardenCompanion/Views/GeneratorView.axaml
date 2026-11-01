@@ -57,7 +57,7 @@
             </Border>
         </Border>
 
-        <ToggleButton x:Name="OptionsToggle" Margin="0,12,0,4" Padding="4,6" Background="Transparent" BorderThickness="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding OptionsExpanded, Mode=TwoWay}" AutomationProperties.Name="Options">
+        <ToggleButton x:Name="OptionsToggle" Classes="Disclosure" Margin="0,12,0,4" Padding="4,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsChecked="{Binding OptionsExpanded, Mode=TwoWay}" AutomationProperties.Name="Options">
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Text="Options" FontSize="{StaticResource CaptionTextBlockFontSize}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
                 <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.ChevronDown}" IsVisible="{Binding !OptionsExpanded}" />
