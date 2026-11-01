@@ -7,9 +7,14 @@
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:SettingRowViewModel">
     <Panel>
-        <Border Classes="Row Switch" Classes.Child="{Binding IsChild}" IsVisible="{Binding !IsGroup}">
+        <Border Classes="Row Switch" Classes.Child="{Binding IsChild}" IsVisible="{Binding IsRow}">
             <local:SettingRowBody />
         </Border>
+        <hoobi:SettingsCard x:Name="LinkCard" Classes="Item" BorderThickness="0" IsClickEnabled="True" IsVisible="{Binding IsLink}" Description="{Binding Description}" AutomationProperties.Name="{Binding Label}">
+            <hoobi:SettingsCard.Header>
+                <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+            </hoobi:SettingsCard.Header>
+        </hoobi:SettingsCard>
         <hoobi:SettingsCard x:Name="GroupCard" Classes="Item" BorderThickness="0" IsClickEnabled="{Binding !RevealsChildren}" IsVisible="{Binding IsGroup}" IsExpanded="{Binding Expanded, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
             <hoobi:SettingsCard.Header>
                 <local:SettingRowBody x:Name="GroupHeader" />

@@ -3,6 +3,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:chrome="using:Avalonia.Controls.Chrome"
+    xmlns:hoobi="using:Hoobi.Design.Avalonia"
     xmlns:local="using:HoobiBitwardenCompanion.Views"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:SettingsViewModel"
@@ -63,16 +64,11 @@
                                     <ItemsControl Classes="Rows" ItemsSource="{Binding Rows}">
                                         <ItemsControl.DataTemplates>
                                             <DataTemplate DataType="vm:LinkRowViewModel" x:DataType="vm:LinkRowViewModel">
-                                                <Border Classes="Row Switch" IsVisible="{Binding IsShown}">
-                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                        <StackPanel VerticalAlignment="Center" Spacing="2">
-                                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                                                            <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
-                                                        </StackPanel>
-                                                        <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.OpenInNewWindow}" />
-                                                        <Button Grid.ColumnSpan="2" Margin="-16,-8" Classes="RowOverlay" Theme="{StaticResource SubtleButtonStyle}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
-                                                    </Grid>
-                                                </Border>
+                                                <hoobi:SettingsCard Classes="Item" BorderThickness="0" IsClickEnabled="True" IsVisible="{Binding IsShown}" ActionGlyph="{StaticResource Glyph.OpenInNewWindow}" Description="{Binding Description}" AutomationProperties.Name="{Binding Label}">
+                                                    <hoobi:SettingsCard.Header>
+                                                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                    </hoobi:SettingsCard.Header>
+                                                </hoobi:SettingsCard>
                                             </DataTemplate>
                                             <DataTemplate DataType="vm:AboutRowViewModel" x:DataType="vm:AboutRowViewModel">
                                                 <Border Classes="Row Switch" IsVisible="{Binding IsShown}">

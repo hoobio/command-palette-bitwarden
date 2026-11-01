@@ -1098,10 +1098,38 @@ public class SettingsWindowTests(AvaloniaSession session)
     WaitForRows(window);
 
     Assert.Equal("bw", Find<TextBox>(window, "cliPath").PlaceholderText);
-    Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.DataContext is SettingRowViewModel { Key: "openLogs" });
+    Assert.True(Find<SettingsCard>(window, "openLogs").IsClickEnabled);
     Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible && t.Text == "Help and feedback");
     Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.IsEffectivelyVisible && b.Content is "Check now");
     window.Close();
     await Task.CompletedTask;
+  });
+
+  [Fact]
+  public Task LinkRows_AreClickableCardsWithTheirGlyph_AndAClickOpensTheTarget() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    extension.Schema.Add(new(SettingKeys.Hotkeys, SettingKinds.Link, "Keyboard shortcuts", null, null, null));
+    var (vm, opened, pair) = await LoadedAsync(extension);
+    using var channelPair = pair;
+    var window = new SettingsWindow(vm) { Height = 1600 };
+    window.Show();
+    window.UpdateLayout();
+    var cards = window.GetVisualDescendants().OfType<SettingsCard>().Where(c => c.IsEffectivelyVisible && c.DataContext is LinkRowViewModel or SettingRowViewModel { IsLink: true }).ToList();
+    var support = cards.Single(c => c.DataContext is LinkRowViewModel { Label: "Support" });
+    var shortcuts = cards.Single(c => c.DataContext is SettingRowViewModel { Key: SettingKeys.Hotkeys });
+
+    Assert.Equal(5, cards.Count);
+    Assert.All(cards, c => Assert.True(c.IsClickEnabled));
+    Assert.Equal(window.FindResource("Glyph.OpenInNewWindow"), support.ActionGlyph);
+    Assert.Equal(window.FindResource("Glyph.ChevronRight"), shortcuts.ActionGlyph);
+    Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Classes.Contains("RowOverlay"));
+
+    Click(window, support);
+    Assert.Equal(["https://www.paypal.com/donate/?hosted_button_id=E2UBLTYAT4K8Y"], opened);
+
+    Click(window, shortcuts);
+    Assert.True(vm.IsShortcutsOpen);
+    window.Close();
   });
 }

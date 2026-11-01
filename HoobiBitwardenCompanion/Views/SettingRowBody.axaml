@@ -32,9 +32,6 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
             </Grid>
-            <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.OpenInNewWindow}" IsVisible="{Binding IsExternalLink}" />
-            <TextBlock Grid.Column="1" Classes="Icon" Text="{StaticResource Glyph.ChevronRight}" IsVisible="{Binding IsPageLink}" />
-            <Button Grid.ColumnSpan="2" Margin="-16,-8" Classes="RowOverlay" Theme="{StaticResource SubtleButtonStyle}" IsVisible="{Binding IsLink}" Command="{Binding OpenCommand}" AutomationProperties.Name="{Binding Label}" />
         </Grid>
         <StackPanel Spacing="6" IsVisible="{Binding IsText}">
             <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />

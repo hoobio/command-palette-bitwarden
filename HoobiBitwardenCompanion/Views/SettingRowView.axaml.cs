@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
 
@@ -16,6 +17,13 @@ internal sealed partial class SettingRowView : UserControl
       if (e.Source is TextBox)
         StopActivation(sender, e);
     });
+  }
+
+  protected override void OnDataContextChanged(EventArgs e)
+  {
+    base.OnDataContextChanged(e);
+    if (DataContext is SettingRowViewModel { IsLink: true } row)
+      LinkCard.ActionGlyph = this.FindResource(row.IsPageLink ? "Glyph.ChevronRight" : "Glyph.OpenInNewWindow") as string;
   }
 
   private static void StopActivation(object? sender, KeyEventArgs e)

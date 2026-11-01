@@ -350,10 +350,12 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   internal List<SettingRowViewModel> Children { get; } = [];
 
   [ObservableProperty]
-  [NotifyPropertyChangedFor(nameof(IsGroup))]
+  [NotifyPropertyChangedFor(nameof(IsGroup), nameof(IsRow))]
   public partial IReadOnlyList<SettingRowViewModel> ShownChildren { get; set; } = [];
 
   public bool IsGroup => ShownChildren.Count > 0;
+
+  public bool IsRow => !IsGroup && !IsLink;
 
   public bool IsExpander => Kind == SettingKinds.Expander;
 
@@ -378,8 +380,6 @@ internal sealed partial class SettingRowViewModel : ObservableObject
   public bool IsLink => Kind == SettingKinds.Link;
 
   public bool IsPageLink => IsLink && Key == SettingKeys.Hotkeys;
-
-  public bool IsExternalLink => IsLink && !IsPageLink;
 
   [ObservableProperty]
   public partial string? Placeholder { get; private set; }

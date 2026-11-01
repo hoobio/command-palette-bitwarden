@@ -27,6 +27,7 @@ internal sealed partial class SettingsWindow : Window
     AddHandler(LostFocusEvent, OnLostFocus);
     AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
     AddHandler(TextBox.TextChangedEvent, OnTextChanged);
+    AddHandler(SettingsCard.ClickEvent, OnCardClick);
     SearchBox.TextChanged += OnSearchTextChanged;
     ShortcutsPage.Back.Click += (_, _) => ViewModel?.CloseShortcuts();
     if (viewModel is not null)
@@ -54,6 +55,19 @@ internal sealed partial class SettingsWindow : Window
   {
     if (e.Source is TextBox { DataContext: SettingRowViewModel { Key: SettingKeys.ServerUrl } } box)
       ViewModel?.ServerUrlTyped(box.Text);
+  }
+
+  private static void OnCardClick(object? sender, RoutedEventArgs e)
+  {
+    switch ((e.Source as Control)?.DataContext)
+    {
+      case SettingRowViewModel { IsLink: true } row:
+        row.OpenCommand.Execute(null);
+        break;
+      case LinkRowViewModel link:
+        link.OpenCommand.Execute(null);
+        break;
+    }
   }
 
   private static void OnGotFocus(object? sender, RoutedEventArgs e)
