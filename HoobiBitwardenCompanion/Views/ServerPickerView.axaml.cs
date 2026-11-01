@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using FluentAvalonia.UI.Controls;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -17,12 +18,13 @@ internal sealed partial class ServerPickerView : UserControl
   {
     base.OnDataContextChanged(e);
     if (DataContext is ServerPickerViewModel viewModel)
-      viewModel.SelfHostedRequested += dialog => _ = ShowSelfHostedAsync(dialog);
+      viewModel.SelfHostedRequested += dialog => _ = ShowSelfHostedAsync(viewModel, dialog);
   }
 
-  private async Task ShowSelfHostedAsync(SelfHostedServerViewModel viewModel)
+  private async Task ShowSelfHostedAsync(ServerPickerViewModel picker, SelfHostedServerViewModel viewModel)
   {
-    OpenDialog = SelfHostedServerView.CreateDialog(viewModel);
+    SetServerRequest? saved = null;
+    OpenDialog = SelfHostedServerView.CreateDialog(viewModel, request => saved = request);
     try
     {
       await OpenDialog.ShowAsync(TopLevel.GetTopLevel(this));
@@ -31,5 +33,8 @@ internal sealed partial class ServerPickerView : UserControl
     {
       OpenDialog = null;
     }
+
+    if (saved is not null)
+      await picker.SaveSelfHostedAsync(saved);
   }
 }

@@ -5,7 +5,6 @@
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:SelfHostedServerViewModel">
     <StackPanel Spacing="8" Margin="2,0">
-        <ProgressBar x:Name="SavingBar" IsIndeterminate="True" IsVisible="{Binding IsSaving}" />
         <TextBlock Text="Server URL" />
         <TextBox x:Name="BaseUrlBox" PlaceholderText="https://bitwarden.company.com" Text="{Binding BaseUrl, Mode=TwoWay}" AutomationProperties.Name="Server URL" />
         <TextBlock Classes="Caption" TextWrapping="Wrap" Text="Base URL of your self-hosted Bitwarden server, for example https://bitwarden.company.com" />

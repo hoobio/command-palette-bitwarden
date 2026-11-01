@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using FluentAvalonia.UI.Controls;
+using HoobiBitwarden.Ipc;
 using HoobiBitwardenCompanion.ViewModels;
 
 namespace HoobiBitwardenCompanion.Views;
@@ -14,7 +15,7 @@ internal sealed partial class SelfHostedServerView : UserControl
 
   private const double DialogChromeHeight = 200;
 
-  internal static FAContentDialog CreateDialog(SelfHostedServerViewModel viewModel)
+  internal static FAContentDialog CreateDialog(SelfHostedServerViewModel viewModel, Action<SetServerRequest> save)
   {
     var scroll = new ScrollViewer { Margin = new Thickness(0, 0, -24, 0), Content = new SelfHostedServerView { DataContext = viewModel, Margin = new Thickness(0, 0, 24, 0) } };
     scroll.AttachedToVisualTree += (_, _) => scroll.MaxHeight = Math.Max(150, (TopLevel.GetTopLevel(scroll)?.Bounds.Height ?? 800) - DialogChromeHeight);
@@ -26,26 +27,13 @@ internal sealed partial class SelfHostedServerView : UserControl
       CloseButtonText = "Cancel",
       DefaultButton = FAContentDialogButton.Primary,
     };
-    dialog.PrimaryButtonClick += (sender, e) => _ = SaveDeferredAsync(viewModel, e);
-    viewModel.PropertyChanged += (_, e) =>
+    dialog.PrimaryButtonClick += (_, e) =>
     {
-      if (e.PropertyName == nameof(SelfHostedServerViewModel.IsSaving))
-        dialog.IsPrimaryButtonEnabled = !viewModel.IsSaving;
+      if (viewModel.BuildRequest() is { } request)
+        save(request);
+      else
+        e.Cancel = true;
     };
-    dialog.Closing += (_, e) => e.Cancel |= viewModel.IsSaving;
     return dialog;
-  }
-
-  private static async Task SaveDeferredAsync(SelfHostedServerViewModel viewModel, FAContentDialogButtonClickEventArgs e)
-  {
-    var deferral = e.GetDeferral();
-    try
-    {
-      e.Cancel = !await viewModel.SaveAsync();
-    }
-    finally
-    {
-      deferral.Complete();
-    }
   }
 }

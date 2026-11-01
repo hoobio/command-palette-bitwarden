@@ -7,6 +7,7 @@ namespace HoobiBitwardenCompanion.ViewModels;
 internal sealed partial class ServerPickerViewModel(PipeChannel channel, SetServerRequest? initial = null) : ObservableObject
 {
   private SetServerRequest _server = initial ?? new SetServerRequest(ServerRegions.Cloud, null);
+  private SetServerRequest? _failedSelfHosted;
 
   internal event Action<SelfHostedServerViewModel>? SelfHostedRequested;
 
@@ -36,9 +37,15 @@ internal sealed partial class ServerPickerViewModel(PipeChannel channel, SetServ
   {
     ErrorMessage = null;
     if (region == ServerRegions.SelfHosted)
-      SelfHostedRequested?.Invoke(new SelfHostedServerViewModel(_server, ApplyAsync));
+      SelfHostedRequested?.Invoke(new SelfHostedServerViewModel(_failedSelfHosted ?? _server));
     else
       ErrorMessage = await ApplyAsync(new SetServerRequest(region, null));
+  }
+
+  internal async Task SaveSelfHostedAsync(SetServerRequest request)
+  {
+    ErrorMessage = await ApplyAsync(request);
+    _failedSelfHosted = ErrorMessage is null ? null : request;
   }
 
   private async Task<string?> ApplyAsync(SetServerRequest request)
@@ -87,11 +94,8 @@ internal sealed partial class ServerUrlFieldViewModel(string label, string path,
 
 internal sealed partial class SelfHostedServerViewModel : ObservableObject
 {
-  private readonly Func<SetServerRequest, Task<string?>> _apply;
-
-  public SelfHostedServerViewModel(SetServerRequest current, Func<SetServerRequest, Task<string?>> apply)
+  public SelfHostedServerViewModel(SetServerRequest current)
   {
-    _apply = apply;
     BaseUrl = current.Region == ServerRegions.SelfHosted ? current.BaseUrl : null;
     Fields =
     [
@@ -117,23 +121,12 @@ internal sealed partial class SelfHostedServerViewModel : ObservableObject
   [ObservableProperty]
   public partial string? ErrorMessage { get; private set; }
 
-  [ObservableProperty]
-  public partial bool IsSaving { get; private set; }
-
-  internal async Task<bool> SaveAsync()
+  internal SetServerRequest? BuildRequest()
   {
-    ErrorMessage = null;
+    ErrorMessage = string.IsNullOrWhiteSpace(BaseUrl) ? "Enter the server URL." : null;
+    if (ErrorMessage is not null)
+      return null;
     string? Override(int index) => string.IsNullOrWhiteSpace(Fields[index].Value) ? null : Fields[index].Value;
-    IsSaving = true;
-    try
-    {
-      ErrorMessage = await _apply(new SetServerRequest(ServerRegions.SelfHosted, BaseUrl, Override(0), Override(1), Override(2), Override(3), Override(4), Override(5), Override(6)));
-    }
-    finally
-    {
-      IsSaving = false;
-    }
-
-    return ErrorMessage is null;
+    return new SetServerRequest(ServerRegions.SelfHosted, BaseUrl!.Trim(), Override(0), Override(1), Override(2), Override(3), Override(4), Override(5), Override(6));
   }
 }

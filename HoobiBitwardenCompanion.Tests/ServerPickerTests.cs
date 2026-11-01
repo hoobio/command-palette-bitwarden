@@ -184,26 +184,45 @@ public class ServerPickerTests(AvaloniaSession session)
   });
 
   [Fact]
-  public Task SelfHostedDialog_DisablesSave_WhileSaving_AndReenablesAfterAValidationError() => session.RunAsync(async () =>
+  public Task SelfHostedSave_SwitchesTheLabelAtOnce_AndLocksTheLoginWindowUntilTheReply() => session.RunAsync(async () =>
   {
-    var extension = new FakeExtension { Reply = new SetServerResponse(false, "bad url"), Gate = new SemaphoreSlim(0) };
+    var extension = new FakeExtension { Gate = new SemaphoreSlim(0) };
     using var pair = new ChannelPair(extension.HandleAsync);
     using var coordinator = NewCoordinator(pair);
     var window = coordinator.ShowLogin();
     var picker = window.ViewModel!.Server;
-    SelfHostedServerViewModel? viewModel = null;
-    picker.SelfHostedRequested += d => viewModel = d;
+    SelfHostedServerViewModel? dialog = null;
+    picker.SelfHostedRequested += d => dialog = d;
     await picker.SelectAsync(ServerRegions.SelfHosted);
-    var dialog = SelfHostedServerView.CreateDialog(viewModel!);
+    dialog!.BaseUrl = "https://vault.example.com";
 
-    var saving = viewModel!.SaveAsync();
+    var saving = picker.SaveSelfHostedAsync(dialog.BuildRequest()!);
 
-    Assert.True(viewModel.IsSaving);
-    Assert.False(dialog.IsPrimaryButtonEnabled);
+    Assert.Equal("vault.example.com", picker.Host);
+    Assert.True(picker.IsSwitching);
+    Assert.True(window.ViewModel.IsBusy);
     extension.Gate.Release();
-    Assert.False(await saving);
-    Assert.False(viewModel.IsSaving);
-    Assert.True(dialog.IsPrimaryButtonEnabled);
+    await saving;
+    Assert.False(window.ViewModel.IsBusy);
+    window.Close();
+  });
+
+  [Fact]
+  public Task SelfHostedDialog_WithoutAUrl_StaysOpen_AndSendsNothing() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = NewCoordinator(pair);
+    var window = coordinator.ShowLogin();
+    SelfHostedServerViewModel? dialog = null;
+    window.ViewModel!.Server.SelfHostedRequested += d => dialog = d;
+    await window.ViewModel.Server.SelectAsync(ServerRegions.SelfHosted);
+
+    dialog!.BaseUrl = "  ";
+
+    Assert.Null(dialog.BuildRequest());
+    Assert.Equal("Enter the server URL.", dialog.ErrorMessage);
+    Assert.Empty(extension.Servers);
     window.Close();
   });
 
@@ -261,18 +280,17 @@ public class ServerPickerTests(AvaloniaSession session)
     dialog!.BaseUrl = "https://vault.example.com";
     dialog.Fields.Single(f => f.Label == "Identity URL").Value = "https://id.example.com";
     dialog.Fields.Single(f => f.Label == "Icons URL").Value = "   ";
-    var saved = await dialog.SaveAsync();
+    await picker.SaveSelfHostedAsync(dialog.BuildRequest()!);
 
-    Assert.True(saved);
     Assert.Equal(new SetServerRequest(ServerRegions.SelfHosted, "https://vault.example.com", IdentityUrl: "https://id.example.com"), extension.Servers.Single());
     Assert.Equal("vault.example.com", picker.Host);
     Assert.True(picker.IsSelfHosted);
-    Assert.Null(dialog.ErrorMessage);
+    Assert.Null(picker.ErrorMessage);
     window.Close();
   });
 
   [Fact]
-  public Task SelfHostedDialog_ValidationError_IsShownInline_AndTheServerStays() => session.RunAsync(async () =>
+  public Task SelfHostedSave_Failure_ShowsTheErrorOnTheLoginWindow_AndReopensPrefilled() => session.RunAsync(async () =>
   {
     var extension = new FakeExtension { Reply = new SetServerResponse(false, "Enter a valid server URL starting with http:// or https://") };
     using var pair = new ChannelPair(extension.HandleAsync);
@@ -284,12 +302,12 @@ public class ServerPickerTests(AvaloniaSession session)
     await picker.SelectAsync(ServerRegions.SelfHosted);
 
     dialog!.BaseUrl = "vault";
-    var saved = await dialog.SaveAsync();
+    await picker.SaveSelfHostedAsync(dialog.BuildRequest()!);
 
-    Assert.False(saved);
-    Assert.Equal("Enter a valid server URL starting with http:// or https://", dialog.ErrorMessage);
+    Assert.Equal("Enter a valid server URL starting with http:// or https://", picker.ErrorMessage);
     Assert.Equal("bitwarden.com", picker.Host);
-    Assert.Null(picker.ErrorMessage);
+    await picker.SelectAsync(ServerRegions.SelfHosted);
+    Assert.Equal("vault", dialog!.BaseUrl);
     window.Close();
   });
 
