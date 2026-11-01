@@ -63,7 +63,7 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Master switch for tags on vault items. When off, no tags are shown (including the Context tag) and the five tag settings below (Watchtower, Protected, Passkey, TOTP, Organisation) are hidden in the companion window. |
+| **Description** | Master switch for tags on vault items. When off, no tags are shown (including the Context tag) and the five tag settings below (Watchtower, Protected, Passkey, TOTP, Organisation) are hidden in the companion window. In the companion window, each of the five rows previews its tag. |
 
 ### Watchtower
 

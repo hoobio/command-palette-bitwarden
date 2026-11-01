@@ -1,8 +1,8 @@
 # Keyboard Shortcuts
 
-Each action in the more-commands menu of a vault item has a default shortcut. The **Keyboard shortcuts** window changes the shortcuts and chooses which action Enter runs.
+Each action in the more-commands menu of a vault item has a default shortcut. The **Keyboard shortcuts** page changes the shortcuts and chooses which action Enter runs.
 
-Open the window from the **Shortcuts** section at the top of the [settings window](Companion-Window#settings-window). Changes take effect at once and the vault list refreshes.
+Open the page from the **Shortcuts** section of the [settings window](Companion-Window#settings-window). It replaces the settings list inside the same window. The back arrow in the page header, or `Esc`, returns to the settings. `Esc` while a shortcut dialog is open cancels the capture only. Changes take effect at once and the vault list refreshes.
 
 ## Default shortcuts
 
