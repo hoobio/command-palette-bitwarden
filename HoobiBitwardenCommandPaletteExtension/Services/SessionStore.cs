@@ -4,9 +4,9 @@ internal static class SessionStore
 {
   // MSIX scopes CredWrite/CredRead per package family, so Dev and Release each need their own target name or one sees the other's credential as a stale orphan.
 #if DEBUG
-  private const string TargetName = "BitwardenCommandPaletteExtension.Debug/default_sessionToken";
+  internal static string TargetName { get; set; } = "BitwardenCommandPaletteExtension.Debug/default_sessionToken";
 #else
-  private const string TargetName = "BitwardenCommandPaletteExtension/default_sessionToken";
+  internal static string TargetName { get; set; } = "BitwardenCommandPaletteExtension/default_sessionToken";
 #endif
 
   public static void Save(string sessionKey) => CredentialStore.Write(TargetName, "session", sessionKey);
@@ -19,9 +19,9 @@ internal static class SessionStore
 internal static class ApiKeyStore
 {
 #if DEBUG
-  private const string TargetName = "BitwardenCommandPaletteExtension.Debug/default_apiKey";
+  internal static string TargetName { get; set; } = "BitwardenCommandPaletteExtension.Debug/default_apiKey";
 #else
-  private const string TargetName = "BitwardenCommandPaletteExtension/default_apiKey";
+  internal static string TargetName { get; set; } = "BitwardenCommandPaletteExtension/default_apiKey";
 #endif
 
   public static void Save(string clientId, string clientSecret) => CredentialStore.Write(TargetName, clientId, clientSecret);
