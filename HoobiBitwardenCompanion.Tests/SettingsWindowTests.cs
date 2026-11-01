@@ -1056,33 +1056,25 @@ public class SettingsWindowTests(AvaloniaSession session)
   }
 
   [Fact]
-  public Task Dropdown_SizesToItsWidestOption() => session.RunAsync(async () =>
+  public Task Dropdown_SitsTwentyTwoPixelsFromTheGroupChevron() => session.RunAsync(async () =>
   {
-    async Task<double> MeasureAsync(params ChoiceDto[] choices)
-    {
-      var extension = new FakeExtension();
-      extension.Schema.Clear();
-      extension.Schema.Add(new("style", SettingKinds.Choice, "Style", null, choices[0].Value, choices));
-      using var pair = new ChannelPair(extension.HandleAsync);
-      using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput);
-      _ = coordinator.RunAsync(() => { });
-      var window = coordinator.ShowSettings();
-      AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.Count == 1);
-      window.UpdateLayout();
-      var combo = Find<ComboBox>(window, "style");
-      var result = combo.Bounds.Width;
-      window.Close();
-      await Task.CompletedTask;
-      return result;
-    }
+    var extension = new FakeExtension();
+    UseServerSchema(extension, confirm: null);
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var coordinator = new WindowCoordinator(pair.CompanionInput, pair.CompanionOutput) { TakeForeground = _ => { } };
+    _ = coordinator.RunAsync(() => { });
+    var window = coordinator.ShowSettings();
+    window.Show();
+    AvaloniaSession.WaitFor(() => window.ViewModel!.Sections.Count == 2 && ServerRow(window.ViewModel!, SettingKeys.ServerRegion).IsGroup);
+    var card = GroupCard(window, SettingKeys.ServerRegion);
+    var combo = Find<ComboBox>(window, SettingKeys.ServerRegion);
+    var chevron = card.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "PART_Chevron" && ReferenceEquals(t.TemplatedParent, card));
 
-    var narrow = await MeasureAsync(new ChoiceDto("Never", "0"));
-    var wide = await MeasureAsync(new ChoiceDto("Never", "0"), new ChoiceDto("A much longer option title", "1"));
-    var wideOtherWayRound = await MeasureAsync(new ChoiceDto("A much longer option title", "1"), new ChoiceDto("Never", "0"));
-
-    Assert.True(wide > narrow + 40, $"narrow {narrow}, wide {wide}");
-    Assert.Equal(wide, wideOtherWayRound);
-    Assert.True(wide < 300);
+    var comboRight = combo.TranslatePoint(new Point(combo.Bounds.Width, 0), card)!.Value.X;
+    var glyphLeft = chevron.TranslatePoint(new Point((chevron.Bounds.Width - chevron.FontSize) / 2, 0), card)!.Value.X;
+    Assert.Equal(22, glyphLeft - comboRight, 0.5);
+    window.Close();
+    await Task.CompletedTask;
   });
 
   [Fact]

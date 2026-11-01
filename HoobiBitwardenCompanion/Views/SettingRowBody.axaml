@@ -16,22 +16,13 @@
                 <TextBlock Classes="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
             </StackPanel>
             <ToggleSwitch Grid.Column="1" MinWidth="0" VerticalAlignment="Center" IsVisible="{Binding IsToggle}" IsChecked="{Binding BoolValue, Mode=TwoWay}" OnContent="{x:Null}" OffContent="{x:Null}" AutomationProperties.Name="{Binding Label}" />
-            <Grid Grid.Column="1" VerticalAlignment="Center" IsVisible="{Binding IsChoice}">
-                <ItemsControl Height="0" Margin="10,0,44,0" ClipToBounds="True" IsHitTestVisible="False" Focusable="False" ItemsSource="{Binding Choices}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="ipc:ChoiceDto">
-                            <TextBlock Text="{Binding Title}" FontSize="{StaticResource ControlContentThemeFontSize}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="ipc:ChoiceDto">
-                            <TextBlock Text="{Binding Title}" ToolTip.Tip="{Binding Description}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-            </Grid>
+            <ComboBox Grid.Column="1" VerticalAlignment="Center" IsVisible="{Binding IsChoice}" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" AutomationProperties.Name="{Binding Label}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="ipc:ChoiceDto">
+                        <TextBlock Text="{Binding Title}" ToolTip.Tip="{Binding Description}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
         </Grid>
         <StackPanel Spacing="6" IsVisible="{Binding IsText}">
             <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />

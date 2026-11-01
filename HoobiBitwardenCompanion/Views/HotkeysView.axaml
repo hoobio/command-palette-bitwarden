@@ -33,22 +33,13 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock VerticalAlignment="Center" Text="Enter action" />
                                                 <Button Grid.Column="1" Content="Reset" VerticalAlignment="Center" IsVisible="{Binding IsEnterModified}" Command="{Binding ResetEnterCommand}" AutomationProperties.Name="Reset Enter action" />
-                                                <Grid Grid.Column="2" VerticalAlignment="Center">
-                                                    <ItemsControl Height="0" Margin="10,0,44,0" ClipToBounds="True" IsHitTestVisible="False" Focusable="False" ItemsSource="{Binding EnterChoices}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate x:DataType="ipc:ChoiceDto">
-                                                                <TextBlock Text="{Binding Title}" FontSize="{StaticResource ControlContentThemeFontSize}" />
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                    <ComboBox ItemsSource="{Binding EnterChoices}" SelectedItem="{Binding SelectedEnter, Mode=TwoWay}" HorizontalContentAlignment="Center" AutomationProperties.Name="Enter action">
-                                                        <ComboBox.ItemTemplate>
-                                                            <DataTemplate x:DataType="ipc:ChoiceDto">
-                                                                <TextBlock Text="{Binding Title}" />
-                                                            </DataTemplate>
-                                                        </ComboBox.ItemTemplate>
-                                                    </ComboBox>
-                                                </Grid>
+                                                <ComboBox Grid.Column="2" VerticalAlignment="Center" ItemsSource="{Binding EnterChoices}" SelectedItem="{Binding SelectedEnter, Mode=TwoWay}" HorizontalContentAlignment="Center" AutomationProperties.Name="Enter action">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="ipc:ChoiceDto">
+                                                            <TextBlock Text="{Binding Title}" />
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
                                             </Grid>
                                         </Border>
                                         <ItemsControl Classes="Rows" ItemsSource="{Binding Rows}">
