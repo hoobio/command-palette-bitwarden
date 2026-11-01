@@ -5,8 +5,8 @@
     xmlns:ipc="using:HoobiBitwarden.Ipc"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
     x:DataType="vm:ServerPickerViewModel">
-    <StackPanel Spacing="4" HorizontalAlignment="Center">
-        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+    <StackPanel Spacing="4" HorizontalAlignment="Left">
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left">
             <TextBlock Classes="Caption" VerticalAlignment="Center" Text="Accessing:" />
             <Button x:Name="ServerButton" Theme="{StaticResource CaptionLinkButtonStyle}" AutomationProperties.Name="Server">
                 <Button.Flyout>
@@ -34,6 +34,6 @@
                 </StackPanel>
             </Button>
         </StackPanel>
-        <TextBlock x:Name="ServerError" Classes="Warn" TextWrapping="Wrap" HorizontalAlignment="Center" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock x:Name="ServerError" Classes="Warn" TextWrapping="Wrap" HorizontalAlignment="Left" Text="{Binding ErrorMessage}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     </StackPanel>
 </UserControl>

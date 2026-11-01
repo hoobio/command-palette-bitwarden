@@ -67,16 +67,18 @@
                     <ProgressBar IsIndeterminate="True" />
                     <TextBlock x:Name="BusyText" Classes="Caption" TextWrapping="Wrap" Text="{Binding BusyText}" />
                 </StackPanel>
-                <StackPanel Margin="0,8,0,0" IsVisible="{Binding IsCredentialsStep}" IsEnabled="{Binding !IsBusy}">
-                    <views:ServerPickerView x:Name="ServerPicker" DataContext="{Binding Server}" />
-                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="24,8,24,24">
-            <Button x:Name="SubmitButton" Theme="{StaticResource AccentButtonStyle}" Content="{Binding SubmitLabel}" Command="{Binding SubmitCommand}" IsEnabled="{Binding SubmitEnabled}" />
-            <Button x:Name="BackButton" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding !IsCredentialsStep}" IsEnabled="{Binding !IsBusy}" />
-            <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
-        </StackPanel>
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="24,8,24,24">
+            <Panel HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding IsCredentialsStep}" IsEnabled="{Binding !IsBusy}">
+                <views:ServerPickerView x:Name="ServerPicker" DataContext="{Binding Server}" />
+            </Panel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button x:Name="SubmitButton" Theme="{StaticResource AccentButtonStyle}" Content="{Binding SubmitLabel}" Command="{Binding SubmitCommand}" IsEnabled="{Binding SubmitEnabled}" />
+                <Button x:Name="BackButton" Content="Back" Command="{Binding BackCommand}" IsVisible="{Binding !IsCredentialsStep}" IsEnabled="{Binding !IsBusy}" />
+                <Button x:Name="CancelButton" Content="Cancel" IsEnabled="{Binding !IsBusy}" Click="OnCancelClick" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </views:DialogWindow>
