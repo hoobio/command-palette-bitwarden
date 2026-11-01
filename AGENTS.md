@@ -83,6 +83,7 @@ The figures are the private working set of the companion, measured with `D:\hoob
 | --- | --- | --- |
 | Before the package (hand-rolled styles, no trim) | 49.7 MB (49.3 to 51.7) | 119 MB |
 | `Hoobi.Design.Avalonia` 0.47.1 (GC defaults, trim after the last window closes) | 6.7 MB (5.8 to 8.1) | 119 MB |
+| `Hoobi.Design.Avalonia` 0.48.0 (`IdleMemory.ForApplication`) | 8.2 MB (5.8 to 8.8) | 126 MB |
 
 ## Git Commit Message Format
 
