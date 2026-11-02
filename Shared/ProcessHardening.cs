@@ -14,6 +14,7 @@ internal static partial class ProcessHardening
   private const int OwnerAccess = 0x00101001;
   private const int SystemAccess = 0x1FFFFF;
 
+  // ponytail: process object only; threads keep the token default DACL (hijackable via OpenThread) and the COM-activated extension keeps its .NET diagnostics pipe. Upgrade path: TokenDefaultDacl plus a re-exec with DOTNET_EnableDiagnostics=0, both need a COM activation test.
   internal static uint Apply() => Debugger.IsAttached ? 0 : Apply(GetCurrentProcess());
 
   internal static uint Apply(nint process)
