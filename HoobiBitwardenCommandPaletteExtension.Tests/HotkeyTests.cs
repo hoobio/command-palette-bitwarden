@@ -579,7 +579,7 @@ public class HotkeyTests : IDisposable
   [Fact]
   public void GetDefaultCommand_ChosenCopyWithReprompt_UsesTheCopyRepromptFlow()
   {
-    Pages.RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var item = new BitwardenItem
     {
       Id = "test-protected",
@@ -589,7 +589,7 @@ public class HotkeyTests : IDisposable
     };
     _store.SetEnter(HotkeyItemTypes.Login, HotkeyIds.LoginCopyPassword);
 
-    Assert.IsType<Pages.RepromptPage>(VaultItemHelper.GetDefaultCommand(item, new BitwardenCliService()));
+    Assert.Equal(Companion.CompanionUnavailable.Command().Name, VaultItemHelper.GetDefaultCommand(item, new BitwardenCliService()).Name);
   }
 }
 

@@ -847,16 +847,16 @@ public class BitwardenCliServiceMockedTests
   [Fact]
   public void Matches_RepromptNoteOutsideGrace_SkipsNotes()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.ClearGracePeriod();
     var item = new BitwardenItem { Id = "rp-1", Name = "Bank", Type = BitwardenItemType.SecureNote, Notes = ProtectedSecret.From("pin 4321"), Reprompt = 1 };
 
     Assert.False(BitwardenCliService.Matches(item, "4321"));
     Assert.True(BitwardenCliService.Matches(item, "bank"));
 
-    RepromptPage.RecordVerification("rp-1");
+    RepromptGrace.RecordVerification("rp-1");
     Assert.True(BitwardenCliService.Matches(item, "4321"));
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]

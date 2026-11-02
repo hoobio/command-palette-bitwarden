@@ -32,10 +32,10 @@ internal static partial class VaultItemHelper
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null) =>
     ResolveEnterCommand(item, service);
 
-  private static ICommand BuildRepromptCommand(BitwardenCliService service, string itemId, Action action, string label) =>
+  private static ICommand BuildRepromptCommand(string itemId, Action action) =>
     CompanionHost.Current is { } companion
       ? new AnonymousCommand(() => companion.ShowReprompt(itemId, action)) { Name = "Verify password", Result = CommandResult.KeepOpen() }
-      : new RepromptPage(service, itemId, action, label);
+      : CompanionUnavailable.Command();
 
   private static AnonymousCommand BuildOpenInWindowCommand(CompanionHost companion, string id) =>
     new(() => companion.ShowItem(id)) { Name = "Open in companion", Result = CommandResult.Dismiss() };
@@ -201,7 +201,7 @@ internal static partial class VaultItemHelper
   }
 
   internal static Tag? BuildTotpTag(BitwardenItem item) =>
-    item.Reprompt == 1 && !RepromptPage.IsWithinGracePeriod(item.Id)
+    item.Reprompt == 1 && !RepromptGrace.IsWithinGracePeriod(item.Id)
       ? GetStaticTotpTag()
       : BuildTotpTag(item.TotpSecret!);
 
@@ -402,8 +402,8 @@ internal static partial class VaultItemHelper
 
   private static ICommand CopyCommand(string itemId, string label, BitwardenCliService? reprompt, Action sensitiveCopy, Action? plainCopy = null)
   {
-    if (reprompt != null && !RepromptPage.IsWithinGracePeriod(itemId))
-      return BuildRepromptCommand(reprompt, itemId, sensitiveCopy, label);
+    if (reprompt != null && !RepromptGrace.IsWithinGracePeriod(itemId))
+      return BuildRepromptCommand(itemId, sensitiveCopy);
     return Track(itemId, new AnonymousCommand(GuardLocked(plainCopy ?? sensitiveCopy)) { Name = $"Copy {label}", Result = CommandResult.ShowToast($"Copied {label} to clipboard") });
   }
 

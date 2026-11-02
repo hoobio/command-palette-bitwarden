@@ -89,6 +89,12 @@ public class VaultItemHelperTests
     Assert.Equal(expected, VaultItemHelper.IsValidSshHost(host));
   }
 
+  private static void AssertGated(Microsoft.CommandPalette.Extensions.ICommand? command) =>
+    Assert.Equal(Companion.CompanionUnavailable.Command().Name, command?.Name);
+
+  private static void AssertNotGated(Microsoft.CommandPalette.Extensions.ICommand? command) =>
+    Assert.NotEqual(Companion.CompanionUnavailable.Command().Name, command?.Name);
+
   [Fact]
   public void GetDefaultCommand_NoReprompt_ReturnsInvokable()
   {
@@ -99,13 +105,13 @@ public class VaultItemHelperTests
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var cmd = VaultItemHelper.GetDefaultCommand(item);
-    Assert.IsNotType<RepromptPage>(cmd);
+    AssertNotGated(cmd);
   }
 
   [Fact]
-  public void GetDefaultCommand_WithReprompt_ReturnsRepromptPage()
+  public void GetDefaultCommand_WithReprompt_ReturnsRepromptGate()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -115,7 +121,7 @@ public class VaultItemHelperTests
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var cmd = VaultItemHelper.GetDefaultCommand(item, svc);
-    Assert.IsType<RepromptPage>(cmd);
+    AssertGated(cmd);
   }
 
   [Fact]
@@ -129,7 +135,7 @@ public class VaultItemHelperTests
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var cmd = VaultItemHelper.GetDefaultCommand(item);
-    Assert.IsNotType<RepromptPage>(cmd);
+    AssertNotGated(cmd);
   }
 
   // PowerToys 0.99 gates right-click context menus on a non-empty Command.Name: https://github.com/hoobio/command-palette-bitwarden/issues/140
@@ -217,7 +223,7 @@ public class VaultItemHelperTests
   public void GetDefaultCommand_FallbackItem_OpensInWindowWhenCompanionIsRunning()
   {
     BitwardenCliService.ResetStaticState();
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var note = new BitwardenItem { Id = Guid.NewGuid().ToString(), Type = BitwardenItemType.SecureNote };
     var login = new BitwardenItem
     {
@@ -240,7 +246,7 @@ public class VaultItemHelperTests
       Companion.CompanionHost.Current = null;
     }
 
-    Assert.IsType<RepromptPage>(VaultItemHelper.GetDefaultCommand(protectedNote, new BitwardenCliService()));
+    AssertGated(VaultItemHelper.GetDefaultCommand(protectedNote, new BitwardenCliService()));
   }
 
   [Fact]
@@ -281,7 +287,7 @@ public class VaultItemHelperTests
   [Fact]
   public void BuildContextItems_Login_Reprompt_AllFieldsProtected()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -296,7 +302,7 @@ public class VaultItemHelperTests
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
     Assert.True(copyItems.Length >= 2);
     foreach (var ci in copyItems)
-      Assert.IsType<RepromptPage>(ci.Command);
+      AssertGated(ci.Command);
   }
 
   [Fact]
@@ -312,13 +318,13 @@ public class VaultItemHelperTests
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
     var usernameItem = contextItems.First(c => c.Title == "Copy Username");
-    Assert.IsNotType<RepromptPage>(usernameItem.Command);
+    AssertNotGated(usernameItem.Command);
   }
 
   [Fact]
   public void BuildContextItems_Card_Reprompt_CardholderNameProtected()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -335,7 +341,7 @@ public class VaultItemHelperTests
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
     Assert.True(copyItems.Length >= 4);
     foreach (var ci in copyItems)
-      Assert.IsType<RepromptPage>(ci.Command);
+      AssertGated(ci.Command);
   }
 
   [Fact]
@@ -351,13 +357,13 @@ public class VaultItemHelperTests
     };
     var contextItems = VaultItemHelper.BuildContextItems(item);
     var holderItem = contextItems.First(c => c.Title == "Copy Cardholder");
-    Assert.IsNotType<RepromptPage>(holderItem.Command);
+    AssertNotGated(holderItem.Command);
   }
 
   [Fact]
   public void BuildContextItems_Identity_Reprompt_AllFieldsProtected()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -372,13 +378,13 @@ public class VaultItemHelperTests
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
     Assert.True(copyItems.Length >= 3);
     foreach (var ci in copyItems)
-      Assert.IsType<RepromptPage>(ci.Command);
+      AssertGated(ci.Command);
   }
 
   [Fact]
   public void BuildContextItems_SshKey_Reprompt_AllFieldsProtected()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -392,13 +398,13 @@ public class VaultItemHelperTests
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
     Assert.True(copyItems.Length >= 2);
     foreach (var ci in copyItems)
-      Assert.IsType<RepromptPage>(ci.Command);
+      AssertGated(ci.Command);
   }
 
   [Fact]
   public void BuildContextItems_CustomField_Reprompt_AllProtected()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -414,59 +420,59 @@ public class VaultItemHelperTests
     var contextItems = VaultItemHelper.BuildContextItems(item, svc);
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
     foreach (var ci in copyItems)
-      Assert.IsType<RepromptPage>(ci.Command);
+      AssertGated(ci.Command);
   }
 
   [Fact]
   public void RepromptGracePeriod_IsWithinGracePeriod_AfterVerification()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
-    Assert.False(RepromptPage.IsWithinGracePeriod("item-a"));
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.ClearGracePeriod();
+    Assert.False(RepromptGrace.IsWithinGracePeriod("item-a"));
 
-    RepromptPage.RecordVerification("item-a");
-    Assert.True(RepromptPage.IsWithinGracePeriod("item-a"));
+    RepromptGrace.RecordVerification("item-a");
+    Assert.True(RepromptGrace.IsWithinGracePeriod("item-a"));
   }
 
   [Fact]
   public void RepromptGracePeriod_IsScopedToVerifiedItem()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.ClearGracePeriod();
 
-    RepromptPage.RecordVerification("item-a");
+    RepromptGrace.RecordVerification("item-a");
 
-    Assert.True(RepromptPage.IsWithinGracePeriod("item-a"));
-    Assert.False(RepromptPage.IsWithinGracePeriod("item-b"));
-    RepromptPage.ClearGracePeriod();
+    Assert.True(RepromptGrace.IsWithinGracePeriod("item-a"));
+    Assert.False(RepromptGrace.IsWithinGracePeriod("item-b"));
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]
   public void RepromptGracePeriod_ClearGracePeriod_ResetsState()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.RecordVerification("item-a");
-    Assert.True(RepromptPage.IsWithinGracePeriod("item-a"));
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.RecordVerification("item-a");
+    Assert.True(RepromptGrace.IsWithinGracePeriod("item-a"));
 
-    RepromptPage.ClearGracePeriod();
-    Assert.False(RepromptPage.IsWithinGracePeriod("item-a"));
+    RepromptGrace.ClearGracePeriod();
+    Assert.False(RepromptGrace.IsWithinGracePeriod("item-a"));
   }
 
   [Fact]
   public void RepromptGracePeriod_ZeroSeconds_AlwaysFalse()
   {
-    RepromptPage.GracePeriodSeconds = 0;
-    RepromptPage.RecordVerification("item-a");
-    Assert.False(RepromptPage.IsWithinGracePeriod("item-a"));
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.GracePeriodSeconds = 0;
+    RepromptGrace.RecordVerification("item-a");
+    Assert.False(RepromptGrace.IsWithinGracePeriod("item-a"));
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]
   public void GetDefaultCommand_WithReprompt_GracePeriod_BypassesReprompt()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.RecordVerification("test-1");
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.RecordVerification("test-1");
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -476,16 +482,16 @@ public class VaultItemHelperTests
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var cmd = VaultItemHelper.GetDefaultCommand(item, svc);
-    Assert.IsNotType<RepromptPage>(cmd);
-    RepromptPage.ClearGracePeriod();
+    AssertNotGated(cmd);
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]
   public void GetDefaultCommand_GracePeriod_ScopedToItem_OtherItemStillProtected()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
-    RepromptPage.RecordVerification("verified-item");
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.ClearGracePeriod();
+    RepromptGrace.RecordVerification("verified-item");
 
     var svc = new BitwardenCliService();
     var otherItem = new BitwardenItem
@@ -496,15 +502,15 @@ public class VaultItemHelperTests
       Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
     };
     var cmd = VaultItemHelper.GetDefaultCommand(otherItem, svc);
-    Assert.IsType<RepromptPage>(cmd);
-    RepromptPage.ClearGracePeriod();
+    AssertGated(cmd);
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]
   public void BuildContextItems_Login_Reprompt_GracePeriod_BypassesReprompt()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.RecordVerification("test-login");
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.RecordVerification("test-login");
     var svc = new BitwardenCliService();
     var item = new BitwardenItem
     {
@@ -518,15 +524,15 @@ public class VaultItemHelperTests
     var copyItems = contextItems.Where(c => c.Title.StartsWith("Copy", StringComparison.Ordinal)).ToArray();
     Assert.True(copyItems.Length >= 2);
     foreach (var ci in copyItems)
-      Assert.IsNotType<RepromptPage>(ci.Command);
-    RepromptPage.ClearGracePeriod();
+      AssertNotGated(ci.Command);
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]
   public void RecordVerification_DoesNotPersistAcrossProcesses()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.ClearGracePeriod();
 
     // A stale grace.json from an older build (which did persist) must not make this test pass or fail spuriously.
     var graceFile = Path.Combine(
@@ -535,10 +541,10 @@ public class VaultItemHelperTests
     if (File.Exists(graceFile))
       File.Delete(graceFile);
 
-    RepromptPage.RecordVerification("item-a");
+    RepromptGrace.RecordVerification("item-a");
 
     Assert.False(File.Exists(graceFile));
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Theory]
@@ -635,8 +641,8 @@ public class VaultItemHelperTests
   [Fact]
   public void BuildTags_Live_RepromptItem_HidesCodeUntilGrace()
   {
-    RepromptPage.GracePeriodSeconds = 60;
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.GracePeriodSeconds = 60;
+    RepromptGrace.ClearGracePeriod();
     var item = new BitwardenItem
     {
       Id = "totp-reprompt",
@@ -650,9 +656,9 @@ public class VaultItemHelperTests
     Assert.Equal("2FA", Assert.Single(hidden).Text);
     Assert.Equal("2FA", VaultItemHelper.BuildTotpTag(item)!.Text);
 
-    RepromptPage.RecordVerification("totp-reprompt");
+    RepromptGrace.RecordVerification("totp-reprompt");
     Assert.Contains("s)", VaultItemHelper.BuildTotpTag(item)!.Text, StringComparison.Ordinal);
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]

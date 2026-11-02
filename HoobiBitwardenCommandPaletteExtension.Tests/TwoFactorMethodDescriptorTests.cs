@@ -7,7 +7,7 @@ public class TwoFactorMethodDescriptorTests
   [Fact]
   public void Describe_Authenticator_NumericCopyAndValidator()
   {
-    var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(0);
+    var d = HoobiBitwarden.Ipc.TwoFactorRules.Describe(0);
     Assert.Contains("authenticator", d.Placeholder, StringComparison.OrdinalIgnoreCase);
     Assert.Equal("authenticator code", d.TypedNoun);
     Assert.True(d.Validator("123456"));
@@ -17,7 +17,7 @@ public class TwoFactorMethodDescriptorTests
   [Fact]
   public void Describe_Email_NumericCopyAndValidator()
   {
-    var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(1);
+    var d = HoobiBitwarden.Ipc.TwoFactorRules.Describe(1);
     Assert.Contains("email", d.Placeholder, StringComparison.OrdinalIgnoreCase);
     Assert.Equal("email code", d.TypedNoun);
     Assert.True(d.Validator("654321"));
@@ -26,7 +26,7 @@ public class TwoFactorMethodDescriptorTests
   [Fact]
   public void Describe_Yubikey_TouchCopyAndAlphanumericValidator()
   {
-    var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(3);
+    var d = HoobiBitwarden.Ipc.TwoFactorRules.Describe(3);
     Assert.Contains("YubiKey", d.Placeholder, StringComparison.Ordinal);
     Assert.Equal("YubiKey OTP", d.TypedNoun);
     Assert.True(d.Validator("cccccccbcdefghijklnrtuv1234567890abcdefghijk"));
@@ -39,7 +39,7 @@ public class TwoFactorMethodDescriptorTests
   [InlineData(99)]
   public void Describe_UnknownOrNull_FallsBackToGenericNumeric(int? method)
   {
-    var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(method);
+    var d = HoobiBitwarden.Ipc.TwoFactorRules.Describe(method);
     Assert.Equal("2FA code", d.TypedNoun);
     Assert.True(d.Validator("123456"));
     Assert.False(d.Validator("ab"));
@@ -54,7 +54,7 @@ public class TwoFactorMethodDescriptorTests
   [InlineData("")]
   public void NumericValidator_RejectsInvalidShapes(string raw)
   {
-    var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(0);
+    var d = HoobiBitwarden.Ipc.TwoFactorRules.Describe(0);
     Assert.False(d.Validator(raw));
   }
 
@@ -64,7 +64,7 @@ public class TwoFactorMethodDescriptorTests
   [InlineData("")]
   public void YubikeyValidator_RejectsInvalidShapes(string raw)
   {
-    var d = HoobiBitwardenCommandPaletteExtensionPage.DescribeTwoFactorMethod(3);
+    var d = HoobiBitwarden.Ipc.TwoFactorRules.Describe(3);
     Assert.False(d.Validator(raw));
   }
 

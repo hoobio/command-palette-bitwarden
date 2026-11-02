@@ -71,7 +71,7 @@ When an item has re-prompt enabled:
 - The live TOTP tag is replaced by a static **2FA** tag outside the grace period
 - Search does not match the notes of the item outside the grace period
 - Fallback results in the root Command Palette also require the verification
-- Selecting the item (Enter key) opens a master password verification form before performing the default action
+- Selecting the item (Enter key) opens the master password verification window of the [companion](Companion-Window#master-password-re-prompt) before performing the default action
 - **All** copy actions — including normally non-sensitive fields like Username, Cardholder Name, and Email — require verification
 - Non-copy actions (Open in Browser, Open in companion, View in Web Vault) via context menu remain unprotected
 - After entering the correct password, a toast confirms the action and a configurable **grace period** begins

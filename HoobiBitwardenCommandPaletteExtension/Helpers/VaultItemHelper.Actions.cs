@@ -105,8 +105,8 @@ internal static partial class VaultItemHelper
   {
     var reprompt = item.Reprompt == 1 ? service : null;
     var built = ResolveEnterAction(item, reprompt).Built;
-    return built.Run is { } run && reprompt is not null && !RepromptPage.IsWithinGracePeriod(item.Id)
-      ? BuildRepromptCommand(reprompt, item.Id, run, "Open")
+    return built.Run is { } run && reprompt is not null && !RepromptGrace.IsWithinGracePeriod(item.Id)
+      ? BuildRepromptCommand(item.Id, run)
       : built.Command;
   }
 

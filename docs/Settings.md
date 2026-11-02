@@ -22,7 +22,7 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | Off |
-| **Description** | Log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) (`bw login --apikey`) instead of your email and master password. Use this when your account uses FIDO2 or Duo two-step login. The login form asks for the Client ID and Client Secret, and the extension stores them in Windows Credential Manager. When you are logged out, the extension logs in again with the stored key, so you only unlock with your master password. Changing this setting logs you out and deletes the stored API key and session key. Logging out also deletes the stored API key. See [API key login](Getting-Started#api-key-login). |
+| **Description** | Log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) (`bw login --apikey`) instead of your email and master password. Use this when your account uses FIDO2 or Duo two-step login. The companion login window asks for the Client ID and Client Secret, and the extension stores them in Windows Credential Manager. When you are logged out, the extension logs in again with the stored key, so you only unlock with your master password. Changing this setting logs you out and deletes the stored API key and session key. Logging out also deletes the stored API key. See [API key login](Getting-Started#api-key-login). |
 
 ### Unlock with Windows Hello
 
@@ -30,7 +30,7 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 |---|---|
 | **Type** | Toggle |
 | **Default** | On |
-| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the unlock page, the master password re-prompt page and the master password panel of the [companion window](Companion-Window#master-password-re-prompt) show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. In the companion window, a check mark on this row means the extension can reach the Desktop app and a warning mark means it cannot; no mark shows while the setting is off. |
+| **Description** | Use Windows Hello through the Bitwarden Desktop app over IPC. The Desktop app must run with **Allow browser integration** on. When this setting is on, the [companion window](Companion-Window#master-password-re-prompt) unlock window, master password re-prompt window and master password panel show a Windows Hello button: **Unlock with Windows Hello** to unlock, **Verify with Windows Hello** for a re-prompt. The extension runs the Windows Hello check and applies the same cooldown and grace period as a master password. In the companion window, a check mark on this row means the extension can reach the Desktop app and a warning mark means it cannot; no mark shows while the setting is off. |
 
 ### Automatically Prompt for Biometrics
 

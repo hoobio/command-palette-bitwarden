@@ -131,7 +131,7 @@ internal sealed partial class CompanionOps
 
   private async Task RequireWriteGrantAsync(string id, bool verified)
   {
-    if (verified || RepromptPage.IsWithinGracePeriod(id))
+    if (verified || RepromptGrace.IsWithinGracePeriod(id))
       return;
     var reprompt = _service.GetCachedItem(id)?.Reprompt ?? Int(await _service.GetItemJsonAsync(id), "reprompt");
     if (reprompt == 1)

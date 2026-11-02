@@ -35,8 +35,8 @@ dotnet build -c Debug -p:Platform=x64
 
 1. Open the Command Palette (default: `Win + Ctrl + Space`)
 2. Type **"Bitwarden"** to open the vault browser
-3. If you are not logged in, select **Login to Bitwarden**. The companion window opens and asks for your email and master password, and for the two-factor or device verification code when Bitwarden asks for one. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead. See [Login](Companion-Window#login).
-4. If your vault is locked, select **Unlock Vault**. The companion window opens and asks for your master password. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead. See [Unlock](Companion-Window#unlock).
+3. If you are not logged in, select **Login to Bitwarden**. The companion window opens and asks for your email and master password, and for the two-factor or device verification code when Bitwarden asks for one. Command Palette stays open behind it. If the companion cannot start, the item shows a message to restart PowerToys or reinstall the extension. See [Login](Companion-Window#login).
+4. If your vault is locked, select **Unlock Vault**. The companion window opens and asks for your master password. Command Palette stays open behind it. If the companion cannot start, the item shows a message to restart PowerToys or reinstall the extension. See [Unlock](Companion-Window#unlock).
 5. Once unlocked, vault items are cached locally and refreshed every 5 minutes
 
 ### API key login
@@ -44,7 +44,7 @@ dotnet build -c Debug -p:Platform=x64
 If your account uses FIDO2 (WebAuthn) or Duo two-step login, the CLI cannot complete a password login. Turn on **Use API Key Authentication** in [Settings](Settings) and log in with your [personal API key](https://bitwarden.com/help/personal-api-key/) instead:
 
 1. In the Bitwarden web vault, go to **Settings > Security > Keys** and select **View API key**.
-2. Select **Login to Bitwarden**. The companion window opens. Paste the **Client ID** and **Client Secret** into it and select **Log in**. The window stays open when you switch to the web vault, so the values are kept. Command Palette stays open behind it. If the companion is not available, the item opens a form in Command Palette instead.
+2. Select **Login to Bitwarden**. The companion window opens. Paste the **Client ID** and **Client Secret** into it and select **Log in**. The window stays open when you switch to the web vault, so the values are kept. Command Palette stays open behind it. If the companion cannot start, the item shows a message to restart PowerToys or reinstall the extension.
 3. Unlock the vault with your master password.
 
 The extension stores the API key in Windows Credential Manager. When the CLI session ends, the extension logs in again with the stored key, so you only enter your master password. API key login skips two-step login. The API key cannot decrypt the vault without the master password.
@@ -55,7 +55,7 @@ Open **Bitwarden settings** and use the **Server** section at the top, where you
 
 ## Sign-in Security
 
-- Pressing Enter in a password field submits the form. Pressing Enter in the login email field needs PowerToys 0.101 or later.
+- Login, unlock and master password re-prompt happen only in the companion window. The master password does not pass through Command Palette.
 - When the extension downloads the Bitwarden CLI, it accepts the file only if the Authenticode signature is valid (with a revocation check) and the signer is exactly `Bitwarden Inc.`.
 - For biometric unlock, the extension checks that the pipe server is a Bitwarden-signed binary and writes the result to the debug log. The extension drops unencrypted responses from the pipe.
 - During a Windows Hello prompt, Command Palette stays open, so you can type in the search box as soon as the prompt closes.
