@@ -15,7 +15,7 @@
     <PackageVersion Include="Hoobi.Design.Avalonia" Version="0.53.4" />
     <PackageVersion Include="Hoobi.Design.Avalonia.Testing" Version="0.53.4" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.318" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.320" />
     <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.12.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="xunit.v3.mtp-off" Version="4.0.2" />
