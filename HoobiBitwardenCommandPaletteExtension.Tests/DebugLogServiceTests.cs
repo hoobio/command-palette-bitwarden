@@ -87,7 +87,7 @@ public class DebugLogServiceTests : IDisposable
   [Fact]
   public void ParseItems_UnexpectedOutput_DoesNotLogContent()
   {
-    BitwardenCliService.ParseItems("{\"login\":{\"password\":\"hunter2\"}}");
+    BitwardenCliService.ParseItems("{\"login\":{\"password\":\"hunter2\"}}"u8.ToArray());
     Assert.DoesNotContain("hunter2", DebugLogService.Export(), StringComparison.Ordinal);
   }
 

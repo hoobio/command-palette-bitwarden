@@ -487,6 +487,27 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
     field.IsRevealed = true;
   });
 
+  internal async Task<string?> RevealForDragAsync(FieldViewModel field)
+  {
+    string? value = null;
+    var dragging = true;
+    // A reprompt retry runs after the drag has ended, so it reveals the field to drag on the next attempt.
+    await RunAsync(Ops.Reveal, FieldPayload(field.Key), reply =>
+    {
+      var secret = IpcJson.Read(reply, IpcJson.Default.SecretResponse).Value;
+      if (dragging)
+      {
+        value = secret;
+        return;
+      }
+
+      field.RevealedValue = secret;
+      field.IsRevealed = true;
+    });
+    dragging = false;
+    return value;
+  }
+
   public Task CopyAsync(FieldViewModel field) =>
     RunAsync(Ops.Copy, FieldPayload(field.Key), _ => Notify($"Copied {field.Label}"));
 

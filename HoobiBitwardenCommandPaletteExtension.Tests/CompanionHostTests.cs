@@ -19,14 +19,13 @@ public class CompanionHostTests
       var error = await Assert.ThrowsAsync<IpcException>(() => host.RequestAsync("unknown", null).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
       Assert.Equal(IpcErrors.Invalid, error.Code);
       Assert.Same(host.EnsureStarted(), host.EnsureStarted());
-      using var companion = System.Diagnostics.Process.GetProcessById(host.Process!.Id);
+      var started = host.Process!.Id;
       host.NotifyLocked();
       Assert.Equal(IpcErrors.Invalid, (await Assert.ThrowsAsync<IpcException>(() => host.RequestAsync("unknown", null))).Code);
 
       host.Dispose();
 
-      await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
-      Assert.True(companion.HasExited);
+      await WaitForExitAsync(started);
     }
     finally
     {
@@ -70,10 +69,9 @@ public class CompanionHostTests
       var started = host.Process!.Id;
       host.Prewarm();
       Assert.Equal(started, host.Process!.Id);
-      using var companion = System.Diagnostics.Process.GetProcessById(started);
 
       host.Dispose();
-      await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+      await WaitForExitAsync(started);
     }
     finally
     {
@@ -91,10 +89,9 @@ public class CompanionHostTests
       Assert.Null(host.Process);
       service.NotifyStatusChanged();
       var started = host.Process!.Id;
-      using var companion = System.Diagnostics.Process.GetProcessById(started);
 
       host.Dispose();
-      await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+      await WaitForExitAsync(started);
     }
     finally
     {
@@ -122,7 +119,7 @@ public class CompanionHostTests
       Assert.Equal(IntPtr.Zero, companion.MainWindowHandle);
 
       host.Dispose();
-      await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+      await WaitForExitAsync(started);
     }
     finally
     {
@@ -163,19 +160,38 @@ public class CompanionHostTests
   {
     using var host = new CompanionHost(new CompanionOps(new BitwardenCliService()), requestTimeout: TimeSpan.FromMilliseconds(1));
     host.EnsureStarted();
-    using var companion = System.Diagnostics.Process.GetProcessById(host.Process!.Id);
-    // The exit code is readable later only through a handle opened while the process runs.
-    _ = companion.Handle;
+    var started = host.Process!.Id;
 
     var ex = await Assert.ThrowsAsync<TimeoutException>(() => host.RequestAsync("unknown", null).WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
 
     Assert.Equal("unknown timed out", ex.Message);
     Assert.Null(host.Process);
-    await companion.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
-    Assert.Equal(-1, companion.ExitCode);
+    await WaitForExitAsync(started);
 
     host.EnsureStarted();
-    Assert.NotEqual(companion.Id, host.Process!.Id);
+    Assert.NotEqual(started, host.Process!.Id);
+  }
+
+  // The companion hardens its DACL, so a handle opened by PID gets only SYNCHRONIZE and query-limited rights; WaitForExitAsync needs more.
+  private static async Task WaitForExitAsync(int pid)
+  {
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+    timeout.CancelAfter(TimeSpan.FromSeconds(15));
+    while (IsRunning(pid))
+      await Task.Delay(50, timeout.Token);
+  }
+
+  private static bool IsRunning(int pid)
+  {
+    try
+    {
+      using var process = System.Diagnostics.Process.GetProcessById(pid);
+      return !process.HasExited;
+    }
+    catch (ArgumentException)
+    {
+      return false;
+    }
   }
 
   [Fact]

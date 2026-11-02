@@ -31,37 +31,40 @@ internal sealed partial class BitwardenCliService
   internal async Task<bool> DownloadAttachmentAsync(string id, ItemAttachment attachment, string path)
   {
     var started = DateTime.UtcNow.AddSeconds(-2);
-    string output;
+    SecretBuffer output;
     try
     {
-      output = await RunCliAsync($"get attachment {attachment.Id} --itemid {RequireId(id)} --output {Quote(path)}", WriteTimeoutMs, verbOnlyLog: true);
+      output = await RunCliBufferAsync($"get attachment {attachment.Id} --itemid {RequireId(id)} --output {Quote(path)}", WriteTimeoutMs, verbOnlyLog: true);
     }
     catch (TimeoutException)
     {
       throw new VaultWriteException(VaultWriteError.Unknown);
     }
 
-    // The size bw reports is the encrypted size, which is larger than the decrypted file.
-    var file = new FileInfo(path);
-    if (file.Exists && file.LastWriteTimeUtc >= started && file.Length <= attachment.Size)
-      return true;
-    ThrowIfRejected(output);
-    return false;
+    using (output)
+    {
+      // The size bw reports is the encrypted size, which is larger than the decrypted file.
+      var file = new FileInfo(path);
+      if (file.Exists && file.LastWriteTimeUtc >= started && file.Length <= attachment.Size)
+        return true;
+      ThrowIfRejected(output);
+      return false;
+    }
   }
 
   private static bool IsAttachmentDownload(string args) => args.StartsWith("get attachment ", StringComparison.Ordinal);
 
   private static string Quote(string path) => "\"" + path + "\"";
 
-  internal static string ThrowIfRejected(string output)
+  internal static SecretBuffer ThrowIfRejected(SecretBuffer output)
   {
-    if (ParseObject(output) is not null)
+    if (output.Text is not { } text)
       return output;
-    if (output.Contains("premium", StringComparison.OrdinalIgnoreCase))
+    if (text.Contains("premium", StringComparison.OrdinalIgnoreCase))
       throw new VaultWriteException(VaultWriteError.Premium);
-    if (output.Contains("Max file size", StringComparison.OrdinalIgnoreCase))
+    if (text.Contains("Max file size", StringComparison.OrdinalIgnoreCase))
       throw new VaultWriteException(VaultWriteError.TooLarge);
-    if (output.Contains("Not enough storage", StringComparison.OrdinalIgnoreCase))
+    if (text.Contains("Not enough storage", StringComparison.OrdinalIgnoreCase))
       throw new VaultWriteException(VaultWriteError.NoStorage);
     return output;
   }

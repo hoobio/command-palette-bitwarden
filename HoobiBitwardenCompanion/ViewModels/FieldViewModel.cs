@@ -79,6 +79,12 @@ internal sealed partial class FieldViewModel : ObservableObject
     ? TotpCode ?? Mask
     : IsSecret ? (IsRevealed ? RevealedValue ?? string.Empty : Mask) : _value ?? string.Empty;
 
+  internal Task<string?> GetDragTextAsync() =>
+    IsTotp ? Task.FromResult(TotpCode)
+    : !IsSecret ? Task.FromResult(_value)
+    : IsRevealed ? Task.FromResult(RevealedValue)
+    : _owner?.RevealForDragAsync(this) ?? Task.FromResult<string?>(null);
+
   internal bool IsHeld { get; private set; }
 
   internal Task PeekAsync()

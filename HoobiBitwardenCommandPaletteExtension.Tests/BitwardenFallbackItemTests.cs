@@ -44,7 +44,7 @@ public class BitwardenFallbackItemTests
   [Fact]
   public async Task UpdateQuery_RepromptItem_DefaultCommandRequiresReprompt()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var factory = new FakeProcessFactory();
     var svc = new BitwardenCliService(processFactory: factory.Create);
     factory.Enqueue(new FakeCliProcess(stdout: "session_key\n", exitCode: 0));
@@ -54,7 +54,7 @@ public class BitwardenFallbackItemTests
 
     fallback.UpdateQuery("github");
 
-    Assert.IsType<RepromptPage>(fallback.Command);
+    Assert.Equal(Companion.CompanionUnavailable.Command().Name, fallback.Command?.Name);
   }
 
   [Fact]

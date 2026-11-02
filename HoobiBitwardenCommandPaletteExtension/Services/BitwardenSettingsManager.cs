@@ -400,7 +400,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
     private void SyncRepromptSettings()
     {
         var seconds = int.TryParse(RepromptGracePeriod.Value, out var gp) ? gp : 60;
-        Pages.RepromptPage.GracePeriodSeconds = Math.Clamp(seconds, 0, 300);
+        RepromptGrace.GracePeriodSeconds = Math.Clamp(seconds, 0, 300);
     }
 
     private readonly Dictionary<string, object?> _defaults = [];

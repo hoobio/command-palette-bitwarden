@@ -18,7 +18,7 @@ public class CompanionRepromptOpsTests : IDisposable
 
   public CompanionRepromptOpsTests()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     _service = new BitwardenCliService { DataFileOverride = Path.Combine(Path.GetTempPath(), $"bw_missing_{Guid.NewGuid():N}.json") };
     _service.LoadTestData([new BitwardenItem { Id = _id, Name = "GitHub", Type = BitwardenItemType.Login, Reprompt = 1 }], [], []);
     _service.SetSession("session-key");
@@ -27,7 +27,7 @@ public class CompanionRepromptOpsTests : IDisposable
 
   public void Dispose()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     _ops.Dispose();
     GC.SuppressFinalize(this);
   }
@@ -70,7 +70,7 @@ public class CompanionRepromptOpsTests : IDisposable
 
     Assert.Equal(new RepromptConfirmResponse(true, null), reply);
     Assert.Equal(1, runs);
-    Assert.True(RepromptPage.IsWithinGracePeriod(_id));
+    Assert.True(RepromptGrace.IsWithinGracePeriod(_id));
     Assert.False(again.Success);
     Assert.Equal(0, _ops.PendingRepromptCount);
   }
@@ -86,7 +86,7 @@ public class CompanionRepromptOpsTests : IDisposable
     Assert.Equal(new RepromptConfirmResponse(false, "Incorrect master password. Please try again."), reply);
     Assert.Equal(0, runs);
     Assert.Equal(1, _ops.PendingRepromptCount);
-    Assert.False(RepromptPage.IsWithinGracePeriod(_id));
+    Assert.False(RepromptGrace.IsWithinGracePeriod(_id));
 
     Assert.True((await ConfirmOpAsync(_ops, new RepromptConfirmRequest(token, "correct"))).Success);
     Assert.Equal(1, runs);
@@ -100,7 +100,7 @@ public class CompanionRepromptOpsTests : IDisposable
     var reply = await ConfirmOpAsync(_ops, new RepromptConfirmRequest(token, ""));
 
     Assert.Equal(new RepromptConfirmResponse(false, "Enter your master password"), reply);
-    Assert.Equal(0, RepromptPage.GetCooldownSecondsRemaining());
+    Assert.Equal(0, RepromptGrace.GetCooldownSecondsRemaining());
   }
 
   [Fact]

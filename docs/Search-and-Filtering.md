@@ -69,7 +69,7 @@ The dropdown lists, in order:
 2. Static filters: Favourites, Protected, Weak passwords, Old passwords, Insecure URLs, Watchtower, Has TOTP, Has passkey, Has password, Has URL, Has notes, In a folder, Logins, Cards, Identities, Secure notes, SSH keys
 3. **My vault** (items that are not in an organisation) and each of your organisations. Organisation names longer than 24 characters are shortened.
 
-Folders are not in the dropdown. Type `folder:` to filter by folder. The organisation entries are built from the loaded vault and refresh after a sync. If the selected organisation no longer exists, the dropdown returns to **All items**. The dropdown is not shown on the login, unlock and two-factor screens.
+Folders are not in the dropdown. Type `folder:` to filter by folder. The organisation entries are built from the loaded vault and refresh after a sync. If the selected organisation no longer exists, the dropdown returns to **All items**. The dropdown is not shown on the login and unlock screens.
 
 ## Sort Order
 

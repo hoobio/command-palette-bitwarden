@@ -254,7 +254,7 @@ internal sealed partial class CompanionOps : IDisposable
   internal ItemDto GetItem(string? id, bool verified = false)
   {
     var item = Find(id);
-    var locked = item.Reprompt == 1 && !verified && !RepromptPage.IsWithinGracePeriod(item.Id);
+    var locked = item.Reprompt == 1 && !verified && !RepromptGrace.IsWithinGracePeriod(item.Id);
     return new ItemDto(
       item.Id,
       item.Name,
@@ -270,7 +270,7 @@ internal sealed partial class CompanionOps : IDisposable
       locked ? [] : MapFields(item),
       locked ? null : item.Attachments.Select(a => new AttachmentDto(a.Id, a.FileName, a.SizeName)).ToList(),
       _service.ShowWebsiteIcons ? CachedIconPath(item) : null,
-      item.Reprompt == 1 && !locked ? RepromptPage.GetGrace(item.Id) : null,
+      item.Reprompt == 1 && !locked ? RepromptGrace.GetGrace(item.Id) : null,
       item.Password is not null,
       item.Reprompt == 1 && _biometricEnabled(),
       locked ? null : item.PasswordHistory?.Count);
@@ -425,20 +425,20 @@ internal sealed partial class CompanionOps : IDisposable
     var item = Find(id);
     if (item.Reprompt == 1)
     {
-      var cooldown = RepromptPage.GetCooldownSecondsRemaining();
+      var cooldown = RepromptGrace.GetCooldownSecondsRemaining();
       if (cooldown > 0 || (!biometric && string.IsNullOrEmpty(password)))
         return new RepromptResponse(false, cooldown);
 
       if (!await (biometric ? _verifyBiometric() : _verifyPassword(password!)))
       {
-        RepromptPage.RecordFailure();
-        return new RepromptResponse(false, RepromptPage.GetCooldownSecondsRemaining());
+        RepromptGrace.RecordFailure();
+        return new RepromptResponse(false, RepromptGrace.GetCooldownSecondsRemaining());
       }
 
-      RepromptPage.RecordVerification(item.Id);
+      RepromptGrace.RecordVerification(item.Id);
     }
 
-    return new RepromptResponse(true, 0, op is null ? null : await DispatchAsync(op, payload, item.Id), RepromptPage.GetGrace(item.Id));
+    return new RepromptResponse(true, 0, op is null ? null : await DispatchAsync(op, payload, item.Id), RepromptGrace.GetGrace(item.Id));
   }
 
   private BitwardenItem Find(string? id)
@@ -455,7 +455,7 @@ internal sealed partial class CompanionOps : IDisposable
     var item = Find(id);
     if (revisionDate is { } revision && revision != item.RevisionDate)
       throw new IpcException(IpcErrors.Stale);
-    return item.Reprompt == 1 && !verified && !RepromptPage.IsWithinGracePeriod(item.Id) ? throw new IpcException(IpcErrors.Reprompt) : item;
+    return item.Reprompt == 1 && !verified && !RepromptGrace.IsWithinGracePeriod(item.Id) ? throw new IpcException(IpcErrors.Reprompt) : item;
   }
 
   internal static (ProtectedSecret? Secret, string? Text) Resolve(BitwardenItem item, string? field)

@@ -65,7 +65,7 @@ public class HotkeysPageTests(AvaloniaSession session)
             throw new IpcException(IpcErrors.Failed);
           var groups = new List<HotkeyGroupDto>
           {
-            new("all", "All items", "all.openWindow", "all.openWindow", [new("Open in window", "all.openWindow")], [Action("all.openWindow", "Open in window")]),
+            new("all", "All items", "all.openWindow", "all.openWindow", [new("Open in companion", "all.openWindow")], [Action("all.openWindow", "Open in companion")]),
             new("login", "Login", LoginInherited, LoginEnter, [new("Open in Browser", "login.openBrowser"), new("Copy Password", "login.copyPassword")],
               [Action("login.copyUsername", "Copy Username"), Action("login.copyPassword", "Copy Password"), Action("login.rotatePassword", "Rotate password")]),
           };

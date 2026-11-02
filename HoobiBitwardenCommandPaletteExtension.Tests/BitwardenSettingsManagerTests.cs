@@ -213,12 +213,12 @@ public class BitwardenSettingsManagerTests : IDisposable
         var m = CreateManager();
         m.RepromptGracePeriod.Value = "120";
         FireSettingsChanged(m);
-        Assert.Equal(120, RepromptPage.GracePeriodSeconds);
+        Assert.Equal(120, RepromptGrace.GracePeriodSeconds);
 
         m.RepromptGracePeriod.Value = "0";
         FireSettingsChanged(m);
-        Assert.Equal(0, RepromptPage.GracePeriodSeconds);
+        Assert.Equal(0, RepromptGrace.GracePeriodSeconds);
 
-        RepromptPage.GracePeriodSeconds = 60;
+        RepromptGrace.GracePeriodSeconds = 60;
     }
 }

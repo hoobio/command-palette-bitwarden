@@ -64,7 +64,7 @@
     {
       "label": "Stop Extension",
       "type": "shell",
-      "command": "Get-Process HoobiBitwardenCommandPaletteExtension, HoobiBitwardenCompanion -ErrorAction SilentlyContinue | Where-Object Path -like '${workspaceFolder}*' | Stop-Process -Force; exit 0",
+      "command": "& '${workspaceFolder}\\.vscode\\Stop-DevExtension.ps1' -Root '${workspaceFolder}'; exit 0",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",

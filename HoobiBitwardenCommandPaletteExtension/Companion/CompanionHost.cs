@@ -8,6 +8,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Services;
+using Microsoft.CommandPalette.Extensions;
+using Microsoft.CommandPalette.Extensions.Toolkit;
 
 namespace HoobiBitwardenCommandPaletteExtension.Companion;
 
@@ -200,6 +202,8 @@ internal sealed partial class CompanionHost : IDisposable
     catch (Exception ex)
     {
       DebugLogService.Log("Companion", $"{op} failed: {ex.GetType().Name}: {ex.Message}");
+      if (!IsRunning())
+        ExtensionHost.ShowStatus(new StatusMessage { Message = CompanionUnavailable.Message, State = MessageState.Error }, StatusContext.Page);
     }
   }
 
@@ -224,6 +228,8 @@ internal sealed partial class CompanionHost : IDisposable
         try
         {
           var startInfo = new ProcessStartInfo(_exePath) { UseShellExecute = false };
+          // The .NET diagnostics pipe (dotnet-dump, profiler attach) is not covered by the process DACL and can only be disabled by environment variable.
+          startInfo.Environment["DOTNET_EnableDiagnostics"] = "0";
           startInfo.ArgumentList.Add(toCompanion.GetClientHandleAsString());
           startInfo.ArgumentList.Add(fromCompanion.GetClientHandleAsString());
           _process = Process.Start(startInfo) ?? throw new InvalidOperationException("Companion process did not start");

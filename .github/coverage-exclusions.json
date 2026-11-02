@@ -32,10 +32,6 @@
     "reason": "Interface + thin RealCliProcess wrapper delegating to System.Diagnostics.Process, no testable logic"
   },
   {
-    "pattern": "EnterKeySubmitService\\.cs$",
-    "reason": "Win32 low-level keyboard hook + UI Automation COM interop against the live Command Palette host window, cannot be exercised in unit tests"
-  },
-  {
     "pattern": "UiaInterop\\.cs$",
     "reason": "UI Automation COM interface declarations and CoCreateInstance factory, needs a live UIA host"
   },

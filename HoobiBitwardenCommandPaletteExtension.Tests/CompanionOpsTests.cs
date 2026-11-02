@@ -278,7 +278,7 @@ public class CompanionOpsTests
     Assert.True(h.Ops.GetItem(id).RepromptRequired);
 
     Assert.True((await h.Ops.VerifyRepromptAsync(id, "correct")).Verified);
-    Assert.True(RepromptPage.IsWithinGracePeriod(id));
+    Assert.True(RepromptGrace.IsWithinGracePeriod(id));
     Assert.False(h.Ops.GetItem(id).RepromptRequired);
     Assert.Equal("hunter2", h.Ops.Reveal(id, ItemFields.Password));
     h.Ops.Copy(id, ItemFields.Username);
@@ -295,11 +295,11 @@ public class CompanionOpsTests
     Assert.Null(h.Ops.GetItem(id).Grace);
     var verified = await h.Ops.VerifyRepromptAsync(id, "correct");
 
-    Assert.Equal(RepromptPage.GracePeriodSeconds, verified.Grace!.Seconds);
-    Assert.InRange(verified.Grace.ExpiresUtc, before.AddSeconds(RepromptPage.GracePeriodSeconds - 2), DateTime.UtcNow.AddSeconds(RepromptPage.GracePeriodSeconds));
+    Assert.Equal(RepromptGrace.GracePeriodSeconds, verified.Grace!.Seconds);
+    Assert.InRange(verified.Grace.ExpiresUtc, before.AddSeconds(RepromptGrace.GracePeriodSeconds - 2), DateTime.UtcNow.AddSeconds(RepromptGrace.GracePeriodSeconds));
     Assert.Equal(verified.Grace.Seconds, h.Ops.GetItem(id).Grace!.Seconds);
 
-    RepromptPage.GracePeriodSeconds = 0;
+    RepromptGrace.GracePeriodSeconds = 0;
     try
     {
       Assert.Null((await h.Ops.VerifyRepromptAsync(id, "correct")).Grace);
@@ -307,15 +307,15 @@ public class CompanionOpsTests
     }
     finally
     {
-      RepromptPage.GracePeriodSeconds = 60;
-      RepromptPage.ClearGracePeriod();
+      RepromptGrace.GracePeriodSeconds = 60;
+      RepromptGrace.ClearGracePeriod();
     }
   }
 
   [Fact]
   public async Task VerifyReprompt_WithWindowsHello_IsCheckedByTheExtension_AndOnlyWhenTheSettingIsOn()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var id = NewId();
     var h = new Harness(Login(id, reprompt: 1));
     var request = new RepromptRequest(id, null, Ops.GetItem, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest), Biometric: true);
@@ -330,18 +330,18 @@ public class CompanionOpsTests
     var denied = IpcJson.Read(await h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken), IpcJson.Default.RepromptResponse);
     Assert.False(denied.Verified);
     Assert.Null(denied.Result);
-    Assert.False(RepromptPage.IsWithinGracePeriod(id));
+    Assert.False(RepromptGrace.IsWithinGracePeriod(id));
 
     h.BiometricVerifies = true;
     var verified = IpcJson.Read(await h.Ops.HandleAsync(Ops.VerifyReprompt, IpcJson.ToElement(request, IpcJson.Default.RepromptRequest), TestContext.Current.CancellationToken), IpcJson.Default.RepromptResponse);
     Assert.True(verified.Verified);
     Assert.NotEmpty(IpcJson.Read(verified.Result, IpcJson.Default.ItemDto).Fields);
-    Assert.True(RepromptPage.IsWithinGracePeriod(id));
+    Assert.True(RepromptGrace.IsWithinGracePeriod(id));
     Assert.NotNull(verified.Grace);
     Assert.Equal(2, h.BiometricPrompts);
     var plain = NewId();
     Assert.False(new Harness(Login(plain)) { BiometricEnabled = true }.Ops.GetItem(plain).BiometricAvailable);
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
   }
 
   [Fact]
@@ -350,7 +350,7 @@ public class CompanionOpsTests
     var id = NewId();
     var h = new Harness(Login(id)) { ExpectedPassword = "never" };
     Assert.True((await h.Ops.VerifyRepromptAsync(id, "anything")).Verified);
-    Assert.False(RepromptPage.IsWithinGracePeriod(id));
+    Assert.False(RepromptGrace.IsWithinGracePeriod(id));
   }
 
   [Fact]
@@ -359,7 +359,7 @@ public class CompanionOpsTests
     var id = NewId();
     var h = new Harness(Login(id, reprompt: 1));
     var revision = h.Service.GetCachedItem(id)!.RevisionDate;
-    RepromptPage.GracePeriodSeconds = 0;
+    RepromptGrace.GracePeriodSeconds = 0;
     try
     {
       var verified = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password, revision), IpcJson.Default.FieldRequest));
@@ -379,7 +379,7 @@ public class CompanionOpsTests
     }
     finally
     {
-      RepromptPage.GracePeriodSeconds = 60;
+      RepromptGrace.GracePeriodSeconds = 60;
     }
   }
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input.Platform;
@@ -541,6 +542,76 @@ public class ItemWindowTests(AvaloniaSession session)
     Assert.True(vm.RepromptRequired);
     Assert.False(password.IsRevealed);
     Assert.Equal(1, extension.Count(Ops.VerifyReprompt));
+  });
+
+  [Fact]
+  public Task FieldDragText_UsesTheShownValue_AndRevealsAMaskedSecretWithoutShowingIt() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    using var vm = new ItemViewModel(ItemId, channel);
+    await vm.LoadAsync();
+    var password = Field(vm, ItemFields.Password);
+
+    Assert.Equal("octocat", await Field(vm, ItemFields.Username).GetDragTextAsync());
+    Assert.Equal("000001", await Field(vm, ItemFields.Totp).GetDragTextAsync());
+    Assert.Equal(0, extension.Count(Ops.Reveal));
+
+    Assert.Equal("hunter2", await password.GetDragTextAsync());
+    Assert.Equal(1, extension.Count(Ops.Reveal));
+    Assert.Equal(FieldViewModel.Mask, password.DisplayValue);
+
+    await password.ToggleRevealCommand.ExecuteAsync(null);
+    Assert.Equal("hunter2", await password.GetDragTextAsync());
+    Assert.Equal(2, extension.Count(Ops.Reveal));
+  });
+
+  [Fact]
+  public Task FieldDragText_GraceZero_RevealsTheFieldAfterVerify() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    using var vm = new ItemViewModel(ItemId, channel);
+    await vm.LoadAsync();
+    extension.RepromptEveryOp = true;
+    var password = Field(vm, ItemFields.Password);
+
+    Assert.Null(await password.GetDragTextAsync());
+    Assert.True(vm.RepromptRequired);
+
+    Assert.True(await vm.VerifyRepromptAsync("correct"));
+    Assert.True(password.IsRevealed);
+    Assert.Equal("hunter2", await password.GetDragTextAsync());
+  });
+
+  [Fact]
+  public Task ItemWindow_DraggingAFieldLabel_PastTheThreshold_FetchesTheSecret() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(ItemId, channel);
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+    window.UpdateLayout();
+    var label = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Classes.Contains("FieldLabel") && t.Text == "Password");
+    var start = label.TranslatePoint(new Avalonia.Point(label.Bounds.Width / 2, label.Bounds.Height / 2), window)!.Value;
+
+    window.MouseDown(start, Avalonia.Input.MouseButton.Left);
+    window.MouseMove(start + new Avalonia.Point(2, 2), Avalonia.Input.RawInputModifiers.LeftMouseButton);
+    window.MouseUp(start, Avalonia.Input.MouseButton.Left);
+    window.MouseMove(start + new Avalonia.Point(12, 0));
+    Assert.Equal(0, extension.Count(Ops.Reveal));
+
+    window.MouseDown(start, Avalonia.Input.MouseButton.Left);
+    window.MouseMove(start + new Avalonia.Point(12, 0), Avalonia.Input.RawInputModifiers.LeftMouseButton);
+    AvaloniaSession.WaitFor(() => extension.Count(Ops.Reveal) == 1);
+    window.MouseUp(start, Avalonia.Input.MouseButton.Left);
+    Assert.Equal(FieldViewModel.Mask, Field(vm, ItemFields.Password).DisplayValue);
+    window.Close();
   });
 
   [Fact]

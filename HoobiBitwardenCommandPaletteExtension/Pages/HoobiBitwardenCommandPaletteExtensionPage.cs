@@ -31,11 +31,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
     private volatile bool _handlingAction;
     private string _currentSearchText = string.Empty;
     private string? _errorMessage;
-    private string? _pendingEmail;
-    private ProtectedSecret? _pendingPassword;
-    private int? _pendingTwoFactorMethod;
-    private bool _twoFactorRequired;
-    private bool _deviceVerificationRequired;
     private ForegroundContext? _context;
     private DateTime _lastContextCapture = DateTime.MinValue;
     private Timer? _totpTimer;
@@ -73,8 +68,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed += OnItemAccessed;
         HotkeyStore.Current.Changed += OnItemAccessed;
         FaviconService.IconCached += OnIconCached;
-        RepromptPage.GraceStarted += OnItemAccessed;
-        RepromptPage.BiometricRequested += OnRepromptBiometricRequested;
+        RepromptGrace.GraceStarted += OnItemAccessed;
         _iconRefreshTimer = new Timer(OnIconRefreshTick, null, Timeout.Infinite, Timeout.Infinite);
         _searchDebounceTimer = new Timer(OnSearchDebounceTick, null, Timeout.Infinite, Timeout.Infinite);
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
@@ -199,13 +193,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked)
         {
             DebugLogService.Log("Page", $"UpdateSearchText skipped: handlingAction={_handlingAction}, status={_service.LastStatus}, search length={newSearch.Length}");
-        }
-
-        if ((_twoFactorRequired || _deviceVerificationRequired) && !_handlingAction)
-        {
-            _currentItems = BuildUnauthenticatedItems();
-            RaiseItemsChanged();
-            return;
         }
 
         if (_handlingAction || _service.LastStatus != VaultStatus.Unlocked)
@@ -571,52 +558,12 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
 
     private IListItem[] BuildUnauthenticatedItems()
     {
-        if (_twoFactorRequired && _pendingEmail != null && _pendingPassword != null)
-        {
-            var (placeholder, typedNoun, emptyHint, validator) = DescribeTwoFactorMethod(_pendingTwoFactorMethod);
-            PlaceholderText = placeholder;
-            var code = _currentSearchText.Trim();
-            var canSubmit = validator(code);
-            ICommand command = canSubmit
-                ? new AnonymousCommand(() => OnTwoFactorSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
-                : new NoOpCommand();
-            var hint = new ListItem(command)
-            {
-                Title = canSubmit ? $"Submit {typedNoun}" : "Two-Factor Authentication Required",
-                Subtitle = _errorMessage ?? (canSubmit ? "Press Enter to submit" : emptyHint),
-                Icon = new IconInfo("\uE8D7"),
-            };
-            if (_errorMessage != null)
-                hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return WithCommonItems([hint, BuildBackToLoginItem()]);
-        }
-
-        if (_deviceVerificationRequired && _pendingEmail != null && _pendingPassword != null)
-        {
-            PlaceholderText = "Enter device verification code...";
-            var code = _currentSearchText.Trim();
-            var canSubmit = TwoFactorRules.IsNumericCode(code);
-            ICommand command = canSubmit
-                ? new AnonymousCommand(() => OnDeviceVerificationSubmitted(code)) { Name = "Submit", Result = CommandResult.KeepOpen() }
-                : new NoOpCommand();
-            var hint = new ListItem(command)
-            {
-                Title = canSubmit ? "Submit verification code" : "New Device Verification Required",
-                Subtitle = _errorMessage ?? (canSubmit
-                    ? "Press Enter to submit"
-                    : "Enter the OTP code sent to your login email"),
-                Icon = new IconInfo("\uE8D7"),
-            };
-            if (_errorMessage != null)
-                hint.Tags = [new Tag("Error") { Foreground = ColorHelpers.FromRgb(0xED, 0x82, 0x74) }];
-            return WithCommonItems([hint, BuildBackToLoginItem()]);
-        }
-
         PlaceholderText = "Search your vault... (try url:github)";
 
-        ICommand loginCommand = CompanionHost.Current is { } companion
-            ? new AnonymousCommand(_settings?.UseApiKeyAuthentication.Value == true ? (Action)companion.ShowApiKeyLogin : companion.ShowLogin) { Name = "Log in", Result = CommandResult.KeepOpen() }
-            : new Pages.LoginPage(_settings, OnLoginSubmitted, OnApiKeyLoginSubmitted);
+        if (CompanionHost.Current is not { } companion)
+            return WithCommonItems([CompanionUnavailable.Item("Login to Bitwarden")]);
+
+        var loginCommand = new AnonymousCommand(_settings?.UseApiKeyAuthentication.Value == true ? (Action)companion.ShowApiKeyLogin : companion.ShowLogin) { Name = "Log in", Result = CommandResult.KeepOpen() };
         var item = new ListItem(loginCommand)
         {
             Title = "Login to Bitwarden",
@@ -638,30 +585,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         BuildLogoutItem(),
     ]);
 
-    internal static (string Placeholder, string TypedNoun, string EmptyHint, Func<string, bool> Validator) DescribeTwoFactorMethod(int? method) =>
-        TwoFactorRules.Describe(method);
-
-    private ListItem BuildBackToLoginItem() => new(new AnonymousCommand(OnBackToLoginRequested)
-    {
-        Name = "Back",
-        Result = CommandResult.KeepOpen(),
-    })
-    {
-        Title = "Back to login",
-        Subtitle = "Pick a different 2FA method or re-enter your credentials",
-        Icon = new IconInfo(""),
-    };
-
-    private void OnBackToLoginRequested()
-    {
-        DebugLogService.Log("Action", "User returned to login screen from 2FA prompt");
-        ClearSearchText();
-        ResetPendingLogin();
-        _errorMessage = null;
-        _currentItems = BuildUnauthenticatedItems();
-        RaiseItemsChanged();
-    }
-
     private ListItem BuildUnlockItem()
     {
         var biometricEnabled = _settings?.UseDesktopIntegration.Value == true && _settings?.AutoBiometricUnlock.Value == true;
@@ -669,7 +592,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
             ? new AnonymousCommand(OnBiometricUnlockRequested) { Name = "Unlock with Windows Hello", Result = CommandResult.KeepOpen() }
             : CompanionHost.Current is { } companion
                 ? new AnonymousCommand(() => companion.ShowUnlock(_settings?.RememberSession.Value == true, _settings?.UseDesktopIntegration.Value == true)) { Name = "Unlock", Result = CommandResult.KeepOpen() }
-                : new Pages.UnlockVaultPage(_settings, OnUnlockSubmitted, OnBiometricUnlockRequested);
+                : CompanionUnavailable.Command();
 
         var item = new ListItem(command)
         {
@@ -916,8 +839,7 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         AccessTracker.ItemAccessed -= OnItemAccessed;
         HotkeyStore.Current.Changed -= OnItemAccessed;
         FaviconService.IconCached -= OnIconCached;
-        RepromptPage.GraceStarted -= OnItemAccessed;
-        RepromptPage.BiometricRequested -= OnRepromptBiometricRequested;
+        RepromptGrace.GraceStarted -= OnItemAccessed;
     }
 
     private void OnIconCached()
@@ -971,7 +893,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         _handlingAction = false;
         _initialLoadStarted = true;
         _initComplete = false;
-        ResetPendingLogin();
         _errorMessage = null;
         IsLoading = true;
         ShowLoadingStatus("Checking vault status...", "bw status");
@@ -991,67 +912,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         {
             RebuildVaultList();
         }
-    }
-
-    // Handled here, not in RepromptForm, so the WinHello prompt can come to the foreground once the items list is showing
-    private void OnRepromptBiometricRequested(BiometricVerificationRequest request)
-    {
-        DebugLogService.Log("Reprompt", $"Biometric verification requested for item {request.ItemId}");
-
-        _ = Task.Run(async () =>
-        {
-            var connectingStatus = new StatusMessage { Message = "Connecting to Bitwarden Desktop...", State = MessageState.Info };
-            ExtensionHost.ShowStatus(connectingStatus, StatusContext.Page);
-
-            (bool success, string? error) result;
-            try
-            {
-                result = await request.Service.VerifyWithBiometricsAsync(
-                    onStatus: msg => connectingStatus.Message = msg);
-            }
-            catch (Exception ex)
-            {
-                DebugLogService.Log("Reprompt", $"Biometric verify exception: {ex.GetType().Name}: {ex.Message}");
-                result = (false, ex.Message);
-            }
-            finally
-            {
-                try { ExtensionHost.HideStatus(connectingStatus); } catch { }
-            }
-
-            if (!result.success)
-            {
-                RepromptPage.RecordFailure();
-                var cooldown = RepromptPage.GetCooldownSecondsRemaining();
-                var msg = cooldown > 0
-                    ? $"Too many failed attempts. Try again in {cooldown}s."
-                    : result.error ?? "Biometric verification failed";
-                var failStatus = new StatusMessage { Message = msg, State = MessageState.Error };
-                ExtensionHost.ShowStatus(failStatus, StatusContext.Page);
-                _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(failStatus); } catch { } }, TaskScheduler.Default);
-                return;
-            }
-
-            RepromptPage.RecordVerification(request.ItemId);
-            try { request.InnerAction(); }
-            catch (Exception ex)
-            {
-                DebugLogService.Log("Reprompt", $"Inner action exception: {ex.GetType().Name}: {ex.Message}");
-                var errStatus = new StatusMessage { Message = "Action failed after verification.", State = MessageState.Error };
-                ExtensionHost.ShowStatus(errStatus, StatusContext.Page);
-                _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(errStatus); } catch { } }, TaskScheduler.Default);
-                return;
-            }
-
-            var successStatus = new StatusMessage { Message = $"Copied {request.ActionLabel} to clipboard", State = MessageState.Success };
-            ExtensionHost.ShowStatus(successStatus, StatusContext.Page);
-            _ = Task.Delay(3000).ContinueWith(_ => { try { ExtensionHost.HideStatus(successStatus); } catch { } }, TaskScheduler.Default);
-
-            if (_service.LastStatus == VaultStatus.Unlocked && _service.IsCacheLoaded)
-            {
-                RebuildVaultList();
-            }
-        });
     }
 
     private void OnLockRequested()
@@ -1237,64 +1097,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
         });
     }
 
-    private void OnUnlockSubmitted(string password)
-    {
-        DebugLogService.Log("Action", "Unlock submitted by user");
-        _handlingAction = true;
-        ClearSearchText();
-        _errorMessage = null;
-        _currentItems = [];
-        IsLoading = true;
-        RaiseItemsChanged();
-
-        RunAction(async () =>
-        {
-            try
-            {
-                ShowLoadingStatus("Unlocking vault...", "bw unlock");
-                var (success, error) = await _service.UnlockAsync(password);
-                if (!success)
-                {
-                    if (_service.LastStatus == VaultStatus.Unauthenticated)
-                    {
-                        _errorMessage = "You are not logged in";
-                        _currentItems = BuildUnauthenticatedItems();
-                    }
-                    else
-                    {
-                        _errorMessage = error?.Contains("key", StringComparison.OrdinalIgnoreCase) == true
-                            ? "Invalid password entered"
-                            : error ?? "Unlock failed";
-                        _currentItems = BuildLockedItems();
-                    }
-
-                    RaiseItemsChanged();
-                    return;
-                }
-
-                ShowLoadingStatus("Retrieving items from vault...", "bw list items");
-                await _service.RefreshCacheAsync();
-                RebuildVaultList();
-            }
-            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
-            {
-                RecoverFromFailedRefresh(ex);
-            }
-        });
-    }
-
-    private void ReplacePendingPassword(string? password) =>
-        Interlocked.Exchange(ref _pendingPassword, ProtectedSecret.From(password))?.Dispose();
-
-    private void ResetPendingLogin()
-    {
-        _twoFactorRequired = false;
-        _deviceVerificationRequired = false;
-        _pendingEmail = null;
-        ReplacePendingPassword(null);
-        _pendingTwoFactorMethod = null;
-    }
-
     private void RebuildVaultList(bool keepPage = false)
     {
         if (TryPublishVaultList(out _, keepPage))
@@ -1377,167 +1179,6 @@ internal sealed partial class HoobiBitwardenCommandPaletteExtensionPage : Dynami
                 items.AddRange(tail);
             Shown = items.ToArray();
         }
-    }
-
-    private void OnLoginSubmitted(string email, string password, int? twoFactorMethod)
-    {
-        DebugLogService.Log("Action", $"Login submitted by user (2FA method: {(twoFactorMethod?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "auto")})");
-        _handlingAction = true;
-        ClearSearchText();
-        _errorMessage = null;
-        ResetPendingLogin();
-        _currentItems = [];
-        IsLoading = true;
-        RaiseItemsChanged();
-
-        RunAction(async () =>
-        {
-            try
-            {
-                ShowLoadingStatus("Logging in...", "bw login");
-                // The method is passed on the first attempt so Email (1) triggers the CLI's send-email-login call
-                var (success, error, twoFactorRequired, deviceVerificationRequired) = await _service.LoginAsync(email, password, null, twoFactorMethod);
-                if (!success)
-                {
-                    if (twoFactorRequired)
-                    {
-                        _twoFactorRequired = true;
-                        _pendingEmail = email;
-                        ReplacePendingPassword(password);
-                        _pendingTwoFactorMethod = twoFactorMethod;
-                        _errorMessage = null;
-                    }
-                    else if (deviceVerificationRequired)
-                    {
-                        _deviceVerificationRequired = true;
-                        _pendingEmail = email;
-                        ReplacePendingPassword(password);
-                        _errorMessage = null;
-                    }
-                    else
-                    {
-                        _errorMessage = error ?? "Login failed";
-                    }
-
-                    _currentItems = BuildUnauthenticatedItems();
-                    RaiseItemsChanged();
-                    return;
-                }
-
-                ShowLoadingStatus("Syncing vault...", "bw sync");
-                await _service.SyncVaultAsync();
-                RebuildVaultList();
-            }
-            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
-            {
-                RecoverFromFailedRefresh(ex);
-            }
-        });
-    }
-
-    private void OnApiKeyLoginSubmitted(string clientId, string clientSecret)
-    {
-        DebugLogService.Log("Action", "API key login submitted by user");
-        _handlingAction = true;
-        ClearSearchText();
-        _errorMessage = null;
-        ResetPendingLogin();
-        _currentItems = [];
-        IsLoading = true;
-        RaiseItemsChanged();
-
-        RunAction(async () =>
-        {
-            ShowLoadingStatus("Logging in...", "bw login --apikey");
-            var (success, error) = await _service.LoginWithApiKeyAsync(clientId, clientSecret);
-            if (!success)
-                _errorMessage = error ?? "Login failed";
-            _currentItems = success ? BuildLockedItems() : BuildUnauthenticatedItems();
-            RaiseItemsChanged();
-        });
-    }
-
-    private void OnTwoFactorSubmitted(string twoFactorCode)
-    {
-        DebugLogService.Log("Action", "2FA code submitted by user");
-        _handlingAction = true;
-        ClearSearchText();
-        var email = _pendingEmail;
-        var password = _pendingPassword?.Reveal();
-        _errorMessage = null;
-        _currentItems = [];
-        IsLoading = true;
-        RaiseItemsChanged();
-
-        RunAction(async () =>
-        {
-            try
-            {
-                ShowLoadingStatus("Verifying 2FA code...", "bw login");
-                var (success, error, _, _) = await _service.LoginAsync(email!, password!, twoFactorCode, _pendingTwoFactorMethod);
-                if (!success)
-                {
-                    _errorMessage = error?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true
-                        ? "Invalid 2FA code - try again"
-                        : error ?? "Verification failed";
-                    _currentItems = BuildUnauthenticatedItems();
-                    RaiseItemsChanged();
-                    return;
-                }
-
-                _twoFactorRequired = false;
-                _pendingEmail = null;
-                ReplacePendingPassword(null);
-                _pendingTwoFactorMethod = null;
-                PlaceholderText = "Search your vault... (try url:github)";
-                ShowLoadingStatus("Syncing vault...", "bw sync");
-                await _service.SyncVaultAsync();
-                RebuildVaultList();
-            }
-            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
-            {
-                RecoverFromFailedRefresh(ex);
-            }
-        });
-    }
-
-    private void OnDeviceVerificationSubmitted(string otpCode)
-    {
-        DebugLogService.Log("Action", "Device verification OTP submitted by user");
-        _handlingAction = true;
-        ClearSearchText();
-        _errorMessage = null;
-        _currentItems = [];
-        IsLoading = true;
-        RaiseItemsChanged();
-
-        RunAction(async () =>
-        {
-            try
-            {
-                ShowLoadingStatus("Verifying device...", "bw login");
-                var (success, error) = await _service.SubmitDeviceVerificationAsync(otpCode);
-                if (!success)
-                {
-                    _errorMessage = error ?? "Verification failed - try again";
-                    _currentItems = BuildUnauthenticatedItems();
-                    RaiseItemsChanged();
-                    return;
-                }
-
-                _deviceVerificationRequired = false;
-                _pendingEmail = null;
-                ReplacePendingPassword(null);
-                PlaceholderText = "Search your vault... (try url:github)";
-                ShowLoadingStatus("Syncing vault...", "bw sync");
-                await _service.SyncVaultAsync();
-                RebuildVaultList();
-            }
-            catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
-            {
-                RecoverFromFailedRefresh(ex);
-            }
-        });
     }
 
     private void RecoverFromFailedRefresh(Exception ex)
