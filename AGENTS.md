@@ -28,7 +28,7 @@ Start-Process 'shell:AppsFolder\Microsoft.PowerToysWin32'
 **Redeploy without a PowerToys restart.** When the Dev package is already registered from this checkout's `bin`, VS Code task **Build & Reload (Debug x64)** stops the Dev extension and companion, builds, and reloads Command Palette:
 
 ```powershell
-Get-CimInstance Win32_Process -Filter "Name='HoobiBitwardenCommandPaletteExtension.exe' OR Name='HoobiBitwardenCompanion.exe'" | Where-Object ExecutablePath -like "$PWD*" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+.\.vscode\Stop-DevExtension.ps1
 dotnet build .\HoobiBitwardenCommandPaletteExtension\HoobiBitwardenCommandPaletteExtension.csproj -c Debug /p:Platform=x64
 Start-Process 'x-cmdpal://reload'
 ```

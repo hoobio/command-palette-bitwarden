@@ -64,7 +64,7 @@
     {
       "label": "Stop Extension",
       "type": "shell",
-      "command": "Get-CimInstance Win32_Process -Filter \"Name='HoobiBitwardenCommandPaletteExtension.exe' OR Name='HoobiBitwardenCompanion.exe'\" | Where-Object ExecutablePath -like '${workspaceFolder}*' | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; exit 0",
+      "command": "& '${workspaceFolder}\\.vscode\\Stop-DevExtension.ps1' -Root '${workspaceFolder}'; exit 0",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
