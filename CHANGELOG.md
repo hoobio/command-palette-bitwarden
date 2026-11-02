@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.15.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.14.0...v1.15.0) (2026-11-02)
+
+
+### Features
+
+* drag item window fields into other apps ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+* hide the Enter action from the more-commands menu when it has no shortcut ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+* leave Open in Browser and Open SSH Session without a default shortcut ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+* rename Open in window to Open in companion ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+* **security:** harden the extension and companion processes against same-user memory access ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+* **security:** log in, unlock and re-prompt only in the companion window ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+
+
+### Bug Fixes
+
+* **security:** disable the companion's .NET diagnostics pipe and report a failed companion start ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+* **security:** parse vault secrets from bw output without creating .NET strings ([d674d3e](https://github.com/hoobio/command-palette-bitwarden/commit/d674d3e6de0be8e6a451d67e2b077a5b3837ad67))
+
 ## [1.14.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.13.1...v1.14.0) (2026-11-01)
 
 
