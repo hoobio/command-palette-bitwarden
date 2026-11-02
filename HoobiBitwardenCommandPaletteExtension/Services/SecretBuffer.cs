@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
-internal sealed class SecretBuffer : IDisposable
+internal sealed partial class SecretBuffer : IDisposable
 {
   private readonly byte[] _buffer;
   private readonly int _start;

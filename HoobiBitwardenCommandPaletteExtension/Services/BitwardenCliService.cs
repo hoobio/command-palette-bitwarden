@@ -2102,7 +2102,7 @@ internal sealed partial class BitwardenCliService
       FolderId = Text(node, "folderId"),
       OrganizationId = Text(node, "organizationId"),
       Reprompt = Prop(node, "reprompt")?.GetInt32() ?? 0,
-      CollectionIds = [.. Elements(Prop(node, "collectionIds")).Where(c => c.ValueKind == JsonValueKind.String).Select(c => c.GetString()!)],
+      CollectionIds = (string[])[.. Elements(Prop(node, "collectionIds")).Where(c => c.ValueKind == JsonValueKind.String).Select(c => c.GetString()!)],
       DeletedDate = DateTime.TryParse(Text(node, "deletedDate"), out var dd) ? dd.ToUniversalTime() : null,
       ArchivedDate = DateTime.TryParse(Text(node, "archivedDate"), out var ad) ? ad.ToUniversalTime() : null,
       Attachments = ParseAttachments(Prop(node, "attachments") is { ValueKind: JsonValueKind.Array } attachments ? JsonArray.Create(attachments) : null),

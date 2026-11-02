@@ -32,7 +32,7 @@ internal static partial class VaultItemHelper
   internal static ICommand GetDefaultCommand(BitwardenItem item, BitwardenCliService? service = null) =>
     ResolveEnterCommand(item, service);
 
-  private static ICommand BuildRepromptCommand(string itemId, Action action) =>
+  private static AnonymousCommand BuildRepromptCommand(string itemId, Action action) =>
     CompanionHost.Current is { } companion
       ? new AnonymousCommand(() => companion.ShowReprompt(itemId, action)) { Name = "Verify password", Result = CommandResult.KeepOpen() }
       : CompanionUnavailable.Command();
