@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -876,7 +878,7 @@ internal sealed partial class BitwardenCliService
     SetStatus(VaultStatus.Unauthenticated);
     InvalidateCache();
     SessionStore.Clear();
-    Pages.RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     StatusChanged?.Invoke();
   }
 
@@ -1176,7 +1178,7 @@ internal sealed partial class BitwardenCliService
     InvalidateCache();
     FaviconService.ClearMemCache();
     SessionStore.Clear();
-    Pages.RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     StatusChanged?.Invoke();
 
     try { await RunCliAsync("lock", CliTimeoutMs, "Your vault is locked."); }
@@ -1517,16 +1519,17 @@ internal sealed partial class BitwardenCliService
     var failed = false;
     var writeVersion = WriteVersion;
     var dataStamp = ReadDataFileStamp();
+    Task<SecretBuffer>? itemsTask = null;
     try
     {
       var foldersTask = RunCliAsync("list folders");
-      var itemsTask = RunCliAsync("list items");
+      itemsTask = RunCliBufferAsync("list items");
       var organizationsTask = RunCliAsync("list organizations");
       var collectionsTask = RunCliAsync("list collections");
       await Task.WhenAll(foldersTask, itemsTask, organizationsTask, collectionsTask);
 
       var folders = ParseFolders(await foldersTask);
-      var items = ParseItems(await itemsTask);
+      var items = ParseItems((await itemsTask).Json);
       var organizations = ParseOrganizations(await organizationsTask);
       var collections = ParseIdNameMap(await collectionsTask, "ParseCollections");
       lock (_cacheLock)
@@ -1571,6 +1574,8 @@ internal sealed partial class BitwardenCliService
     }
     finally
     {
+      if (itemsTask is { IsCompletedSuccessfully: true })
+        (await itemsTask).Dispose();
       Interlocked.Exchange(ref _refreshing, 0);
       if (Interlocked.Exchange(ref _refreshPending, 0) == 1 && IsUnlocked)
         await RefreshCacheAsync();
@@ -1707,7 +1712,7 @@ internal sealed partial class BitwardenCliService
   internal static bool Matches(BitwardenItem item, string query)
   {
     if (item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) return true;
-    var secretsHidden = item.Reprompt == 1 && !Pages.RepromptPage.IsWithinGracePeriod(item.Id);
+    var secretsHidden = item.Reprompt == 1 && !RepromptGrace.IsWithinGracePeriod(item.Id);
     if (!secretsHidden && item.Notes?.UseOrDefault(notes => notes.Contains(query, StringComparison.OrdinalIgnoreCase)) == true) return true;
 
     return item.Type switch
@@ -1794,7 +1799,16 @@ internal sealed partial class BitwardenCliService
 
   private const int CliTimeoutMs = 30_000;
 
+  internal const int CliReadBufferBytes = 16 * 1024;
+  private const int CliReadChunkBytes = 4096;
+
   private async Task<string> RunCliAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null, string? stdin = null, bool verbOnlyLog = false)
+  {
+    using var output = await RunCliBufferAsync(args, timeoutMs, earlyExitText, stdin, verbOnlyLog);
+    return output.Text ?? System.Text.Encoding.UTF8.GetString(output.Json.Span);
+  }
+
+  private async Task<SecretBuffer> RunCliBufferAsync(string args, int timeoutMs = CliTimeoutMs, string? earlyExitText = null, string? stdin = null, bool verbOnlyLog = false)
   {
     if (!IsDataWrite(args))
       return await RunCliUnsyncedAsync(args, timeoutMs, earlyExitText, null, stdin, verbOnlyLog);
@@ -1810,12 +1824,14 @@ internal sealed partial class BitwardenCliService
     catch (Exception ex) when (ex is not TimeoutException || !IsItemWrite(args)) { ReleaseOnce(); throw; }
   }
 
-  private async Task<string> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd, string? stdin = null, bool verbOnlyLog = false)
+  private async Task<SecretBuffer> RunCliUnsyncedAsync(string args, int timeoutMs, string? earlyExitText, Action? onProcessEnd, string? stdin = null, bool verbOnlyLog = false)
   {
     var logged = verbOnlyLog ? args.Split(' ')[0] : args;
     DebugLogService.Log("CLI", $"RunCliAsync: bw {logged}");
     var sw = System.Diagnostics.Stopwatch.StartNew();
     using var lease = NewCliLease(args, timeoutMs, onProcessEnd, stdin != null, logged);
+    var buffer = GC.AllocateUninitializedArray<byte>(CliReadBufferBytes, pinned: true);
+    var owned = true;
     try
     {
       if (stdin != null)
@@ -1824,25 +1840,29 @@ internal sealed partial class BitwardenCliService
         lease.Process.StandardInput.Close();
       }
 
-      var reader = lease.Process.StandardOutput;
-      var buffer = new char[4096];
-      var accum = new System.Text.StringBuilder();
+      var stdout = lease.Process.StandardOutput.BaseStream;
       // Node pkg does not flush stdout, so ReadLineAsync blocks until bw exits (~3s); chunked ReadAsync with brace tracking instead.
+      int length = 0;
       int depth = 0;
       int jsonStartIdx = -1;
       bool inJsonString = false;
       bool jsonEscape = false;
 
-      int n;
-      while ((n = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), lease.Token)) > 0)
+      while (true)
       {
-        for (int i = 0; i < n; i++)
+        if (buffer.Length - length < CliReadChunkBytes)
+          buffer = GrowZeroingOld(buffer, length);
+        var n = await stdout.ReadAsync(buffer.AsMemory(length, CliReadChunkBytes), lease.Token);
+        if (n <= 0) break;
+
+        var end = length + n;
+        for (int i = length; i < end; i++)
         {
-          char c = buffer[i];
+          byte c = buffer[i];
           if (c == '\n' || c == '\r')
             continue;
 
-          accum.Append(c);
+          buffer[length++] = c;
 
           if (jsonStartIdx >= 0)
           {
@@ -1857,28 +1877,28 @@ internal sealed partial class BitwardenCliService
               depth--;
               if (depth == 0)
               {
-                var json = accum.ToString()[jsonStartIdx..].Trim();
                 DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} JSON early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
                 lease.Detach();
-                return json;
+                owned = false;
+                return new SecretBuffer(buffer, jsonStartIdx, length - jsonStartIdx);
               }
             }
           }
           else if (c == '{' || c == '[')
           {
-            jsonStartIdx = accum.Length - 1;
+            jsonStartIdx = length - 1;
             depth = 1;
           }
         }
 
         if (earlyExitText != null)
         {
-          var text = accum.ToString();
+          var text = System.Text.Encoding.UTF8.GetString(buffer, 0, length);
           if (text.Contains(earlyExitText, StringComparison.OrdinalIgnoreCase))
           {
             DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} text early-exit ({sw.ElapsedMilliseconds}ms), detaching for graceful drain");
             lease.Detach();
-            return text.Trim();
+            return new SecretBuffer(text.Trim());
           }
         }
       }
@@ -1886,11 +1906,15 @@ internal sealed partial class BitwardenCliService
       if (jsonStartIdx >= 0)
       {
         DebugLogService.Log("CLI", $"RunCliAsync: bw {logged} JSON EOF-exit ({sw.ElapsedMilliseconds}ms)");
-        return accum.ToString()[jsonStartIdx..].Trim();
+        var jsonEnd = length;
+        while (jsonEnd > jsonStartIdx && buffer[jsonEnd - 1] is 0x20 or 0x09 or 0x0B or 0x0C)
+          jsonEnd--;
+        owned = false;
+        return new SecretBuffer(buffer, jsonStartIdx, jsonEnd - jsonStartIdx);
       }
 
       var stderr = (await lease.StderrTask).Trim();
-      var fallbackStr = accum.ToString().Trim();
+      var fallbackStr = System.Text.Encoding.UTF8.GetString(buffer, 0, length).Trim();
       var errorText = !string.IsNullOrEmpty(stderr) ? stderr : fallbackStr;
       if (IsSessionInvalidError(errorText))
       {
@@ -1901,7 +1925,7 @@ internal sealed partial class BitwardenCliService
 
       var syncError = args == "sync" && stderr.Length > 0 ? $", stderr: {stderr[..Math.Min(stderr.Length, 300)]}" : "";
       DebugLogService.Log("CLI", $"RunCliAsync completed: bw {logged} (fallback, {fallbackStr.Length} chars, {sw.ElapsedMilliseconds}ms{syncError})");
-      return verbOnlyLog ? errorText : fallbackStr;
+      return new SecretBuffer(verbOnlyLog ? errorText : fallbackStr);
     }
     catch (OperationCanceledException ex)
     {
@@ -1913,6 +1937,19 @@ internal sealed partial class BitwardenCliService
         try { lease.Process.Kill(); } catch { }
       throw new TimeoutException($"Bitwarden CLI timed out after {timeoutMs / 1000}s running: bw {args.Split(' ')[0]}", ex);
     }
+    finally
+    {
+      if (owned)
+        CryptographicOperations.ZeroMemory(buffer);
+    }
+  }
+
+  private static byte[] GrowZeroingOld(byte[] buffer, int length)
+  {
+    var grown = GC.AllocateUninitializedArray<byte>(buffer.Length * 2, pinned: true);
+    buffer.AsSpan(0, length).CopyTo(grown);
+    CryptographicOperations.ZeroMemory(buffer);
+    return grown;
   }
 
   private CliProcessLease NewCliLease(string args, int timeoutMs, Action? onProcessEnd, bool keepInput = false, string? logged = null) =>
@@ -2008,20 +2045,20 @@ internal sealed partial class BitwardenCliService
     StatusChanged?.Invoke();
   }
 
-  internal static List<BitwardenItem> ParseItems(string json)
+  internal static List<BitwardenItem> ParseItems(ReadOnlyMemory<byte> json)
   {
     var items = new List<BitwardenItem>();
 
     try
     {
-      var array = JsonNode.Parse(json)?.AsArray();
-      if (array == null)
+      using var document = JsonDocument.Parse(json);
+      if (document.RootElement.ValueKind != JsonValueKind.Array)
       {
-        DebugLogService.Log("Cache", $"ParseItems: unexpected output (not a JSON array), {json.Trim().Length} chars");
+        DebugLogService.Log("Cache", $"ParseItems: unexpected output (not a JSON array), {json.Length} bytes");
         return items;
       }
 
-      foreach (var node in array)
+      foreach (var node in document.RootElement.EnumerateArray())
       {
         var item = TryParseItemNode(node);
         if (item != null)
@@ -2036,19 +2073,17 @@ internal sealed partial class BitwardenCliService
     return items;
   }
 
-  private static BitwardenItem? TryParseItemNode(JsonNode? node)
+  private static BitwardenItem? TryParseItemNode(JsonElement node)
   {
-    if (node == null) return null;
-
-    var typeInt = node["type"]?.GetValue<int>() ?? 0;
+    var typeInt = Prop(node, "type")?.GetInt32() ?? 0;
     if (typeInt < 1 || typeInt > 5) return null;
 
     var type = (BitwardenItemType)typeInt;
-    var login = type == BitwardenItemType.Login ? node["login"] : null;
-    var card = type == BitwardenItemType.Card ? node["card"] : null;
-    var identity = type == BitwardenItemType.Identity ? node["identity"] : null;
-    var ssh = type == BitwardenItemType.SshKey ? node["sshKey"] : null;
-    var totp = ProtectedSecret.From(login?["totp"]?.GetValue<string>());
+    var login = type == BitwardenItemType.Login ? Prop(node, "login") : null;
+    var card = type == BitwardenItemType.Card ? Prop(node, "card") : null;
+    var identity = type == BitwardenItemType.Identity ? Prop(node, "identity") : null;
+    var ssh = type == BitwardenItemType.SshKey ? Prop(node, "sshKey") : null;
+    var totp = Secret(login, "totp");
     var address = JoinNonEmpty("\n",
       JoinNonEmpty(", ", Text(identity, "address1"), Text(identity, "address2"), Text(identity, "address3")),
       JoinNonEmpty(", ", Text(identity, "city"), Text(identity, "state"), Text(identity, "postalCode")),
@@ -2056,36 +2091,36 @@ internal sealed partial class BitwardenCliService
 
     return new BitwardenItem
     {
-      Id = node["id"]?.GetValue<string>() ?? string.Empty,
-      Name = node["name"]?.GetValue<string>() ?? string.Empty,
+      Id = Text(node, "id") ?? string.Empty,
+      Name = Text(node, "name") ?? string.Empty,
       Type = type,
-      Notes = ProtectedSecret.From(node["notes"]?.GetValue<string>()),
-      RevisionDate = DateTime.TryParse(node["revisionDate"]?.GetValue<string>(), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue,
-      CreationDate = DateTime.TryParse(node["creationDate"]?.GetValue<string>(), out var cd) ? cd.ToUniversalTime() : null,
-      CustomFields = ParseCustomFields(node["fields"]),
-      Favorite = node["favorite"]?.GetValue<bool>() ?? false,
-      FolderId = node["folderId"]?.GetValue<string>(),
-      OrganizationId = node["organizationId"]?.GetValue<string>(),
-      Reprompt = node["reprompt"]?.GetValue<int>() ?? 0,
-      CollectionIds = node["collectionIds"] is JsonArray collections ? collections.Select(c => c?.GetValue<string>()).OfType<string>().ToArray() : [],
-      DeletedDate = DateTime.TryParse(node["deletedDate"]?.GetValue<string>(), out var dd) ? dd.ToUniversalTime() : null,
-      ArchivedDate = DateTime.TryParse(node["archivedDate"]?.GetValue<string>(), out var ad) ? ad.ToUniversalTime() : null,
-      Attachments = ParseAttachments(node["attachments"]),
-      EditableFromCache = IsEditableFromCache(type, node["fields"], login),
+      Notes = Secret(node, "notes"),
+      RevisionDate = DateTime.TryParse(Text(node, "revisionDate"), out var rd) ? rd.ToUniversalTime() : DateTime.MinValue,
+      CreationDate = DateTime.TryParse(Text(node, "creationDate"), out var cd) ? cd.ToUniversalTime() : null,
+      CustomFields = ParseCustomFields(Prop(node, "fields")),
+      Favorite = Prop(node, "favorite")?.GetBoolean() ?? false,
+      FolderId = Text(node, "folderId"),
+      OrganizationId = Text(node, "organizationId"),
+      Reprompt = Prop(node, "reprompt")?.GetInt32() ?? 0,
+      CollectionIds = [.. Elements(Prop(node, "collectionIds")).Where(c => c.ValueKind == JsonValueKind.String).Select(c => c.GetString()!)],
+      DeletedDate = DateTime.TryParse(Text(node, "deletedDate"), out var dd) ? dd.ToUniversalTime() : null,
+      ArchivedDate = DateTime.TryParse(Text(node, "archivedDate"), out var ad) ? ad.ToUniversalTime() : null,
+      Attachments = ParseAttachments(Prop(node, "attachments") is { ValueKind: JsonValueKind.Array } attachments ? JsonArray.Create(attachments) : null),
+      EditableFromCache = IsEditableFromCache(type, Prop(node, "fields"), login),
       Username = Text(login, "username"),
-      Password = ProtectedSecret.From(Text(login, "password")),
+      Password = Secret(login, "password"),
       HasTotp = totp != null,
       TotpSecret = totp,
-      HasPasskey = login?["fido2Credentials"] is JsonArray fido && fido.Count > 0,
+      HasPasskey = Prop(login, "fido2Credentials") is { ValueKind: JsonValueKind.Array } fido && fido.GetArrayLength() > 0,
       Uris = ParseUris(login),
       PasswordRevisionDate = DateTime.TryParse(Text(login, "passwordRevisionDate"), out var prd) ? prd.ToUniversalTime() : null,
-      PasswordHistory = node is JsonObject obj && obj.ContainsKey("passwordHistory") ? ParsePasswordHistory(obj["passwordHistory"]) : null,
+      PasswordHistory = node.TryGetProperty("passwordHistory", out var history) ? ParsePasswordHistory(history) : null,
       CardholderName = Text(card, "cardholderName"),
       CardBrand = Text(card, "brand"),
-      CardNumber = ProtectedSecret.From(Text(card, "number")),
+      CardNumber = Secret(card, "number"),
       CardExpMonth = Text(card, "expMonth"),
       CardExpYear = Text(card, "expYear"),
-      CardCode = ProtectedSecret.From(Text(card, "code")),
+      CardCode = Secret(card, "code"),
       IdentityFullName = JoinNonEmpty(" ", Text(identity, "firstName"), Text(identity, "middleName"), Text(identity, "lastName")),
       IdentityEmail = Text(identity, "email"),
       IdentityPhone = Text(identity, "phone"),
@@ -2094,15 +2129,26 @@ internal sealed partial class BitwardenCliService
       IdentityAddress = address,
       SshPublicKey = Text(ssh, "publicKey"),
       SshFingerprint = Text(ssh, "keyFingerprint"),
-      SshPrivateKey = ProtectedSecret.From(Text(ssh, "privateKey")),
+      SshPrivateKey = Secret(ssh, "privateKey"),
     };
   }
 
-  private static string? Text(JsonNode? node, string key) => node?[key]?.GetValue<string>();
+  private static JsonElement? Prop(JsonElement? element, string key) =>
+    element is { ValueKind: JsonValueKind.Object } obj && obj.TryGetProperty(key, out var value) && value.ValueKind != JsonValueKind.Null ? value : null;
 
-  internal static List<PasswordHistoryEntry> ParsePasswordHistory(JsonNode? history) =>
-    [.. (history as JsonArray ?? [])
-      .Select(h => (Password: ProtectedSecret.From(Text(h, "password")), Used: Text(h, "lastUsedDate")))
+  private static IEnumerable<JsonElement> Elements(JsonElement? array) =>
+    array is { ValueKind: JsonValueKind.Array } items ? items.EnumerateArray() : Enumerable.Empty<JsonElement>();
+
+  private static string? Text(JsonElement? element, string key) => Prop(element, key)?.GetString();
+
+  private static ProtectedSecret? Secret(JsonElement? element, string key) => Prop(element, key) is { } value ? ProtectedSecret.FromJson(value) : null;
+
+  private static bool HasText(JsonElement? value) =>
+    value is { ValueKind: JsonValueKind.String } text && System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(text).Length > 2;
+
+  internal static List<PasswordHistoryEntry> ParsePasswordHistory(JsonElement? history) =>
+    [.. Elements(history)
+      .Select(h => (Password: Secret(h, "password"), Used: Text(h, "lastUsedDate")))
       .Where(h => h.Password != null)
       .Select(h => new PasswordHistoryEntry(h.Password!, DateTime.TryParse(h.Used, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var used) ? used : default))];
 
@@ -2112,39 +2158,31 @@ internal sealed partial class BitwardenCliService
     return joined.Length == 0 ? null : joined;
   }
 
-  private static List<ItemUri> ParseUris(JsonNode? login) =>
-    login?["uris"]?.AsArray()
-      .Select(u =>
-      {
-        var uri = Text(u, "uri");
-        if (string.IsNullOrEmpty(uri)) return null;
-        var matchVal = u?["match"];
-        return new ItemUri(uri, matchVal is null ? UriMatchType.Default : (UriMatchType)matchVal.GetValue<int>());
-      })
-      .OfType<ItemUri>()
-      .ToList() ?? [];
+  private static List<ItemUri> ParseUris(JsonElement? login) =>
+    [.. Elements(Prop(login, "uris"))
+      .Select(u => Text(u, "uri") is { Length: > 0 } uri
+        ? new ItemUri(uri, Prop(u, "match") is { } match ? (UriMatchType)match.GetInt32() : UriMatchType.Default)
+        : null)
+      .OfType<ItemUri>()];
 
   // The cache drops identity parts, boolean and linked fields, empty values, duplicate names and empty URIs, so those items are edited from the live item.
-  internal static bool IsEditableFromCache(BitwardenItemType type, JsonNode? fields, JsonNode? login)
+  internal static bool IsEditableFromCache(BitwardenItemType type, JsonElement? fields, JsonElement? login)
   {
     if (type == BitwardenItemType.Identity) return false;
     var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    return (fields as JsonArray ?? []).All(f => Text(f, "name") is { Length: > 0 } name && !string.IsNullOrEmpty(Text(f, "value")) && (f?["type"]?.GetValue<int>() ?? 0) is 0 or 1 && names.Add(name))
-      && (login?["uris"] as JsonArray ?? []).All(u => !string.IsNullOrEmpty(Text(u, "uri")));
+    return Elements(fields).All(f => Text(f, "name") is { Length: > 0 } name && HasText(Prop(f, "value")) && (Prop(f, "type")?.GetInt32() ?? 0) is 0 or 1 && names.Add(name))
+      && Elements(Prop(login, "uris")).All(u => !string.IsNullOrEmpty(Text(u, "uri")));
   }
 
-  internal static Dictionary<string, CustomField> ParseCustomFields(JsonNode? fields)
+  internal static Dictionary<string, CustomField> ParseCustomFields(JsonElement? fields)
   {
     var result = new Dictionary<string, CustomField>(StringComparer.OrdinalIgnoreCase);
-    if (fields is not JsonArray arr) return result;
-
-    foreach (var field in arr)
+    foreach (var field in Elements(fields))
     {
-      var fieldName = field?["name"]?.GetValue<string>();
-      var fieldValue = field?["value"]?.GetValue<string>();
-      var fieldType = field?["type"]?.GetValue<int>() ?? 0;
-      if (!string.IsNullOrEmpty(fieldName) && fieldValue != null)
-        result.TryAdd(fieldName, fieldType == 1 ? new CustomField(null, ProtectedSecret.From(fieldValue)) : new CustomField(fieldValue));
+      var fieldName = Text(field, "name");
+      if (string.IsNullOrEmpty(fieldName) || Prop(field, "value") is not { ValueKind: JsonValueKind.String } value)
+        continue;
+      result.TryAdd(fieldName, (Prop(field, "type")?.GetInt32() ?? 0) == 1 ? new CustomField(null, ProtectedSecret.FromJson(value)) : new CustomField(value.GetString()));
     }
 
     return result;

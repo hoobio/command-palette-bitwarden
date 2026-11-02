@@ -130,7 +130,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     }
 
     public void Load() => Service.LoadTestData(
-      BitwardenCliService.ParseItems(new JsonArray([.. Bw.Items.Values.Select(i => (JsonNode?)i.DeepClone())]).ToJsonString()),
+      BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(new JsonArray([.. Bw.Items.Values.Select(i => (JsonNode?)i.DeepClone())]).ToJsonString())),
       new Dictionary<string, string>(Bw.Folders));
 
     public Task<JsonElement?> Handle<T>(string op, T payload, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> info) =>
@@ -244,7 +244,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
   [Fact]
   public async Task AttachmentOps_AreRepromptGated()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var id = NewId();
     var h = new Harness(Login(id, reprompt: 1));
     var path = Path.Combine(_dir, "up.txt");
@@ -257,7 +257,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     Assert.DoesNotContain(h.Bw.Args, a => a.Contains("attachment", StringComparison.Ordinal));
     Assert.Null(h.Ops.GetItem(id).Attachments);
 
-    RepromptPage.GracePeriodSeconds = 0;
+    RepromptGrace.GracePeriodSeconds = 0;
     try
     {
       Assert.False((await h.Ops.VerifyRepromptAsync(id, "wrong", Ops.DownloadAttachment, IpcJson.ToElement(download, IpcJson.Default.AttachmentRequest))).Verified);
@@ -266,8 +266,8 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     }
     finally
     {
-      RepromptPage.GracePeriodSeconds = 60;
-      RepromptPage.ClearGracePeriod();
+      RepromptGrace.GracePeriodSeconds = 60;
+      RepromptGrace.ClearGracePeriod();
     }
   }
 
@@ -500,7 +500,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
   [Fact]
   public async Task Rotate_IsRepromptGated_AndLoginOnly()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var id = NewId();
     var h = new Harness(Login(id, reprompt: 1));
 
@@ -508,7 +508,7 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     Assert.Empty(h.Bw.Args);
     Assert.Equal(IpcErrors.Invalid, await h.Fails(Ops.RotatePassword, Rotate(id) with { Options = new GeneratorOptions("username") }, IpcJson.Default.RotateRequest));
 
-    RepromptPage.GracePeriodSeconds = 0;
+    RepromptGrace.GracePeriodSeconds = 0;
     try
     {
       var result = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.RotatePassword, IpcJson.ToElement(Rotate(id), IpcJson.Default.RotateRequest));
@@ -517,8 +517,8 @@ public sealed class CompanionVaultToolsOpsTests : IDisposable
     }
     finally
     {
-      RepromptPage.GracePeriodSeconds = 60;
-      RepromptPage.ClearGracePeriod();
+      RepromptGrace.GracePeriodSeconds = 60;
+      RepromptGrace.ClearGracePeriod();
     }
 
     var note = NewId();

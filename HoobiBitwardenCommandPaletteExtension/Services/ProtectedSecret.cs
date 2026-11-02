@@ -1,13 +1,14 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading;
 
 namespace HoobiBitwardenCommandPaletteExtension.Services;
 
 internal delegate T SecretFunc<out T>(ReadOnlySpan<char> secret);
 
-// ponytail: only the extension's own long-lived copies are encrypted; plaintext still passes through bw stdout, the host's form-submit JSON, Reveal() call sites and the BW_SESSION/BW_MP env of child processes.
+// ponytail: bw stdout is read into a zeroed pinned buffer and secrets go bytes to ProtectedSecret; plaintext still passes through the stdout pipe's kernel buffers, the get-item JsonObject used for edits, Reveal() call sites, the companion pipe JSON and the BW_SESSION/BW_MP env of child processes.
 internal sealed partial class ProtectedSecret : IDisposable
 {
   private const int BlockSize = 16;
@@ -34,6 +35,23 @@ internal sealed partial class ProtectedSecret : IDisposable
   }
 
   public static ProtectedSecret? From(ReadOnlySpan<char> plaintext) => plaintext.IsEmpty ? null : new(plaintext);
+
+  public static ProtectedSecret? FromJson(JsonElement value)
+  {
+    if (value.ValueKind == JsonValueKind.Null) return null;
+    var reader = new Utf8JsonReader(JsonMarshal.GetRawUtf8Value(value));
+    reader.Read();
+    var size = reader.ValueSpan.Length;
+    Span<char> chars = size <= StackLimit / sizeof(char) ? stackalloc char[size] : GC.AllocateUninitializedArray<char>(size, pinned: true);
+    try
+    {
+      return From(chars[..reader.CopyString(chars)]);
+    }
+    finally
+    {
+      CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(chars));
+    }
+  }
 
   public T Use<T>(SecretFunc<T> action) =>
     TryUse(action, out var result) ? result : throw new ObjectDisposedException(GetType().FullName);

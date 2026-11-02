@@ -130,7 +130,7 @@ public class CompanionWriteOpsTests
       foreach (var item in items)
         Vault.Items[item["id"]!.GetValue<string>()] = item;
       Service = new BitwardenCliService(processFactory: Vault.Create);
-      Service.LoadTestData(BitwardenCliService.ParseItems(new JsonArray([.. items.Select(i => (JsonNode?)i.DeepClone())]).ToJsonString()), []);
+      Service.LoadTestData(BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(new JsonArray([.. items.Select(i => (JsonNode?)i.DeepClone())]).ToJsonString())), []);
       Service.SetSession("session-key");
       Service.CacheUpdated += () => CacheUpdates++;
       Ops = new CompanionOps(Service, verifyPassword: p => Task.FromResult(p == "correct"), copyText: (t, s) => TextCopies.Add((t, s)),
@@ -369,7 +369,7 @@ public class CompanionWriteOpsTests
   public void EditableFromCache_OnlyWhenTheCacheKeepsEveryEditedValue()
   {
     static bool Check(Models.BitwardenItemType type, string fields, string uris = "[]") =>
-      BitwardenCliService.IsEditableFromCache(type, JsonNode.Parse(fields), JsonNode.Parse($$"""{ "uris": {{uris}} }"""));
+      BitwardenCliService.IsEditableFromCache(type, JsonDocument.Parse(fields).RootElement, JsonDocument.Parse($$"""{ "uris": {{uris}} }""").RootElement);
 
     Assert.True(Check(Models.BitwardenItemType.Login, """[{ "name": "a", "value": "1", "type": 0 }, { "name": "b", "value": "2", "type": 1 }]""", """[{ "uri": "x.com" }]"""));
     Assert.True(BitwardenCliService.IsEditableFromCache(Models.BitwardenItemType.SecureNote, null, null));
@@ -520,7 +520,7 @@ public class CompanionWriteOpsTests
   [Fact]
   public async Task Reprompt_GatesEditableItemAndPasswordHistory()
   {
-    RepromptPage.ClearGracePeriod();
+    RepromptGrace.ClearGracePeriod();
     var id = NewId();
     var h = new Harness(Login(id, reprompt: 1));
     var payload = IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest);
@@ -531,7 +531,7 @@ public class CompanionWriteOpsTests
     Assert.Equal(IpcErrors.Reprompt, (await Assert.ThrowsAsync<IpcException>(() => h.Ops.CopyPasswordHistoryAsync(id, ItemFields.HistoryPrefix + "0", RevisionDate))).Code);
     Assert.DoesNotContain(h.Vault.Started, p => p.Arguments.StartsWith("get", StringComparison.Ordinal));
 
-    RepromptPage.GracePeriodSeconds = 0;
+    RepromptGrace.GracePeriodSeconds = 0;
     try
     {
       var verified = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.GetEditableItem, payload);
@@ -548,7 +548,7 @@ public class CompanionWriteOpsTests
     }
     finally
     {
-      RepromptPage.GracePeriodSeconds = 60;
+      RepromptGrace.GracePeriodSeconds = 60;
     }
   }
 
@@ -596,7 +596,7 @@ public class CompanionWriteOpsTests
         { "id": "b", "name": "B", "type": 1, "login": {}, "passwordHistory": null },
         { "id": "c", "name": "C", "type": 1, "login": {} }
       ]
-      """);
+      """u8.ToArray());
 
     var entry = Assert.Single(items[0].PasswordHistory!);
     Assert.Equal("old", entry.Password.Reveal());
@@ -724,8 +724,8 @@ public class CompanionWriteOpsTests
   [Fact]
   public async Task Reprompt_GatesEveryWriteOp_EvenWithNoGracePeriod()
   {
-    RepromptPage.ClearGracePeriod();
-    RepromptPage.GracePeriodSeconds = 0;
+    RepromptGrace.ClearGracePeriod();
+    RepromptGrace.GracePeriodSeconds = 0;
     try
     {
       var id = NewId();
@@ -746,7 +746,7 @@ public class CompanionWriteOpsTests
 
       Assert.False((await h.Ops.VerifyRepromptAsync(id, "wrong", Ops.ArchiveItem, Write(new WriteRequest(id, RevisionDate)))).Verified);
       Assert.Equal(0, h.Vault.Writes);
-      RepromptPage.ClearGracePeriod();
+      RepromptGrace.ClearGracePeriod();
 
       var verified = await h.Ops.VerifyRepromptAsync(id, "correct", Ops.UpdateItem, IpcJson.ToElement(Edited(editable), IpcJson.Default.EditableItem));
       Assert.True(verified.Verified);
@@ -756,8 +756,8 @@ public class CompanionWriteOpsTests
     }
     finally
     {
-      RepromptPage.GracePeriodSeconds = 60;
-      RepromptPage.ClearGracePeriod();
+      RepromptGrace.GracePeriodSeconds = 60;
+      RepromptGrace.ClearGracePeriod();
     }
   }
 

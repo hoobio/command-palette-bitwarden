@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using HoobiBitwardenCommandPaletteExtension.Models;
@@ -405,7 +407,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items);
     var item = items[0];
     Assert.Equal("abc-123", item.Id);
@@ -442,7 +444,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items);
     var item = items[0];
     Assert.Equal(BitwardenItemType.Card, item.Type);
@@ -482,7 +484,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items);
     var item = items[0];
     Assert.Equal(BitwardenItemType.Identity, item.Type);
@@ -517,7 +519,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items);
     var item = items[0];
     Assert.Equal(BitwardenItemType.SshKey, item.Type);
@@ -541,7 +543,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items);
     Assert.Equal(BitwardenItemType.SecureNote, items[0].Type);
     Assert.Equal("Secret content here", items[0].Notes!.Reveal());
@@ -550,20 +552,20 @@ public class BitwardenCliServiceTests
   [Fact]
   public void ParseItems_EmptyArray_ReturnsEmpty()
   {
-    Assert.Empty(BitwardenCliService.ParseItems("[]"));
+    Assert.Empty(BitwardenCliService.ParseItems("[]"u8.ToArray()));
   }
 
   [Fact]
   public void ParseItems_InvalidJson_ReturnsEmpty()
   {
-    Assert.Empty(BitwardenCliService.ParseItems("not json"));
+    Assert.Empty(BitwardenCliService.ParseItems("not json"u8.ToArray()));
   }
 
   [Fact]
   public void ParseItems_SkipsInvalidType()
   {
     var json = """[{"id":"x","type":99,"name":"Bad","revisionDate":"2024-01-01T00:00:00Z"}]""";
-    Assert.Empty(BitwardenCliService.ParseItems(json));
+    Assert.Empty(BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json)));
   }
 
   [Fact]
@@ -585,7 +587,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.True(items[0].HasTotp);
     Assert.Equal("JBSWY3DPEHPK3PXP", items[0].TotpSecret!.Reveal());
   }
@@ -609,7 +611,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.True(items[0].HasPasskey);
   }
 
@@ -634,7 +636,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Equal(3, items[0].Uris.Count);
     Assert.Equal(UriMatchType.Exact, items[0].Uris[0].Match);
     Assert.Equal(UriMatchType.Host, items[0].Uris[1].Match);
@@ -660,7 +662,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Equal(2, items[0].CustomFields.Count);
     Assert.True(items[0].CustomFields["API Key"].IsHidden);
     Assert.False(items[0].CustomFields["Region"].IsHidden);
@@ -714,7 +716,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.NotNull(items[0].PasswordRevisionDate);
     Assert.Equal(2023, items[0].PasswordRevisionDate!.Value.Year);
   }
@@ -723,7 +725,7 @@ public class BitwardenCliServiceTests
   public void ParseItems_LoginWithNullLoginNode_CreatesLoginWithDefaults()
   {
     var json = """[{"id":"n-1","type":1,"name":"Null Login","revisionDate":"2024-01-01T00:00:00Z","login":null}]""";
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items);
     Assert.Equal(BitwardenItemType.Login, items[0].Type);
     Assert.Null(items[0].Username);
@@ -756,7 +758,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Equal("A B C", items[0].IdentityFullName);
     Assert.Contains("Line 1", items[0].IdentityAddress!, StringComparison.Ordinal);
     Assert.Contains("Line 2", items[0].IdentityAddress!, StringComparison.Ordinal);
@@ -780,7 +782,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Equal("Solo", items[0].IdentityFullName);
     Assert.Null(items[0].IdentityAddress);
   }
@@ -789,7 +791,7 @@ public class BitwardenCliServiceTests
   public void ParseItems_IdentityEmptyFields_NullFullNameAndAddress()
   {
     var json = """[{"id":"e","type":4,"name":"Empty","revisionDate":"2024-01-01T00:00:00Z","identity":{}}]""";
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Null(items[0].IdentityFullName);
     Assert.Null(items[0].IdentityAddress);
   }
@@ -809,7 +811,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Null(items[0].PasswordRevisionDate);
   }
 
@@ -828,7 +830,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items[0].Uris);
     Assert.Equal("https://valid.com", items[0].Uris[0].Uri);
   }
@@ -837,7 +839,7 @@ public class BitwardenCliServiceTests
   public void ParseItems_NullNodeInArray_Skipped()
   {
     var arr = new JsonArray(null, JsonNode.Parse("""{"id":"ok","type":2,"name":"Note","revisionDate":"2024-01-01T00:00:00Z"}"""));
-    var items = BitwardenCliService.ParseItems(arr.ToJsonString());
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(arr.ToJsonString()));
     Assert.Single(items);
   }
 
@@ -851,14 +853,14 @@ public class BitwardenCliServiceTests
   [Fact]
   public void ParseCustomFields_EmptyArray_ReturnsEmpty()
   {
-    var result = BitwardenCliService.ParseCustomFields(JsonNode.Parse("[]"));
+    var result = BitwardenCliService.ParseCustomFields(Element("[]"));
     Assert.Empty(result);
   }
 
   [Fact]
   public void ParseCustomFields_MixedFields()
   {
-    var json = JsonNode.Parse("""
+    var json = Element("""
     [
       {"name":"Visible","value":"v1","type":0},
       {"name":"Hidden","value":"v2","type":1}
@@ -876,7 +878,7 @@ public class BitwardenCliServiceTests
   [Fact]
   public void ParseCustomFields_DuplicateName_FirstWins()
   {
-    var json = JsonNode.Parse("""
+    var json = Element("""
     [
       {"name":"Key","value":"first","type":0},
       {"name":"Key","value":"second","type":0}
@@ -890,7 +892,7 @@ public class BitwardenCliServiceTests
   [Fact]
   public void ParseCustomFields_NullNameOrValue_Skipped()
   {
-    var json = JsonNode.Parse("""
+    var json = Element("""
     [
       {"name":null,"value":"v","type":0},
       {"name":"","value":"v","type":0},
@@ -906,13 +908,15 @@ public class BitwardenCliServiceTests
   [Fact]
   public void ParseCustomFields_CaseInsensitiveLookup()
   {
-    var json = JsonNode.Parse("""
+    var json = Element("""
     [{"name":"MyKey","value":"val","type":0}]
     """);
     var result = BitwardenCliService.ParseCustomFields(json);
     Assert.True(result.ContainsKey("mykey"));
     Assert.True(result.ContainsKey("MYKEY"));
   }
+
+  private static JsonElement Element(string json) => JsonDocument.Parse(json).RootElement;
 
   [Fact]
   public void GetFolderName_ExistingFolder_ReturnsName()
@@ -1572,7 +1576,7 @@ public class BitwardenCliServiceTests
     ]
     """;
 
-    var items = BitwardenCliService.ParseItems(json);
+    var items = BitwardenCliService.ParseItems(Encoding.UTF8.GetBytes(json));
     Assert.Single(items);
     var item = items[0];
     Assert.Contains("áéíóőöúűü", item.Name, StringComparison.Ordinal);

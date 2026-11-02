@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,8 +43,13 @@ internal sealed partial class BitwardenCliService
 
   private static bool IsItemWrite(string args) => WriteVerbs.Any(v => args.StartsWith(v, StringComparison.Ordinal));
 
-  internal async Task<JsonObject?> GetItemJsonAsync(string id) =>
-    ParseObject(await RunCliAsync($"get item {RequireId(id)}", verbOnlyLog: true));
+  internal async Task<JsonObject?> GetItemJsonAsync(string id)
+  {
+    using var output = await GetItemBufferAsync(id);
+    return ParseObject(output);
+  }
+
+  private Task<SecretBuffer> GetItemBufferAsync(string id) => RunCliBufferAsync($"get item {RequireId(id)}", verbOnlyLog: true);
 
   internal Task<JsonObject> CreateItemAsync(JsonObject item) =>
     WriteAsync(null, null, _ => RunWriteAsync("create item", Encode(item)),
@@ -75,9 +81,9 @@ internal sealed partial class BitwardenCliService
   internal Task<JsonObject> SetCollectionsAsync(string id, DateTime expectedRevision, IReadOnlyList<string> collectionIds) =>
     WriteAsync(id, expectedRevision, _ => RunWriteAsync($"edit item-collections {id}", EncodeIds(collectionIds)), (_, saved) => SameIds(saved, collectionIds));
 
-  private Task<string> RunWriteAsync(string args, string? stdin = null) => RunCliAsync(args, WriteTimeoutMs, stdin: stdin, verbOnlyLog: true);
+  private Task<SecretBuffer> RunWriteAsync(string args, string? stdin = null) => RunCliBufferAsync(args, WriteTimeoutMs, stdin: stdin, verbOnlyLog: true);
 
-  private async Task<JsonObject> WriteAsync(string? id, DateTime? expectedRevision, Func<JsonObject?, Task<string>> write, Func<JsonObject?, JsonObject?, bool> verify, bool gone = false)
+  private async Task<JsonObject> WriteAsync(string? id, DateTime? expectedRevision, Func<JsonObject?, Task<SecretBuffer>> write, Func<JsonObject?, JsonObject?, bool> verify, bool gone = false)
   {
     if (id is not null)
       RequireId(id);
@@ -89,15 +95,16 @@ internal sealed partial class BitwardenCliService
       JsonObject? current = null;
       if (id is not null)
       {
-        current = await GetItemJsonAsync(id) ?? throw new VaultWriteException(VaultWriteError.NotFound);
+        using var currentOutput = await GetItemBufferAsync(id);
+        current = ParseObject(currentOutput) ?? throw new VaultWriteException(VaultWriteError.NotFound);
         if (RevisionOf(current) != expectedRevision)
         {
-          UpdateCachedItem(id, current, generation);
+          UpdateCachedItem(id, currentOutput, generation);
           throw new VaultWriteException(VaultWriteError.Conflict);
         }
       }
 
-      string output;
+      SecretBuffer? output;
       var timedOut = false;
       try
       {
@@ -107,14 +114,18 @@ internal sealed partial class BitwardenCliService
       {
         DebugLogService.Log("CLI", "Write outcome unknown: bw did not answer in time");
         timedOut = true;
-        output = string.Empty;
+        output = null;
       }
 
-      var result = ParseObject(output);
-      if (id is not null && result is null && output.Contains("out of date", StringComparison.OrdinalIgnoreCase))
+      string? writtenId;
+      bool outOfDate;
+      using (output)
+        outOfDate = !TryReadId(output, out writtenId) && output?.Text?.Contains("out of date", StringComparison.OrdinalIgnoreCase) == true;
+      if (id is not null && outOfDate)
       {
         await RunCliAsync("sync", CliTimeoutMs, "Syncing complete.");
-        UpdateCachedItem(id, await GetItemJsonAsync(id), generation);
+        using var latest = await GetItemBufferAsync(id);
+        UpdateCachedItem(id, latest, generation);
         throw new VaultWriteException(VaultWriteError.Conflict);
       }
 
@@ -122,7 +133,7 @@ internal sealed partial class BitwardenCliService
       await _syncGate.WaitAsync();
       _syncGate.Release();
 
-      var savedId = id ?? (result?["id"]?.GetValue<string>() is { } created && Guid.TryParse(created, out _) ? created : null);
+      var savedId = id ?? (writtenId is { } created && Guid.TryParse(created, out _) ? created : null);
       if (savedId is null && !timedOut)
         throw new VaultWriteException(VaultWriteError.Failed);
 
@@ -133,15 +144,15 @@ internal sealed partial class BitwardenCliService
         if (savedId is null)
           throw new VaultWriteException(VaultWriteError.Unknown);
 
-        var savedOutput = await RunCliAsync($"get item {savedId}", verbOnlyLog: true);
+        using var savedOutput = await GetItemBufferAsync(savedId);
         var saved = ParseObject(savedOutput);
-        if (gone ? saved is not null || !savedOutput.Contains("Not found", StringComparison.OrdinalIgnoreCase) : !verify(current, saved))
+        if (gone ? saved is not null || savedOutput.Text?.Contains("Not found", StringComparison.OrdinalIgnoreCase) != true : !verify(current, saved))
         {
           DebugLogService.Log("CLI", "Write verification failed");
           throw new VaultWriteException(timedOut ? VaultWriteError.Unknown : VaultWriteError.Failed);
         }
 
-        UpdateCachedItem(savedId, saved, generation);
+        UpdateCachedItem(savedId, savedOutput, generation);
         return saved ?? new JsonObject();
       }
       catch (Exception ex) when (id is null)
@@ -158,9 +169,9 @@ internal sealed partial class BitwardenCliService
     }
   }
 
-  private void UpdateCachedItem(string id, JsonObject? saved, int generation)
+  private void UpdateCachedItem(string id, SecretBuffer output, int generation)
   {
-    var item = saved is null ? null : TryParseItemNode(saved);
+    var item = ParseItem(output);
     var active = item is { DeletedDate: null, ArchivedDate: null };
     lock (_cacheLock)
     {
@@ -193,15 +204,51 @@ internal sealed partial class BitwardenCliService
       ? revision
       : null;
 
-  internal static JsonObject? ParseObject(string output)
+  internal static JsonObject? ParseObject(SecretBuffer output)
   {
+    if (output.Json.IsEmpty)
+      return null;
     try
     {
-      return JsonNode.Parse(output) as JsonObject;
+      return JsonNode.Parse(output.Json.Span) as JsonObject;
     }
-    catch (System.Text.Json.JsonException)
+    catch (JsonException)
     {
       return null;
+    }
+  }
+
+  private static BitwardenItem? ParseItem(SecretBuffer output)
+  {
+    if (output.Json.IsEmpty)
+      return null;
+    try
+    {
+      using var document = JsonDocument.Parse(output.Json);
+      return document.RootElement.ValueKind == JsonValueKind.Object ? TryParseItemNode(document.RootElement) : null;
+    }
+    catch (JsonException)
+    {
+      return null;
+    }
+  }
+
+  private static bool TryReadId(SecretBuffer? output, out string? id)
+  {
+    id = null;
+    if (output is null || output.Json.IsEmpty)
+      return false;
+    try
+    {
+      using var document = JsonDocument.Parse(output.Json);
+      if (document.RootElement.ValueKind != JsonValueKind.Object)
+        return false;
+      id = Text(document.RootElement, "id");
+      return true;
+    }
+    catch (JsonException)
+    {
+      return false;
     }
   }
 
