@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.15.0...v1.15.1) (2026-11-03)
+
+
+### Miscellaneous Chores
+
+* **deps:** update avalonia monorepo to 12.1.5 ([#248](https://github.com/hoobio/command-palette-bitwarden/issues/248)) ([a055d53](https://github.com/hoobio/command-palette-bitwarden/commit/a055d53d49a50694a420790582ba245fc8d28c14))
+* **deps:** update dependency meziantou.analyzer to 3.0.320 ([#246](https://github.com/hoobio/command-palette-bitwarden/issues/246)) ([272a374](https://github.com/hoobio/command-palette-bitwarden/commit/272a374778e503a1cb184c9176be0c9375bd69ed))
+
 ## [1.15.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.14.0...v1.15.0) (2026-11-02)
 
 
