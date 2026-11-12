@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.15.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.15.0...v1.15.1) (2026-11-12)
+
+
+### Miscellaneous Chores
+
+* **deps:** update avalonia monorepo to 12.1.5 ([#248](https://github.com/hoobio/command-palette-bitwarden/issues/248)) ([a055d53](https://github.com/hoobio/command-palette-bitwarden/commit/a055d53d49a50694a420790582ba245fc8d28c14))
+* **deps:** update avalonia monorepo to 12.1.6 ([#254](https://github.com/hoobio/command-palette-bitwarden/issues/254)) ([d115ca3](https://github.com/hoobio/command-palette-bitwarden/commit/d115ca369c2795bf605c23212a68db32bd96c87e))
+* **deps:** update dependency meziantou.analyzer to 3.0.320 ([#246](https://github.com/hoobio/command-palette-bitwarden/issues/246)) ([272a374](https://github.com/hoobio/command-palette-bitwarden/commit/272a374778e503a1cb184c9176be0c9375bd69ed))
+* **deps:** update dependency microsoft.net.test.sdk to 18.11.1 ([#255](https://github.com/hoobio/command-palette-bitwarden/issues/255)) ([c93cd28](https://github.com/hoobio/command-palette-bitwarden/commit/c93cd287e91861fcd9e8485ece9d34f80395cd6b))
+* **deps:** update dependency microsoft.net.test.sdk to 18.12.0 ([#256](https://github.com/hoobio/command-palette-bitwarden/issues/256)) ([49af14d](https://github.com/hoobio/command-palette-bitwarden/commit/49af14d0deb000904a0b99a4c5aced51b45676d6))
+* **deps:** update dependency xunit.v3.mtp-off to 4.0.3 ([#252](https://github.com/hoobio/command-palette-bitwarden/issues/252)) ([0ce8646](https://github.com/hoobio/command-palette-bitwarden/commit/0ce8646397972b1448adf21362768a848f3ac09a))
+
 ## [1.15.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.14.0...v1.15.0) (2026-11-02)
 
 
