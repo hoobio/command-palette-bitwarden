@@ -569,7 +569,7 @@ internal sealed partial class BitwardenCliService
     UpdateLiveSync();
   }
 
-  private const int CliVersionTimeoutMs = 8_000;
+  private const int CliVersionTimeoutMs = 20_000;
 
   private async Task<bool> IsCliAvailableAsync()
   {
