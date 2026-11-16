@@ -244,7 +244,6 @@ internal sealed partial class ItemView : UserControl
     EditorScroll.UpdateLayout();
     if (EditView.FindEditor(key) is not { } target)
       return;
-    target.BringIntoView();
     if (target is TextBox box)
     {
       box.Focus();
@@ -254,5 +253,8 @@ internal sealed partial class ItemView : UserControl
     {
       target.Focus(NavigationMethod.Tab);
     }
+
+    // After the focus: a caret move brings the box into view at the nearest edge, which would stop the animation.
+    SmoothScroll.Centre(EditorScroll, target);
   }
 }
