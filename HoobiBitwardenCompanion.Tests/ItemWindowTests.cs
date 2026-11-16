@@ -45,6 +45,8 @@ public class ItemWindowTests(AvaloniaSession session)
 
     public List<JsonElement?> CopyPayloads { get; } = [];
 
+    public List<JsonElement?> OpenPayloads { get; } = [];
+
     private JsonElement? Handle(string op, JsonElement? payload, bool verified)
     {
       lock (Requests)
@@ -52,6 +54,8 @@ public class ItemWindowTests(AvaloniaSession session)
         Requests.Add(op);
         if (op == Ops.Copy)
           CopyPayloads.Add(payload);
+        if (op == Ops.OpenUri)
+          OpenPayloads.Add(payload);
       }
       if (ErrorCode is { } code)
         throw new IpcException(code);
@@ -69,6 +73,11 @@ public class ItemWindowTests(AvaloniaSession session)
         Ops.Reveal => IpcJson.ToElement(new SecretResponse(IpcJson.Read(payload, IpcJson.Default.FieldRequest).Field == ItemFields.Notes ? Notes : "hunter2"), IpcJson.Default.SecretResponse),
         Ops.GetTotp => IpcJson.ToElement(new TotpResponse($"00000{++TotpCalls}", TotpRemaining, 30), IpcJson.Default.TotpResponse),
         Ops.VerifyReprompt => VerifyReprompt(IpcJson.Read(payload, IpcJson.Default.RepromptRequest)),
+        Ops.ListFilters => IpcJson.ToElement(new FiltersResponse([], [], []), IpcJson.Default.FiltersResponse),
+        Ops.GetEditableItem => IpcJson.ToElement(
+          new EditableItem(ItemId, 1, "GitHub", null, null, [], false, true, null, new DateTime(2025, 1, 2, 0, 0, 0, DateTimeKind.Utc), [],
+            Login: new LoginEdit("octocat", "hunter2", null, [new UriEdit("https://github.com")])),
+          IpcJson.Default.EditableItem),
         _ => null,
       };
     }
@@ -146,6 +155,66 @@ public class ItemWindowTests(AvaloniaSession session)
     item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
     Assert.False(window.Topmost);
     Assert.False(ItemWindow.AlwaysOnTop);
+    window.Close();
+  });
+
+  private static Border FieldRow(ItemWindow window, string key) =>
+    window.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("Field") && b.DataContext is FieldViewModel field && field.Key == key);
+
+  private static List<MenuItem> OpenRowMenu(Border row)
+  {
+    row.ContextMenu!.Open(row);
+    return [.. row.ContextMenu.Items.OfType<MenuItem>()];
+  }
+
+  [Fact]
+  public Task FieldRow_ContextMenu_OffersCopyEditOpenAndAlwaysOnTop() => session.RunAsync(async () =>
+  {
+    ItemWindow.AlwaysOnTop = false;
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    using var channel = CompanionChannel(pair);
+    var vm = new ItemViewModel(ItemId, channel) { Toast = (_, _) => { } };
+    var window = new ItemWindow(vm);
+    window.Show();
+    await vm.LoadAsync();
+    window.UpdateLayout();
+
+    var username = FieldRow(window, ItemFields.Username);
+    var items = OpenRowMenu(username);
+    Assert.Equal(["Copy", "Edit", "Open URL", "Always on top"], items.Select(i => i.Header as string));
+    Assert.Contains(username.ContextMenu!.Items, i => i is Separator);
+    Assert.True(vm.CanEdit);
+    Assert.True(items[1].IsVisible);
+    Assert.False(items[2].IsVisible);
+    username.ContextMenu.Close();
+
+    var website = FieldRow(window, ItemFields.UriPrefix + "0");
+    var websiteItems = OpenRowMenu(website);
+    Assert.True(websiteItems[2].IsVisible);
+    websiteItems[2].Command!.Execute(null);
+    AvaloniaSession.WaitFor(() => extension.Count(Ops.OpenUri) == 1);
+    Assert.Equal(ItemFields.UriPrefix + "0", IpcJson.Read(Assert.Single(extension.OpenPayloads), IpcJson.Default.UriRequest).Field);
+    website.ContextMenu!.Close();
+
+    items = OpenRowMenu(username);
+    items[0].Command!.Execute(null);
+    AvaloniaSession.WaitFor(() => extension.Count(Ops.Copy) == 1);
+    Assert.Equal(ItemFields.Username, IpcJson.Read(Assert.Single(extension.CopyPayloads), IpcJson.Default.FieldRequest).Field);
+
+    var onTop = items[3];
+    Assert.False(onTop.IsChecked);
+    onTop.Command!.Execute(null);
+    Assert.True(window.Topmost);
+    Assert.True(ItemWindow.AlwaysOnTop);
+    Assert.True(onTop.IsChecked);
+    onTop.Command.Execute(null);
+    Assert.False(window.Topmost);
+    Assert.False(ItemWindow.AlwaysOnTop);
+
+    items[1].Command!.Execute(null);
+    AvaloniaSession.WaitFor(() => vm.IsEditing);
+    Assert.Equal(1, extension.Count(Ops.GetEditableItem));
     window.Close();
   });
 

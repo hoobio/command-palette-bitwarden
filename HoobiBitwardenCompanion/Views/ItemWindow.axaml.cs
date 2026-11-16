@@ -27,7 +27,9 @@ internal sealed partial class ItemWindow : Window
 
   internal ItemViewModel? ViewModel => DataContext as ItemViewModel;
 
-  private void OnAlwaysOnTopClick(object? sender, RoutedEventArgs e) => Topmost = AlwaysOnTop = !Topmost;
+  internal static void ToggleAlwaysOnTop(Window window) => window.Topmost = AlwaysOnTop = !window.Topmost;
+
+  private void OnAlwaysOnTopClick(object? sender, RoutedEventArgs e) => ToggleAlwaysOnTop(this);
 
   protected override void OnClosing(WindowClosingEventArgs e)
   {

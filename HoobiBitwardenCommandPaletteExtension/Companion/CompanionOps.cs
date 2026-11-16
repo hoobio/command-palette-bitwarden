@@ -213,7 +213,7 @@ internal sealed partial class CompanionOps : IDisposable
         return IpcJson.ToElement(GetTotp(totp.Id, IsVerified(totp.Id, verifiedId)), IpcJson.Default.TotpResponse);
       case Ops.OpenUri:
         var open = IpcJson.Read(payload, IpcJson.Default.UriRequest);
-        OpenUri(open.Id, open.Index, open.RevisionDate, IsVerified(open.Id, verifiedId));
+        OpenUri(open.Id, open.Field, open.RevisionDate, IsVerified(open.Id, verifiedId));
         return null;
       case Ops.UpdateItem:
         var update = IpcJson.Read(payload, IpcJson.Default.EditableItem);
@@ -337,7 +337,7 @@ internal sealed partial class CompanionOps : IDisposable
         for (var i = 0; i < item.Uris.Count; i++)
         {
           fields.Add(new FieldDto(ItemFields.UriPrefix + i.ToString(CultureInfo.InvariantCulture), "Website", AutofillGroup, item.Uris[i].Uri, false,
-            CanOpen: VaultItemHelper.ToSafeWebUrl(item.Uris[i].Uri) != null));
+            CanOpen: VaultItemHelper.ToOpenableUri(item.Uris[i].Uri, assumeWeb: true) != null));
         }
         break;
       case BitwardenItemType.Card:
@@ -410,12 +410,12 @@ internal sealed partial class CompanionOps : IDisposable
 
   internal TotpResponse GetTotp(string? id, bool verified = false) => ComputeTotp(FindGranted(id, null, verified));
 
-  internal void OpenUri(string? id, int index, DateTime? revisionDate = null, bool verified = false)
+  internal void OpenUri(string? id, string? field, DateTime? revisionDate = null, bool verified = false)
   {
     var item = FindGranted(id, revisionDate, verified);
-    if (index < 0 || index >= item.Uris.Count)
-      throw new IpcException(IpcErrors.Invalid);
-    _openUrl(VaultItemHelper.ToSafeWebUrl(item.Uris[index].Uri) ?? throw new IpcException(IpcErrors.Invalid));
+    var (secret, text) = Resolve(item, field);
+    var assumeWeb = field!.StartsWith(ItemFields.UriPrefix, StringComparison.Ordinal);
+    _openUrl(secret is null ? VaultItemHelper.ToOpenableUri(text, assumeWeb) ?? throw new IpcException(IpcErrors.Invalid) : throw new IpcException(IpcErrors.Invalid));
   }
 
   internal async Task<RepromptResponse> VerifyRepromptAsync(string? id, string? password, string? op = null, JsonElement? payload = null, bool biometric = false)
@@ -516,7 +516,7 @@ internal sealed partial class CompanionOps : IDisposable
   private static void AddText(List<FieldDto> fields, string key, string label, string group, string? value, bool multiline = false)
   {
     if (!string.IsNullOrEmpty(value))
-      fields.Add(new FieldDto(key, label, group, value, false, IsMultiline: multiline));
+      fields.Add(new FieldDto(key, label, group, value, false, CanOpen: VaultItemHelper.ToOpenableUri(value, assumeWeb: false) != null, IsMultiline: multiline));
   }
 
   private static void AddSecret(List<FieldDto> fields, string key, string label, string group, ProtectedSecret? secret, bool multiline = false)

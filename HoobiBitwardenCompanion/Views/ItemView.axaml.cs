@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
+using CommunityToolkit.Mvvm.Input;
 using FluentAvalonia.UI.Controls;
 using Hoobi.Design.Avalonia;
 using HoobiBitwardenCompanion.ViewModels;
@@ -20,6 +21,11 @@ internal sealed partial class ItemView : UserControl
 
   public ItemView()
   {
+    ToggleAlwaysOnTopCommand = new RelayCommand(() =>
+    {
+      if (TopLevel.GetTopLevel(this) is Window window)
+        ItemWindow.ToggleAlwaysOnTop(window);
+    });
     InitializeComponent();
     DataContextChanged += (_, _) =>
     {
@@ -46,6 +52,8 @@ internal sealed partial class ItemView : UserControl
     AddHandler(PointerReleasedEvent, (_, _) => _dragPress = null);
     AddHandler(PointerCaptureLostEvent, (_, _) => _dragPress = null);
   }
+
+  public IRelayCommand ToggleAlwaysOnTopCommand { get; }
 
   private void OnFieldPointerPressed(object? sender, PointerPressedEventArgs e) =>
     _dragPress = e.Pointer.Type == PointerType.Mouse && e.Source is not SelectableTextBlock && e.Source is StyledElement { DataContext: FieldViewModel { CanCopy: true } }

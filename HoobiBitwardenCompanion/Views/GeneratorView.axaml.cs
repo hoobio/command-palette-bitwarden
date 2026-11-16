@@ -93,7 +93,7 @@ internal sealed partial class GeneratorView : UserControl
     {
       Toast = message => ToastWindow.Show(owner, message),
       CurrentPassword = current,
-      Website = item.Groups.SelectMany(g => g.Fields).FirstOrDefault(f => f.CanOpen),
+      Website = item.Groups.SelectMany(g => g.Fields).FirstOrDefault(f => f.CanOpen && f.Key.StartsWith(ItemFields.UriPrefix, StringComparison.Ordinal)),
       Username = item.Groups.SelectMany(g => g.Fields).FirstOrDefault(f => f.Key == ItemFields.Username),
     };
     var dialog = CreateDialog(viewModel, "Rotate password", "Save", "Cancel");
