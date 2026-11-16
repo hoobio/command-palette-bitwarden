@@ -22,7 +22,7 @@ This calls `ssh` directly in your default console host. The item also gets an **
 
 ### host Field Format
 
-The value must match `user@hostname`. Letters, digits, `.`, `+`, `-`, and `_` are accepted on both sides. Invalid or missing values fall back to opening the item in the Bitwarden app.
+The value must match `user@hostname`. Letters, digits, `.`, `-` and `_` are accepted on both sides. The user also accepts `+` and `\`, so a Windows domain user such as `DOMAIN\user@hostname` is valid. The value cannot start with `-`. Invalid or missing values fall back to opening the item in the Bitwarden app.
 
 Valid examples:
 

@@ -77,6 +77,8 @@ public class VaultItemHelperTests
   [InlineData("user@host-name.com", true)]
   [InlineData("user@host_name.com", true)]
   [InlineData("user.name@host.com", true)]
+  [InlineData("CORP\\user@HOST-01", true)]
+  [InlineData("-user@host.com", false)]
   [InlineData(null, false)]
   [InlineData("", false)]
   [InlineData("nope", false)]
