@@ -595,6 +595,68 @@ public class VaultItemHelperTests
     Assert.True(result is null || result.StartsWith("https://", StringComparison.Ordinal));
   }
 
+  private static T WithRegisteredSchemes<T>(Func<T> act, params string[] schemes)
+  {
+    var original = VaultItemHelper.IsRegisteredScheme;
+    VaultItemHelper.IsRegisteredScheme = scheme => Array.IndexOf(schemes, scheme) >= 0;
+    try
+    {
+      return act();
+    }
+    finally
+    {
+      VaultItemHelper.IsRegisteredScheme = original;
+    }
+  }
+
+  [Theory]
+  [InlineData("github.com", true, "https://github.com/")]
+  [InlineData("https://example.com/a", false, "https://example.com/a")]
+  [InlineData("  http://example.com ", false, "http://example.com/")]
+  [InlineData("vnc://open/item?id=1", false, "vnc://open/item?id=1")]
+  [InlineData("vnc://open/item?id=1", true, "vnc://open/item?id=1")]
+  [InlineData("mailto:a@example.com", false, "mailto:a@example.com")]
+  [InlineData("steam://run/10", false, null)]
+  [InlineData("search:query=x&crumb=location:\\\\evil\\share", false, null)]
+  [InlineData("ms-word:ofe|u|x", true, null)]
+  [InlineData("vnc://host\\x", false, null)]
+  [InlineData("github.com", false, null)]
+  [InlineData("file:///c:/x", false, null)]
+  [InlineData("file:///c:/x", true, null)]
+  [InlineData("C:\\x", false, null)]
+  [InlineData("\\\\server\\share", false, null)]
+  [InlineData("javascript:alert(1)", false, null)]
+  [InlineData("JavaScript:alert(1)", true, null)]
+  [InlineData("vbscript:x", false, null)]
+  [InlineData("data:text/html,x", false, null)]
+  [InlineData("ms-msdt:x", false, null)]
+  [InlineData("search-ms:query=x", false, null)]
+  [InlineData("ms-officecmd:x", false, null)]
+  [InlineData("unregistered://x", false, null)]
+  [InlineData("user:pass", false, null)]
+  [InlineData("vnc://has space", false, null)]
+  [InlineData("plain text", false, null)]
+  [InlineData("", false, null)]
+  [InlineData(null, true, null)]
+  public void ToOpenableUri_AcceptsWebAndRegisteredSchemesOnly(string? input, bool assumeWeb, string? expected)
+  {
+    var result = WithRegisteredSchemes(() => VaultItemHelper.ToOpenableUri(input, assumeWeb), "vnc", "mailto", "steam", "search", "ms-word", "javascript", "ms-msdt", "file");
+    Assert.Equal(expected, result);
+  }
+
+  [Fact]
+  public void ToOpenableUri_UnregisteredAppScheme_IsRejected()
+  {
+    Assert.Null(WithRegisteredSchemes(() => VaultItemHelper.ToOpenableUri("vnc://open", false)));
+  }
+
+  [Fact]
+  public void IsRegisteredScheme_DefaultReadsTheRegistry()
+  {
+    Assert.True(VaultItemHelper.IsRegisteredScheme("http"));
+    Assert.False(VaultItemHelper.IsRegisteredScheme("hoobi-no-such-scheme"));
+  }
+
   [Fact]
   public void BuildContextItems_Login_UnsafeUri_OmitsOpenInBrowser()
   {

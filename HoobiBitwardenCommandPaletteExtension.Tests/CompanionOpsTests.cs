@@ -3,6 +3,7 @@ using System.IO.Pipes;
 using System.Text.Json;
 using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Companion;
+using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
 using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
@@ -10,9 +11,19 @@ using HoobiBitwardenCommandPaletteExtension.Services;
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
 
 [Collection("SessionStore")]
-public class CompanionOpsTests
+public class CompanionOpsTests : IDisposable
 {
   private const string TotpSecret = "JBSWY3DPEHPK3PXP";
+
+  private readonly Func<string, bool> _originalIsRegisteredScheme = VaultItemHelper.IsRegisteredScheme;
+
+  public CompanionOpsTests() => VaultItemHelper.IsRegisteredScheme = scheme => scheme == "vnc";
+
+  public void Dispose()
+  {
+    VaultItemHelper.IsRegisteredScheme = _originalIsRegisteredScheme;
+    GC.SuppressFinalize(this);
+  }
 
   private sealed class Harness
   {
@@ -72,6 +83,22 @@ public class CompanionOpsTests
     {
       ["password"] = new("visible-custom"),
       ["apiKey"] = new(null, ProtectedSecret.From("hidden-custom")),
+    },
+  };
+
+  private static BitwardenItem LoginWithUrlFields(string id) => new()
+  {
+    Id = id,
+    Name = "GitHub",
+    Type = BitwardenItemType.Login,
+    Username = "octocat",
+    Password = ProtectedSecret.From("hunter2"),
+    CustomFields = new Dictionary<string, CustomField>
+    {
+      ["link"] = new("https://example.com/x"),
+      ["app"] = new("vnc://open/1"),
+      ["plain"] = new("not a link"),
+      ["token"] = new(null, ProtectedSecret.From("https://secret.example.com")),
     },
   };
 
@@ -246,17 +273,46 @@ public class CompanionOpsTests
   }
 
   [Fact]
-  public void OpenUri_AllowsOnlyHttpAndHttps()
+  public void OpenUri_AllowsOnlyOpenableUris()
   {
     var id = NewId();
     var h = new Harness(Login(id));
 
-    h.Ops.OpenUri(id, 0);
-    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, 1))));
-    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, 2))));
-    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, 3))));
-    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, -1))));
+    h.Ops.OpenUri(id, ItemFields.UriPrefix + "0");
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.UriPrefix + "1"))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.UriPrefix + "2"))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.UriPrefix + "3"))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.UriPrefix + "-1"))));
     Assert.Equal(["https://github.com/login"], h.Opened);
+  }
+
+  [Fact]
+  public void OpenUri_OpensACustomFieldUrlAndAnAppScheme()
+  {
+    var id = NewId();
+    var h = new Harness(LoginWithUrlFields(id));
+
+    h.Ops.OpenUri(id, ItemFields.CustomPrefix + "0");
+    h.Ops.OpenUri(id, ItemFields.CustomPrefix + "1");
+
+    Assert.Equal(["https://example.com/x", "vnc://open/1"], h.Opened);
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.CustomPrefix + "2"))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.CustomPrefix + "3"))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.Password))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.Totp))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.Username))));
+    Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, null))));
+    Assert.Equal(2, h.Opened.Count);
+  }
+
+  [Fact]
+  public void MapFields_FlagsOpenableTextFieldsAndNeverSecrets()
+  {
+    var fields = CompanionOps.MapFields(LoginWithUrlFields(NewId()));
+
+    Assert.Equal([true, true, false, false], fields.Where(f => f.Key.StartsWith(ItemFields.CustomPrefix, StringComparison.Ordinal)).Select(f => f.CanOpen));
+    Assert.False(fields.Single(f => f.Key == ItemFields.Username).CanOpen);
+    Assert.False(fields.Single(f => f.Key == ItemFields.Password).CanOpen);
   }
 
   [Fact]
@@ -271,7 +327,7 @@ public class CompanionOpsTests
     Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.Reveal(id, ItemFields.Password))));
     Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.Copy(id, ItemFields.Username))));
     Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.GetTotp(id))));
-    Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, 0))));
+    Assert.Equal(IpcErrors.Reprompt, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.UriPrefix + "0"))));
 
     Assert.False((await h.Ops.VerifyRepromptAsync(id, "wrong")).Verified);
     Assert.False((await h.Ops.VerifyRepromptAsync(id, "")).Verified);
@@ -392,7 +448,7 @@ public class CompanionOpsTests
 
     Assert.Equal(IpcErrors.Stale, Code(Assert.Throws<IpcException>(() => h.Ops.Reveal(id, ItemFields.Password, stale))));
     Assert.Equal(IpcErrors.Stale, Code(Assert.Throws<IpcException>(() => h.Ops.Copy(id, ItemFields.Password, stale))));
-    Assert.Equal(IpcErrors.Stale, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, 0, stale))));
+    Assert.Equal(IpcErrors.Stale, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.UriPrefix + "0", stale))));
     Assert.Equal("hunter2", h.Ops.Reveal(id, ItemFields.Password, h.Service.GetCachedItem(id)!.RevisionDate));
     Assert.Empty(h.SecretCopies);
     Assert.Empty(h.Opened);
@@ -437,7 +493,7 @@ public class CompanionOpsTests
     var secret = IpcJson.Read(await pair.Client.RequestAsync(Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password, item.RevisionDate), IpcJson.Default.FieldRequest), ct), IpcJson.Default.SecretResponse);
     await pair.Client.RequestAsync(Ops.Copy, IpcJson.ToElement(new FieldRequest(id, ItemFields.Username, item.RevisionDate), IpcJson.Default.FieldRequest), ct);
     var totp = IpcJson.Read(await pair.Client.RequestAsync(Ops.GetTotp, IpcJson.ToElement(new ItemRequest(id), IpcJson.Default.ItemRequest), ct), IpcJson.Default.TotpResponse);
-    await pair.Client.RequestAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(id, 0, item.RevisionDate), IpcJson.Default.UriRequest), ct);
+    await pair.Client.RequestAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(id, ItemFields.UriPrefix + "0", item.RevisionDate), IpcJson.Default.UriRequest), ct);
     var verify = IpcJson.Read(await pair.Client.RequestAsync(Ops.VerifyReprompt, IpcJson.ToElement(new RepromptRequest(id, "x"), IpcJson.Default.RepromptRequest), ct), IpcJson.Default.RepromptResponse);
     var stale = await Assert.ThrowsAsync<IpcException>(() => pair.Client.RequestAsync(Ops.Reveal, IpcJson.ToElement(new FieldRequest(id, ItemFields.Password, item.RevisionDate.AddSeconds(-1)), IpcJson.Default.FieldRequest), ct));
     var unknown = await Assert.ThrowsAsync<IpcException>(() => pair.Client.RequestAsync("runBw", null, ct));

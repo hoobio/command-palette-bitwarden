@@ -220,7 +220,7 @@ internal sealed record ItemRequest(string Id);
 
 internal sealed record FieldRequest(string Id, string Field, DateTime RevisionDate, int? Start = null, int? Length = null);
 
-internal sealed record UriRequest(string Id, int Index, DateTime RevisionDate);
+internal sealed record UriRequest(string Id, string Field, DateTime RevisionDate);
 
 internal sealed record RepromptRequest(string Id, string? Password, string? Op = null, JsonElement? Payload = null, bool Biometric = false);
 

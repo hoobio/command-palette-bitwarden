@@ -514,12 +514,8 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   public Task CopySelectionAsync(FieldViewModel field, int start, int length) =>
     RunAsync(Ops.Copy, FieldPayload(field.Key, start, length), _ => Notify("Copied selected text"));
 
-  public async Task OpenUriAsync(FieldViewModel field)
-  {
-    if (field.Key.StartsWith(ItemFields.UriPrefix, StringComparison.Ordinal)
-      && int.TryParse(field.Key.AsSpan(ItemFields.UriPrefix.Length), CultureInfo.InvariantCulture, out var index))
-      await RunAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(Id, index, _revisionDate), IpcJson.Default.UriRequest), _ => { });
-  }
+  public Task OpenUriAsync(FieldViewModel field) =>
+    RunAsync(Ops.OpenUri, IpcJson.ToElement(new UriRequest(Id, field.Key, _revisionDate), IpcJson.Default.UriRequest), _ => { });
 
   public async Task<bool> VerifyRepromptAsync(string? password, bool biometric = false)
   {

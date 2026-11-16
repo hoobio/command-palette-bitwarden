@@ -35,6 +35,8 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   public bool CanCopy { get; }
 
+  public bool CanEdit => _owner is { CanEdit: true };
+
   public bool IsMultiline { get; }
 
   public bool IsTotp => Key == ItemFields.Totp;
@@ -114,6 +116,9 @@ internal sealed partial class FieldViewModel : ObservableObject
 
   [RelayCommand]
   private Task OpenAsync() => _owner?.OpenUriAsync(this) ?? Task.CompletedTask;
+
+  [RelayCommand]
+  private Task EditAsync() => _owner?.EditCommand.ExecuteAsync(null) ?? Task.CompletedTask;
 
   [RelayCommand]
   private Task RotateAsync() => _owner?.RotateCommand.ExecuteAsync(null) ?? Task.CompletedTask;

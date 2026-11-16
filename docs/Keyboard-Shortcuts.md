@@ -48,7 +48,9 @@ The extension checks each shortcut before it saves it:
 
 ## Enter action
 
-The first row of each group is the **Enter action**, the action that Enter runs for items of that type. The choices are the actions of that item type and the **All items** actions.
+The first row of each group is the **Enter action**, the action that Enter runs for items of that type. The choices are the actions of that item type, the **All items** actions and **Show actions**.
+
+**Show actions** opens a page that lists every action of the item, the same actions as the more-commands menu. Enter on a row of that page runs the action. **Show actions** has no shortcut and does not show in the more-commands menu.
 
 | Item type | Default Enter action |
 |-----------|----------------------|

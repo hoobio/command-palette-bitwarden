@@ -222,6 +222,24 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         "Folder for CLI data (data.json). Overrides the other locations",
         "");
 
+    internal const int DefaultCliDetectionTimeoutSeconds = 20;
+
+    public ChoiceSetSetting CliDetectionTimeout { get; } = new(
+        "cliDetectionTimeout",
+        "CLI Detection Timeout",
+        "Time to wait for bw --version before the CLI counts as missing",
+        [
+            new("10 seconds", "10"),
+            new("20 seconds", "20"),
+            new("30 seconds", "30"),
+            new("60 seconds", "60"),
+            new("2 minutes", "120"),
+        ])
+    { Value = "20" };
+
+    internal int CliDetectionTimeoutMs =>
+        (int.TryParse(CliDetectionTimeout.Value, out var seconds) && seconds > 0 ? seconds : DefaultCliDetectionTimeoutSeconds) * 1000;
+
     public ChoiceSetSetting RepromptGracePeriod { get; } = new(
         "repromptGracePeriod",
         "Re-prompt Grace Period",
@@ -311,6 +329,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         AddSetting(UsePortableDataDirectory, CliDirectoryOverride);
         AddSetting(UseCliDataDirectoryOverride);
         AddSetting(CliDataDirectoryOverride, UseCliDataDirectoryOverride);
+        AddSetting(CliDetectionTimeout);
 
         AddSetting(new SectionHeaderSetting("_section_advanced", "Diagnostics"));
         AddSetting(DebugLogging);
@@ -458,6 +477,7 @@ internal sealed class BitwardenSettingsManager : JsonSettingsManager
         yield return (UsePortableDataDirectory.Key, (object?)UsePortableDataDirectory.Value);
         yield return (UseCliDataDirectoryOverride.Key, (object?)UseCliDataDirectoryOverride.Value);
         yield return (CliDataDirectoryOverride.Key, CliDataDirectoryOverride.Value);
+        yield return (CliDetectionTimeout.Key, CliDetectionTimeout.Value);
         yield return (DebugLogging.Key, (object?)DebugLogging.Value);
     }
 }

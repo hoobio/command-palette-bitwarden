@@ -29,6 +29,7 @@ internal static class HotkeyIds
 {
   public const string OpenWindow = "all.openWindow";
   public const string OpenWebVault = "all.openWebVault";
+  public const string ShowActions = "all.showActions";
   public const string LoginCopyUsername = "login.copyUsername";
   public const string LoginCopyPassword = "login.copyPassword";
   public const string LoginCopyOtp = "login.copyOtp";
@@ -110,8 +111,10 @@ internal static class HotkeyCatalog
       ? Groups.Select(g => g.ItemType).Where(t => t != HotkeyItemTypes.All)
       : new[] { action.ItemType };
 
+  internal static readonly HotkeyAction ShowActions = new(HotkeyIds.ShowActions, HotkeyItemTypes.All, "Show actions", null);
+
   internal static HotkeyAction[] EnterChoices(string itemType) =>
-    (itemType == HotkeyItemTypes.All ? ActionsFor(HotkeyItemTypes.All) : AvailableOn(itemType)).ToArray();
+    (itemType == HotkeyItemTypes.All ? ActionsFor(HotkeyItemTypes.All) : AvailableOn(itemType)).Append(ShowActions).ToArray();
 
   internal static string DefaultEnter(string itemType) => itemType switch
   {

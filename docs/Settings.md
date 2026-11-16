@@ -190,6 +190,15 @@ The companion settings window starts with a **Server** section: **Region** (**Bi
 | **Default** | Off |
 | **Description** | Use your own directory for Bitwarden CLI data (`data.json`). When the switch is on, the **CLI data folder** box opens under it. A folder in the box sets the `BITWARDENCLI_APPDATA_DIR` environment variable and takes precedence over the portable directory toggle. Leave the box empty to use the default location, or the portable CLI directory if that toggle is on. When the switch is off, the box is hidden and the extension uses the default location, but it keeps the folder, so turning the switch on again restores it. While the box is empty, it shows the folder that holds `data.json` now as the placeholder text, and hovering the box shows the full path and where it came from. If you set a folder before this switch existed, the switch starts on. |
 
+### CLI Detection Timeout
+
+| | |
+|---|---|
+| **Type** | Choice (dropdown) |
+| **Default** | 20 seconds |
+| **Options** | 10 seconds, 20 seconds, 30 seconds, 60 seconds, 2 minutes |
+| **Description** | How long the extension waits for `bw --version` before it reports that the Bitwarden CLI is missing. Select a longer time when antivirus software makes `bw` slow to start. The extension keeps a successful result, so the wait applies only to the first check and to a check after the CLI path changes. |
+
 ### Debug Logging
 
 | | |

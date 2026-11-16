@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using Microsoft.Win32;
 using Windows.UI.ViewManagement;
 using HoobiBitwardenCommandPaletteExtension.Commands;
 using HoobiBitwardenCommandPaletteExtension.Companion;
@@ -49,6 +50,32 @@ internal static partial class VaultItemHelper
     if (!Uri.TryCreate(candidate, UriKind.Absolute, out var parsed))
       return null;
     return parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps ? parsed.AbsoluteUri : null;
+  }
+
+  // An allowlist, because a registered handler such as search: or ms-word: opens a UNC path taken from the value.
+  private static readonly HashSet<string> OpenableSchemes = new(StringComparer.OrdinalIgnoreCase)
+  {
+    "ssh", "ftp", "sftp", "irc", "vnc", "rdp", "ms-rd", "mailto", "tel",
+  };
+
+  internal static Func<string, bool> IsRegisteredScheme { get; set; } = scheme =>
+  {
+    using var key = Registry.ClassesRoot.OpenSubKey(scheme);
+    return key?.GetValue("URL Protocol") is not null;
+  };
+
+  internal static string? ToOpenableUri(string? value, bool assumeWeb)
+  {
+    if (assumeWeb && ToSafeWebUrl(value) is { } web)
+      return web;
+    var trimmed = value?.Trim();
+    if (string.IsNullOrEmpty(trimmed) || trimmed.Any(char.IsWhiteSpace) || !Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed))
+      return null;
+    if (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps)
+      return parsed.AbsoluteUri;
+    if (trimmed.Contains('\\') || !OpenableSchemes.Contains(parsed.Scheme))
+      return null;
+    return IsRegisteredScheme(parsed.Scheme) ? parsed.AbsoluteUri : null;
   }
 
   internal static CommandContextItem[] BuildContextItems(BitwardenItem item, BitwardenCliService? service = null)
@@ -385,11 +412,7 @@ internal static partial class VaultItemHelper
     Result = CommandResult.Dismiss(),
   };
 
-  internal static bool IsValidSshHost(string? host) =>
-      !string.IsNullOrEmpty(host) && SshHostPattern().IsMatch(host);
-
-  [GeneratedRegex(@"^[\w.+-]+@[\w.-]+$", RegexOptions.None, matchTimeoutMilliseconds: 100)]
-  private static partial Regex SshHostPattern();
+  internal static bool IsValidSshHost(string? host) => HoobiBitwarden.Ipc.SshHostRules.IsValid(host);
 
   [GeneratedRegex(@"[^a-z0-9_]", RegexOptions.None, matchTimeoutMilliseconds: 100)]
   private static partial Regex UnsafeSlugChars();

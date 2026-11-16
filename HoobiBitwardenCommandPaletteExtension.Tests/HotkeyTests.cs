@@ -3,6 +3,7 @@ using HoobiBitwarden.Ipc;
 using HoobiBitwardenCommandPaletteExtension.Companion;
 using HoobiBitwardenCommandPaletteExtension.Helpers;
 using HoobiBitwardenCommandPaletteExtension.Models;
+using HoobiBitwardenCommandPaletteExtension.Pages;
 using HoobiBitwardenCommandPaletteExtension.Services;
 
 namespace HoobiBitwardenCommandPaletteExtension.Tests;
@@ -116,7 +117,8 @@ public class HotkeyTests : IDisposable
   [Fact]
   public void EnterChoices_AreTheTypeActionsPlusTheAllItemActions()
   {
-    Assert.Equal([HotkeyIds.OpenWindow, HotkeyIds.OpenWebVault], HotkeyCatalog.EnterChoices(HotkeyItemTypes.All).Select(a => a.Id));
+    Assert.Equal([HotkeyIds.OpenWindow, HotkeyIds.OpenWebVault, HotkeyIds.ShowActions], HotkeyCatalog.EnterChoices(HotkeyItemTypes.All).Select(a => a.Id));
+    Assert.DoesNotContain(HotkeyCatalog.Actions, a => a.Id == HotkeyIds.ShowActions);
     var login = HotkeyCatalog.EnterChoices(HotkeyItemTypes.Login).Select(a => a.Id).ToList();
     Assert.Contains(HotkeyIds.LoginCopyPassword, login);
     Assert.Contains(HotkeyIds.OpenWebVault, login);
@@ -574,6 +576,30 @@ public class HotkeyTests : IDisposable
 
     Assert.Equal(expected, VaultItemHelper.GetDefaultCommand(login).Name);
     Assert.DoesNotContain(VaultItemHelper.BuildContextItems(login), ci => ci.Title == "View in Web Vault");
+  }
+
+  [Fact]
+  public void GetDefaultCommand_ShowActionsChosen_OpensAPageOfTheItemActions()
+  {
+    BitwardenCliService.ResetStaticState();
+    var login = new BitwardenItem
+    {
+      Id = "test-login",
+      Name = "Example",
+      Type = BitwardenItemType.Login,
+      Username = "user@test.com",
+      Password = ProtectedSecret.From("secret"),
+      Uris = [new ItemUri("https://example.com", UriMatchType.Default)],
+    };
+    Assert.Null(_store.SetEnter(HotkeyItemTypes.Login, HotkeyIds.ShowActions));
+
+    var page = Assert.IsType<ItemActionsPage>(VaultItemHelper.GetDefaultCommand(login));
+
+    Assert.Equal("Show actions", page.Name);
+    Assert.Equal("Example", page.Title);
+    Assert.Equal(VaultItemHelper.BuildContextItems(login).Select(ci => ci.Title), page.GetItems().Select(i => i.Title));
+    Assert.Contains(page.GetItems(), i => i.Title == "Open in Browser");
+    Assert.Equal(HotkeyIds.ShowActions, new HotkeyStore(FilePath).EnterFor(HotkeyItemTypes.Login));
   }
 
   [Fact]

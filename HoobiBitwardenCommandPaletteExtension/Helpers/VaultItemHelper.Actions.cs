@@ -43,6 +43,9 @@ internal static partial class VaultItemHelper
 
   private static BuiltAction? BuildAction(BitwardenItem item, string actionId, BitwardenCliService? reprompt)
   {
+    if (actionId == HotkeyIds.ShowActions)
+      return new(HotkeyCatalog.ShowActions.Title, "", new ItemActionsPage(item, reprompt));
+
     if (HotkeyCatalog.Find(actionId) is not { } action || !ActionGlyphs.TryGetValue(actionId, out var glyph))
       return null;
 

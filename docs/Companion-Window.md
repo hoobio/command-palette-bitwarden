@@ -38,7 +38,7 @@ All item types also show Custom fields, Additional options (notes) and Item hist
 - The copy button copies through the extension. Secrets are excluded from clipboard history and cleared after the time set in [Settings](Settings), also after you close the window.
 - To type a field's value into another app, drag the field's label or row to a text box in that app. The value text itself stays selectable, so a drag on it selects text. A masked secret is sent with its real value and stays masked in the window. The drag does not use the clipboard. Windows does not let a drop reach an app that runs as administrator. If the item needs the master password, the window asks for it, then shows the field so you can drag it again.
 - The verification code changes at the end of each period. The ring shows the seconds left in the current period. The ring and the number turn yellow for the last 5 seconds.
-- The open button on a website opens it in your browser. Only `http` and `https` addresses open.
+- The open button shows on a website and on any other text field whose value is a web address (`http` or `https`) or an address with one of these schemes, when an app on this computer is registered for the scheme: `ssh`, `ftp`, `sftp`, `irc`, `vnc`, `rdp`, `ms-rd`, `mailto`, `tel`. A website without a scheme, such as `github.com`, opens as `https`. Secret fields never have an open button. The extension checks the value again before it opens it. `file` addresses, paths and scripts do not open.
 - When a save, a rotate or another change does not reach the vault, the window plays the Windows error sound, flashes its taskbar button until you switch to it, and shows a red message with a warning icon at the top of the item.
 - A failed request shows as a yellow message at the top of the item. Red is used only for actions that you cannot undo. When an action fails because the item changed in the vault, the window reloads the item and a yellow message at the top says so.
 - The result of a successful action (copy, save, rotate, attach, download or delete an attachment, copy from the generator) shows in a small toast at the bottom centre of the monitor that holds the window, above the taskbar, as in Command Palette. The toast names the field or file, never its value. It does not take focus, has no taskbar button and goes away after about 2 seconds. A new result replaces the text and starts the 2 seconds again.
@@ -59,9 +59,18 @@ The item window shows an **Attachments** group with the name and size of each fi
 
 Attachments need Bitwarden Premium, or an organisation item in an organisation that allows them. The window shows a message when Bitwarden refuses a file because of the plan, the 500 MB limit or the storage space. For an item with master password re-prompt, the attachments show after you verify, and each download, upload and delete asks for your master password outside the grace period.
 
+### Field menu
+
+Right-click a field row to open its menu:
+
+- **Copy** copies the field, as the copy button does.
+- **Edit** opens the whole item in edit mode. It shows only when you can edit the item.
+- **Open URL** opens the value, as the open button does. It shows only when the field has an open button.
+- **Always on top** works as in the window menu below.
+
 ### Always on top
 
-Right-click the title bar or an empty area of the window and select **Always on top** to keep the window above other windows. A check mark shows in the menu and a pin shows in the title bar while it is on. New item windows use the same choice until the companion stops.
+Right-click the title bar or an empty area of the window, or a field row, and select **Always on top** to keep the window above other windows. A check mark shows in the menu and a pin shows in the title bar while it is on. New item windows use the same choice until the companion stops.
 
 ## Edit an item
 
