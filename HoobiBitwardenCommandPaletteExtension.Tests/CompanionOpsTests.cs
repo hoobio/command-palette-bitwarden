@@ -17,7 +17,7 @@ public class CompanionOpsTests : IDisposable
 
   private readonly Func<string, bool> _originalIsRegisteredScheme = VaultItemHelper.IsRegisteredScheme;
 
-  public CompanionOpsTests() => VaultItemHelper.IsRegisteredScheme = scheme => scheme == "myapp";
+  public CompanionOpsTests() => VaultItemHelper.IsRegisteredScheme = scheme => scheme == "vnc";
 
   public void Dispose()
   {
@@ -96,7 +96,7 @@ public class CompanionOpsTests : IDisposable
     CustomFields = new Dictionary<string, CustomField>
     {
       ["link"] = new("https://example.com/x"),
-      ["app"] = new("myapp://open/1"),
+      ["app"] = new("vnc://open/1"),
       ["plain"] = new("not a link"),
       ["token"] = new(null, ProtectedSecret.From("https://secret.example.com")),
     },
@@ -295,7 +295,7 @@ public class CompanionOpsTests : IDisposable
     h.Ops.OpenUri(id, ItemFields.CustomPrefix + "0");
     h.Ops.OpenUri(id, ItemFields.CustomPrefix + "1");
 
-    Assert.Equal(["https://example.com/x", "myapp://open/1"], h.Opened);
+    Assert.Equal(["https://example.com/x", "vnc://open/1"], h.Opened);
     Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.CustomPrefix + "2"))));
     Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.CustomPrefix + "3"))));
     Assert.Equal(IpcErrors.Invalid, Code(Assert.Throws<IpcException>(() => h.Ops.OpenUri(id, ItemFields.Password))));

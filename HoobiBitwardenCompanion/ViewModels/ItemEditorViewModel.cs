@@ -28,6 +28,7 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
   private readonly int _sshHostIndex = -1;
   private readonly string _sshHostName = SshHostFieldName;
   private readonly bool _hostFieldKept;
+  private readonly string? _loadedSshHost;
 
   public ItemEditorViewModel(EditableItem item, FiltersResponse filters)
   {
@@ -79,6 +80,7 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
     if (hostIndex >= 0 && item.Fields[hostIndex] is { Type: TextFieldType } hostField)
     {
       SshHost = hostField.Value;
+      _loadedSshHost = Empty(hostField.Value?.Trim());
       _sshHostIndex = hostIndex;
       _sshHostName = hostField.Name;
     }
@@ -305,7 +307,7 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
 
   private string? TrimmedSshHost => ShowSshHost ? Empty(SshHost?.Trim()) : null;
 
-  private static bool IsSshHostName(string name) => string.Equals(name.Trim(), SshHostFieldName, StringComparison.OrdinalIgnoreCase);
+  private static bool IsSshHostName(string name) => string.Equals(name, SshHostFieldName, StringComparison.OrdinalIgnoreCase);
 
   private List<CustomFieldEdit> FieldsWithSshHost()
   {
@@ -320,8 +322,8 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
     ValidationMessage = Name.Trim().Length == 0 ? NameRequired
       : IsCard && !ItemRules.IsValidMonth(Empty(CardExpMonth)) ? "Expiration month must be a number from 1 to 12."
       : IsSshKey && (Empty(PrivateKey) is null || Empty(PublicKey) is null || Empty(Fingerprint) is null) ? "An SSH key needs the private key, public key and fingerprint."
-      : TrimmedSshHost is not null && !SshHostRules.IsValid(TrimmedSshHost) ? "The SSH host must be in the form user@hostname."
-      : TrimmedSshHost is not null && Fields.Any(f => IsSshHostName(f.Name)) ? "Use the SSH host box for the host field."
+      : TrimmedSshHost is not null && TrimmedSshHost != _loadedSshHost && !SshHostRules.IsValid(TrimmedSshHost) ? "The SSH host must be in the form user@hostname."
+      : TrimmedSshHost is not null && Fields.Any(f => f.IsAdded && IsSshHostName(f.Name)) ? "Use the SSH host box for the host field."
       : Fields.Any(f => f.IsAdded && f.Name.Trim().Length == 0) ? "Every new custom field needs a name."
       : Fields.Any(f => f.IsLinked && f.SelectedLink is null) ? "Choose the linked field for every linked custom field."
       : SelectedOwner?.Value is { } org && (HasCollections || org != OriginalOrganizationId) && !Collections.Any(c => c.IsChecked) ? "Choose at least one collection for the organisation."

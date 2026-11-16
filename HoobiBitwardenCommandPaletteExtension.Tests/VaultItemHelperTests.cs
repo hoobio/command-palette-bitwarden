@@ -613,8 +613,13 @@ public class VaultItemHelperTests
   [InlineData("github.com", true, "https://github.com/")]
   [InlineData("https://example.com/a", false, "https://example.com/a")]
   [InlineData("  http://example.com ", false, "http://example.com/")]
-  [InlineData("myapp://open/item?id=1", false, "myapp://open/item?id=1")]
-  [InlineData("myapp://open/item?id=1", true, "myapp://open/item?id=1")]
+  [InlineData("vnc://open/item?id=1", false, "vnc://open/item?id=1")]
+  [InlineData("vnc://open/item?id=1", true, "vnc://open/item?id=1")]
+  [InlineData("mailto:a@example.com", false, "mailto:a@example.com")]
+  [InlineData("steam://run/10", false, null)]
+  [InlineData("search:query=x&crumb=location:\\\\evil\\share", false, null)]
+  [InlineData("ms-word:ofe|u|x", true, null)]
+  [InlineData("vnc://host\\x", false, null)]
   [InlineData("github.com", false, null)]
   [InlineData("file:///c:/x", false, null)]
   [InlineData("file:///c:/x", true, null)]
@@ -629,20 +634,20 @@ public class VaultItemHelperTests
   [InlineData("ms-officecmd:x", false, null)]
   [InlineData("unregistered://x", false, null)]
   [InlineData("user:pass", false, null)]
-  [InlineData("myapp://has space", false, null)]
+  [InlineData("vnc://has space", false, null)]
   [InlineData("plain text", false, null)]
   [InlineData("", false, null)]
   [InlineData(null, true, null)]
   public void ToOpenableUri_AcceptsWebAndRegisteredSchemesOnly(string? input, bool assumeWeb, string? expected)
   {
-    var result = WithRegisteredSchemes(() => VaultItemHelper.ToOpenableUri(input, assumeWeb), "myapp", "javascript", "ms-msdt", "file");
+    var result = WithRegisteredSchemes(() => VaultItemHelper.ToOpenableUri(input, assumeWeb), "vnc", "mailto", "steam", "search", "ms-word", "javascript", "ms-msdt", "file");
     Assert.Equal(expected, result);
   }
 
   [Fact]
   public void ToOpenableUri_UnregisteredAppScheme_IsRejected()
   {
-    Assert.Null(WithRegisteredSchemes(() => VaultItemHelper.ToOpenableUri("myapp://open", false)));
+    Assert.Null(WithRegisteredSchemes(() => VaultItemHelper.ToOpenableUri("vnc://open", false)));
   }
 
   [Fact]

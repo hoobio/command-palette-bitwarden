@@ -52,9 +52,10 @@ internal static partial class VaultItemHelper
     return parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps ? parsed.AbsoluteUri : null;
   }
 
-  private static readonly HashSet<string> BlockedSchemes = new(StringComparer.OrdinalIgnoreCase)
+  // An allowlist, because a registered handler such as search: or ms-word: opens a UNC path taken from the value.
+  private static readonly HashSet<string> OpenableSchemes = new(StringComparer.OrdinalIgnoreCase)
   {
-    "javascript", "vbscript", "data", "ms-msdt", "search-ms", "ms-officecmd",
+    "ssh", "ftp", "sftp", "irc", "vnc", "rdp", "ms-rd", "mailto", "tel",
   };
 
   internal static Func<string, bool> IsRegisteredScheme { get; set; } = scheme =>
@@ -72,9 +73,9 @@ internal static partial class VaultItemHelper
       return null;
     if (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps)
       return parsed.AbsoluteUri;
-    if (parsed.IsFile || parsed.IsUnc || BlockedSchemes.Contains(parsed.Scheme))
+    if (trimmed.Contains('\\') || !OpenableSchemes.Contains(parsed.Scheme))
       return null;
-    return IsRegisteredScheme(parsed.Scheme) ? trimmed : null;
+    return IsRegisteredScheme(parsed.Scheme) ? parsed.AbsoluteUri : null;
   }
 
   internal static CommandContextItem[] BuildContextItems(BitwardenItem item, BitwardenCliService? service = null)
