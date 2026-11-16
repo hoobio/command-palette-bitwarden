@@ -367,6 +367,100 @@ public class EditTests(AvaloniaSession session)
     Assert.False(new ItemEditorViewModel(Sample(2), Filters).CanLink);
   }
 
+  private static EditableItem SshWithHost(int hostType) =>
+    Sample(5) with { Fields = [new CustomFieldEdit("pin", "1234", 1), new CustomFieldEdit("Host", "root@router", hostType), new CustomFieldEdit("text", "v", 0)] };
+
+  private static async Task<IReadOnlyList<CustomFieldEdit>> SaveSshAsync(EditableItem item, Action<ItemEditorViewModel> change)
+  {
+    using var h = new Harness(item);
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+    await vm.EditCommand.ExecuteAsync(null);
+    change(vm.Editor!);
+    await vm.SaveCommand.ExecuteAsync(null);
+    return IpcJson.Read(Assert.Single(h.Extension.Payloads(Ops.UpdateItem)), IpcJson.Default.EditableItem).Fields;
+  }
+
+  [Fact]
+  public void SshHost_MovesATextHostFieldIntoTheBox_AndKeepsItsIndex()
+  {
+    var editor = new ItemEditorViewModel(SshWithHost(0), Filters);
+
+    Assert.True(editor.ShowSshHost);
+    Assert.Equal("root@router", editor.SshHost);
+    Assert.Equal(["pin", "text"], editor.Fields.Select(f => f.Name));
+    Assert.Equal(["pin", "Host", "text"], editor.ToDto().Fields.Select(f => f.Name));
+    Assert.Equal(new CustomFieldEdit("Host", "root@router", 0), editor.ToDto().Fields[1]);
+    Assert.False(editor.IsDirty);
+  }
+
+  [Fact]
+  public Task SshHost_Unchanged_IsSentBackAtItsOriginalIndex() => session.RunAsync(async () =>
+  {
+    var fields = await SaveSshAsync(SshWithHost(0), editor => editor.Notes = "changed");
+
+    Assert.Equal(["pin", "Host", "text"], fields.Select(f => f.Name));
+    Assert.Equal(new CustomFieldEdit("Host", "root@router", 0), fields[1]);
+  });
+
+  [Fact]
+  public Task SshHost_Typed_IsSentAsATextHostField() => session.RunAsync(async () =>
+  {
+    var fields = await SaveSshAsync(Sample(5), editor => editor.SshHost = " me@box ");
+
+    Assert.Equal(["pin", "flag", "text", "host"], fields.Select(f => f.Name));
+    Assert.Equal(new CustomFieldEdit("host", "me@box", 0), fields[^1]);
+  });
+
+  [Fact]
+  public Task SshHost_Cleared_SendsNoHostField() => session.RunAsync(async () =>
+  {
+    var fields = await SaveSshAsync(SshWithHost(0), editor => editor.SshHost = string.Empty);
+
+    Assert.Equal(["pin", "text"], fields.Select(f => f.Name));
+  });
+
+  [Fact]
+  public Task SshHost_Invalid_BlocksTheSave() => session.RunAsync(async () =>
+  {
+    var item = SshWithHost(0);
+    using var h = new Harness(item);
+    using var vm = h.Item(item.Id!);
+    await vm.LoadAsync();
+    await vm.EditCommand.ExecuteAsync(null);
+    vm.Editor!.SshHost = "not a host";
+
+    await vm.SaveCommand.ExecuteAsync(null);
+
+    Assert.Equal("The SSH host must be in the form user@hostname.", vm.Editor.ValidationMessage);
+    Assert.Empty(h.Extension.Payloads(Ops.UpdateItem));
+  });
+
+  [Fact]
+  public void SshHost_RejectsAHostCustomFieldWhileTheBoxIsFilled()
+  {
+    var editor = new ItemEditorViewModel(Sample(5), Filters) { SshHost = "me@box" };
+    editor.AddFieldCommand.Execute("0");
+    editor.Fields[^1].Name = "HOST";
+
+    Assert.Equal("Use the SSH host box for the host field.", editor.Validate());
+  }
+
+  [Fact]
+  public Task SshHost_HiddenHostField_HidesTheBox_AndRoundTripsUntouched() => session.RunAsync(async () =>
+  {
+    var item = SshWithHost(1);
+    var editor = new ItemEditorViewModel(item, Filters);
+    Assert.False(editor.ShowSshHost);
+    Assert.Equal(["pin", "Host", "text"], editor.Fields.Select(f => f.Name));
+    Assert.Null(editor.SshHost);
+
+    var fields = await SaveSshAsync(item, e => e.Notes = "changed");
+
+    Assert.Equal(["pin", "Host", "text"], fields.Select(f => f.Name));
+    Assert.Equal(new CustomFieldEdit("Host", "root@router", 1), fields[1]);
+  });
+
   [Theory]
   [InlineData(1)]
   [InlineData(2)]

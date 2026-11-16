@@ -4,6 +4,14 @@ SSH key items support a quick-connect feature that launches an SSH session direc
 
 ## Quick Connect
 
+### Companion Editor
+
+The companion item editor has an **SSH host** box for SSH key items. Enter the value in `user@hostname` format. The box stores it in the `host` custom field, so other Bitwarden clients see the same value. An empty box removes the field.
+
+The box does not appear when the item already has a hidden `host` field. That field stays in the custom fields list and is not changed.
+
+### Other Bitwarden Clients
+
 Add a custom field named `host` to an SSH key item with a value in `user@hostname` format. When set, the default action (Enter) launches a session immediately:
 
 ```

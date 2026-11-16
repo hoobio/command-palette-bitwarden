@@ -336,6 +336,12 @@
                             <TextBox Text="{Binding Fingerprint}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
+                    <Border Classes="Row Edit" IsVisible="{Binding ShowSshHost}">
+                        <StackPanel>
+                            <TextBlock Classes="FieldLabel" Text="SSH host" />
+                            <TextBox x:Name="SshHostBox" Text="{Binding SshHost}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="user@hostname" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
         </StackPanel>
