@@ -171,6 +171,20 @@ public class BitwardenSettingsManagerTests : IDisposable
     }
 
     [Fact]
+    public void CliDetectionTimeout_DefaultsTo20Seconds_AndFollowsTheChoice()
+    {
+        var m = CreateManager();
+        Assert.Equal("20", m.CliDetectionTimeout.Value);
+        Assert.Equal(20_000, m.CliDetectionTimeoutMs);
+
+        m.CliDetectionTimeout.Value = "60";
+        Assert.Equal(60_000, m.CliDetectionTimeoutMs);
+
+        m.CliDetectionTimeout.Value = "nonsense";
+        Assert.Equal(20_000, m.CliDetectionTimeoutMs);
+    }
+
+    [Fact]
     public void SyncClipboardSettings_PropagatesDelay()
     {
         var m = CreateManager();

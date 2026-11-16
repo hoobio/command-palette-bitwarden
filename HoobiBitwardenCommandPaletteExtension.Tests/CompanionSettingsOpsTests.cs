@@ -46,7 +46,8 @@ public class CompanionSettingsOpsTests : IDisposable
     Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Section));
     Assert.Equal(2, settings.Count(s => s.Kind == SettingKinds.Link));
     Assert.Equal(17, settings.Count(s => s.Kind == SettingKinds.Toggle));
-    Assert.Equal(8, settings.Count(s => s.Kind == SettingKinds.Choice));
+    Assert.Equal(9, settings.Count(s => s.Kind == SettingKinds.Choice));
+    Assert.Equal("20", settings.Single(s => s.Key == "cliDetectionTimeout").Value);
     Assert.Equal(10, settings.Count(s => s.Kind == SettingKinds.Text));
     Assert.Equal(["_section_server", "serverRegion", "serverUrl", "serverAdvanced"], settings.Take(4).Select(s => s.Key));
     Assert.Equal(["_section_shortcuts", "hotkeys"], settings.Skip(11).Take(2).Select(s => s.Key));
