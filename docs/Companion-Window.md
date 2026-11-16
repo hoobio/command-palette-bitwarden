@@ -64,7 +64,7 @@ Attachments need Bitwarden Premium, or an organisation item in an organisation t
 Right-click a field row to open its menu:
 
 - **Copy** copies the field, as the copy button does.
-- **Edit** opens the whole item in edit mode. It shows only when you can edit the item.
+- **Edit** opens the whole item in edit mode. It shows only when you can edit the item. The form scrolls to the editor of the field that you right-clicked and puts the keyboard focus on it. A secret field stays hidden. A field with no editor of its own, such as a read-only field, opens the form at the top.
 - **Open URL** opens the value, as the open button does. It shows only when the field has an open button.
 - **Always on top** works as in the window menu below.
 

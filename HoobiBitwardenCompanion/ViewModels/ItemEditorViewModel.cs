@@ -128,6 +128,12 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
 
   public IReadOnlyList<Choice> LinkTargets { get; }
 
+  public string? FocusFieldKey { get; set; }
+
+  public string? SshHostKey => _sshHostIndex >= 0 ? ItemFields.CustomPrefix + _sshHostIndex.ToString(CultureInfo.InvariantCulture) : null;
+
+  internal int CustomEditorIndex(int viewIndex) => _sshHostIndex >= 0 && viewIndex > _sshHostIndex ? viewIndex - 1 : viewIndex;
+
   public ObservableCollection<UriEditViewModel> Uris { get; }
 
   public ObservableCollection<CustomFieldViewModel> Fields { get; }

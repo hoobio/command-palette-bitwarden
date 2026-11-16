@@ -43,6 +43,8 @@ public class ItemWindowTests(AvaloniaSession session)
 
     public bool WithNotes { get; set; }
 
+    public int ExtraCount { get; set; }
+
     public List<JsonElement?> CopyPayloads { get; } = [];
 
     public List<JsonElement?> OpenPayloads { get; } = [];
@@ -76,7 +78,10 @@ public class ItemWindowTests(AvaloniaSession session)
         Ops.ListFilters => IpcJson.ToElement(new FiltersResponse([], [], []), IpcJson.Default.FiltersResponse),
         Ops.GetEditableItem => IpcJson.ToElement(
           new EditableItem(ItemId, 1, "GitHub", null, null, [], false, true, null, new DateTime(2025, 1, 2, 0, 0, 0, DateTimeKind.Utc), [],
-            Login: new LoginEdit("octocat", "hunter2", null, [new UriEdit("https://github.com")])),
+            Login: new LoginEdit("octocat", "hunter2", null, [new UriEdit("https://github.com"), .. Enumerable.Range(1, ExtraCount).Select(i => new UriEdit($"https://e{i}.example"))])) with
+          {
+            Fields = [.. Enumerable.Range(0, ExtraCount).Select(i => new CustomFieldEdit($"f{i}", $"v{i}", 0))],
+          },
           IpcJson.Default.EditableItem),
         _ => null,
       };
@@ -118,6 +123,8 @@ public class ItemWindowTests(AvaloniaSession session)
         new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true),
         new FieldDto(ItemFields.Totp, "Verification code (TOTP)", "Login credentials", null, true),
         new FieldDto(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://github.com", false, CanOpen: true),
+        .. Enumerable.Range(1, ExtraCount).Select(i => new FieldDto(ItemFields.UriPrefix + i, "Website", "Autofill options", $"https://e{i}.example", false)),
+        .. Enumerable.Range(0, ExtraCount).Select(i => new FieldDto(ItemFields.CustomPrefix + i, $"f{i}", "Custom fields", $"v{i}", false)),
         .. WithNotes ? [new FieldDto(ItemFields.Notes, "Notes", "Additional options", null, true, IsMultiline: true)] : Array.Empty<FieldDto>(),
       ],
       Grace: RepromptRequired ? null : _grace,
@@ -215,6 +222,94 @@ public class ItemWindowTests(AvaloniaSession session)
     items[1].Command!.Execute(null);
     AvaloniaSession.WaitFor(() => vm.IsEditing);
     Assert.Equal(1, extension.Count(Ops.GetEditableItem));
+    window.Close();
+  });
+
+  private static async Task<(ItemWindow Window, ItemViewModel ViewModel)> ShowLongItemAsync(FakeExtension extension, ChannelPair pair)
+  {
+    extension.ExtraCount = 12;
+    var vm = new ItemViewModel(ItemId, CompanionChannel(pair)) { Toast = (_, _) => { } };
+    var window = new ItemWindow(vm) { Height = 480 };
+    window.Show();
+    await vm.LoadAsync();
+    window.UpdateLayout();
+    return (window, vm);
+  }
+
+  private static ScrollViewer EditorScroll(ItemWindow window) => window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "EditorScroll");
+
+  private static void EditFromRow(ItemWindow window, ItemViewModel vm, string key)
+  {
+    var row = FieldRow(window, key);
+    OpenRowMenu(row)[1].Command!.Execute(null);
+    AvaloniaSession.WaitFor(() => vm.IsEditing);
+    window.UpdateLayout();
+  }
+
+  private static void AssertFocusedAndInView(ItemWindow window, Func<TextBox, bool> match)
+  {
+    AvaloniaSession.WaitFor(() => window.FocusManager!.GetFocusedElement() is TextBox box && match(box));
+    var focused = (TextBox)window.FocusManager!.GetFocusedElement()!;
+    var scroll = EditorScroll(window);
+    var top = focused.TranslatePoint(default, scroll)!.Value.Y;
+    Assert.True(top >= 0 && top + focused.Bounds.Height <= scroll.Viewport.Height, $"editor at {top} outside viewport {scroll.Viewport.Height}");
+  }
+
+  [Fact]
+  public Task FieldRow_Edit_ScrollsToAndFocusesThatFieldsEditor() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    var (window, vm) = await ShowLongItemAsync(extension, pair);
+
+    EditFromRow(window, vm, ItemFields.CustomPrefix + "10");
+
+    AssertFocusedAndInView(window, box => box.Text == "v10");
+    Assert.True(EditorScroll(window).Offset.Y > 0);
+    window.Close();
+  });
+
+  [Fact]
+  public Task FieldRow_Edit_OnASecretField_FocusesTheMaskedBox() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    var (window, vm) = await ShowLongItemAsync(extension, pair);
+
+    EditFromRow(window, vm, ItemFields.Password);
+
+    AssertFocusedAndInView(window, box => box.Name == "PasswordBox");
+    Assert.Equal('•', ((TextBox)window.FocusManager!.GetFocusedElement()!).PasswordChar);
+    window.Close();
+  });
+
+  [Fact]
+  public Task FieldRow_Edit_OnALaterWebsite_FocusesThatWebsiteEditor() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    var (window, vm) = await ShowLongItemAsync(extension, pair);
+
+    EditFromRow(window, vm, ItemFields.UriPrefix + "5");
+
+    AssertFocusedAndInView(window, box => box.Text == "https://e5.example");
+    window.Close();
+  });
+
+  [Fact]
+  public Task Edit_WithoutAField_FocusesNothingAndStaysAtTheTop() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension();
+    using var pair = new ChannelPair(extension.HandleAsync);
+    var (window, vm) = await ShowLongItemAsync(extension, pair);
+
+    await vm.EditCommand.ExecuteAsync(null);
+    window.UpdateLayout();
+    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+    Assert.True(vm.IsEditing);
+    Assert.DoesNotContain(EditorScroll(window).GetVisualDescendants(), v => ReferenceEquals(v, window.FocusManager!.GetFocusedElement()));
+    Assert.Equal(0, EditorScroll(window).Offset.Y);
     window.Close();
   });
 

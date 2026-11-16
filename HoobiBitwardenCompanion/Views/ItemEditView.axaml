@@ -3,6 +3,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:vm="using:HoobiBitwardenCompanion.ViewModels"
+    xmlns:ipc="using:HoobiBitwarden.Ipc"
     x:DataType="vm:ItemEditorViewModel">
     <UserControl.Styles>
         <Style Selector="StackPanel.Solo">
@@ -80,14 +81,14 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Username" />
-                            <TextBox Text="{Binding Username}" PlaceholderText="jane@example.com" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.Username}" Text="{Binding Username}" PlaceholderText="jane@example.com" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Password" />
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                                <TextBox x:Name="PasswordBox" Classes="revealPasswordButton" Text="{Binding Password}" PasswordChar="•" PlaceholderText="Password" FontFamily="{StaticResource HoobiMonoFontFamily}" />
+                                <TextBox x:Name="PasswordBox" Tag="{x:Static ipc:ItemFields.Password}" Classes="revealPasswordButton" Text="{Binding Password}" PasswordChar="•" PlaceholderText="Password" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                                 <Button x:Name="GeneratePasswordButton" Grid.Column="1" Theme="{StaticResource IconButtonStyle}" Content="{StaticResource Glyph.Password}" Command="{Binding GeneratePasswordCommand}" ToolTip.Tip="Generate password" AutomationProperties.Name="Generate password" />
                             </Grid>
                         </StackPanel>
@@ -95,7 +96,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Authenticator key (TOTP)" />
-                            <TextBox Classes="revealPasswordButton" Text="{Binding Totp}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="otpauth://totp/…" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.Totp}" Classes="revealPasswordButton" Text="{Binding Totp}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="otpauth://totp/…" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -104,7 +105,7 @@
             <TextBlock Classes="GroupHeader" Text="Autofill options" />
             <Border Classes="Group">
                 <StackPanel Classes="Rows">
-                    <ItemsControl Classes="Rows" ItemsSource="{Binding Uris}">
+                    <ItemsControl x:Name="UriList" Classes="Rows" ItemsSource="{Binding Uris}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:UriEditViewModel">
                                 <Border Classes="Row Edit">
@@ -139,26 +140,26 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Cardholder name" />
-                            <TextBox Text="{Binding CardholderName}" PlaceholderText="Jane Doe" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.CardholderName}" Text="{Binding CardholderName}" PlaceholderText="Jane Doe" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Brand" />
-                            <TextBox Text="{Binding CardBrand}" PlaceholderText="Visa" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.CardBrand}" Text="{Binding CardBrand}" PlaceholderText="Visa" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Number" />
-                            <TextBox Classes="revealPasswordButton" Text="{Binding CardNumber}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.CardNumber}" Classes="revealPasswordButton" Text="{Binding CardNumber}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                             <StackPanel>
                                 <TextBlock Classes="FieldLabel" Text="Expiration month" />
-                                <TextBox x:Name="ExpMonthBox" Text="{Binding CardExpMonth}" PlaceholderText="04" />
+                                <TextBox x:Name="ExpMonthBox" Tag="{x:Static ipc:ItemFields.CardExpiration}" Text="{Binding CardExpMonth}" PlaceholderText="04" />
                             </StackPanel>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Classes="FieldLabel" Text="Expiration year" />
@@ -169,7 +170,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Security code" />
-                            <TextBox Classes="revealPasswordButton" Text="{Binding CardCode}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.CardCode}" Classes="revealPasswordButton" Text="{Binding CardCode}" PasswordChar="•" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -188,7 +189,7 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Classes="FieldLabel" Text="First name" />
-                                <TextBox Text="{Binding FirstName}" />
+                                <TextBox Tag="{x:Static ipc:ItemFields.IdentityName}" Text="{Binding FirstName}" />
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -208,11 +209,11 @@
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                             <StackPanel>
                                 <TextBlock Classes="FieldLabel" Text="Username" />
-                                <TextBox Text="{Binding IdentityUsername}" />
+                                <TextBox Tag="{x:Static ipc:ItemFields.IdentityUsername}" Text="{Binding IdentityUsername}" />
                             </StackPanel>
                             <StackPanel Grid.Column="1">
                                 <TextBlock Classes="FieldLabel" Text="Company" />
-                                <TextBox Text="{Binding Company}" />
+                                <TextBox Tag="{x:Static ipc:ItemFields.IdentityCompany}" Text="{Binding Company}" />
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -249,11 +250,11 @@
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Email" />
-                            <TextBox Text="{Binding Email}" PlaceholderText="jane@example.com" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.IdentityEmail}" Text="{Binding Email}" PlaceholderText="jane@example.com" />
                         </StackPanel>
                         <StackPanel Grid.Column="1">
                             <TextBlock Classes="FieldLabel" Text="Phone" />
-                            <TextBox Text="{Binding Phone}" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.IdentityPhone}" Text="{Binding Phone}" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -265,7 +266,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Address 1" />
-                            <TextBox Text="{Binding Address1}" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.IdentityAddress}" Text="{Binding Address1}" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
@@ -315,7 +316,7 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Private key" />
-                            <TextBox x:Name="PrivateKeyBox" Classes="revealPasswordButton Multiline" PasswordChar="•" Text="{Binding PrivateKey}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----" />
+                            <TextBox x:Name="PrivateKeyBox" Tag="{x:Static ipc:ItemFields.SshPrivateKey}" Classes="revealPasswordButton Multiline" PasswordChar="•" Text="{Binding PrivateKey}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----" />
                             <Button x:Name="ImportKeyButton" Margin="0,8,0,0" Background="{DynamicResource LayerFillColorAltBrush}" Command="{Binding ImportSshKeyCommand}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Classes="Icon" Text="{StaticResource Glyph.Import}" FontSize="16" Foreground="{DynamicResource DefaultTextForegroundThemeBrush}" />
@@ -327,19 +328,19 @@
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Public key" />
-                            <TextBox Text="{Binding PublicKey}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.SshPublicKey}" Text="{Binding PublicKey}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="Fingerprint" />
-                            <TextBox Text="{Binding Fingerprint}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" />
+                            <TextBox Tag="{x:Static ipc:ItemFields.SshFingerprint}" Text="{Binding Fingerprint}" TextWrapping="Wrap" FontFamily="{StaticResource HoobiMonoFontFamily}" />
                         </StackPanel>
                     </Border>
                     <Border Classes="Row Edit" IsVisible="{Binding ShowSshHost}">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="SSH host" />
-                            <TextBox x:Name="SshHostBox" Text="{Binding SshHost}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="user@hostname" />
+                            <TextBox x:Name="SshHostBox" Tag="{Binding SshHostKey}" Text="{Binding SshHost}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="user@hostname" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -349,7 +350,7 @@
         <TextBlock Classes="GroupHeader" Text="Custom fields" />
         <Border Classes="Group">
             <StackPanel Classes="Rows">
-                <ItemsControl Classes="Rows" ItemsSource="{Binding Fields}">
+                <ItemsControl x:Name="FieldList" Classes="Rows" ItemsSource="{Binding Fields}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:CustomFieldViewModel">
                             <Border Classes="Row Edit">
@@ -393,7 +394,7 @@
             <Border Classes="Row Edit">
                 <StackPanel>
                     <TextBlock Classes="FieldLabel" Text="Notes" />
-                    <TextBox Classes="Multiline" Text="{Binding Notes}" />
+                    <TextBox Tag="{x:Static ipc:ItemFields.Notes}" Classes="Multiline" Text="{Binding Notes}" />
                 </StackPanel>
             </Border>
         </Border>

@@ -118,7 +118,7 @@ internal sealed partial class FieldViewModel : ObservableObject
   private Task OpenAsync() => _owner?.OpenUriAsync(this) ?? Task.CompletedTask;
 
   [RelayCommand]
-  private Task EditAsync() => _owner?.EditCommand.ExecuteAsync(null) ?? Task.CompletedTask;
+  private Task EditAsync() => _owner?.EditCommand.ExecuteAsync(Key) ?? Task.CompletedTask;
 
   [RelayCommand]
   private Task RotateAsync() => _owner?.RotateCommand.ExecuteAsync(null) ?? Task.CompletedTask;
