@@ -45,6 +45,10 @@ public class ItemWindowTests(AvaloniaSession session)
 
     public int ExtraCount { get; set; }
 
+    public EditableItem? Editable { get; set; }
+
+    public IReadOnlyList<FieldDto>? ViewFields { get; set; }
+
     public List<JsonElement?> CopyPayloads { get; } = [];
 
     public List<JsonElement?> OpenPayloads { get; } = [];
@@ -77,7 +81,7 @@ public class ItemWindowTests(AvaloniaSession session)
         Ops.VerifyReprompt => VerifyReprompt(IpcJson.Read(payload, IpcJson.Default.RepromptRequest)),
         Ops.ListFilters => IpcJson.ToElement(new FiltersResponse([], [], []), IpcJson.Default.FiltersResponse),
         Ops.GetEditableItem => IpcJson.ToElement(
-          new EditableItem(ItemId, 1, "GitHub", null, null, [], false, true, null, new DateTime(2025, 1, 2, 0, 0, 0, DateTimeKind.Utc), [],
+          Editable ?? new EditableItem(ItemId, 1, "GitHub", null, null, [], false, true, null, new DateTime(2025, 1, 2, 0, 0, 0, DateTimeKind.Utc), [],
             Login: new LoginEdit("octocat", "hunter2", null, [new UriEdit("https://github.com"), .. Enumerable.Range(1, ExtraCount).Select(i => new UriEdit($"https://e{i}.example"))])) with
           {
             Fields = [.. Enumerable.Range(0, ExtraCount).Select(i => new CustomFieldEdit($"f{i}", $"v{i}", 0))],
@@ -117,7 +121,7 @@ public class ItemWindowTests(AvaloniaSession session)
     private ItemDto Item() => new(
       ItemId, "GitHub", 1, "Work", "Acme", false, true, RepromptRequired,
       new DateTime(2024, 1, 2, 0, 0, 0, DateTimeKind.Utc), new DateTime(2025, 1, 2, 0, 0, 0, DateTimeKind.Utc), null,
-      RepromptRequired ? [] :
+      RepromptRequired ? [] : ViewFields is { } custom ? [.. custom] :
       [
         new FieldDto(ItemFields.Username, "Username", "Login credentials", "octocat", false),
         new FieldDto(ItemFields.Password, "Password", "Login credentials", null, true),
@@ -293,6 +297,74 @@ public class ItemWindowTests(AvaloniaSession session)
     EditFromRow(window, vm, ItemFields.UriPrefix + "5");
 
     AssertFocusedAndInView(window, box => box.Text == "https://e5.example");
+    window.Close();
+  });
+
+  private static EditableItem LiveItem(int type, CustomFieldEdit[] fields, LoginEdit? login = null, SshKeyEdit? ssh = null) =>
+    new(ItemId, type, "GitHub", null, null, [], false, true, null, new DateTime(2025, 1, 2, 0, 0, 0, DateTimeKind.Utc), fields, Login: login, SshKey: ssh);
+
+  private static FieldDto CustomRow(int index, string name, string? value) => new(ItemFields.CustomPrefix + index, name, "Custom fields", value, false);
+
+  [Fact]
+  public Task FieldRow_Edit_SkipsLinkedFieldsThatTheViewDoesNotList() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension
+    {
+      Editable = LiveItem(1, [new("a", null, 3, 100), new("b", "vb", 0), new("c", "vc", 0), new("flag", "true", 2)], new LoginEdit("octocat", "hunter2", null, [])),
+      ViewFields = [CustomRow(0, "b", "vb"), CustomRow(1, "c", "vc"), CustomRow(2, "flag", "true")],
+    };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    var (window, vm) = await ShowLongItemAsync(extension, pair);
+
+    EditFromRow(window, vm, ItemFields.CustomPrefix + "1");
+    AssertFocusedAndInView(window, box => box.Text == "vc");
+    await vm.CancelEditCommand.ExecuteAsync(null);
+
+    EditFromRow(window, vm, ItemFields.CustomPrefix + "2");
+    AvaloniaSession.WaitFor(() => window.FocusManager!.GetFocusedElement() is ToggleSwitch { IsChecked: true });
+    var toggle = (ToggleSwitch)window.FocusManager!.GetFocusedElement()!;
+    Assert.Contains(":focus-visible", toggle.Classes);
+    window.Close();
+  });
+
+  [Fact]
+  public Task FieldRow_Edit_SkipsEmptyWebsitesThatTheViewDoesNotList() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension
+    {
+      Editable = LiveItem(1, [], new LoginEdit("octocat", "hunter2", null, [new(""), new("https://x.example"), new("https://y.example")])),
+      ViewFields =
+      [
+        new FieldDto(ItemFields.UriPrefix + "0", "Website", "Autofill options", "https://x.example", false),
+        new FieldDto(ItemFields.UriPrefix + "1", "Website", "Autofill options", "https://y.example", false),
+      ],
+    };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    var (window, vm) = await ShowLongItemAsync(extension, pair);
+
+    EditFromRow(window, vm, ItemFields.UriPrefix + "1");
+
+    AssertFocusedAndInView(window, box => box.Text == "https://y.example");
+    window.Close();
+  });
+
+  [Fact]
+  public Task FieldRow_Edit_OnAnSshKey_SkipsTheHostBoxWhenMappingCustomFields() => session.RunAsync(async () =>
+  {
+    var extension = new FakeExtension
+    {
+      Editable = LiveItem(5, [new("a", "va", 0), new("host", "user@h", 0), new("b", "vb", 0)], ssh: new SshKeyEdit("private", "public", "fingerprint")),
+      ViewFields = [CustomRow(0, "a", "va"), CustomRow(1, "host", "user@h"), CustomRow(2, "b", "vb")],
+    };
+    using var pair = new ChannelPair(extension.HandleAsync);
+    var (window, vm) = await ShowLongItemAsync(extension, pair);
+
+    EditFromRow(window, vm, ItemFields.CustomPrefix + "2");
+    AssertFocusedAndInView(window, box => box.Text == "vb");
+    await vm.CancelEditCommand.ExecuteAsync(null);
+
+    EditFromRow(window, vm, ItemFields.CustomPrefix + "1");
+    AssertFocusedAndInView(window, box => box.Name == "SshHostBox");
     window.Close();
   });
 

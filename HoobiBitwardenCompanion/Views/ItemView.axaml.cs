@@ -245,8 +245,14 @@ internal sealed partial class ItemView : UserControl
     if (EditView.FindEditor(key) is not { } target)
       return;
     target.BringIntoView();
-    target.Focus();
     if (target is TextBox box)
+    {
+      box.Focus();
       box.CaretIndex = box.Text?.Length ?? 0;
+    }
+    else
+    {
+      target.Focus(NavigationMethod.Tab);
+    }
   }
 }

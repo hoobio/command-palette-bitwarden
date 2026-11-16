@@ -340,7 +340,7 @@
                     <Border Classes="Row Edit" IsVisible="{Binding ShowSshHost}">
                         <StackPanel>
                             <TextBlock Classes="FieldLabel" Text="SSH host" />
-                            <TextBox x:Name="SshHostBox" Tag="{Binding SshHostKey}" Text="{Binding SshHost}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="user@hostname" />
+                            <TextBox x:Name="SshHostBox" Text="{Binding SshHost}" FontFamily="{StaticResource HoobiMonoFontFamily}" PlaceholderText="user@hostname" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

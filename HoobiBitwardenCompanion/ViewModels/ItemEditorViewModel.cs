@@ -130,9 +130,33 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
 
   public string? FocusFieldKey { get; set; }
 
-  public string? SshHostKey => _sshHostIndex >= 0 ? ItemFields.CustomPrefix + _sshHostIndex.ToString(CultureInfo.InvariantCulture) : null;
+  internal int? UriEditorIndex(int viewIndex)
+  {
+    var seen = 0;
+    for (var i = 0; i < Uris.Count; i++)
+    {
+      if (!string.IsNullOrEmpty(Uris[i].Uri) && seen++ == viewIndex)
+        return i;
+    }
 
-  internal int CustomEditorIndex(int viewIndex) => _sshHostIndex >= 0 && viewIndex > _sshHostIndex ? viewIndex - 1 : viewIndex;
+    return null;
+  }
+
+  // Mirrors BitwardenCliService.ParseCustomFields, which numbers the custom:N keys of the item view.
+  internal (bool IsSshHost, int Index)? CustomEditorIndex(int viewIndex)
+  {
+    var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var seen = 0;
+    for (var raw = 0; raw < _source.Fields.Count; raw++)
+    {
+      var field = _source.Fields[raw];
+      if (string.IsNullOrEmpty(field.Name) || field.Value is null || !names.Add(field.Name) || seen++ != viewIndex)
+        continue;
+      return raw == _sshHostIndex ? (true, -1) : (false, _sshHostIndex >= 0 && raw > _sshHostIndex ? raw - 1 : raw);
+    }
+
+    return null;
+  }
 
   public ObservableCollection<UriEditViewModel> Uris { get; }
 

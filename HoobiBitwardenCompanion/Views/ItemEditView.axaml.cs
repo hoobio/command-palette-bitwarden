@@ -14,9 +14,9 @@ internal sealed partial class ItemEditView : UserControl
     if (DataContext is not ItemEditorViewModel editor)
       return null;
     if (TryIndex(key, ItemFields.UriPrefix, out var uri))
-      return FirstEditor(UriList, uri, 0);
+      return editor.UriEditorIndex(uri) is { } uriIndex ? FirstEditor(UriList, uriIndex, 0) : null;
     if (TryIndex(key, ItemFields.CustomPrefix, out var custom))
-      return key == editor.SshHostKey ? SshHostBox : FirstEditor(FieldList, editor.CustomEditorIndex(custom), 1);
+      return editor.CustomEditorIndex(custom) is { } slot ? slot.IsSshHost ? SshHostBox : FirstEditor(FieldList, slot.Index, 1) : null;
     return this.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.IsEffectivelyVisible && c.Tag as string == key);
   }
 
