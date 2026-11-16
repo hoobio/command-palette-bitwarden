@@ -255,6 +255,13 @@ public class ItemWindowTests(AvaloniaSession session)
     AvaloniaSession.WaitFor(() => window.FocusManager!.GetFocusedElement() is TextBox box && match(box));
     var focused = (TextBox)window.FocusManager!.GetFocusedElement()!;
     var scroll = EditorScroll(window);
+    var max = scroll.Extent.Height - scroll.Viewport.Height;
+    var centred = SmoothScroll.CentredOffset(scroll.Offset.Y + focused.TranslatePoint(default, scroll)!.Value.Y, focused.Bounds.Height, scroll.Viewport.Height, max);
+    AvaloniaSession.WaitFor(() =>
+    {
+      AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+      return Math.Abs(scroll.Offset.Y - centred) < 1;
+    });
     var top = focused.TranslatePoint(default, scroll)!.Value.Y;
     Assert.True(top >= 0 && top + focused.Bounds.Height <= scroll.Viewport.Height, $"editor at {top} outside viewport {scroll.Viewport.Height}");
   }
