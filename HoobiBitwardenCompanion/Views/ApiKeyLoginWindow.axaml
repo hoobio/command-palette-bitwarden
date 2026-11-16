@@ -19,7 +19,7 @@
     Background="{DynamicResource HoobiBgBrush}">
     <Grid RowDefinitions="64,*,Auto" Background="Transparent">
         <Grid x:Name="AppTitleBar" Background="Transparent" chrome:WindowDecorationProperties.ElementRole="TitleBar">
-            <TextBlock Text="Log in with your API key" Margin="24,16,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
+            <TextBlock Text="Log in with your API key" Margin="24,24,56,0" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Top" TextTrimming="CharacterEllipsis" IsHitTestVisible="False" />
         </Grid>
 
         <ScrollViewer Grid.Row="1">
