@@ -232,5 +232,27 @@ internal sealed partial class ItemView : UserControl
   {
     if (e.PropertyName == nameof(ItemViewModel.IsPrompting) && sender is ItemViewModel { IsPrompting: true })
       FocusPasswordBox();
+    else if (e.PropertyName == nameof(ItemViewModel.Editor) && sender is ItemViewModel { Editor.FocusFieldKey: not null })
+      Dispatcher.UIThread.Post(FocusEditorField, DispatcherPriority.Loaded);
+  }
+
+  private void FocusEditorField()
+  {
+    if ((DataContext as ItemViewModel)?.Editor is not { FocusFieldKey: { } key } editor)
+      return;
+    editor.FocusFieldKey = null;
+    EditorScroll.UpdateLayout();
+    if (EditView.FindEditor(key) is not { } target)
+      return;
+    target.BringIntoView();
+    if (target is TextBox box)
+    {
+      box.Focus();
+      box.CaretIndex = box.Text?.Length ?? 0;
+    }
+    else
+    {
+      target.Focus(NavigationMethod.Tab);
+    }
   }
 }

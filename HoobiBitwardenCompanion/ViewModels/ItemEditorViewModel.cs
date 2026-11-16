@@ -128,6 +128,36 @@ internal sealed partial class ItemEditorViewModel : ObservableObject
 
   public IReadOnlyList<Choice> LinkTargets { get; }
 
+  public string? FocusFieldKey { get; set; }
+
+  internal int? UriEditorIndex(int viewIndex)
+  {
+    var seen = 0;
+    for (var i = 0; i < Uris.Count; i++)
+    {
+      if (!string.IsNullOrEmpty(Uris[i].Uri) && seen++ == viewIndex)
+        return i;
+    }
+
+    return null;
+  }
+
+  // Mirrors BitwardenCliService.ParseCustomFields, which numbers the custom:N keys of the item view.
+  internal (bool IsSshHost, int Index)? CustomEditorIndex(int viewIndex)
+  {
+    var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var seen = 0;
+    for (var raw = 0; raw < _source.Fields.Count; raw++)
+    {
+      var field = _source.Fields[raw];
+      if (string.IsNullOrEmpty(field.Name) || field.Value is null || !names.Add(field.Name) || seen++ != viewIndex)
+        continue;
+      return raw == _sshHostIndex ? (true, -1) : (false, _sshHostIndex >= 0 && raw > _sshHostIndex ? raw - 1 : raw);
+    }
+
+    return null;
+  }
+
   public ObservableCollection<UriEditViewModel> Uris { get; }
 
   public ObservableCollection<CustomFieldViewModel> Fields { get; }

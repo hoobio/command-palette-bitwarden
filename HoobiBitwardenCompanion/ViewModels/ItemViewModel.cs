@@ -548,10 +548,10 @@ internal sealed partial class ItemViewModel : ObservableObject, IDisposable
   }
 
   [RelayCommand]
-  private async Task EditAsync()
+  private async Task EditAsync(string? fieldKey)
   {
     if (await LoadFiltersAsync() is { } filters)
-      await RunAsync(Ops.GetEditableItem, ItemPayload, reply => Editor = new ItemEditorViewModel(IpcJson.Read(reply, IpcJson.Default.EditableItem), filters));
+      await RunAsync(Ops.GetEditableItem, ItemPayload, reply => Editor = new ItemEditorViewModel(IpcJson.Read(reply, IpcJson.Default.EditableItem), filters) { FocusFieldKey = fieldKey });
   }
 
   [RelayCommand]
