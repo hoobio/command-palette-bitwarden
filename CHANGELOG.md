@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.16.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.15.0...v1.16.0) (2026-11-16)
+
+
+### Features
+
+* add a CLI Detection Timeout setting ([7339db8](https://github.com/hoobio/command-palette-bitwarden/commit/7339db88266a4f9438206ad0cc6d246c633fe1ed))
+* add a field menu with Copy, Edit and Open URL to the item window ([7339db8](https://github.com/hoobio/command-palette-bitwarden/commit/7339db88266a4f9438206ad0cc6d246c633fe1ed))
+* add a Show actions Enter action that lists the item actions ([7339db8](https://github.com/hoobio/command-palette-bitwarden/commit/7339db88266a4f9438206ad0cc6d246c633fe1ed))
+* add an SSH host box to the SSH key editor ([7339db8](https://github.com/hoobio/command-palette-bitwarden/commit/7339db88266a4f9438206ad0cc6d246c633fe1ed))
+* centre the edited field with a smooth scroll ([1431a98](https://github.com/hoobio/command-palette-bitwarden/commit/1431a9826e8ed1db36fb11a71a98827f3e22c517))
+* **companion:** focus and scroll to the field chosen for edit ([#260](https://github.com/hoobio/command-palette-bitwarden/issues/260)) ([ce40d0e](https://github.com/hoobio/command-palette-bitwarden/commit/ce40d0eb481b25cbf811518e6c48c099e312ee35))
+* show Open URL for text fields that hold a web or app address ([7339db8](https://github.com/hoobio/command-palette-bitwarden/commit/7339db88266a4f9438206ad0cc6d246c633fe1ed))
+
+
+### Bug Fixes
+
+* accept a Windows domain user in the SSH host ([#259](https://github.com/hoobio/command-palette-bitwarden/issues/259)) ([b16872d](https://github.com/hoobio/command-palette-bitwarden/commit/b16872dd06edbbf04274c2cf8576feeceb48ac9a))
+* announce client type to Bitwarden Desktop before the handshake ([#257](https://github.com/hoobio/command-palette-bitwarden/issues/257)) ([34360d9](https://github.com/hoobio/command-palette-bitwarden/commit/34360d93ff5208604593a96baa0c1827a082f1ea))
+* keep a gutter around companion dialogs in a narrow window ([#261](https://github.com/hoobio/command-palette-bitwarden/issues/261)) ([019d8cb](https://github.com/hoobio/command-palette-bitwarden/commit/019d8cb2f732e76286b642c15db7e601a34416de))
+* raise the bw --version detection timeout from 8 to 20 seconds ([7339db8](https://github.com/hoobio/command-palette-bitwarden/commit/7339db88266a4f9438206ad0cc6d246c633fe1ed))
+* use equal padding on all four sides of companion rows and windows ([1431a98](https://github.com/hoobio/command-palette-bitwarden/commit/1431a9826e8ed1db36fb11a71a98827f3e22c517))
+
+
+### Miscellaneous Chores
+
+* **deps:** update all non-major dependencies ([#249](https://github.com/hoobio/command-palette-bitwarden/issues/249)) ([76b3e3e](https://github.com/hoobio/command-palette-bitwarden/commit/76b3e3eff49e9e4fd65cb0cbb90770ea2f9d32d5))
+* **deps:** update avalonia monorepo to 12.1.5 ([#248](https://github.com/hoobio/command-palette-bitwarden/issues/248)) ([a055d53](https://github.com/hoobio/command-palette-bitwarden/commit/a055d53d49a50694a420790582ba245fc8d28c14))
+* **deps:** update avalonia monorepo to 12.1.6 ([#254](https://github.com/hoobio/command-palette-bitwarden/issues/254)) ([d115ca3](https://github.com/hoobio/command-palette-bitwarden/commit/d115ca369c2795bf605c23212a68db32bd96c87e))
+* **deps:** update dependency meziantou.analyzer to 3.0.320 ([#246](https://github.com/hoobio/command-palette-bitwarden/issues/246)) ([272a374](https://github.com/hoobio/command-palette-bitwarden/commit/272a374778e503a1cb184c9176be0c9375bd69ed))
+* **deps:** update dependency microsoft.net.test.sdk to 18.11.1 ([#255](https://github.com/hoobio/command-palette-bitwarden/issues/255)) ([c93cd28](https://github.com/hoobio/command-palette-bitwarden/commit/c93cd287e91861fcd9e8485ece9d34f80395cd6b))
+* **deps:** update dependency microsoft.net.test.sdk to 18.12.0 ([#256](https://github.com/hoobio/command-palette-bitwarden/issues/256)) ([49af14d](https://github.com/hoobio/command-palette-bitwarden/commit/49af14d0deb000904a0b99a4c5aced51b45676d6))
+* **deps:** update dependency xunit.v3.mtp-off to 4.0.3 ([#252](https://github.com/hoobio/command-palette-bitwarden/issues/252)) ([0ce8646](https://github.com/hoobio/command-palette-bitwarden/commit/0ce8646397972b1448adf21362768a848f3ac09a))
+
+
+### Continuous Integration
+
+* read the Hoobi feed OIDC IDs from repository secrets ([#243](https://github.com/hoobio/command-palette-bitwarden/issues/243)) ([58dff01](https://github.com/hoobio/command-palette-bitwarden/commit/58dff013f02f23c88e3f0126c30637f6bf24aa6b))
+
 ## [1.15.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.14.0...v1.15.0) (2026-11-02)
 
 
