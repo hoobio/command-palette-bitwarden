@@ -503,6 +503,7 @@ public class HotkeyTests : IDisposable
   [Fact]
   public void BuildContextItems_UseTheStoredChords()
   {
+    BitwardenCliService.ResetStaticState();
     var item = new BitwardenItem
     {
       Id = "test-login",
