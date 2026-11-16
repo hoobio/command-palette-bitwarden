@@ -350,6 +350,8 @@ internal static partial class DesktopIpcService
       _readCts = new CancellationTokenSource();
       _readLoop = Task.Run(() => ReadLoopAsync(_readCts.Token));
 
+      // Desktop 2026.10.2+ drops a client whose first frame is not an announcement (bitwarden/clients#23275); "cli" routes to a different handler
+      SendRaw(new JsonObject { ["clientType"] = "unknown" });
       await SetupEncryptionAsync();
     }
 
