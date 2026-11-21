@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.16.1](https://github.com/hoobio/command-palette-bitwarden/compare/v1.16.0...v1.16.1) (2026-11-21)
+
+
+### Miscellaneous Chores
+
+* **deps:** update dependency coverlet.collector to 10.1.1 ([#265](https://github.com/hoobio/command-palette-bitwarden/issues/265)) ([aac3022](https://github.com/hoobio/command-palette-bitwarden/commit/aac3022cb444e00dd4c7af3dc7589db8d1ce92cd))
+* **deps:** update dependency meziantou.analyzer to 3.0.341 ([#263](https://github.com/hoobio/command-palette-bitwarden/issues/263)) ([a654a56](https://github.com/hoobio/command-palette-bitwarden/commit/a654a562dd3689509d7d9628e08ccceb64fa22db))
+* **deps:** update dependency microsoft.windows.sdk.buildtools.msix to 1.7.261119100 ([#266](https://github.com/hoobio/command-palette-bitwarden/issues/266)) ([1831d8d](https://github.com/hoobio/command-palette-bitwarden/commit/1831d8df10b93e5857fccd90f3f7127b9fdf101b))
+
 ## [1.16.0](https://github.com/hoobio/command-palette-bitwarden/compare/v1.15.0...v1.16.0) (2026-11-16)
 
 
